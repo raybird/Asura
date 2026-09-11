@@ -16,8 +16,10 @@ var (
 // WorkerPool 限制全域並行執行任務數量
 type WorkerPool struct {
 	maxWorkers int
-	sem        chan struct{}
+	maxQueue   int
+	running    int
 	queue      chan taskItem
+	mu         sync.Mutex
 	closed     chan struct{}
 	closeOnce  sync.Once
 	wg         sync.WaitGroup
@@ -30,6 +32,7 @@ type taskItem struct {
 }
 
 // NewWorkerPool 初始化指定 Worker 數與佇列長度的 WorkerPool
+// 遵循 R-02：以互斥鎖原子保護 Worker 額度交接與佇列檢查，徹底杜絕佇列停滯
 func NewWorkerPool(maxWorkers int, maxQueue int) *WorkerPool {
 	if maxWorkers <= 0 {
 		maxWorkers = 1
@@ -40,7 +43,7 @@ func NewWorkerPool(maxWorkers int, maxQueue int) *WorkerPool {
 
 	return &WorkerPool{
 		maxWorkers: maxWorkers,
-		sem:        make(chan struct{}, maxWorkers),
+		maxQueue:   maxQueue,
 		queue:      make(chan taskItem, maxQueue),
 		closed:     make(chan struct{}),
 	}
@@ -51,6 +54,8 @@ func (p *WorkerPool) Submit(ctx context.Context, fn func() error) error {
 	select {
 	case <-p.closed:
 		return ErrPoolClosed
+	case <-ctx.Done():
+		return ctx.Err()
 	default:
 	}
 
@@ -60,17 +65,26 @@ func (p *WorkerPool) Submit(ctx context.Context, fn func() error) error {
 		result: make(chan error, 1),
 	}
 
-	// 1. 嘗試直接取得 worker 執行許可
+	p.mu.Lock()
 	select {
-	case p.sem <- struct{}{}:
-		p.wg.Add(1)
-		go p.runWorker(item)
+	case <-p.closed:
+		p.mu.Unlock()
+		return ErrPoolClosed
 	default:
-		// 2. 若 worker 已滿，嘗試排入佇列
+	}
+
+	if p.running < p.maxWorkers {
+		p.running++
+		p.wg.Add(1)
+		go p.workerLoop(item)
+		p.mu.Unlock()
+	} else {
+		// Worker 已達上限，嘗試排入佇列
 		select {
 		case p.queue <- item:
-			// 成功排入佇列
+			p.mu.Unlock()
 		default:
+			p.mu.Unlock()
 			return ErrCapacityExceeded
 		}
 	}
@@ -85,20 +99,24 @@ func (p *WorkerPool) Submit(ctx context.Context, fn func() error) error {
 	}
 }
 
-func (p *WorkerPool) runWorker(initialItem taskItem) {
+func (p *WorkerPool) workerLoop(initialItem taskItem) {
 	defer p.wg.Done()
-	defer func() { <-p.sem }()
-
 	p.executeItem(initialItem)
 
-	// 接續處理排隊任務，直到佇列為空
 	for {
+		p.mu.Lock()
 		select {
 		case <-p.closed:
+			p.running--
+			p.mu.Unlock()
 			return
 		case item := <-p.queue:
+			p.mu.Unlock()
 			p.executeItem(item)
 		default:
+			// 佇列為空，原子釋放 Worker 額度並退出（徹底修復 R-02 佇列殘留停滯）
+			p.running--
+			p.mu.Unlock()
 			return
 		}
 	}

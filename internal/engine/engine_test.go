@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"asura/internal/auth"
 	"asura/internal/storage"
@@ -298,4 +299,213 @@ func TestEngine_EmptyOutputTreatedAsFailed(t *testing.T) {
 		t.Errorf("expected saved error message to mention empty output, got: %s", saved.ErrorMessage)
 	}
 }
+
+// R-05: 父 Context 被取消時，仍使用未取消且有界的 persistCtx 將狀態寫入資料庫
+func TestEngine_R05_PersistOnCancelledParentContext(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-r05-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	runner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		// 等待 ctx 被取消
+		<-ctx.Done()
+		return "partial execution before timeout", ctx.Err()
+	}
+
+	eng := NewEngine(store, policy, WithRunner(runner))
+
+	// 使用立即取消的 Context 提交任務
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+
+	task, err := eng.SubmitTask(ctx, SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "timeout-task",
+	})
+	if err == nil {
+		t.Fatalf("expected error from cancelled context, got nil")
+	}
+
+	// 驗證記憶體與資料庫中的狀態絕不停留在 running，而是已持久化為 cancelled
+	if task.Status != storage.StatusCancelled {
+		t.Errorf("expected memory status %s, got %s", storage.StatusCancelled, task.Status)
+	}
+
+	saved, err := store.GetTask(context.Background(), task.ID)
+	if err != nil {
+		t.Fatalf("failed to get task from store: %v", err)
+	}
+	if saved.Status != storage.StatusCancelled {
+		t.Errorf("expected saved status in DB to be %s, but got %s (remained in running?)", storage.StatusCancelled, saved.Status)
+	}
+}
+
+// R-06: 外部 CancelTask 後，執行端收集到的 partial output 仍完整持久化至資料庫
+func TestEngine_R06_PreservePartialOutputOnCancel(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-r06-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	started := make(chan struct{})
+	runner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		close(started)
+		<-ctx.Done()
+		return "step 1 finished; step 2 partial output", ctx.Err()
+	}
+
+	eng := NewEngine(store, policy, WithRunner(runner))
+
+	var taskID = "task-r06-test"
+	go func() {
+		<-started
+		// 模擬外部 CancelTask
+		_ = eng.CancelTask(taskID)
+	}()
+
+	task, err := eng.SubmitTask(context.Background(), SubmitRequest{
+		ID:        taskID,
+		Workspace: tmpDir,
+		Prompt:    "cancel-test",
+	})
+	if err == nil {
+		t.Fatalf("expected error from cancelled task, got nil")
+	}
+
+	expectedOutput := "step 1 finished; step 2 partial output"
+	if task.Result != expectedOutput {
+		t.Errorf("expected memory task result %q, got %q", expectedOutput, task.Result)
+	}
+
+	// 查驗資料庫中是否保存了 partial output 而非空字串
+	saved, err := store.GetTask(context.Background(), taskID)
+	if err != nil {
+		t.Fatalf("failed to get task from store: %v", err)
+	}
+	if saved.Result != expectedOutput {
+		t.Errorf("expected DB task result to contain partial output %q, got empty or wrong: %q", expectedOutput, saved.Result)
+	}
+}
+
+// R-09: 輸出僅包含未解決的結構化錯誤（如 429 錯誤 JSON）且無有效文字時，任務標記為 failed
+func TestEngine_R09_UnresolvedStructuredError(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-r09-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	// runner 退出碼為 0 但只輸出 429 rate limit 結構化錯誤事件
+	runner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		return `{"type":"error","error":{"message":"Rate limit exceeded","statusCode":429}}`, nil
+	}
+
+	eng := NewEngine(store, policy, WithRunner(runner))
+
+	task, err := eng.SubmitTask(context.Background(), SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "rate-limit-task",
+	})
+	if err == nil {
+		t.Fatalf("expected task with unresolved 429 to fail, got nil")
+	}
+
+	if task.Status != storage.StatusFailed {
+		t.Errorf("expected task status to be %s, got %s", storage.StatusFailed, task.Status)
+	}
+
+	saved, err := store.GetTask(context.Background(), task.ID)
+	if err != nil {
+		t.Fatalf("failed to get task from store: %v", err)
+	}
+	if saved.Status != storage.StatusFailed {
+		t.Errorf("expected DB task status to be %s, got %s", storage.StatusFailed, saved.Status)
+	}
+	if !strings.Contains(saved.ErrorMessage, "empty output or unresolved error") {
+		t.Errorf("expected error message to explain unresolved error, got: %s", saved.ErrorMessage)
+	}
+}
+
+// R-10: 條件式更新防護——若任務在執行期間已被外部取消，不得被成功狀態覆寫
+func TestEngine_R10_DoNotOverwriteCancelledStatus(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-r10-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	taskID := "task-r10-race"
+	runner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		// 在 runner 內部模擬外部行程在 SQLite 中將此 task 標記為 cancelled
+		_ = store.UpdateTaskStatus(context.Background(), taskID, storage.StatusCancelled, "cancelled externally", "cancelled by CLI")
+		return "runner completed execution", nil
+	}
+
+	eng := NewEngine(store, policy, WithRunner(runner))
+
+	task, err := eng.SubmitTask(context.Background(), SubmitRequest{
+		ID:        taskID,
+		Workspace: tmpDir,
+		Prompt:    "race-cancel-complete",
+	})
+	if err == nil {
+		t.Fatalf("expected cancelled task error, got nil")
+	}
+
+	// 斷言狀態絕未被覆寫為 completed
+	if task.Status != storage.StatusCancelled {
+		t.Errorf("expected task status %s, got %s (overwritten?)", storage.StatusCancelled, task.Status)
+	}
+
+	saved, err := store.GetTask(context.Background(), taskID)
+	if err != nil {
+		t.Fatalf("failed to get task from store: %v", err)
+	}
+	if saved.Status != storage.StatusCancelled {
+		t.Errorf("expected DB status to remain %s, got %s", storage.StatusCancelled, saved.Status)
+	}
+}
+
 

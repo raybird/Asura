@@ -23,7 +23,6 @@ func TestDaemonConcurrency(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	sockPath := filepath.Join(tmpDir, "asura.sock")
 	dbPath := filepath.Join(tmpDir, "asura.db")
 
 	store, err := storage.NewSQLiteStore(dbPath)
@@ -36,28 +35,48 @@ func TestDaemonConcurrency(t *testing.T) {
 
 	// 1. 驗證競爭啟動：只有一個能成為 Daemon 擁有者，另一個被拒絕
 	t.Run("競爭啟動無雙重擁有者", func(t *testing.T) {
-		d1 := NewDaemon(Config{
-			SocketPath: sockPath,
-			MaxWorkers: 2,
-		}, store, policy)
+		concurrentSock := filepath.Join(tmpDir, "concurrent.sock")
+		const concurrentCount = 10
+		var wg sync.WaitGroup
+		var successCount int32
+		var alreadyRunningCount int32
+		var otherErrCount int32
+		var activeDaemons []*Daemon
+		var activeMu sync.Mutex
 
-		if err := d1.Start(); err != nil {
-			t.Fatalf("first daemon start failed: %v", err)
+		for i := 0; i < concurrentCount; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				d := NewDaemon(Config{
+					SocketPath: concurrentSock,
+					MaxWorkers: 2,
+				}, store, policy)
+				err := d.Start()
+				if err == nil {
+					atomic.AddInt32(&successCount, 1)
+					activeMu.Lock()
+					activeDaemons = append(activeDaemons, d)
+					activeMu.Unlock()
+				} else if errors.Is(err, ErrDaemonAlreadyRunning) {
+					atomic.AddInt32(&alreadyRunningCount, 1)
+				} else {
+					atomic.AddInt32(&otherErrCount, 1)
+					t.Errorf("unexpected error on concurrent start: %v", err)
+				}
+			}()
 		}
-		defer d1.Close()
+		wg.Wait()
 
-		d2 := NewDaemon(Config{
-			SocketPath: sockPath,
-			MaxWorkers: 2,
-		}, store, policy)
-
-		err = d2.Start()
-		if err == nil {
-			_ = d2.Close()
-			t.Fatalf("expected error on second daemon start with same socket, got nil")
+		for _, d := range activeDaemons {
+			_ = d.Close()
 		}
-		if !errors.Is(err, ErrDaemonAlreadyRunning) {
-			t.Errorf("expected ErrDaemonAlreadyRunning, got %v", err)
+
+		if success := atomic.LoadInt32(&successCount); success != 1 {
+			t.Fatalf("expected exactly 1 daemon to acquire ownership, got %d", success)
+		}
+		if rejected := atomic.LoadInt32(&alreadyRunningCount); rejected != concurrentCount-1 {
+			t.Fatalf("expected %d daemons rejected with ErrDaemonAlreadyRunning, got %d", concurrentCount-1, rejected)
 		}
 	})
 
@@ -265,6 +284,52 @@ func TestDaemonConcurrency(t *testing.T) {
 		}
 		if savedB.ErrorMessage == "" {
 			t.Errorf("expected task B to have non-empty error message explaining interruption")
+		}
+	})
+
+	// 5. R-08: 執行失敗時 Client.Submit 同時回傳 Task 與 Error，保留任務識別與失敗狀態
+	t.Run("R-08: 執行失敗時 Client.Submit 同時回傳 Task 與 Error", func(t *testing.T) {
+		sockPath5 := filepath.Join(tmpDir, "asura5.sock")
+		failedRunner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+			return "partial stdout before error", errors.New("command failed with exit code 42")
+		}
+		failEng := engine.NewEngine(store, policy, engine.WithRunner(failedRunner))
+
+		d := NewDaemon(Config{
+			SocketPath: sockPath5,
+			MaxWorkers: 2,
+			MaxQueue:   10,
+		}, store, policy, WithEngine(failEng))
+
+		if err := d.Start(); err != nil {
+			t.Fatalf("daemon start failed: %v", err)
+		}
+		defer d.Close()
+
+		client, err := NewClient(sockPath5)
+		if err != nil {
+			t.Fatalf("client connect failed: %v", err)
+		}
+		defer client.Close()
+
+		task, err := client.Submit(context.Background(), engine.SubmitRequest{
+			Workspace: tmpDir,
+			Prompt:    "task-that-will-fail",
+		})
+		if err == nil {
+			t.Fatalf("expected error from failed task, got nil")
+		}
+		if task == nil {
+			t.Fatalf("expected resp.Task to be retained on error, got nil task (violates R-08)")
+		}
+		if task.ID == "" {
+			t.Errorf("expected task ID to be populated, got empty")
+		}
+		if task.Status != storage.StatusFailed {
+			t.Errorf("expected task status to be %s, got %s", storage.StatusFailed, task.Status)
+		}
+		if task.Result != "partial stdout before error" {
+			t.Errorf("expected partial result to be retained, got: %q", task.Result)
 		}
 	})
 }

@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"syscall"
 	"time"
 
 	"asura/internal/auth"
@@ -35,6 +36,7 @@ type Daemon struct {
 	engine    *engine.Engine
 	pool      *WorkerPool
 	listener  net.Listener
+	lockFile  *os.File
 	closed    chan struct{}
 	closeOnce sync.Once
 	wg        sync.WaitGroup
@@ -79,25 +81,44 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 }
 
 // Start 競爭取得 Unix Domain Socket 擁有權並開始監聽
-// 遵循 SCN-003：競爭啟動無雙重擁有者，只有一個進程成為 Daemon，其餘收到 ErrDaemonAlreadyRunning
+// 遵循 SCN-003 與 R-01：以 flock 原子排他鎖消除 TOCTOU 競爭，確保單一擁有權無雙重 Daemon
 func (d *Daemon) Start() error {
-	// 1. 探測既有 Socket 是否有存活 Daemon
+	// 1. 先取得跨進程檔案排他鎖，保護後續探測、清理與綁定過程
+	lockPath := d.cfg.SocketPath + ".lock"
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return fmt.Errorf("open daemon lock file: %w", err)
+	}
+
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		_ = f.Close()
+		return ErrDaemonAlreadyRunning
+	}
+	d.lockFile = f
+
+	// 2. 探測既有 Socket 是否有存活 Daemon
 	if conn, err := net.DialTimeout("unix", d.cfg.SocketPath, 100*time.Millisecond); err == nil {
 		_ = conn.Close()
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = f.Close()
+		d.lockFile = nil
 		return ErrDaemonAlreadyRunning
 	}
 
-	// 2. 清理過期殘留 socket 檔案
+	// 3. 清理過期殘留 socket 檔案
 	_ = os.Remove(d.cfg.SocketPath)
 
-	// 3. 綁定監聽
+	// 4. 綁定監聽
 	l, err := net.Listen("unix", d.cfg.SocketPath)
 	if err != nil {
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = f.Close()
+		d.lockFile = nil
 		return fmt.Errorf("listen unix socket: %w", err)
 	}
 	d.listener = l
 
-	// 4. 執行重啟恢復：將前次未完成的殘留任務安全轉移為 failed，揭露中斷原因（SCN-006）
+	// 5. 執行重啟恢復：將前次未完成的殘留任務安全轉移為 failed，揭露中斷原因（SCN-006）
 	if d.store != nil {
 		_, _ = d.store.RecoverInterruptedTasks(context.Background())
 	}
@@ -161,13 +182,13 @@ func (d *Daemon) handleConn(conn net.Conn) {
 		return submitErr
 	})
 
-	if errors.Is(err, ErrCapacityExceeded) {
-		_ = encoder.Encode(IPCResponse{Error: ErrCapacityExceeded.Error()})
-		return
-	}
-
-	if submitErr != nil {
-		_ = encoder.Encode(IPCResponse{Task: task, Error: submitErr.Error()})
+	if err != nil {
+		if errors.Is(err, ErrCapacityExceeded) || errors.Is(err, ErrPoolClosed) {
+			_ = encoder.Encode(IPCResponse{Error: err.Error()})
+			return
+		}
+		// 後端任務執行失敗：保留 Task 實體與 Error 一併回傳 (修復 R-08)
+		_ = encoder.Encode(IPCResponse{Task: task, Error: err.Error()})
 		return
 	}
 
@@ -183,6 +204,12 @@ func (d *Daemon) Close() error {
 			err = d.listener.Close()
 		}
 		_ = os.Remove(d.cfg.SocketPath)
+		if d.lockFile != nil {
+			_ = syscall.Flock(int(d.lockFile.Fd()), syscall.LOCK_UN)
+			_ = d.lockFile.Close()
+			_ = os.Remove(d.cfg.SocketPath + ".lock")
+			d.lockFile = nil
+		}
 		d.pool.Close()
 		d.wg.Wait()
 	})
@@ -226,9 +253,9 @@ func (c *Client) Submit(ctx context.Context, req engine.SubmitRequest) (*storage
 
 	if resp.Error != "" {
 		if resp.Error == ErrCapacityExceeded.Error() {
-			return nil, ErrCapacityExceeded
+			return resp.Task, ErrCapacityExceeded
 		}
-		return nil, errors.New(resp.Error)
+		return resp.Task, errors.New(resp.Error)
 	}
 
 	if resp.Task == nil {

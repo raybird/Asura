@@ -181,6 +181,47 @@ func (s *SQLiteStore) UpdateTaskStatus(ctx context.Context, id string, status Ta
 	return nil
 }
 
+// UpdateTaskStatusIfRunning 僅在任務處於 running 狀態時才轉移狀態，防止覆寫已被外部取消的狀態 (修復 R-10)
+func (s *SQLiteStore) UpdateTaskStatusIfRunning(ctx context.Context, id string, status TaskStatus, result string, errMsg string) (bool, error) {
+	query := `
+	UPDATE tasks
+	SET status = ?, result = ?, error_message = ?, updated_at = ?
+	WHERE id = ? AND status = ?
+	`
+	now := time.Now().UTC()
+	res, err := s.db.ExecContext(ctx, query, string(status), result, errMsg, now, id, string(StatusRunning))
+	if err != nil {
+		return false, fmt.Errorf("update task status if running: %w", err)
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("check rows affected: %w", err)
+	}
+	return rowsAffected > 0, nil
+}
+
+// UpdateTaskResult 僅更新任務的輸出結果，保留既有狀態與錯誤訊息 (修復 R-06)
+func (s *SQLiteStore) UpdateTaskResult(ctx context.Context, id string, result string) error {
+	query := `
+	UPDATE tasks
+	SET result = ?, updated_at = ?
+	WHERE id = ?
+	`
+	now := time.Now().UTC()
+	res, err := s.db.ExecContext(ctx, query, result, now, id)
+	if err != nil {
+		return fmt.Errorf("update task result: %w", err)
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrTaskNotFound
+	}
+	return nil
+}
+
 // UpdateTaskPGID 更新任務關聯的進程組 ID
 func (s *SQLiteStore) UpdateTaskPGID(ctx context.Context, id string, pgid int) error {
 	query := `

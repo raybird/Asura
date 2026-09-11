@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -52,6 +53,24 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  cancel  Cancel a pending or running task")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Run 'asura <command> -h' for details on each command.")
+}
+
+// safeBuffer 提供線程安全的緩衝區，杜絕 stdout 與 stderr 併發寫入的 DATA RACE (修復 R-04)
+type safeBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (s *safeBuffer) Write(p []byte) (n int, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.Write(p)
+}
+
+func (s *safeBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.String()
 }
 
 func handleRun(args []string, stdout, stderr io.Writer) int {
@@ -111,7 +130,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 	runner := func(ctx context.Context, dir string, p string) (string, error) {
 		cmd := exec.CommandContext(ctx, "sh", "-c", p)
 		cmd.Dir = dir
-		var buf bytes.Buffer
+		var buf safeBuffer
 		cmd.Stdout = io.MultiWriter(stdout, &buf)
 		cmd.Stderr = io.MultiWriter(stderr, &buf)
 
@@ -122,10 +141,19 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 			return buf.String(), err
 		}
 
-		if currentTaskID != "" && cmd.Process != nil {
+		if cmd.Process != nil {
 			pgid, err := syscall.Getpgid(cmd.Process.Pid)
 			if err == nil {
-				_ = store.UpdateTaskPGID(ctx, currentTaskID, pgid)
+				if currentTaskID != "" {
+					_ = store.UpdateTaskPGID(ctx, currentTaskID, pgid)
+					// 檢查此任務是否在啟動前或啟動當下已被外部標記取消（修復 R-03）
+					t, err := store.GetTask(context.Background(), currentTaskID)
+					if err == nil && t.Status == storage.StatusCancelled {
+						_ = syscall.Kill(-pgid, syscall.SIGKILL)
+						_ = cmd.Wait()
+						return buf.String(), context.Canceled
+					}
+				}
 			}
 		}
 
@@ -144,6 +172,9 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 	}
 	currentTaskID = reqID
 
+	// 在任務提交執行前揭露 Task ID，確保執行中任務可取得 ID 進行取消，失敗任務亦可追蹤（修復 R-07）
+	fmt.Fprintf(stdout, "Task ID: %s\n", reqID)
+
 	task, err := eng.SubmitTask(ctx, engine.SubmitRequest{
 		ID:        reqID,
 		Workspace: ws,
@@ -154,7 +185,6 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	fmt.Fprintf(stdout, "Task ID: %s\n", task.ID)
 	fmt.Fprintf(stdout, "Status:  %s\n", task.Status)
 
 	if task.Status == storage.StatusFailed {

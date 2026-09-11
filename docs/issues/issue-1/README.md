@@ -137,6 +137,7 @@ Feature: 可控且可追蹤的本機任務執行
 | 2026-09-11 | Task 1.5 完成並提交 commit `27edaa4`；使用者明確核准 SCN-005（部分失敗副作用保護） | Antigravity |
 | 2026-09-11 | Task 1.6 完成並提交 commit `65da3e7`；使用者明確核准 SCN-006（重啟狀態恢復與中斷揭露） | Antigravity |
 | 2026-09-12 | Task 1.7 完成並提交 commit `b48c614`；使用者明確核准 SCN-007（空輸出與結構化錯誤防禦） | Antigravity |
+| 2026-09-12 | 依使用者核准全面修復 review-86ebf6b.md 提出的 10 項缺陷（R-01~R-10），通過 go test -race 雙迴圈驗證 | Antigravity |
 
 ---
 

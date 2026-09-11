@@ -82,4 +82,21 @@ func TestWorkerPool(t *testing.T) {
 
 		close(blocker)
 	})
+
+	t.Run("R-02: 快速交替任務不發生佇列停滯", func(t *testing.T) {
+		pool := NewWorkerPool(1, 5)
+		defer pool.Close()
+
+		for i := 0; i < 50; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			err := pool.Submit(ctx, func() error {
+				time.Sleep(1 * time.Millisecond)
+				return nil
+			})
+			cancel()
+			if err != nil {
+				t.Fatalf("iteration %d: Submit failed: %v", i, err)
+			}
+		}
+	})
 }

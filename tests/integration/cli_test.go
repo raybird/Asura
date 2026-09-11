@@ -542,3 +542,158 @@ func TestCLI_EmptyOutputDefense(t *testing.T) {
 		t.Errorf("expected DB task error message to contain 'empty output', got: %s", task.ErrorMessage)
 	}
 }
+
+// R-03, R-06, R-07 整合驗證：快速取消資源回收、保留 partial output、失敗與取消皆揭露 Task ID
+func TestCLI_ReviewFixes_R03_R06_R07(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-review-cli-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	allowedDir := filepath.Join(tmpDir, "project")
+	if err := os.MkdirAll(allowedDir, 0755); err != nil {
+		t.Fatalf("failed to create allowed dir: %v", err)
+	}
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get wd: %v", err)
+	}
+	projectRoot := filepath.Dir(filepath.Dir(wd))
+	cmdDir := filepath.Join(projectRoot, "cmd", "asura")
+
+	asuraBin := filepath.Join(tmpDir, "asura")
+	buildCmd := exec.Command("go", "build", "-o", asuraBin, cmdDir)
+	if buildOut, buildErr := buildCmd.CombinedOutput(); buildErr != nil {
+		t.Fatalf("failed to build asura binary: %v, output: %s", buildErr, string(buildOut))
+	}
+
+	// 1. R-07 驗證：任務失敗時 stdout 依然揭露 Task ID
+	failCmd := exec.Command(asuraBin,
+		"run",
+		"--db", dbPath,
+		"--workspace", allowedDir,
+		"--allowed-roots", allowedDir,
+		"echo initial-partial-output; exit 42",
+	)
+	var failOut, failErr bytes.Buffer
+	failCmd.Stdout = &failOut
+	failCmd.Stderr = &failErr
+	_ = failCmd.Run()
+
+	failOutStr := failOut.String()
+	if !strings.Contains(failOutStr, "Task ID: task-") {
+		t.Errorf("expected failed run to reveal Task ID (R-07), but got stdout: %q", failOutStr)
+	}
+
+	// 2. R-03 & R-06 驗證：快速發動取消，進程被殺死且保存 partial output
+	taskCancelID := "task-cancel-partial"
+	runCmd := exec.Command(asuraBin,
+		"run",
+		"--db", dbPath,
+		"--id", taskCancelID,
+		"--workspace", allowedDir,
+		"--allowed-roots", allowedDir,
+		"echo captured-partial-log; sleep 5",
+	)
+	var runOut, runErr bytes.Buffer
+	runCmd.Stdout = &runOut
+	runCmd.Stderr = &runErr
+	if err := runCmd.Start(); err != nil {
+		t.Fatalf("failed to start runCmd: %v", err)
+	}
+
+	// 等候產生部分輸出後立即發動取消
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open store: %v", err)
+	}
+	defer store.Close()
+
+	for i := 0; i < 30; i++ {
+		t, err := store.GetTask(context.Background(), taskCancelID)
+		if err == nil && t.PGID > 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	cancelCmd := exec.Command(asuraBin, "cancel", "--db", dbPath, taskCancelID)
+	if cancelOut, cancelErr := cancelCmd.CombinedOutput(); cancelErr != nil {
+		t.Fatalf("asura cancel failed: %v, output: %s", cancelErr, string(cancelOut))
+	}
+
+	_ = runCmd.Wait()
+
+	// 透過 status 檢查是否保存了 partial output (R-06)
+	statusCmd := exec.Command(asuraBin, "status", "--db", dbPath, taskCancelID)
+	statusOut, err := statusCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("asura status failed: %v, output: %s", err, string(statusOut))
+	}
+	statusStr := string(statusOut)
+	if !strings.Contains(statusStr, "captured-partial-log") {
+		t.Errorf("expected status output to preserve partial output (R-06), got: %s", statusStr)
+	}
+	if !strings.Contains(statusStr, "cancelled") {
+		t.Errorf("expected status to be cancelled, got: %s", statusStr)
+	}
+}
+
+// R-04 驗證：stdout 與 stderr 併發高頻輸出時安全無 Data Race (搭配 -race 執行)
+func TestCLI_ReviewFixes_R04_ConcurrentOutput(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-r04-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	allowedDir := filepath.Join(tmpDir, "project")
+	if err := os.MkdirAll(allowedDir, 0755); err != nil {
+		t.Fatalf("failed to create allowed dir: %v", err)
+	}
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get wd: %v", err)
+	}
+	projectRoot := filepath.Dir(filepath.Dir(wd))
+	cmdDir := filepath.Join(projectRoot, "cmd", "asura")
+
+	asuraBin := filepath.Join(tmpDir, "asura")
+	buildCmd := exec.Command("go", "build", "-o", asuraBin, cmdDir)
+	if buildOut, buildErr := buildCmd.CombinedOutput(); buildErr != nil {
+		t.Fatalf("failed to build asura binary: %v, output: %s", buildErr, string(buildOut))
+	}
+
+	runCmd := exec.Command(asuraBin,
+		"run",
+		"--db", dbPath,
+		"--workspace", allowedDir,
+		"--allowed-roots", allowedDir,
+		"for i in $(seq 1 50); do echo out-$i; echo err-$i >&2; done",
+	)
+	var outBuf, errBuf bytes.Buffer
+	runCmd.Stdout = &outBuf
+	runCmd.Stderr = &errBuf
+
+	if err := runCmd.Run(); err != nil {
+		t.Fatalf("concurrent output run failed: %v, stderr: %s", err, errBuf.String())
+	}
+
+	outStr := outBuf.String()
+	errStr := errBuf.String()
+
+	if !strings.Contains(outStr, "out-50") {
+		t.Errorf("expected stdout to contain out-50, got: %s", outStr)
+	}
+	if !strings.Contains(errStr, "err-50") {
+		t.Errorf("expected stderr to contain err-50, got: %s", errStr)
+	}
+}
+
