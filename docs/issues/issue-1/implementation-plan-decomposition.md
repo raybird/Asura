@@ -48,7 +48,7 @@
 
 ### Tasks
 
-#### Task 0.1：立項與核心驗收劇本核准（純文件）
+#### Task 0.1：立項與核心驗收劇本核准（純文件） [已完成]
 - **任務說明**：正式建立 `issue-1` 文件目錄，向使用者取得第一批核心 Scenario（`SCN-001`、`SCN-002`）明確核准。
 - **預期輸出**：更新後的 `docs/issues/issue-1/README.md` 與核准紀錄。
 - **涉及模組或檔案**：`docs/issues/issue-1/README.md`
@@ -59,8 +59,9 @@
 - **Scenario ID**：SCN-001, SCN-002
 - **改變可觀察行為**：否
 - **等價證據**：純文件變更；`git diff --check` 無語法警告，`check-links.py` 輸出 PASS，Git commit `d002e6b`。
+- **狀態**：已完成
 
-#### Task 0.2：工作目錄授權策略實作與驗證
+#### Task 0.2：工作目錄授權策略實作與驗證 [已完成]
 - **任務說明**：實作工作目錄白名單策略，確保未授權或敏感目錄在入口處直接攔截，絕不啟動底層 Agent。
 - **預期輸出**：`internal/auth/policy.go` 與 `internal/auth/policy_test.go`。
 - **涉及模組或檔案**：`internal/auth/policy.go`, `internal/auth/policy_test.go`
@@ -70,11 +71,14 @@
 - **責任角色**：唯一負責
 - **Scenario ID**：SCN-002
 - **改變可觀察行為**：是
-- **BDD 外迴圈**：專案無 BDD runner，以標註 SCN-002 的整合測試替代；先執行命令：`go test -v -run TestAuthorizeWorkspace_Denied ./internal/auth`；預期失敗原因：缺少授權校驗邏輯。
-- **TDD 內迴圈**：單元測試路徑 `internal/auth/policy_test.go`；執行命令：`go test ./internal/auth/...`；預期失敗原因：`policy.go` 未定義。
-- **最小實作與回歸**：實作 `internal/auth/policy.go` 中的 `Policy.AuthorizeWorkspace()`；全綠回歸命令：`go test -v ./internal/auth/...`。
+- **實作與驗證證據**（2026-09-11）：
+  - 外迴圈紅燈：`go test -v -run TestAuthorizeWorkspace_Denied ./internal/auth`
+  - 內迴圈紅燈：`go test ./internal/auth/...`
+  - 最小實作：完成 `internal/auth/policy.go`
+  - 全綠回歸：`go test -v ./internal/auth/...` 全部 PASS。
+- **狀態**：已完成
 
-#### Task 0.3：Opencode 1.18.23 JSON 事件流解析器
+#### Task 0.3：Opencode 1.18.23 JSON 事件流解析器 [已完成]
 - **任務說明**：基於真實探測樣本，解析 Opencode 的 `step_start`、`text`、`tool_use`、`step_finish` 與 429 速率限制事件。
 - **預期輸出**：`internal/backend/opencode/parser.go` 與單元測試 `internal/backend/opencode/parser_test.go`。
 - **涉及模組或檔案**：`internal/backend/opencode/parser.go`, `internal/backend/opencode/parser_test.go`
@@ -84,11 +88,14 @@
 - **責任角色**：唯一負責
 - **Scenario ID**：SCN-001
 - **改變可觀察行為**：是
-- **BDD 外迴圈**：標註 SCN-001 的事件解析整合測試；執行命令：`go test -v -run TestParseEventLine ./internal/backend/opencode`；預期失敗原因：缺少事件結構解析。
-- **TDD 內迴圈**：單元測試路徑 `internal/backend/opencode/parser_test.go`；執行命令：`go test ./internal/backend/opencode/...`；預期失敗原因：`opencode` 套件未定義。
-- **最小實作與回歸**：實作 `internal/backend/opencode/parser.go`；全綠回歸命令：`go test -v ./internal/backend/opencode/...`。
+- **實作與驗證證據**（2026-09-11）：
+  - 外迴圈紅燈：`go test -v -run TestParseEventLine ./internal/backend/opencode`
+  - 內迴圈紅燈：`go test ./internal/backend/opencode/...`
+  - 最小實作：完成 `internal/backend/opencode/parser.go`
+  - 全綠回歸：`go test -v ./internal/backend/opencode/...` 全部 PASS。
+- **狀態**：已完成
 
-#### Task 0.4：進程組 (PGID) 啟動與取消強殺探測
+#### Task 0.4：進程組 (PGID) 啟動與取消強殺探測 [已完成]
 - **任務說明**：實作底層 CLI 進程啟動封裝，配置 `Setpgid: true`，驗證 `context.Context` 逾時或取消時以 `syscall.Kill(-pgid, SIGKILL)` 乾淨回收整個進程樹。
 - **預期輸出**：`internal/backend/opencode/process.go` 與測試 `internal/backend/opencode/process_test.go`。
 - **涉及模組或檔案**：`internal/backend/opencode/process.go`, `internal/backend/opencode/process_test.go`
@@ -98,9 +105,12 @@
 - **責任角色**：唯一負責
 - **Scenario ID**：SCN-001
 - **改變可觀察行為**：是
-- **BDD 外迴圈**：標註 SCN-001 取消的整合測試；執行命令：`go test -v -run TestProcessCancel ./internal/backend/opencode`；預期失敗原因：缺少 PGID 取消回收。
-- **TDD 內迴圈**：單元測試路徑 `internal/backend/opencode/process_test.go`；執行命令：`go test -run TestProcessGroup ./internal/backend/opencode`；預期失敗原因：未實作進程組隔離。
-- **最小實作與回歸**：實作 `internal/backend/opencode/process.go`；全綠回歸命令：`go test -v ./internal/backend/opencode/...`。
+- **實作與驗證證據**（2026-09-11）：
+  - 外迴圈紅燈：`go test -v -run TestProcessCancel ./internal/backend/opencode`，exit code 1，失敗原因：`undefined: StartProcess`, `undefined: IsProcessGroupAlive`。
+  - 內迴圈紅燈：`go test -run TestProcessGroup ./internal/backend/opencode`，exit code 1，失敗原因：`undefined: ConfigureProcessGroup`, `undefined: KillProcessGroup`。
+  - 最小實作：完成 `internal/backend/opencode/process.go`，配置 `Setpgid: true` 與取消時向 `-pgid` 發送 `SIGKILL`，並以 `done` channel 防止 goroutine 洩漏。
+  - 全綠回歸：`go test -v ./internal/backend/opencode/...` 全部 PASS（`TestProcessCancel` 0.20s 退出且 `IsProcessGroupAlive` 為 false）。`go vet ./...` 檢查通過。
+- **狀態**：已完成
 
 ---
 
