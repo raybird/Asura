@@ -29,7 +29,7 @@
 
 前置：Phase 0 的權限與核心後端能力已有證據，SCN-001 至 SCN-007 及其所需門檻已核准。
 
-- [ ] P1-1：建立唯一擁有權、Migration 與競爭啟動處理（D-02；SCN-003）。完成證據：競爭與失敗案例不產生雙重擁有者、重複執行或突破上限。
+- [x] P1-1：建立唯一擁有權、Migration 與競爭啟動處理（D-02；SCN-003）。完成證據：`internal/daemon/daemon.go` 透過 Unix Domain Socket 互斥探測杜絕雙重擁有者，`internal/daemon/pool.go` 透過 WorkerPool 確保不突破全域上限且每個已接受任務各執行一次，未接受請求得到明確飽和錯誤。
 - [x] P1-2：建立任務接受、狀態與結果保存及查詢（D-07；SCN-001、SCN-006）。完成證據：`internal/storage/sqlite.go` 支援任務持久化與生命週期狀態（pending, running, completed, failed, cancelled），`internal/engine/engine.go` 實現調度，成功結果可再次查得。
 - [x] P1-3：串接 CLI、授權、執行容量與單一後端（D-01、D-03、D-08；SCN-001、SCN-002、SCN-003）。完成證據：`cmd/asura` 實作 `run` 與 `status` 子命令，`tests/integration/cli_test.go` 驗證 SCN-001 與 SCN-002 端到端路徑通過，未授權呼叫被阻擋且 0 子進程、0 DB 寫入。
 - [ ] P1-4：加入取消與共同收尾，依已核准策略處理部分失敗（D-04、D-05、D-06；SCN-004、SCN-005、SCN-007）。完成證據：資源隔離、重試邊界與空輸出測試皆通過。

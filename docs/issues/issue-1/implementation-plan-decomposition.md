@@ -24,7 +24,6 @@
 
 | Scenario ID | 在等什麼 | 對應待確認事項 |
 |---|---|---|
-| SCN-003 | 守護程序競爭啟動協調與全域容量計數策略 | TBD-3 |
 | SCN-004 | 進程與瀏覽器資源歸屬及取消期限確認 | TBD-4 |
 | SCN-005 | 部分失敗時的重試邊界與副作用接續策略 | TBD-5 |
 | SCN-006 | 守護程序意外重啟時的狀態恢復判定 | TBD-5 |
@@ -181,6 +180,23 @@
   - 全綠回歸：`go test -v ./cmd/asura/...` 與 `go test -v ./tests/integration/...` 全部 PASS。手動以 `go run ./cmd/asura run "echo 42"` 執行產出 Task ID 並以 `status` 成功重查相同結果。`go test -v ./...` 與 `go vet ./...` 全專案通過。
 - **狀態**：已完成
 
+#### Task 1.4：Daemon 守護程序、Socket 互斥擁有權與並行 Worker Pool [已完成]
+- **任務說明**：實作 Daemon 守護進程，透過 Unix domain socket / lockfile 互斥競爭單一 Daemon 擁有權；提供 IPC 介面接受任務提交，並由帶全域上限控制（Capacity）的 Worker Pool 統一排程執行，未接受或超出上限時回傳明確結果。
+- **預期輸出**：`internal/daemon/daemon.go`, `internal/daemon/daemon_test.go`, `internal/daemon/pool.go`, `internal/daemon/pool_test.go`
+- **涉及模組或檔案**：`internal/daemon/daemon.go`, `internal/daemon/daemon_test.go`, `internal/daemon/pool.go`, `internal/daemon/pool_test.go`
+- **完成判準**：多個請求與 Daemon 同時啟動時只有一個擁有者，不突破全域上限，每個已接受任務各執行一次，未接受請求獲取明確錯誤或拒絕結果。
+- **驗證方式**：`go test -v ./internal/daemon/...`
+- **覆蓋項目**：P1-1、D-02、D-03、SCN-003
+- **責任角色**：唯一負責
+- **Scenario ID**：SCN-003
+- **改變可觀察行為**：是
+- **實作與驗證證據**（2026-09-11）：
+  - 外迴圈紅燈：`go test -v -run TestDaemonConcurrency ./internal/daemon`，exit code 1，失敗原因：缺少守護程序競爭協調與容量控制（`undefined: NewDaemon`, `undefined: ErrDaemonAlreadyRunning` 等）。
+  - 內迴圈紅燈：`go test ./internal/daemon/...`，exit code 1，失敗原因：`daemon` 模組未定義。
+  - 最小實作：完成 `internal/daemon/pool.go`（Semaphore + 佇列控制並行上限與容量飽和判定）與 `internal/daemon/daemon.go`（Unix domain socket 競爭探測、單一擁有權互斥、JSON IPC 任務接收與調度），提供 `Client` 提交介面。
+  - 全綠回歸：`go test -v ./internal/daemon/...` 全部 PASS（競爭啟動無雙重擁有者、不突破全域上限且各執行一次、未接受請求得到 `ErrCapacityExceeded` 明確結果）。全專案回歸 `go test -v ./...` 與 `go vet ./...` 全數通過。
+- **狀態**：已完成
+
 ---
 
 ## 覆蓋對照表 (Coverage Matrix)
@@ -189,7 +205,7 @@
 |---|---|---|---|
 | SCN-001（取得任務結果與可重查） | Task 1.2, Task 1.3 | Task 0.1, Task 0.3, Task 1.1 | `go test -v ./internal/engine/...` |
 | SCN-002（拒絕超出授權之執行） | Task 0.2 | Task 0.1, Task 1.2 | `go test -v ./internal/auth/...` |
-| SCN-003（競爭啟動與上限） | 待核准（無） | - | - |
+| SCN-003（競爭啟動與上限） | Task 1.4 | Task 1.1, Task 1.2 | `go test -v ./internal/daemon/...` |
 | SCN-004（取消任務資源回收） | 待核准（無） | - | - |
 | SCN-005（部分失敗保護） | 待核准（無） | - | - |
 | SCN-006（重啟狀態恢復） | 待核准（無） | - | - |
