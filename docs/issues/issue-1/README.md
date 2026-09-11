@@ -1,14 +1,12 @@
-# Asura 實作規劃草案
+# Issue 1：Asura 本機執行核心與後端契約探測
 
 ## 概述
 
-將架構願景轉為可驗證的分階段工作，先確認授權與後端契約，再建立最小執行核心。2026-09-11 使用者於對話表示「好那麼協助建立」，授權建立規劃文件；本紀錄不代表下列技術行為已逐項核准。
-
-本目錄是規格草案，尚非正式 issue：未提供 tracker 編號，故不自創編號。取得編號與核心驗收核准後，再移入 `docs/issues/issue-{實際編號}/` 並更新連結。本次只交付文件，功能實作、技術探測與發布均未執行。
+將架構願景轉為可驗證的分階段工作，先確認授權與後端契約，再建立最小執行核心。2026-09-11 使用者授權正式立項為 Issue 1，並將規劃文件自規格草案遷移至本目錄；本紀錄不代表下列技術行為已逐項核准。本次只交付文件，功能實作、技術探測與發布均未執行。
 
 ## 文件清單
 
-- [架構設計](../2026-09-11-asura-architecture-design.md)：首版提案、信任邊界與 D-01 至 D-09 技術決策的權威來源。
+- [架構設計](../../superpowers/specs/2026-09-11-asura-architecture-design.md)：首版提案、信任邊界與 D-01 至 D-09 技術決策的權威來源。
 - [implementation-plan.md](implementation-plan.md)：階段相依、任務與驗證規劃的權威來源。
 
 本次採用使用者同意的兩份實作草案分工，不另建立分析報告。正式議題建立時，若首版需求仍需調查，依文件規範補 requirement-analysis；若完成多方案取捨，補 technical-analysis。2026-09-11 尚無選型定案或後端探測結果可記錄。
@@ -18,8 +16,8 @@
 本次文件交付僅涉及下列三份；程式碼路徑須於核准首版範圍後另行盤點。
 
 - `docs/superpowers/specs/2026-09-11-asura-architecture-design.md`：帶日期的架構修訂與決策追蹤。
-- `docs/superpowers/specs/asura-implementation/README.md`：範圍、驗收候選、核准與待確認事項。
-- `docs/superpowers/specs/asura-implementation/implementation-plan.md`：實作順序與驗證規劃。
+- `docs/issues/issue-1/README.md`：範圍、驗收候選、核准與待確認事項。
+- `docs/issues/issue-1/implementation-plan.md`：實作順序與驗證規劃。
 
 ## Gherkin 驗收劇本
 
@@ -111,7 +109,7 @@ Feature: 可控且可追蹤的本機任務執行
 
 | 編號 | 事項 | 狀態 | 影響 |
 |---|---|---|---|
-| TBD-1 | 實際 issue 編號、首版 CLI／Daemon／單一後端範圍與結果查詢方式 | 待確認 | 正式 issue 建檔與 SCN-001；目前僅規格草案 |
+| TBD-1 | 實際 issue 編號已確認為 issue-1；首版 CLI／Daemon／單一後端範圍待逐項核准 | 已確認 (issue-1) | 正式 issue 已建檔，待確認 SCN-001 與權限矩陣 |
 | TBD-2 | D-01 的呼叫者、專案與權限矩陣 | 待確認 | SCN-002、Phase 0；未確認前不啟動具副作用探測 |
 | TBD-3 | D-02、D-03 的回退政策、接受請求語意與全域上限 | 待確認 | SCN-003、Phase 1 |
 | TBD-4 | D-05 的資源歸屬及取消期限 | 待確認 | SCN-004、Phase 0／1 |
@@ -129,6 +127,7 @@ Feature: 可控且可追蹤的本機任務執行
 | 日期 | 異動 | 負責人 |
 |---|---|---|
 | 2026-09-11 | 使用者授權建立文件；整理架構決策並建立實作草案，候選行為保持待核准 | Codex |
+| 2026-09-11 | 使用者指示正式立項為 Issue 1，將草案遷移至 docs/issues/issue-1/ | Antigravity |
 
 ---
 

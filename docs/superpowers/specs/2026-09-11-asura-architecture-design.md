@@ -270,7 +270,7 @@ Asura/
 
 首個可交付核心建議包含本機 CLI、Daemon、單一後端、資料庫擁有權、任務狀態、取消與共同收尾。Opencode 為優先探測對象，契約驗證後再確認採用。
 
-下一階段選定一個遠端入口，再加入 Cron。完整三面管線、UFL、進階 Context 管理、多後端、Git 掃描與靜默反思列為後續範圍。階段順序見[實作計畫草案](asura-implementation/implementation-plan.md)，驗收候選與核准狀態見[規劃入口](asura-implementation/README.md)。
+下一階段選定一個遠端入口，再加入 Cron。完整三面管線、UFL、進階 Context 管理、多後端、Git 掃描與靜默反思列為後續範圍。階段順序見[實作計畫](../../issues/issue-1/implementation-plan.md)，驗收候選與核准狀態見[規劃入口](../../issues/issue-1/README.md)。
 
 ### 8.2 信任與執行邊界（提案，待核准）
 
