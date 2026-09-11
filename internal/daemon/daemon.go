@@ -97,6 +97,11 @@ func (d *Daemon) Start() error {
 	}
 	d.listener = l
 
+	// 4. 執行重啟恢復：將前次未完成的殘留任務安全轉移為 failed，揭露中斷原因（SCN-006）
+	if d.store != nil {
+		_, _ = d.store.RecoverInterruptedTasks(context.Background())
+	}
+
 	d.wg.Add(1)
 	go d.acceptLoop()
 

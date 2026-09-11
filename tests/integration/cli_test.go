@@ -355,3 +355,102 @@ func TestCLI_PartialFailureProtection(t *testing.T) {
 		t.Errorf("expected DB status to be failed, got: %s", task.Status)
 	}
 }
+
+// SCN-006: 守護程序重啟保留已完成結果並將中斷任務標記為失敗揭露原因
+func TestCLI_RestartRecovery(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-cli-recover-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get wd: %v", err)
+	}
+	projectRoot := filepath.Dir(filepath.Dir(wd))
+	cmdDir := filepath.Join(projectRoot, "cmd", "asura")
+
+	asuraBin := filepath.Join(tmpDir, "asura")
+	buildCmd := exec.Command("go", "build", "-o", asuraBin, cmdDir)
+	if buildOut, buildErr := buildCmd.CombinedOutput(); buildErr != nil {
+		t.Fatalf("failed to build asura binary: %v, output: %s", buildErr, string(buildOut))
+	}
+
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open store: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// 1. 寫入已完成之任務 A
+	taskA := &storage.Task{
+		ID:        "task-A-done",
+		Prompt:    "echo task A finished",
+		Workspace: tmpDir,
+		Status:    storage.StatusCompleted,
+		Result:    "task A finished\n",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.CreateTask(ctx, taskA); err != nil {
+		t.Fatalf("failed to create task A: %v", err)
+	}
+
+	// 2. 寫入中斷前執行中之任務 B (模擬 daemon 突然崩潰中斷)
+	taskB := &storage.Task{
+		ID:        "task-B-interrupted",
+		Prompt:    "sleep 100",
+		Workspace: tmpDir,
+		Status:    storage.StatusRunning,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.CreateTask(ctx, taskB); err != nil {
+		t.Fatalf("failed to create task B: %v", err)
+	}
+
+	// 3. 觸發重啟恢復程序
+	recovered, err := store.RecoverInterruptedTasks(ctx)
+	if err != nil {
+		t.Fatalf("recover interrupted tasks failed: %v", err)
+	}
+	if recovered != 1 {
+		t.Errorf("expected 1 task recovered, got %d", recovered)
+	}
+
+	// 4. 透過 CLI status 查詢任務 A，驗證結果仍完整保存且為 completed
+	statusACmd := exec.Command(asuraBin, "status", "--db", dbPath, taskA.ID)
+	var statusAOut bytes.Buffer
+	statusACmd.Stdout = &statusAOut
+	if err := statusACmd.Run(); err != nil {
+		t.Fatalf("asura status task A failed: %v", err)
+	}
+	statusAStr := statusAOut.String()
+	if !strings.Contains(statusAStr, "Status:    completed") {
+		t.Errorf("expected task A status to be completed, got: %s", statusAStr)
+	}
+	if !strings.Contains(statusAStr, "task A finished") {
+		t.Errorf("expected task A result to be preserved, got: %s", statusAStr)
+	}
+
+	// 5. 透過 CLI status 查詢任務 B，驗證狀態為 failed 且明確揭露中斷原因
+	statusBCmd := exec.Command(asuraBin, "status", "--db", dbPath, taskB.ID)
+	var statusBOut bytes.Buffer
+	statusBCmd.Stdout = &statusBOut
+	if err := statusBCmd.Run(); err != nil {
+		t.Fatalf("asura status task B failed: %v", err)
+	}
+	statusBStr := statusBOut.String()
+	if !strings.Contains(statusBStr, "Status:    failed") {
+		t.Errorf("expected task B status to be failed, got: %s", statusBStr)
+	}
+	if !strings.Contains(statusBStr, "interrupted") {
+		t.Errorf("expected task B error to explain interruption, got: %s", statusBStr)
+	}
+}

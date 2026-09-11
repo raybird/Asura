@@ -236,6 +236,27 @@
   - 全專案回歸：`go test -v ./...` 全部 PASS；`go vet ./...` 靜態分析無告警；`git diff --check` 通過。
 - **狀態**：已完成
 
+#### Task 1.7：守護程序重啟恢復與中斷任務揭露 [已完成]
+- **任務說明**：在調度引擎與 SQLite 儲存層實作重啟恢復機制（`RecoverInterruptedTasks`），於啟動時掃描並將前次未完成的殘留任務（`running`、`pending`）安全標記為中斷失敗，揭露明確中斷原因，絕不假冒為成功，亦不自動從頭重新執行；已完成之任務（`completed`）結果維持完整不變。
+- **預期輸出**：`internal/storage/sqlite.go`, `internal/storage/sqlite_test.go`, `internal/engine/engine.go`, `internal/daemon/daemon.go`, `tests/integration/cli_test.go`
+- **涉及模組或檔案**：`internal/storage/sqlite.go`, `internal/storage/sqlite_test.go`, `internal/engine/engine.go`, `internal/daemon/daemon.go`, `tests/integration/cli_test.go`
+- **完成判準**：調度引擎或 Daemon 啟動時自動執行恢復，已完成任務保持 completed，中斷前處於 running/pending 的任務安全轉為 failed 且記錄 "task interrupted: system restarted or terminated unexpectedly"，嚴格杜絕自動重跑或誤報成功。
+- **驗證方式**：`go test -v -run TestSQLiteStore_RecoverInterruptedTasks ./internal/storage/...` 與 `go test -v -run TestCLI_RestartRecovery ./tests/integration/...`
+- **覆蓋項目**：P1-4、D-07、SCN-006
+- **責任角色**：唯一負責
+- **Scenario ID**：SCN-006
+- **改變可觀察行為**：是
+- **實作與驗證證據**（2026-09-11）：
+  - 內迴圈單元測試紅燈：`go test -v -run TestSQLiteStore_RecoverInterruptedTasks ./internal/storage`，exit code 1，失敗原因：`store.RecoverInterruptedTasks undefined`。
+  - 最小實作：
+    1. 在 `internal/storage/sqlite.go` 實作 `RecoverInterruptedTasks`，以原子 SQL 更新將 `running` 與 `pending` 任務轉為 `failed` 並註明中斷訊息，不變更 `completed` 任務。
+    2. 在 `internal/daemon/daemon.go` 的 `Start()` 監聽成功後自動觸發 `RecoverInterruptedTasks`。
+    3. 在 `internal/engine/engine.go` 提供 `RecoverInterruptedTasks` 委派接口。
+  - 內迴圈單元測試全綠：`TestSQLiteStore_RecoverInterruptedTasks` 0.01s PASS；`internal/daemon/daemon_test.go` 中之 `SCN-006: 守護程序重啟保留已完成結果並揭露中斷任務` PASS。
+  - 外迴圈端到端測試：`go test -v -run TestCLI_RestartRecovery ./tests/integration`，0.57s PASS（驗證已完成任務 A 透過 CLI status 查得狀態仍為 completed 且結果完整保留；中斷任務 B 透過 status 查得狀態為 failed 且包含明確中斷原因）。
+  - 全專案回歸：`go test -v ./...` 全部 PASS；`go vet ./...` 靜態分析無告警；`git diff --check` 通過。
+- **狀態**：已完成
+
 ---
 
 ## 覆蓋對照表 (Coverage Matrix)
@@ -247,7 +268,7 @@
 | SCN-003（競爭啟動與上限） | Task 1.4 | Task 1.1, Task 1.2 | `go test -v ./internal/daemon/...` |
 | SCN-004（取消任務資源回收） | Task 1.5 | Task 0.4, Task 1.1, Task 1.2 | `go test -v ./internal/engine/...` |
 | SCN-005（部分失敗保護） | Task 1.6 | Task 1.1, Task 1.2 | `go test -v -run TestCLI_PartialFailureProtection ./tests/integration/...` |
-| SCN-006（重啟狀態恢復） | 待核准（無） | - | - |
+| SCN-006（重啟狀態恢復） | Task 1.7 | Task 1.1, Task 1.4 | `go test -v -run TestCLI_RestartRecovery ./tests/integration/...` |
 | SCN-007（空輸出收尾防禦） | 待核准（無） | - | - |
 
 ---

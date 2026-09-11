@@ -157,3 +157,8 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 
 	return task, nil
 }
+
+// RecoverInterruptedTasks 委派儲存層執行中斷任務的狀態恢復（遵循 SCN-006）
+func (e *Engine) RecoverInterruptedTasks(ctx context.Context) (int64, error) {
+	return e.store.RecoverInterruptedTasks(ctx)
+}

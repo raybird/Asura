@@ -163,3 +163,107 @@ func TestSQLiteStore_Unit(t *testing.T) {
 		t.Errorf("expected status %q, got %q", StatusCancelled, gotCancelled.Status)
 	}
 }
+
+// SCN-006 內迴圈單元測試：重啟恢復保留已完成任務，並將中斷之 running / pending 任務標記為 failed
+func TestSQLiteStore_RecoverInterruptedTasks(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-storage-recover-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// 1. 寫入已完成任務
+	taskCompleted := &Task{
+		ID:        "task-completed",
+		Prompt:    "echo done",
+		Workspace: "/tmp/allowed",
+		Status:    StatusCompleted,
+		Result:    "completed result",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.CreateTask(ctx, taskCompleted); err != nil {
+		t.Fatalf("create completed task: %v", err)
+	}
+
+	// 2. 寫入中斷前處於 running 的任務
+	taskRunning := &Task{
+		ID:        "task-running",
+		Prompt:    "sleep 100",
+		Workspace: "/tmp/allowed",
+		Status:    StatusRunning,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.CreateTask(ctx, taskRunning); err != nil {
+		t.Fatalf("create running task: %v", err)
+	}
+
+	// 3. 寫入中斷前處於 pending 的任務
+	taskPending := &Task{
+		ID:        "task-pending",
+		Prompt:    "echo pending",
+		Workspace: "/tmp/allowed",
+		Status:    StatusPending,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.CreateTask(ctx, taskPending); err != nil {
+		t.Fatalf("create pending task: %v", err)
+	}
+
+	// 4. 執行恢復
+	recoveredCount, err := store.RecoverInterruptedTasks(ctx)
+	if err != nil {
+		t.Fatalf("RecoverInterruptedTasks failed: %v", err)
+	}
+	if recoveredCount != 2 {
+		t.Errorf("expected 2 recovered tasks, got %d", recoveredCount)
+	}
+
+	// 5. 斷言已完成任務不受任何影響
+	savedCompleted, err := store.GetTask(ctx, "task-completed")
+	if err != nil {
+		t.Fatalf("get completed task: %v", err)
+	}
+	if savedCompleted.Status != StatusCompleted {
+		t.Errorf("expected completed task status %s, got %s", StatusCompleted, savedCompleted.Status)
+	}
+	if savedCompleted.Result != "completed result" {
+		t.Errorf("expected completed result %q, got %q", "completed result", savedCompleted.Result)
+	}
+
+	// 6. 斷言中斷之 running 任務轉為 failed 且具有明確錯誤原因
+	savedRunning, err := store.GetTask(ctx, "task-running")
+	if err != nil {
+		t.Fatalf("get running task: %v", err)
+	}
+	if savedRunning.Status != StatusFailed {
+		t.Errorf("expected running task status %s, got %s", StatusFailed, savedRunning.Status)
+	}
+	if savedRunning.ErrorMessage == "" {
+		t.Errorf("expected non-empty error message for interrupted running task")
+	}
+
+	// 7. 斷言中斷之 pending 任務轉為 failed 且具有明確錯誤原因
+	savedPending, err := store.GetTask(ctx, "task-pending")
+	if err != nil {
+		t.Fatalf("get pending task: %v", err)
+	}
+	if savedPending.Status != StatusFailed {
+		t.Errorf("expected pending task status %s, got %s", StatusFailed, savedPending.Status)
+	}
+	if savedPending.ErrorMessage == "" {
+		t.Errorf("expected non-empty error message for interrupted pending task")
+	}
+}

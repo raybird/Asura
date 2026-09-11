@@ -198,4 +198,73 @@ func TestDaemonConcurrency(t *testing.T) {
 			t.Errorf("expected ErrCapacityExceeded, got %v", err)
 		}
 	})
+
+	// 4. SCN-006: 守護程序重啟保留已完成結果並揭露中斷任務
+	t.Run("SCN-006: 守護程序重啟保留已完成結果並揭露中斷任務", func(t *testing.T) {
+		sockPath4 := filepath.Join(tmpDir, "asura4.sock")
+		now := time.Now().UTC()
+
+		// 預置已完成之任務 A
+		taskA := &storage.Task{
+			ID:        "task-A-done",
+			Prompt:    "task A prompt",
+			Workspace: tmpDir,
+			Status:    storage.StatusCompleted,
+			Result:    "task A success result",
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+		if err := store.CreateTask(context.Background(), taskA); err != nil {
+			t.Fatalf("failed to seed task A: %v", err)
+		}
+
+		// 預置未確認完成之中斷任務 B (status: running)
+		taskB := &storage.Task{
+			ID:        "task-B-interrupted",
+			Prompt:    "task B prompt",
+			Workspace: tmpDir,
+			Status:    storage.StatusRunning,
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+		if err := store.CreateTask(context.Background(), taskB); err != nil {
+			t.Fatalf("failed to seed task B: %v", err)
+		}
+
+		// 啟動守護程序（模擬系統重啟，觸發恢復程序）
+		d := NewDaemon(Config{
+			SocketPath: sockPath4,
+			MaxWorkers: 2,
+			MaxQueue:   10,
+		}, store, policy)
+
+		if err := d.Start(); err != nil {
+			t.Fatalf("daemon start failed: %v", err)
+		}
+		defer d.Close()
+
+		// 斷言任務 A 結果維持 completed
+		savedA, err := store.GetTask(context.Background(), taskA.ID)
+		if err != nil {
+			t.Fatalf("failed to query task A: %v", err)
+		}
+		if savedA.Status != storage.StatusCompleted {
+			t.Errorf("expected task A status to remain completed, got: %s", savedA.Status)
+		}
+		if savedA.Result != "task A success result" {
+			t.Errorf("expected task A result to be preserved, got: %s", savedA.Result)
+		}
+
+		// 斷言任務 B 狀態轉移為 failed 且記載中斷原因
+		savedB, err := store.GetTask(context.Background(), taskB.ID)
+		if err != nil {
+			t.Fatalf("failed to query task B: %v", err)
+		}
+		if savedB.Status != storage.StatusFailed {
+			t.Errorf("expected task B status to be failed after restart, got: %s", savedB.Status)
+		}
+		if savedB.ErrorMessage == "" {
+			t.Errorf("expected task B to have non-empty error message explaining interruption")
+		}
+	})
 }
