@@ -130,7 +130,7 @@
 
 ### Tasks
 
-#### Task 1.1：SQLite 任務資料庫 Schema 與單一連線管理
+#### Task 1.1：SQLite 任務資料庫 Schema 與單一連線管理 [已完成]
 - **任務說明**：建立 `asura.db` 初始化與 `tasks` 資料表，支援 WAL 模式與單一連線池，杜絕鎖死。
 - **預期輸出**：`internal/storage/sqlite.go`, `internal/storage/sqlite_test.go`
 - **涉及模組或檔案**：`internal/storage/sqlite.go`, `internal/storage/sqlite_test.go`
@@ -140,11 +140,14 @@
 - **責任角色**：唯一負責
 - **Scenario ID**：SCN-001
 - **改變可觀察行為**：是
-- **BDD 外迴圈**：標註 SCN-001 的儲存整合測試；執行命令：`go test -v -run TestTaskStorage ./internal/storage`；預期失敗原因：缺少 SQLite 初始化與任務儲存能力。
-- **TDD 內迴圈**：單元測試路徑 `internal/storage/sqlite_test.go`；執行命令：`go test ./internal/storage/...`；預期失敗原因：`storage` 模組未定義。
-- **最小實作與回歸**：實作 `internal/storage/sqlite.go`；全綠回歸命令：`go test -v ./internal/storage/...`。
+- **實作與驗證證據**（2026-09-11）：
+  - 外迴圈紅燈：`go test -v -run TestTaskStorage ./internal/storage`，exit code 1，失敗原因：`undefined: NewSQLiteStore`, `undefined: Task`, `undefined: StatusPending`。
+  - 內迴圈紅燈：`go test ./internal/storage/...`，exit code 1，失敗原因：`undefined: NewSQLiteStore` 等型別未定義。
+  - 最小實作：完成 `internal/storage/sqlite.go`，建立 `tasks` 資料表與索引，配置 WAL 模式、busy_timeout 與單一連線池（`SetMaxOpenConns(1)`），提供 `CreateTask`、`GetTask`、`UpdateTaskStatus` 與 `Close`。
+  - 全綠回歸：`go test -v ./internal/storage/...` 全部 PASS（`TestTaskStorage` 與 `TestSQLiteStore_Unit` 均 PASS）。`go test -v ./...` 與 `go vet ./...` 全專案通過。
+- **狀態**：已完成
 
-#### Task 1.2：任務調度器與授權閘門整合
+#### Task 1.2：任務調度器與授權閘門整合 [已完成]
 - **任務說明**：實作 Task 協調層，接收提交請求，經由 `auth.Policy` 校驗，通過後寫入 DB 並調用 `opencode` 後端執行。
 - **預期輸出**：`internal/engine/engine.go`, `internal/engine/engine_test.go`
 - **涉及模組或檔案**：`internal/engine/engine.go`, `internal/engine/engine_test.go`
@@ -154,11 +157,14 @@
 - **責任角色**：唯一負責
 - **Scenario ID**：SCN-001, SCN-002
 - **改變可觀察行為**：是
-- **BDD 外迴圈**：標註 SCN-001 與 SCN-002 的引擎整合測試；執行命令：`go test -v -run TestEngineExecute ./internal/engine`；預期失敗原因：缺少整合調度引擎。
-- **TDD 內迴圈**：單元測試路徑 `internal/engine/engine_test.go`；執行命令：`go test ./internal/engine/...`；預期失敗原因：`engine` 模組未定義。
-- **最小實作與回歸**：實作 `internal/engine/engine.go`；全綠回歸命令：`go test -v ./internal/engine/...`。
+- **實作與驗證證據**（2026-09-11）：
+  - 外迴圈紅燈：`go test -v -run TestEngineExecute ./internal/engine`，exit code 1，失敗原因：`undefined: NewEngine`, `undefined: WithRunner`, `undefined: SubmitRequest`。
+  - 內迴圈紅燈：`go test ./internal/engine/...`，exit code 1，失敗原因：`engine` 模組未定義。
+  - 最小實作：完成 `internal/engine/engine.go`，實作 `SubmitTask`，前置透過 `auth.Policy.AuthorizeWorkspace` 嚴格把關授權；未授權直接返回錯誤，確保 0 子進程與 0 資料庫任務建立；授權通過則生成唯一 Task ID、寫入任務至 `storage.SQLiteStore` 並調度 runner 執行，成功時更新狀態為 `completed`，失敗時更新為 `failed` 並記錄 `error_message`。
+  - 全綠回歸：`go test -v ./internal/engine/...` 全部 PASS（包含授權拒絕 0 子進程、授權成功取得結果與重查、以及執行失敗路徑單元測試）。`go test -v ./...` 與 `go vet ./...` 全專案通過。
+- **狀態**：已完成
 
-#### Task 1.3：本機 CLI 進入點（`asura run` 與 `asura status`）
+#### Task 1.3：本機 CLI 進入點（`asura run` 與 `asura status`） [已完成]
 - **任務說明**：實作 `cmd/asura` 進入點，提供 `run` 指令提交任務、串流即時輸出，以及 `status <task_id>` 查詢歷史結果。
 - **預期輸出**：`cmd/asura/main.go`, `cmd/asura/run.go`, `cmd/asura/status.go`
 - **涉及模組或檔案**：`cmd/asura/main.go`, `cmd/asura/run.go`, `cmd/asura/status.go`
@@ -168,9 +174,12 @@
 - **責任角色**：唯一負責
 - **Scenario ID**：SCN-001
 - **改變可觀察行為**：是
-- **BDD 外迴圈**：標註 SCN-001 的 CLI 端到端測試；執行命令：`go test -v ./tests/integration/...`；預期失敗原因：`cmd/asura` 進入點不存在。
-- **TDD 內迴圈**：`cmd/asura/run_test.go`；執行命令：`go test ./cmd/asura/...`；預期失敗原因：CLI 命令處理函式未定義。
-- **最小實作與回歸**：實作 `cmd/asura` 相關檔案；全綠回歸命令：`go test -v ./...`。
+- **實作與驗證證據**（2026-09-11）：
+  - 外迴圈紅燈：`go test -v ./tests/integration/...`，exit code 1，失敗原因：CLI 進入點不存在。
+  - 內迴圈紅燈：`go test ./cmd/asura/...`，exit code 1，失敗原因：`undefined: RunCLI`。
+  - 最小實作：完成 `cmd/asura/main.go`、`cmd/asura/run.go` 與 `cmd/asura/status.go`，支援 `run` 與 `status` 子命令、`--db`、`--workspace`、`--allowed-roots` 參數配置，即時串流輸出並保存結果至資料庫。
+  - 全綠回歸：`go test -v ./cmd/asura/...` 與 `go test -v ./tests/integration/...` 全部 PASS。手動以 `go run ./cmd/asura run "echo 42"` 執行產出 Task ID 並以 `status` 成功重查相同結果。`go test -v ./...` 與 `go vet ./...` 全專案通過。
+- **狀態**：已完成
 
 ---
 

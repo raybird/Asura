@@ -1,0 +1,119 @@
+package engine
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"time"
+
+	"asura/internal/auth"
+	"asura/internal/storage"
+)
+
+// RunnerFunc 定義任務底層執行的函式簽名
+type RunnerFunc func(ctx context.Context, workspace string, prompt string) (string, error)
+
+// SubmitRequest 代表提交任務的請求參數
+type SubmitRequest struct {
+	Workspace string `json:"workspace"`
+	Prompt    string `json:"prompt"`
+}
+
+// Engine 協調任務授權、持久化與後端執行
+type Engine struct {
+	store  *storage.SQLiteStore
+	policy *auth.Policy
+	runner RunnerFunc
+}
+
+// Option 用於自訂 Engine 行為
+type Option func(*Engine)
+
+// WithRunner 注入自訂執行器（可用於測試或特定後端串接）
+func WithRunner(runner RunnerFunc) Option {
+	return func(e *Engine) {
+		e.runner = runner
+	}
+}
+
+// NewEngine 建立新的任務協調引擎
+func NewEngine(store *storage.SQLiteStore, policy *auth.Policy, opts ...Option) *Engine {
+	e := &Engine{
+		store:  store,
+		policy: policy,
+	}
+
+	for _, opt := range opts {
+		opt(e)
+	}
+
+	if e.runner == nil {
+		e.runner = defaultRunner
+	}
+
+	return e
+}
+
+// defaultRunner 預設執行器
+func defaultRunner(ctx context.Context, workspace string, prompt string) (string, error) {
+	return "", errors.New("no default runner configured")
+}
+
+func generateTaskID() string {
+	b := make([]byte, 6)
+	_, _ = rand.Read(b)
+	return fmt.Sprintf("task-%d-%s", time.Now().Unix(), hex.EncodeToString(b))
+}
+
+// SubmitTask 驗證授權並調度執行任務
+// 遵循 SCN-002：未授權請求在入口直接拒絕，0 資料庫寫入且 0 後端子進程啟動。
+// 遵循 SCN-001：授權請求寫入儲存並執行，產出可追蹤的任務識別與完成結果。
+func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Task, error) {
+	// 1. 授權閘門檢查
+	if err := e.policy.AuthorizeWorkspace(req.Workspace); err != nil {
+		return nil, fmt.Errorf("workspace authorization denied: %w", err)
+	}
+
+	// 2. 建立任務初始狀態
+	taskID := generateTaskID()
+	now := time.Now().UTC()
+	task := &storage.Task{
+		ID:        taskID,
+		Prompt:    req.Prompt,
+		Workspace: req.Workspace,
+		Status:    storage.StatusPending,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if err := e.store.CreateTask(ctx, task); err != nil {
+		return nil, fmt.Errorf("create task in storage: %w", err)
+	}
+
+	// 3. 轉移狀態至 running
+	if err := e.store.UpdateTaskStatus(ctx, task.ID, storage.StatusRunning, "", ""); err != nil {
+		return nil, fmt.Errorf("update task to running: %w", err)
+	}
+	task.Status = storage.StatusRunning
+
+	// 4. 調用後端執行
+	output, runErr := e.runner(ctx, req.Workspace, req.Prompt)
+	if runErr != nil {
+		_ = e.store.UpdateTaskStatus(ctx, task.ID, storage.StatusFailed, output, runErr.Error())
+		task.Status = storage.StatusFailed
+		task.Result = output
+		task.ErrorMessage = runErr.Error()
+		return task, runErr
+	}
+
+	// 5. 記錄成功結果
+	if err := e.store.UpdateTaskStatus(ctx, task.ID, storage.StatusCompleted, output, ""); err != nil {
+		return nil, fmt.Errorf("update task to completed: %w", err)
+	}
+	task.Status = storage.StatusCompleted
+	task.Result = output
+
+	return task, nil
+}
