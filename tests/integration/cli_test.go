@@ -3,6 +3,7 @@ package integration
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -255,5 +256,102 @@ func TestCLI_CancelIsolation(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	if err := syscall.Kill(-pgidA, 0); err == nil {
 		t.Errorf("expected process group %d to be completely terminated, but it is still alive", pgidA)
+	}
+}
+
+// SCN-005: 部分執行失敗不自動重做副作用且揭露已知進度
+func TestCLI_PartialFailureProtection(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-cli-partial-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	allowedDir := filepath.Join(tmpDir, "project")
+	if err := os.MkdirAll(allowedDir, 0755); err != nil {
+		t.Fatalf("failed to create allowed dir: %v", err)
+	}
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get wd: %v", err)
+	}
+	projectRoot := filepath.Dir(filepath.Dir(wd))
+	cmdDir := filepath.Join(projectRoot, "cmd", "asura")
+
+	asuraBin := filepath.Join(tmpDir, "asura")
+	buildCmd := exec.Command("go", "build", "-o", asuraBin, cmdDir)
+	if buildOut, buildErr := buildCmd.CombinedOutput(); buildErr != nil {
+		t.Fatalf("failed to build asura binary: %v, output: %s", buildErr, string(buildOut))
+	}
+
+	sideEffectFile := filepath.Join(allowedDir, "side-effect-partial.txt")
+	taskID := "task-partial-fail-1"
+
+	// 提交一個執行部分副作用（touch 檔案）隨後失敗（exit 42）的命令
+	script := fmt.Sprintf("echo 'step 1 done' && touch %s && echo 'step 2 failed' && exit 42", sideEffectFile)
+	runCmd := exec.Command(asuraBin,
+		"run",
+		"--db", dbPath,
+		"--id", taskID,
+		"--workspace", allowedDir,
+		"--allowed-roots", allowedDir,
+		script,
+	)
+	var runOut, runErr bytes.Buffer
+	runCmd.Stdout = &runOut
+	runCmd.Stderr = &runErr
+
+	// 預期執行失敗，退出碼非 0
+	err = runCmd.Run()
+	if err == nil {
+		t.Fatalf("expected command to exit with error, but succeeded")
+	}
+
+	// 1. 斷言副作用確實已發生（sideEffectFile 存在）
+	if _, statErr := os.Stat(sideEffectFile); os.IsNotExist(statErr) {
+		t.Fatalf("expected side effect file to be created, but not found")
+	}
+
+	// 2. 斷言透過 asura status 查詢該任務之結果
+	statusCmd := exec.Command(asuraBin, "status", "--db", dbPath, taskID)
+	var statusOut, statusErr bytes.Buffer
+	statusCmd.Stdout = &statusOut
+	statusCmd.Stderr = &statusErr
+	if err := statusCmd.Run(); err != nil {
+		t.Fatalf("asura status failed: %v, stderr: %s", err, statusErr.String())
+	}
+	statusStr := statusOut.String()
+
+	// 狀態必須為 failed（而非 completed 或 pending）
+	if !strings.Contains(statusStr, "Status:    failed") {
+		t.Errorf("expected status to be failed, got: %s", statusStr)
+	}
+
+	// 必須揭露已產生的已知進度（step 1 done）
+	if !strings.Contains(statusStr, "step 1 done") {
+		t.Errorf("expected status output to contain known progress 'step 1 done', got: %s", statusStr)
+	}
+
+	// 必須揭露失敗原因（exit status 42）
+	if !strings.Contains(statusStr, "42") {
+		t.Errorf("expected status output to reveal exit status or error 42, got: %s", statusStr)
+	}
+
+	// 3. 驗證資料庫中僅存在該一筆任務，未自動產生重試任務
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open store: %v", err)
+	}
+	defer store.Close()
+
+	task, err := store.GetTask(context.Background(), taskID)
+	if err != nil {
+		t.Fatalf("expected task in store, got error: %v", err)
+	}
+	if task.Status != storage.StatusFailed {
+		t.Errorf("expected DB status to be failed, got: %s", task.Status)
 	}
 }

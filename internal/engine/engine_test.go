@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -163,6 +164,76 @@ func TestEngine_FailedExecution(t *testing.T) {
 	}
 	if saved.ErrorMessage != failErr.Error() {
 		t.Errorf("expected saved error message %q, got %q", failErr.Error(), saved.ErrorMessage)
+	}
+}
+
+// SCN-005 內迴圈單元測試：部分執行失敗不自動重試，且保留已產生的部分輸出與失敗原因
+func TestEngine_PartialFailureNoRetry(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-engine-partial-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	allowedDir := filepath.Join(tmpDir, "allowed-workspace")
+	if err := os.MkdirAll(allowedDir, 0755); err != nil {
+		t.Fatalf("failed to create allowed dir: %v", err)
+	}
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{allowedDir})
+
+	var backendAttempts int32
+	runner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		atomic.AddInt32(&backendAttempts, 1)
+		// 模擬產生了前段有效副作用與輸出後遭遇退出錯誤
+		return "step 1: file created; step 2: database touched", errors.New("exit status 42: out of memory")
+	}
+
+	eng := NewEngine(store, policy, WithRunner(runner))
+	ctx := context.Background()
+
+	task, err := eng.SubmitTask(ctx, SubmitRequest{
+		Workspace: allowedDir,
+		Prompt:    "multi-step-task",
+	})
+	if err == nil {
+		t.Fatalf("expected error for failed task, got nil")
+	}
+
+	// 1. 斷言系統嚴格執行 1 次，絕不自動重試
+	if attempts := atomic.LoadInt32(&backendAttempts); attempts != 1 {
+		t.Errorf("expected exactly 1 execution attempt (no auto-retry), got %d", attempts)
+	}
+
+	// 2. 斷言記憶體任務與資料庫持久化之任務狀態均為 StatusFailed
+	if task.Status != storage.StatusFailed {
+		t.Errorf("expected task status %s, got %s", storage.StatusFailed, task.Status)
+	}
+	expectedOutput := "step 1: file created; step 2: database touched"
+	if task.Result != expectedOutput {
+		t.Errorf("expected partial output %q, got %q", expectedOutput, task.Result)
+	}
+
+	// 3. 斷言資料庫中查得相同之部分輸出與明確錯誤訊息
+	saved, err := store.GetTask(ctx, task.ID)
+	if err != nil {
+		t.Fatalf("failed to get task from store: %v", err)
+	}
+	if saved.Status != storage.StatusFailed {
+		t.Errorf("expected store task status %s, got %s", storage.StatusFailed, saved.Status)
+	}
+	if saved.Result != expectedOutput {
+		t.Errorf("expected store partial result %q, got %q", expectedOutput, saved.Result)
+	}
+	if !strings.Contains(saved.ErrorMessage, "exit status 42") {
+		t.Errorf("expected error message to contain 'exit status 42', got: %s", saved.ErrorMessage)
 	}
 }
 

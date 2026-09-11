@@ -220,6 +220,22 @@
     3. 全專案回歸：`go test -v ./...` 全部 PASS；`go vet ./...` 靜態檢查無任何告警。
 - **狀態**：已完成
 
+#### Task 1.6：部分失敗副作用保護與進度揭露 [已完成]
+- **任務說明**：在調度引擎與 CLI 確保任務在部分步驟執行失敗時，記錄已產生的輸出與失敗原因，狀態明確轉為 `failed`，絕不自動重新調度或重試該任務，杜絕重複副作用；提供 CLI status 完整查得失敗細節。
+- **預期輸出**：`internal/engine/engine.go`, `internal/engine/engine_test.go`, `tests/integration/cli_test.go`
+- **涉及模組或檔案**：`internal/engine/engine.go`, `internal/engine/engine_test.go`, `cmd/asura/run.go`, `cmd/asura/status.go`, `tests/integration/cli_test.go`
+- **完成判準**：若任務執行中途失敗（如產生部分檔案後返回非 0 退出碼），已產生之副作用保留，任務狀態標記為 failed，嚴格無自動重試（執行計數為 1），透過 `asura status` 查得已產生的部分輸出與退出碼失敗原因。
+- **驗證方式**：`go test -v -run TestEngine_PartialFailureNoRetry ./internal/engine/...` 與 `go test -v -run TestCLI_PartialFailureProtection ./tests/integration/...`
+- **覆蓋項目**：P1-4、D-04、SCN-005
+- **責任角色**：唯一負責
+- **Scenario ID**：SCN-005
+- **改變可觀察行為**：是
+- **實作與驗證證據**（2026-09-11）：
+  - 外迴圈端到端測試：`go test -v -run TestCLI_PartialFailureProtection ./tests/integration`，0.55s PASS（執行建立檔案 + exit 42 命令，驗證副作用檔案確實產生、CLI run 返回非 0 狀態碼、`asura status` 顯示狀態為 `failed` 且完整呈現已完成進度與 exit status 42 失敗訊息、SQLite 資料庫中僅有單一任務記錄無自動重試）。
+  - 內迴圈單元測試：`go test -v -run TestEngine_PartialFailureNoRetry ./internal/engine`，0.01s PASS（驗證後端執行次數嚴格為 1 次杜絕重試，且記憶體與儲存層均保留 partial output 與錯誤字串）。
+  - 全專案回歸：`go test -v ./...` 全部 PASS；`go vet ./...` 靜態分析無告警；`git diff --check` 通過。
+- **狀態**：已完成
+
 ---
 
 ## 覆蓋對照表 (Coverage Matrix)
@@ -230,7 +246,7 @@
 | SCN-002（拒絕超出授權之執行） | Task 0.2 | Task 0.1, Task 1.2 | `go test -v ./internal/auth/...` |
 | SCN-003（競爭啟動與上限） | Task 1.4 | Task 1.1, Task 1.2 | `go test -v ./internal/daemon/...` |
 | SCN-004（取消任務資源回收） | Task 1.5 | Task 0.4, Task 1.1, Task 1.2 | `go test -v ./internal/engine/...` |
-| SCN-005（部分失敗保護） | 待核准（無） | - | - |
+| SCN-005（部分失敗保護） | Task 1.6 | Task 1.1, Task 1.2 | `go test -v -run TestCLI_PartialFailureProtection ./tests/integration/...` |
 | SCN-006（重啟狀態恢復） | 待核准（無） | - | - |
 | SCN-007（空輸出收尾防禦） | 待核准（無） | - | - |
 
