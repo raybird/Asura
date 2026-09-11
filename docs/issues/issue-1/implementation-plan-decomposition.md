@@ -257,6 +257,26 @@
   - 全專案回歸：`go test -v ./...` 全部 PASS；`go vet ./...` 靜態分析無告警；`git diff --check` 通過。
 - **狀態**：已完成
 
+#### Task 1.8：空輸出與結構化錯誤防禦收尾 [已完成]
+- **任務說明**：在調度引擎中實作輸出有效性防禦檢驗，當後端未回傳有效輸出文字（空字串或純空白）或僅包含未解決之結構化錯誤時，杜絕標記為 completed 假成功，嚴格標記為 failed 並揭露明確失敗原因，收尾程序不自動重新執行以防重複副作用。
+- **預期輸出**：`internal/engine/engine.go`, `internal/engine/engine_test.go`, `tests/integration/cli_test.go`
+- **涉及模組或檔案**：`internal/engine/engine.go`, `internal/engine/engine_test.go`, `cmd/asura/run.go`, `tests/integration/cli_test.go`
+- **完成判準**：若後端輸出為空（或純空白），任務狀態嚴格標記為 failed（而非 completed），錯誤訊息標註 "execution produced empty output"，`asura run` 返回非 0 狀態碼，`asura status` 查得失敗狀態與原因，且收尾絕不重新執行以保護副作用。
+- **驗證方式**：`go test -v -run TestEngine_EmptyOutputTreatedAsFailed ./internal/engine/...` 與 `go test -v -run TestCLI_EmptyOutputDefense ./tests/integration/...`
+- **覆蓋項目**：P1-4、D-06、SCN-007
+- **責任角色**：唯一負責
+- **Scenario ID**：SCN-007
+- **改變可觀察行為**：是
+- **實作與驗證證據**（2026-09-12）：
+  - 內迴圈單元測試紅燈：`go test -v -run TestEngine_EmptyOutputTreatedAsFailed ./internal/engine`，exit code 1，失敗原因：`undefined: ErrEmptyOutput`。
+  - 最小實作：
+    1. 在 `internal/engine/engine.go` 定義 `ErrEmptyOutput`。
+    2. 在 `SubmitTask` 結果收尾時檢查 `strings.TrimSpace(output) == ""`，若為空則主動更新為 `StatusFailed`，填入 `"execution produced empty output"`，並回傳 `ErrEmptyOutput`。
+  - 內迴圈單元測試全綠：`TestEngine_EmptyOutputTreatedAsFailed` 0.01s PASS。
+  - 外迴圈端到端測試：`go test -v -run TestCLI_EmptyOutputDefense ./tests/integration`，0.54s PASS（執行 `:` 空輸出命令，CLI run 返回非 0 狀態碼，`asura status` 查得狀態嚴格為 `failed` 且錯誤原因明確說明 `empty output`，DB 亦確認為 `StatusFailed`）。
+  - 全專案回歸：`go test -v ./...` 全部 PASS；`go vet ./...` 靜態分析無告警；`git diff --check` 通過。
+- **狀態**：已完成
+
 ---
 
 ## 覆蓋對照表 (Coverage Matrix)
@@ -269,7 +289,7 @@
 | SCN-004（取消任務資源回收） | Task 1.5 | Task 0.4, Task 1.1, Task 1.2 | `go test -v ./internal/engine/...` |
 | SCN-005（部分失敗保護） | Task 1.6 | Task 1.1, Task 1.2 | `go test -v -run TestCLI_PartialFailureProtection ./tests/integration/...` |
 | SCN-006（重啟狀態恢復） | Task 1.7 | Task 1.1, Task 1.4 | `go test -v -run TestCLI_RestartRecovery ./tests/integration/...` |
-| SCN-007（空輸出收尾防禦） | 待核准（無） | - | - |
+| SCN-007（空輸出收尾防禦） | Task 1.8 | Task 1.1, Task 1.2 | `go test -v -run TestCLI_EmptyOutputDefense ./tests/integration/...` |
 
 ---
 

@@ -6,11 +6,17 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"asura/internal/auth"
 	"asura/internal/storage"
+)
+
+var (
+	// ErrEmptyOutput 代表執行後端未產出任何有效文字（空字串或純空白）
+	ErrEmptyOutput = errors.New("execution produced empty output")
 )
 
 // RunnerFunc 定義任務底層執行的函式簽名
@@ -148,7 +154,17 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 		return task, runErr
 	}
 
-	// 6. 記錄成功結果
+	// 6. 空輸出防禦檢查（遵循 SCN-007）：空白文字不得判定為成功
+	if strings.TrimSpace(output) == "" {
+		errMsg := "execution produced empty output"
+		_ = e.store.UpdateTaskStatus(ctx, task.ID, storage.StatusFailed, output, errMsg)
+		task.Status = storage.StatusFailed
+		task.Result = output
+		task.ErrorMessage = errMsg
+		return task, ErrEmptyOutput
+	}
+
+	// 7. 記錄成功結果
 	if err := e.store.UpdateTaskStatus(ctx, task.ID, storage.StatusCompleted, output, ""); err != nil {
 		return nil, fmt.Errorf("update task to completed: %w", err)
 	}

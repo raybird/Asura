@@ -454,3 +454,91 @@ func TestCLI_RestartRecovery(t *testing.T) {
 		t.Errorf("expected task B error to explain interruption, got: %s", statusBStr)
 	}
 }
+
+// SCN-007: 空白輸出或結構化錯誤不被當成成功且明確告知失敗原因
+func TestCLI_EmptyOutputDefense(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-cli-empty-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	allowedDir := filepath.Join(tmpDir, "project")
+	if err := os.MkdirAll(allowedDir, 0755); err != nil {
+		t.Fatalf("failed to create allowed dir: %v", err)
+	}
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get wd: %v", err)
+	}
+	projectRoot := filepath.Dir(filepath.Dir(wd))
+	cmdDir := filepath.Join(projectRoot, "cmd", "asura")
+
+	asuraBin := filepath.Join(tmpDir, "asura")
+	buildCmd := exec.Command("go", "build", "-o", asuraBin, cmdDir)
+	if buildOut, buildErr := buildCmd.CombinedOutput(); buildErr != nil {
+		t.Fatalf("failed to build asura binary: %v, output: %s", buildErr, string(buildOut))
+	}
+
+	taskID := "task-empty-output-1"
+
+	// 提交一個無任何文字輸出的命令（如 ":" 或 "true"）
+	runCmd := exec.Command(asuraBin,
+		"run",
+		"--db", dbPath,
+		"--id", taskID,
+		"--workspace", allowedDir,
+		"--allowed-roots", allowedDir,
+		":",
+	)
+	var runOut, runErr bytes.Buffer
+	runCmd.Stdout = &runOut
+	runCmd.Stderr = &runErr
+
+	// 斷言 CLI 返回非 0 狀態碼（因空輸出被防禦為失敗）
+	err = runCmd.Run()
+	if err == nil {
+		t.Fatalf("expected CLI run to fail for empty output command, but succeeded with exit code 0")
+	}
+
+	// 透過 CLI status 查詢任務狀態
+	statusCmd := exec.Command(asuraBin, "status", "--db", dbPath, taskID)
+	var statusOut, statusErr bytes.Buffer
+	statusCmd.Stdout = &statusOut
+	statusCmd.Stderr = &statusErr
+	if err := statusCmd.Run(); err != nil {
+		t.Fatalf("asura status failed: %v, stderr: %s", err, statusErr.String())
+	}
+	statusStr := statusOut.String()
+
+	// 1. 斷言狀態嚴格為 failed（杜絕假成功）
+	if !strings.Contains(statusStr, "Status:    failed") {
+		t.Errorf("expected status to be failed, got: %s", statusStr)
+	}
+
+	// 2. 斷言錯誤訊息明確指出 empty output
+	if !strings.Contains(statusStr, "empty output") {
+		t.Errorf("expected error message to explain empty output, got: %s", statusStr)
+	}
+
+	// 3. 檢查資料庫持久化狀態
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open store: %v", err)
+	}
+	defer store.Close()
+
+	task, err := store.GetTask(context.Background(), taskID)
+	if err != nil {
+		t.Fatalf("failed to get task from store: %v", err)
+	}
+	if task.Status != storage.StatusFailed {
+		t.Errorf("expected DB task status failed, got: %s", task.Status)
+	}
+	if !strings.Contains(task.ErrorMessage, "empty output") {
+		t.Errorf("expected DB task error message to contain 'empty output', got: %s", task.ErrorMessage)
+	}
+}

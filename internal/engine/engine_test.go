@@ -237,3 +237,65 @@ func TestEngine_PartialFailureNoRetry(t *testing.T) {
 	}
 }
 
+// SCN-007 內迴圈單元測試：空輸出或純空白文字不得判定為成功，應標記為 failed 並說明原因
+func TestEngine_EmptyOutputTreatedAsFailed(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-engine-empty-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	allowedDir := filepath.Join(tmpDir, "allowed-workspace")
+	if err := os.MkdirAll(allowedDir, 0755); err != nil {
+		t.Fatalf("failed to create allowed dir: %v", err)
+	}
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{allowedDir})
+
+	// runner 正常返回但輸出為純空白
+	runner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		return "   \n\t  ", nil
+	}
+
+	eng := NewEngine(store, policy, WithRunner(runner))
+	ctx := context.Background()
+
+	task, err := eng.SubmitTask(ctx, SubmitRequest{
+		Workspace: allowedDir,
+		Prompt:    "command-producing-no-output",
+	})
+	if err == nil {
+		t.Fatalf("expected error for empty output task, got nil")
+	}
+	if !errors.Is(err, ErrEmptyOutput) {
+		t.Errorf("expected ErrEmptyOutput, got: %v", err)
+	}
+
+	// 斷言記憶體任務狀態為 StatusFailed
+	if task.Status != storage.StatusFailed {
+		t.Errorf("expected task status %s, got %s", storage.StatusFailed, task.Status)
+	}
+	if !strings.Contains(task.ErrorMessage, "empty output") {
+		t.Errorf("expected error message to mention empty output, got: %s", task.ErrorMessage)
+	}
+
+	// 斷言資料庫中狀態亦為 StatusFailed
+	saved, err := store.GetTask(ctx, task.ID)
+	if err != nil {
+		t.Fatalf("failed to get task from store: %v", err)
+	}
+	if saved.Status != storage.StatusFailed {
+		t.Errorf("expected saved status %s, got %s", storage.StatusFailed, saved.Status)
+	}
+	if !strings.Contains(saved.ErrorMessage, "empty output") {
+		t.Errorf("expected saved error message to mention empty output, got: %s", saved.ErrorMessage)
+	}
+}
+
