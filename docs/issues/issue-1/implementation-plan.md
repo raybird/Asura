@@ -29,10 +29,10 @@
 
 前置：Phase 0 的權限與核心後端能力已有證據，SCN-001 至 SCN-007 及其所需門檻已核准。
 
-- [x] P1-1：建立唯一擁有權、Migration 與競爭啟動處理（D-02；SCN-003）。完成證據：`internal/daemon/daemon.go` 透過 Unix Domain Socket 互斥探測杜絕雙重擁有者，`internal/daemon/pool.go` 透過 WorkerPool 確保不突破全域上限且每個已接受任務各執行一次，未接受請求得到明確飽和錯誤。
+- [x] P1-1：建立唯一擁有權、Migration 與競爭啟動處理（D-02；SCN-003）。完成證據：`internal/daemon/daemon.go` 透過 Unix Domain Socket 與 flock 排他互斥鎖杜絕雙重擁有者（R-01），`internal/daemon/pool.go` 透過 WorkerPool 互斥鎖原子交接模型確保不突破全域上限、無佇列停滯且每個已接受任務各執行一次（R-02），未接受請求得到明確飽和錯誤。
 - [x] P1-2：建立任務接受、狀態與結果保存及查詢（D-07；SCN-001、SCN-006）。完成證據：`internal/storage/sqlite.go` 支援任務持久化與生命週期狀態（pending, running, completed, failed, cancelled），`internal/engine/engine.go` 實現調度，成功結果可再次查得。
 - [x] P1-3：串接 CLI、授權、執行容量與單一後端（D-01、D-03、D-08；SCN-001、SCN-002、SCN-003）。完成證據：`cmd/asura` 實作 `run` 與 `status` 子命令，`tests/integration/cli_test.go` 驗證 SCN-001 與 SCN-002 端到端路徑通過，未授權呼叫被阻擋且 0 子進程、0 DB 寫入。
-- [x] P1-4：加入取消與共同收尾，依已核准策略處理部分失敗（D-04、D-05、D-06；SCN-004、SCN-005、SCN-007）。完成證據：以 Task 1.5 實作取消與 PGID 進程樹強殺回收（2 秒內終止且狀態為 cancelled）、以 Task 1.6 實作部分失敗副作用保護與進度揭露（不自動重試且 status 揭露退出碼與部分進度）、以 Task 1.8 實作空輸出與結構化錯誤防禦收尾（空輸出轉為 failed 杜絕假成功，不重做副作用）。
+- [x] P1-4：加入取消與共同收尾，依已核准策略處理部分失敗（D-04、D-05、D-06；SCN-004、SCN-005、SCN-007）。完成證據：以 Task 1.5 實作取消與 PGID 進程樹強殺回收，並以 R-03 雙向同步防禦啟動空窗；以 safeBuffer 杜絕 MultiWriter Data Race（R-04）；以獨立 persistCtx 保證取消與超時下終態持久化（R-05）；以 UpdateTaskResult 保存已取消任務 partial output（R-06）；提早揭露 Task ID（R-07）；Client.Submit 保留失敗 Task（R-08）；以 Task 1.8 與 R-09 實作空輸出與未解決結構化錯誤防禦收尾（轉為 failed 杜絕假成功）；以條件式狀態更新避免覆寫取消結果（R-10）。全套件通過 `go test -count=1 -race ./...` 驗證。
 
 ### Phase 2：主要遠端入口與排程
 
