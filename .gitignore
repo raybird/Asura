@@ -1,0 +1,22 @@
+# Databases & Local State
+mcp-memory-libsql.db*
+*.sqlite
+*.db
+
+# Environment & Credentials
+.env
+.env.local
+*.pem
+*.key
+
+# Editor & OS files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+*.bak
+
+# Agent & CLI local scratch
+.antigravitycli/
