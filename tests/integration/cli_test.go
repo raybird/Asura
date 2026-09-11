@@ -2,11 +2,16 @@ package integration
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
+
+	"asura/internal/storage"
 )
 
 // SCN-001: 透過本機 CLI (go run ./cmd/asura) 提交任務並以 status 重查相同結果
@@ -113,4 +118,142 @@ func TestCLI_EndToEnd(t *testing.T) {
 			t.Errorf("expected stderr to explain authorization denial, got: %s", errStr)
 		}
 	})
+}
+
+// SCN-004: 取消任務 A 在 2 秒內停止且狀態為 cancelled，不影響其他並行任務 B（仍為 completed）
+func TestCLI_CancelIsolation(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-cli-cancel-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	allowedDir := filepath.Join(tmpDir, "project")
+	if err := os.MkdirAll(allowedDir, 0755); err != nil {
+		t.Fatalf("failed to create allowed dir: %v", err)
+	}
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get wd: %v", err)
+	}
+	projectRoot := filepath.Dir(filepath.Dir(wd))
+	cmdDir := filepath.Join(projectRoot, "cmd", "asura")
+
+	// 預先編譯二進位執行檔以消除 go run 編譯時間對 2 秒超時的干擾
+	asuraBin := filepath.Join(tmpDir, "asura")
+	buildCmd := exec.Command("go", "build", "-o", asuraBin, cmdDir)
+	if buildOut, buildErr := buildCmd.CombinedOutput(); buildErr != nil {
+		t.Fatalf("failed to build asura binary: %v, output: %s", buildErr, string(buildOut))
+	}
+
+	// 1. 啟動長時間任務 A (sleep 10)
+	taskAID := "task-A-long"
+	runACmd := exec.Command(asuraBin,
+		"run",
+		"--db", dbPath,
+		"--id", taskAID,
+		"--workspace", allowedDir,
+		"--allowed-roots", allowedDir,
+		"sleep 10",
+	)
+	var runAOut, runAErr bytes.Buffer
+	runACmd.Stdout = &runAOut
+	runACmd.Stderr = &runAErr
+	if err := runACmd.Start(); err != nil {
+		t.Fatalf("failed to start task A: %v", err)
+	}
+
+	// 2. 同時啟動快速任務 B
+	taskBID := "task-B-fast"
+	runBCmd := exec.Command(asuraBin,
+		"run",
+		"--db", dbPath,
+		"--id", taskBID,
+		"--workspace", allowedDir,
+		"--allowed-roots", allowedDir,
+		"echo task-B-finished",
+	)
+	var runBOut, runBErr bytes.Buffer
+	runBCmd.Stdout = &runBOut
+	runBCmd.Stderr = &runBErr
+	if err := runBCmd.Start(); err != nil {
+		t.Fatalf("failed to start task B: %v", err)
+	}
+
+	// 等候任務 A 與 B 寫入資料庫且任務 A 取得 PGID
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open store: %v", err)
+	}
+	defer store.Close()
+
+	var pgidA int
+	for i := 0; i < 30; i++ {
+		taskA, err := store.GetTask(context.Background(), taskAID)
+		if err == nil && taskA.Status == storage.StatusRunning && taskA.PGID > 0 {
+			pgidA = taskA.PGID
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	if pgidA == 0 {
+		taskA, getErr := store.GetTask(context.Background(), taskAID)
+		t.Fatalf("task A did not start or did not register PGID in time, task in DB: %+v, getErr: %v, stdout: %s, stderr: %s", taskA, getErr, runAOut.String(), runAErr.String())
+	}
+
+	// 3. 發送取消請求並精準計時
+	cancelStart := time.Now()
+	cancelCmd := exec.Command(asuraBin,
+		"cancel",
+		"--db", dbPath,
+		taskAID,
+	)
+	var cancelOut, cancelErr bytes.Buffer
+	cancelCmd.Stdout = &cancelOut
+	cancelCmd.Stderr = &cancelErr
+	if err := cancelCmd.Run(); err != nil {
+		t.Fatalf("asura cancel failed: %v, stderr: %s", err, cancelErr.String())
+	}
+
+	// 4. 等候任務 A 進程退出並斷言終止時間在 2 秒內 (SCN-004 規定)
+	_ = runACmd.Wait()
+	duration := time.Since(cancelStart)
+	if duration > 2*time.Second {
+		t.Errorf("task A took %v to terminate after cancel, exceeding 2s limit", duration)
+	}
+
+	// 5. 斷言任務 A 的狀態更新為 cancelled
+	statusACmd := exec.Command(asuraBin, "status", "--db", dbPath, taskAID)
+	var statusAOut bytes.Buffer
+	statusACmd.Stdout = &statusAOut
+	if err := statusACmd.Run(); err != nil {
+		t.Fatalf("asura status task A failed: %v", err)
+	}
+	if !strings.Contains(statusAOut.String(), "cancelled") {
+		t.Errorf("expected task A status to be cancelled, got: %s", statusAOut.String())
+	}
+
+	// 6. 任務 B 正常完成且狀態為 completed
+	if err := runBCmd.Wait(); err != nil {
+		t.Fatalf("task B failed to complete: %v, stderr: %s", err, runBErr.String())
+	}
+	statusBCmd := exec.Command(asuraBin, "status", "--db", dbPath, taskBID)
+	var statusBOut bytes.Buffer
+	statusBCmd.Stdout = &statusBOut
+	if err := statusBCmd.Run(); err != nil {
+		t.Fatalf("asura status task B failed: %v", err)
+	}
+	if !strings.Contains(statusBOut.String(), "completed") {
+		t.Errorf("expected task B status to be completed, got: %s", statusBOut.String())
+	}
+
+	// 7. 驗證任務 A 進程組 PGID 無孤兒進程殘留
+	time.Sleep(50 * time.Millisecond)
+	if err := syscall.Kill(-pgidA, 0); err == nil {
+		t.Errorf("expected process group %d to be completely terminated, but it is still alive", pgidA)
+	}
 }

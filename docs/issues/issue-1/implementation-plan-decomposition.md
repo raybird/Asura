@@ -24,7 +24,6 @@
 
 | Scenario ID | 在等什麼 | 對應待確認事項 |
 |---|---|---|
-| SCN-004 | 進程與瀏覽器資源歸屬及取消期限確認 | TBD-4 |
 | SCN-005 | 部分失敗時的重試邊界與副作用接續策略 | TBD-5 |
 | SCN-006 | 守護程序意外重啟時的狀態恢復判定 | TBD-5 |
 | SCN-007 | 共同收尾、補總結次數上限與結構化錯誤呈現 | TBD-6 |
@@ -197,6 +196,30 @@
   - 全綠回歸：`go test -v ./internal/daemon/...` 全部 PASS（競爭啟動無雙重擁有者、不突破全域上限且各執行一次、未接受請求得到 `ErrCapacityExceeded` 明確結果）。全專案回歸 `go test -v ./...` 與 `go vet ./...` 全數通過。
 - **狀態**：已完成
 
+#### Task 1.5：任務主動取消、PGID 資源回收與局部隔離 [已完成]
+- **任務說明**：在調度引擎與 CLI/Daemon 實作任務取消機制，維護活躍任務之 Context cancel 函式與進程組 PGID，支援發送取消信號，在 2 秒核准期限內終止目標任務並回收資源，將狀態轉移為 `cancelled`；同時運行的其他任務（如工作 B）完全不受干擾。
+- **預期輸出**：`internal/engine/cancel.go`, `internal/engine/cancel_test.go`, `cmd/asura/cancel.go`, `tests/integration/cli_test.go`
+- **涉及模組或檔案**：`internal/engine/engine.go`, `internal/engine/cancel.go`, `internal/engine/cancel_test.go`, `cmd/asura/cancel.go`, `cmd/asura/run.go`, `internal/storage/sqlite.go`, `tests/integration/cli_test.go`
+- **完成判準**：發送取消後，任務 A 在 2 秒內終止且狀態為 `cancelled`，相關子進程組被乾淨回收；並行運行的任務 B 繼續執行並成功完成。
+- **驗證方式**：`go test -v -run TestEngineCancel ./internal/engine/...` 與 `go test -v -run TestCLI_CancelIsolation ./tests/integration/...`
+- **覆蓋項目**：P1-4、D-05、SCN-004
+- **責任角色**：唯一負責
+- **Scenario ID**：SCN-004
+- **改變可觀察行為**：是
+- **實作與驗證證據**（2026-09-11）：
+  - 外迴圈紅燈：`go test -v -run TestCLI_CancelIsolation ./tests/integration`，exit code 1，失敗原因：`task A did not start or did not register PGID in time... SQLITE_BUSY` 與缺少 cancel 協調。
+  - 內迴圈紅燈：`go test -v -run TestEngineCancel ./internal/engine`，exit code 1，失敗原因：`undefined: ErrTaskNotRunning`、`e.CancelTask undefined`。
+  - 最小實作：
+    1. 實作 `internal/engine/cancel.go`，提供 `CancelTask`，安全調用 Context 取消並標記狀態為 `cancelled`。
+    2. 更新 `internal/storage/sqlite.go`：新增 `pgid` 欄位與 `UpdateTaskPGID`，將 `PRAGMA busy_timeout=5000;` 調整為最優先執行杜絕並行開庫鎖死。
+    3. 更新 `cmd/asura/run.go`：啟動任務時建立獨立進程組（`Setpgid: true`）並持久化 PGID，自動生成唯一 ID；更新 `internal/engine/engine.go` 感知外部取消避免覆蓋為 failed。
+    4. 實作 `cmd/asura/cancel.go`：提供 `asura cancel <task_id>` 指令，先標記 cancelled 再發送 `SIGKILL` 強殺進程組。
+  - 全綠回歸：
+    1. 內迴圈單元測試：`go test -v -run TestEngineCancel ./internal/engine`，0.12s PASS。
+    2. 外迴圈端到端測試：`go test -v -run TestCLI_CancelIsolation ./tests/integration`，0.69s PASS（任務 A 在 2 秒內終止，狀態為 cancelled，並行任務 B 正常完成為 completed，且任務 A 的 PGID 進程組無殘留進程）。
+    3. 全專案回歸：`go test -v ./...` 全部 PASS；`go vet ./...` 靜態檢查無任何告警。
+- **狀態**：已完成
+
 ---
 
 ## 覆蓋對照表 (Coverage Matrix)
@@ -206,7 +229,7 @@
 | SCN-001（取得任務結果與可重查） | Task 1.2, Task 1.3 | Task 0.1, Task 0.3, Task 1.1 | `go test -v ./internal/engine/...` |
 | SCN-002（拒絕超出授權之執行） | Task 0.2 | Task 0.1, Task 1.2 | `go test -v ./internal/auth/...` |
 | SCN-003（競爭啟動與上限） | Task 1.4 | Task 1.1, Task 1.2 | `go test -v ./internal/daemon/...` |
-| SCN-004（取消任務資源回收） | 待核准（無） | - | - |
+| SCN-004（取消任務資源回收） | Task 1.5 | Task 0.4, Task 1.1, Task 1.2 | `go test -v ./internal/engine/...` |
 | SCN-005（部分失敗保護） | 待核准（無） | - | - |
 | SCN-006（重啟狀態恢復） | 待核准（無） | - | - |
 | SCN-007（空輸出收尾防禦） | 待核准（無） | - | - |

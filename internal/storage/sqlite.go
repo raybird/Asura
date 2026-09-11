@@ -34,6 +34,7 @@ type Task struct {
 	Status       TaskStatus `json:"status"`
 	Result       string     `json:"result"`
 	ErrorMessage string     `json:"error_message"`
+	PGID         int        `json:"pgid"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 }
@@ -53,10 +54,10 @@ func NewSQLiteStore(dbPath string) (*SQLiteStore, error) {
 	// 限制單一連線池，杜絕跨連線寫入鎖死
 	db.SetMaxOpenConns(1)
 
-	// 配置 WAL 模式與 busy_timeout
+	// 配置 busy_timeout 與 WAL 模式（busy_timeout 必須最先執行以防止並行開庫鎖死）
 	pragmas := []string{
-		"PRAGMA journal_mode=WAL;",
 		"PRAGMA busy_timeout=5000;",
+		"PRAGMA journal_mode=WAL;",
 		"PRAGMA synchronous=NORMAL;",
 	}
 	for _, pragma := range pragmas {
@@ -84,6 +85,7 @@ func (s *SQLiteStore) initSchema() error {
 		status TEXT NOT NULL,
 		result TEXT NOT NULL DEFAULT '',
 		error_message TEXT NOT NULL DEFAULT '',
+		pgid INTEGER NOT NULL DEFAULT 0,
 		created_at DATETIME NOT NULL,
 		updated_at DATETIME NOT NULL
 	);
@@ -99,8 +101,8 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 		return errors.New("task cannot be nil")
 	}
 	query := `
-	INSERT INTO tasks (id, prompt, workspace, status, result, error_message, created_at, updated_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO tasks (id, prompt, workspace, status, result, error_message, pgid, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	now := time.Now().UTC()
 	if task.CreatedAt.IsZero() {
@@ -117,6 +119,7 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 		string(task.Status),
 		task.Result,
 		task.ErrorMessage,
+		task.PGID,
 		task.CreatedAt,
 		task.UpdatedAt,
 	)
@@ -126,7 +129,7 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 // GetTask 依任務 ID 查詢任務狀態與結果
 func (s *SQLiteStore) GetTask(ctx context.Context, id string) (*Task, error) {
 	query := `
-	SELECT id, prompt, workspace, status, result, error_message, created_at, updated_at
+	SELECT id, prompt, workspace, status, result, error_message, pgid, created_at, updated_at
 	FROM tasks
 	WHERE id = ?
 	`
@@ -141,6 +144,7 @@ func (s *SQLiteStore) GetTask(ctx context.Context, id string) (*Task, error) {
 		&statusStr,
 		&task.Result,
 		&task.ErrorMessage,
+		&task.PGID,
 		&task.CreatedAt,
 		&task.UpdatedAt,
 	)
@@ -166,6 +170,28 @@ func (s *SQLiteStore) UpdateTaskStatus(ctx context.Context, id string, status Ta
 	res, err := s.db.ExecContext(ctx, query, string(status), result, errMsg, now, id)
 	if err != nil {
 		return fmt.Errorf("update task status: %w", err)
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrTaskNotFound
+	}
+	return nil
+}
+
+// UpdateTaskPGID 更新任務關聯的進程組 ID
+func (s *SQLiteStore) UpdateTaskPGID(ctx context.Context, id string, pgid int) error {
+	query := `
+	UPDATE tasks
+	SET pgid = ?, updated_at = ?
+	WHERE id = ?
+	`
+	now := time.Now().UTC()
+	res, err := s.db.ExecContext(ctx, query, pgid, now, id)
+	if err != nil {
+		return fmt.Errorf("update task pgid: %w", err)
 	}
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {

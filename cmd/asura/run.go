@@ -3,12 +3,16 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
+	"time"
 
 	"asura/internal/auth"
 	"asura/internal/engine"
@@ -30,6 +34,8 @@ func RunCLI(args []string, stdout, stderr io.Writer) int {
 		return handleRun(subargs, stdout, stderr)
 	case "status":
 		return handleStatus(subargs, stdout, stderr)
+	case "cancel":
+		return handleCancel(subargs, stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "error: unknown command %q\n\n", subcmd)
 		printUsage(stderr)
@@ -43,6 +49,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "Commands:")
 	fmt.Fprintln(w, "  run     Submit and execute a task in a workspace")
 	fmt.Fprintln(w, "  status  Query the execution status and result of a task")
+	fmt.Fprintln(w, "  cancel  Cancel a pending or running task")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Run 'asura <command> -h' for details on each command.")
 }
@@ -52,6 +59,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 
 	dbPath := fs.String("db", "asura.db", "path to SQLite database")
+	customID := fs.String("id", "", "optional custom task ID")
 	workspace := fs.String("workspace", "", "target workspace directory")
 	allowedRoots := fs.String("allowed-roots", "", "comma-separated list of allowed root directories")
 
@@ -98,20 +106,46 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 	}
 	defer store.Close()
 
+	var currentTaskID string
+
 	runner := func(ctx context.Context, dir string, p string) (string, error) {
 		cmd := exec.CommandContext(ctx, "sh", "-c", p)
 		cmd.Dir = dir
 		var buf bytes.Buffer
 		cmd.Stdout = io.MultiWriter(stdout, &buf)
 		cmd.Stderr = io.MultiWriter(stderr, &buf)
-		err := cmd.Run()
+
+		// 配置獨立進程組
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+		if err := cmd.Start(); err != nil {
+			return buf.String(), err
+		}
+
+		if currentTaskID != "" && cmd.Process != nil {
+			pgid, err := syscall.Getpgid(cmd.Process.Pid)
+			if err == nil {
+				_ = store.UpdateTaskPGID(ctx, currentTaskID, pgid)
+			}
+		}
+
+		err := cmd.Wait()
 		return buf.String(), err
 	}
 
 	eng := engine.NewEngine(store, policy, engine.WithRunner(runner))
 
 	ctx := context.Background()
+	reqID := *customID
+	if reqID == "" {
+		b := make([]byte, 6)
+		_, _ = rand.Read(b)
+		reqID = fmt.Sprintf("task-%d-%s", time.Now().Unix(), hex.EncodeToString(b))
+	}
+	currentTaskID = reqID
+
 	task, err := eng.SubmitTask(ctx, engine.SubmitRequest{
+		ID:        reqID,
 		Workspace: ws,
 		Prompt:    prompt,
 	})
