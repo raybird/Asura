@@ -11,7 +11,7 @@
 | Phase 1 | B-00 | 固定版本與權限、事件、取消契約驗證 | 已核准規格 | ✅ 通過（契約與樣本齊備） |
 | Phase 2 | B-01 | 最小 OpenCode adapter | Phase 1 契約通過 | ✅ 通過（Adapter 最小接線與測試全綠） |
 | Phase 3 | B-02 | 正式 Daemon、授權、容量與恢復 | Phase 2 | ✅ 通過（Daemon 授權與容量控制驗證全綠） |
-| Phase 4 | B-03 | ask、接受識別碼、查詢及去重 | Phase 3 | 📝 待實作 |
+| Phase 4 | B-03 | ask、接受識別碼、查詢及去重 | Phase 3 | ✅ 通過（非同步接受、斷線追蹤與去重驗證全綠） |
 | Phase 5 | B-04 | 共同取消入口 | Phase 4 | 📝 待實作 |
 | Phase 6 | B-05 | 完整回歸與操作文件 | Phase 5 | 📝 待執行 |
 
@@ -57,10 +57,10 @@ bash scripts/issue-2/probe-opencode.sh cancellation
 
 ## Phase 4：B-03 ask 與接受生命週期
 
-- [ ] P4-T1：新增 ask 並保留 run shell 語意；正式 CLI 執行 INT-001、002、003 外迴圈，包含 Daemon 不可用。
-- [ ] P4-T2：容量及持久化成功後、後端完成前回傳 Task ID；失敗回應保留已接受任務識別與部分結果。
-- [ ] P4-T3：斷線後任務繼續，另起 CLI 查詢同一結果；同一請求識別重送回原任務。使用獨立副作用計數驗證不重跑，包含接受回應遺失路徑。
-- [ ] P4-T4：完成 INT-001、002、003、004、004-REDELIVERY 的 CLI 外迴圈與單元證據；以已接通 CLI 驗證 INT-006 的失敗與恢復。
+- [x] P4-T1：新增 ask 並保留 run shell 語意；正式 CLI 執行 INT-001、002、003 外迴圈，包含 Daemon 不可用。
+- [x] P4-T2：容量及持久化成功後、後端完成前回傳 Task ID；失敗回應保留已接受任務識別與部分結果。
+- [x] P4-T3：斷線後任務繼續，另起 CLI 查詢同一結果；同一請求識別重送回原任務。使用獨立副作用計數驗證不重跑，包含接受回應遺失路徑。
+- [x] P4-T4：完成 INT-001、002、003、004、004-REDELIVERY 的 CLI 外迴圈與單元證據；以已接通 CLI 驗證 INT-006 的失敗與恢復。
 
 完成證據：正式入口可查詢、容量拒絕如實、斷線與重送均不重複執行。
 
@@ -152,3 +152,13 @@ go test -count=1 -race ./...
    - 最小實作全綠：內迴圈 `TestINT002Unit`（PASS）、`TestINT003Unit`（PASS），外迴圈 `TestINT002`（PASS）、`TestINT003`（PASS）。
    - 全套回歸：`go test -count=1 -race ./...` 全數 PASS（耗時 51s）。
 3. Phase 3 通過，放行 Phase 4（B-03 ask 與接受生命週期）。
+4. 2026-09-12 Phase 4 ask 與接受生命週期實作完成紀錄：
+   - 實作 `internal/daemon/pool.go` 之 `SubmitAsync`，支援容量校驗排入後立即回傳，不阻塞等待後端完成。
+   - 實作 `internal/daemon/daemon.go` 非同步接受協定（P4-T2）：校驗專案授權後產生 Task ID，持久化為 pending 後於後端完成前立即回傳已接受之 Task 實體；若超過容量則自動清理並如實拒絕；Client 斷線不中斷背景任務；支援 `Action: "status"` 與 `Client.GetTask` 查詢已保存結果。
+   - 實作請求去重（INT-004-REDELIVERY）：同 Request ID 且非 Cancelled 任務直接回傳既有任務，絕不重複調度 WorkerPool 或產生額外副作用。
+   - 新增 CLI `asura ask` 命令（P4-T1）：經 Unix Socket 向 Daemon 提交自然語言任務，Daemon 不可用時明確回報錯誤，嚴禁自動啟動或回退獨立執行器；保留 `asura run` 既有 shell 語意。
+   - 取得完整雙迴圈紅綠證據（保存於 `docs/issues/issue-2/evidence/phase-4/test_results.log`）：
+     - 內迴圈測試：`TestINT004Unit`（PASS）、`TestINT004RedeliveryUnit`（PASS）。
+     - 外迴圈測試：`TestINT004`（PASS）、`TestINT004Redelivery`（PASS）、`TestRunCLI_UsageAndValidation` ask 驗證（PASS）。
+     - 全套回歸：`go test -count=1 -race ./...` 全數 PASS（耗時 48.8s）。
+5. Phase 4 通過，放行 Phase 5（B-04 共同取消入口）。

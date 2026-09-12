@@ -99,6 +99,48 @@ func (p *WorkerPool) Submit(ctx context.Context, fn func() error) error {
 	}
 }
 
+// SubmitAsync 異步提交任務至 WorkerPool，確認有執行或排隊容量後立即回傳結果 channel 與 nil (INT-004, P4-T2)
+func (p *WorkerPool) SubmitAsync(ctx context.Context, fn func() error) (<-chan error, error) {
+	select {
+	case <-p.closed:
+		return nil, ErrPoolClosed
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	item := taskItem{
+		ctx:    ctx,
+		fn:     fn,
+		result: make(chan error, 1),
+	}
+
+	p.mu.Lock()
+	select {
+	case <-p.closed:
+		p.mu.Unlock()
+		return nil, ErrPoolClosed
+	default:
+	}
+
+	if p.running < p.maxWorkers {
+		p.running++
+		p.wg.Add(1)
+		go p.workerLoop(item)
+		p.mu.Unlock()
+	} else {
+		select {
+		case p.queue <- item:
+			p.mu.Unlock()
+		default:
+			p.mu.Unlock()
+			return nil, ErrCapacityExceeded
+		}
+	}
+
+	return item.result, nil
+}
+
 func (p *WorkerPool) workerLoop(initialItem taskItem) {
 	defer p.wg.Done()
 	p.executeItem(initialItem)

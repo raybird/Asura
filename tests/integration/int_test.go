@@ -12,6 +12,7 @@ import (
 	"asura/internal/daemon"
 	"asura/internal/engine"
 	"asura/internal/storage"
+	"sync/atomic"
 	"time"
 )
 
@@ -254,4 +255,181 @@ func TestINT003(t *testing.T) {
 
 	close(unblockCh)
 	<-qDone
+}
+
+// TestINT004: 斷線後任務繼續，另起連線查詢同一結果 (INT-004 外迴圈)
+// Given 任務已通過授權並由 Daemon 接受進入執行佇列
+// When 提交該任務之客戶端中斷連線
+// Then 背景任務繼續執行至終態，後續查詢可取得完整結果
+func TestINT004(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-int004-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	sockPath := filepath.Join(tmpDir, "asura.sock")
+
+	startedCh := make(chan struct{})
+	unblockCh := make(chan struct{})
+
+	blockingRunner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		select {
+		case startedCh <- struct{}{}:
+		default:
+		}
+		<-unblockCh
+		return "async-outer-done", nil
+	}
+
+	eng := engine.NewEngine(store, policy, engine.WithRunner(blockingRunner))
+	d := daemon.NewDaemon(daemon.Config{
+		SocketPath: sockPath,
+		MaxWorkers: 2,
+		MaxQueue:   2,
+	}, store, policy, daemon.WithEngine(eng))
+
+	if err := d.Start(); err != nil {
+		t.Fatalf("daemon start failed: %v", err)
+	}
+	defer d.Close()
+
+	c1, err := daemon.NewClient(sockPath)
+	if err != nil {
+		t.Fatalf("c1 connect failed: %v", err)
+	}
+
+	submitCtx, submitCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer submitCancel()
+
+	task, err := c1.Submit(submitCtx, engine.SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "background-task",
+	})
+	if err != nil {
+		t.Fatalf("c1.Submit failed: %v", err)
+	}
+	if task == nil || task.ID == "" {
+		t.Fatalf("expected non-empty task and Task ID immediately upon acceptance, got %+v", task)
+	}
+	taskID := task.ID
+
+	// 模擬客戶端主動斷線
+	_ = c1.Close()
+
+	// 等待後端啟動後放行完成
+	<-startedCh
+	close(unblockCh)
+
+	time.Sleep(100 * time.Millisecond)
+
+	// 另起獨立連線查詢同一任務狀態
+	c2, err := daemon.NewClient(sockPath)
+	if err != nil {
+		t.Fatalf("c2 connect failed: %v", err)
+	}
+	defer c2.Close()
+
+	queriedTask, err := c2.GetTask(context.Background(), taskID)
+	if err != nil {
+		t.Fatalf("c2.GetTask failed: %v", err)
+	}
+	if queriedTask.Status != storage.StatusCompleted {
+		t.Errorf("expected queried task status completed, got %s", queriedTask.Status)
+	}
+	if queriedTask.Result != "async-outer-done" {
+		t.Errorf("expected result 'async-outer-done', got %q", queriedTask.Result)
+	}
+}
+
+// TestINT004Redelivery: 請求識別重送回原任務且不產生額外副作用 (INT-004-REDELIVERY 外迴圈)
+// Given 前次提交之回應因網路中斷遺失，但任務已由中樞接受
+// When 客戶端以相同請求識別重新送出
+// Then 中樞回傳既有任務資訊，且不重複調度執行器或產生額外副作用
+func TestINT004Redelivery(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-int004-redelivery-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	sockPath := filepath.Join(tmpDir, "asura.sock")
+
+	var executionCount atomic.Int32
+	runner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		executionCount.Add(1)
+		time.Sleep(50 * time.Millisecond)
+		return "single-execution-outer", nil
+	}
+
+	eng := engine.NewEngine(store, policy, engine.WithRunner(runner))
+	d := daemon.NewDaemon(daemon.Config{
+		SocketPath: sockPath,
+		MaxWorkers: 2,
+		MaxQueue:   2,
+	}, store, policy, daemon.WithEngine(eng))
+
+	if err := d.Start(); err != nil {
+		t.Fatalf("daemon start failed: %v", err)
+	}
+	defer d.Close()
+
+	c1, err := daemon.NewClient(sockPath)
+	if err != nil {
+		t.Fatalf("c1 connect failed: %v", err)
+	}
+	defer c1.Close()
+
+	c2, err := daemon.NewClient(sockPath)
+	if err != nil {
+		t.Fatalf("c2 connect failed: %v", err)
+	}
+	defer c2.Close()
+
+	// 第一次提交帶有特定 RequestID
+	task1, err := c1.Submit(context.Background(), engine.SubmitRequest{
+		ID:        "idempotent-outer-req-999",
+		Workspace: tmpDir,
+		Prompt:    "dedup-task-outer",
+	})
+	if err != nil {
+		t.Fatalf("first submit failed: %v", err)
+	}
+
+	// 模擬重新發送相同請求 (同 RequestID)
+	task2, err := c2.Submit(context.Background(), engine.SubmitRequest{
+		ID:        "idempotent-outer-req-999",
+		Workspace: tmpDir,
+		Prompt:    "dedup-task-outer",
+	})
+	if err != nil {
+		t.Fatalf("second submit failed: %v", err)
+	}
+
+	if task1.ID != task2.ID {
+		t.Errorf("expected same Task ID for redelivered request, got %s vs %s", task1.ID, task2.ID)
+	}
+
+	// 等待背景執行完成
+	time.Sleep(150 * time.Millisecond)
+
+	if count := executionCount.Load(); count != 1 {
+		t.Errorf("expected exactly 1 execution, got %d (violates INT-004-REDELIVERY)", count)
+	}
 }

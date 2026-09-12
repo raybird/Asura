@@ -1,0 +1,22 @@
+ok  	asura/cmd/asura	1.038s
+ok  	asura/internal/auth	1.035s
+ok  	asura/internal/backend/opencode	10.066s
+ok  	asura/internal/daemon	2.245s
+ok  	asura/internal/engine	1.633s
+ok  	asura/internal/storage	1.151s
+ok  	asura/tests/integration	48.816s
+=== RUN   TestINT004Unit
+--- PASS: TestINT004Unit (0.14s)
+=== RUN   TestINT004RedeliveryUnit
+--- PASS: TestINT004RedeliveryUnit (0.20s)
+PASS
+ok  	asura/internal/daemon	1.366s
+=== RUN   TestINT004
+--- PASS: TestINT004 (0.14s)
+=== RUN   TestINT004Redelivery
+--- PASS: TestINT004Redelivery (0.18s)
+PASS
+ok  	asura/tests/integration	1.345s
+testing: warning: no tests to run
+PASS
+ok  	asura/cmd/asura	1.026s [no tests to run]

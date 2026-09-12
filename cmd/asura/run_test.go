@@ -54,4 +54,28 @@ func TestRunCLI_UsageAndValidation(t *testing.T) {
 			t.Errorf("expected 'task_id is required' in stderr, got: %s", stderr.String())
 		}
 	})
+
+	t.Run("ask 指令缺少 prompt 返回非 0 狀態碼", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		code := RunCLI([]string{"ask"}, out, stderr)
+		if code == 0 {
+			t.Errorf("expected non-zero exit code, got 0")
+		}
+		if !strings.Contains(stderr.String(), "prompt is required") {
+			t.Errorf("expected 'prompt is required' in stderr, got: %s", stderr.String())
+		}
+	})
+
+	t.Run("ask 指令在 Daemon 不可用時回報錯誤且不自動啟動 (P4-T1)", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		code := RunCLI([]string{"ask", "-socket", "/tmp/non-existent-asura.sock", "test prompt"}, out, stderr)
+		if code == 0 {
+			t.Errorf("expected non-zero exit code, got 0")
+		}
+		if !strings.Contains(stderr.String(), "daemon unavailable") {
+			t.Errorf("expected 'daemon unavailable' in stderr, got: %s", stderr.String())
+		}
+	})
 }

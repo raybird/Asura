@@ -287,6 +287,16 @@ func (s *SQLiteStore) RecoverInterruptedTasks(ctx context.Context) (int64, error
 	return res.RowsAffected()
 }
 
+// DeleteTask 依 ID 刪除指定任務
+func (s *SQLiteStore) DeleteTask(ctx context.Context, id string) error {
+	query := `DELETE FROM tasks WHERE id = ?`
+	_, err := s.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("delete task: %w", err)
+	}
+	return nil
+}
+
 // Close 關閉資料庫連線
 func (s *SQLiteStore) Close() error {
 	return s.db.Close()

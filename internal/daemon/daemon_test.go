@@ -119,6 +119,7 @@ func TestDaemonConcurrency(t *testing.T) {
 
 		// 併發提交 5 個請求
 		var wg sync.WaitGroup
+		var taskIDs [5]string
 		for i := 0; i < 5; i++ {
 			wg.Add(1)
 			idx := i
@@ -139,13 +140,31 @@ func TestDaemonConcurrency(t *testing.T) {
 					t.Errorf("task submit failed: %v", err)
 					return
 				}
-				if resp.Status != storage.StatusCompleted {
-					t.Errorf("expected status completed, got %s", resp.Status)
+				if resp == nil || resp.ID == "" {
+					t.Errorf("expected non-empty task and ID, got %+v", resp)
+					return
 				}
-				atomic.AddInt32(&executionCounts[idx], 1)
+				taskIDs[idx] = resp.ID
 			}()
 		}
 		wg.Wait()
+
+		// 等待背景任務全部非同步執行完成
+		for i := 0; i < 5; i++ {
+			id := taskIDs[i]
+			if id == "" {
+				continue
+			}
+			deadline := time.Now().Add(2 * time.Second)
+			for time.Now().Before(deadline) {
+				tObj, err := store.GetTask(context.Background(), id)
+				if err == nil && tObj.Status == storage.StatusCompleted {
+					atomic.AddInt32(&executionCounts[i], 1)
+					break
+				}
+				time.Sleep(20 * time.Millisecond)
+			}
+		}
 
 		// 檢查最大並行數不超過上限 2
 		if maxObs := atomic.LoadInt32(&maxObservedActive); maxObs > 2 {
@@ -317,20 +336,35 @@ func TestDaemonConcurrency(t *testing.T) {
 			Workspace: tmpDir,
 			Prompt:    "task-that-will-fail",
 		})
-		if err == nil {
-			t.Fatalf("expected error from failed task, got nil")
+		if err != nil {
+			t.Fatalf("submit accepted unexpected failure: %v", err)
 		}
-		if task == nil {
-			t.Fatalf("expected resp.Task to be retained on error, got nil task (violates R-08)")
+		if task == nil || task.ID == "" {
+			t.Fatalf("expected initial task and ID to be populated upon acceptance")
 		}
-		if task.ID == "" {
-			t.Errorf("expected task ID to be populated, got empty")
+		taskID := task.ID
+
+		// 等待背景任務執行失敗並由儲存層記錄 (INT-006, P4-T2)
+		time.Sleep(100 * time.Millisecond)
+
+		failedTask, err := client.GetTask(context.Background(), taskID)
+		if err != nil {
+			t.Fatalf("client.GetTask failed: %v", err)
 		}
-		if task.Status != storage.StatusFailed {
-			t.Errorf("expected task status to be %s, got %s", storage.StatusFailed, task.Status)
+		if failedTask == nil {
+			t.Fatalf("expected task to be retained on error, got nil task (violates R-08)")
 		}
-		if task.Result != "partial stdout before error" {
-			t.Errorf("expected partial result to be retained, got: %q", task.Result)
+		if failedTask.ID != taskID {
+			t.Errorf("expected task ID %s, got %s", taskID, failedTask.ID)
+		}
+		if failedTask.Status != storage.StatusFailed {
+			t.Errorf("expected task status to be %s, got %s", storage.StatusFailed, failedTask.Status)
+		}
+		if failedTask.Result != "partial stdout before error" {
+			t.Errorf("expected partial result to be retained, got: %q", failedTask.Result)
+		}
+		if !strings.Contains(failedTask.ErrorMessage, "command failed with exit code 42") {
+			t.Errorf("expected error message to be retained, got: %q", failedTask.ErrorMessage)
 		}
 	})
 }
@@ -601,4 +635,177 @@ func TestINT003Unit(t *testing.T) {
 	// 解除阻塞並收尾
 	close(unblockCh)
 	<-qDone
+}
+
+// TestINT004Unit 驗證任務接受後客戶端斷線仍由背景繼續執行，並可另行查得同一結果 (INT-004 內迴圈)
+func TestINT004Unit(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-int004-unit-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	sockPath := filepath.Join(tmpDir, "asura.sock")
+
+	startedCh := make(chan struct{})
+	unblockCh := make(chan struct{})
+
+	blockingRunner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		select {
+		case startedCh <- struct{}{}:
+		default:
+		}
+		<-unblockCh
+		return "async-done-result", nil
+	}
+
+	eng := engine.NewEngine(store, policy, engine.WithRunner(blockingRunner))
+	d := NewDaemon(Config{
+		SocketPath: sockPath,
+		MaxWorkers: 2,
+		MaxQueue:   2,
+	}, store, policy, WithEngine(eng))
+
+	if err := d.Start(); err != nil {
+		t.Fatalf("daemon start failed: %v", err)
+	}
+	defer d.Close()
+
+	c1, err := NewClient(sockPath)
+	if err != nil {
+		t.Fatalf("c1 connect failed: %v", err)
+	}
+
+	// 提交任務，預期後端完成前立即回傳 Task ID (P4-T2)
+	submitCtx, submitCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer submitCancel()
+
+	task, err := c1.Submit(submitCtx, engine.SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "background-task",
+	})
+	if err != nil {
+		t.Fatalf("c1.Submit failed: %v", err)
+	}
+	if task == nil || task.ID == "" {
+		t.Fatalf("expected non-empty task and Task ID immediately upon acceptance, got %+v", task)
+	}
+	taskID := task.ID
+
+	// 模擬客戶端斷線
+	_ = c1.Close()
+
+	// 等待後端開始並放行完成
+	<-startedCh
+	close(unblockCh)
+
+	// 等待後端完成寫入
+	time.Sleep(100 * time.Millisecond)
+
+	// 另起連線重新查詢同一任務 (INT-004)
+	c2, err := NewClient(sockPath)
+	if err != nil {
+		t.Fatalf("c2 connect failed: %v", err)
+	}
+	defer c2.Close()
+
+	queriedTask, err := c2.GetTask(context.Background(), taskID)
+	if err != nil {
+		t.Fatalf("c2.GetTask failed: %v", err)
+	}
+	if queriedTask.Status != storage.StatusCompleted {
+		t.Errorf("expected queried task status completed, got %s", queriedTask.Status)
+	}
+	if queriedTask.Result != "async-done-result" {
+		t.Errorf("expected result 'async-done-result', got %q", queriedTask.Result)
+	}
+}
+
+// TestINT004RedeliveryUnit 驗證相同請求識別重送時回傳原任務且不重複執行 (INT-004-REDELIVERY 內迴圈)
+func TestINT004RedeliveryUnit(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-int004-redelivery-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	sockPath := filepath.Join(tmpDir, "asura.sock")
+
+	var executionCount atomic.Int32
+	runner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		executionCount.Add(1)
+		time.Sleep(50 * time.Millisecond)
+		return "single-execution", nil
+	}
+
+	eng := engine.NewEngine(store, policy, engine.WithRunner(runner))
+	d := NewDaemon(Config{
+		SocketPath: sockPath,
+		MaxWorkers: 2,
+		MaxQueue:   2,
+	}, store, policy, WithEngine(eng))
+
+	if err := d.Start(); err != nil {
+		t.Fatalf("daemon start failed: %v", err)
+	}
+	defer d.Close()
+
+	c1, err := NewClient(sockPath)
+	if err != nil {
+		t.Fatalf("c1 connect failed: %v", err)
+	}
+	defer c1.Close()
+
+	c2, err := NewClient(sockPath)
+	if err != nil {
+		t.Fatalf("c2 connect failed: %v", err)
+	}
+	defer c2.Close()
+
+	// 第一次提交帶有特定 RequestID
+	task1, err := c1.Submit(context.Background(), engine.SubmitRequest{
+		ID:        "idempotent-req-123",
+		Workspace: tmpDir,
+		Prompt:    "dedup-task",
+	})
+	if err != nil {
+		t.Fatalf("first submit failed: %v", err)
+	}
+
+	// 模擬重送相同請求 (同 RequestID)
+	task2, err := c2.Submit(context.Background(), engine.SubmitRequest{
+		ID:        "idempotent-req-123",
+		Workspace: tmpDir,
+		Prompt:    "dedup-task",
+	})
+	if err != nil {
+		t.Fatalf("second submit failed: %v", err)
+	}
+
+	if task1.ID != task2.ID {
+		t.Errorf("expected same Task ID for redelivered request, got %s vs %s", task1.ID, task2.ID)
+	}
+
+	// 等待執行完成
+	time.Sleep(150 * time.Millisecond)
+
+	if count := executionCount.Load(); count != 1 {
+		t.Errorf("expected exactly 1 execution, got %d (violates INT-004-REDELIVERY)", count)
+	}
 }

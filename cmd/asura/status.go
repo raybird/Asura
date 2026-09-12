@@ -5,7 +5,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 
+	"asura/internal/daemon"
 	"asura/internal/storage"
 )
 
@@ -14,6 +16,7 @@ func handleStatus(args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 
 	dbPath := fs.String("db", "asura.db", "path to SQLite database")
+	sockPath := fs.String("socket", os.Getenv("ASURA_SOCKET"), "path to daemon unix socket")
 
 	if err := fs.Parse(args); err != nil {
 		return 1
@@ -26,17 +29,32 @@ func handleStatus(args []string, stdout, stderr io.Writer) int {
 	}
 	taskID := remaining[0]
 
-	store, err := storage.NewSQLiteStore(*dbPath)
-	if err != nil {
-		fmt.Fprintf(stderr, "error: failed to open storage: %v\n", err)
-		return 1
+	var task *storage.Task
+	if *sockPath != "" {
+		client, err := daemon.NewClient(*sockPath)
+		if err == nil {
+			defer client.Close()
+			task, err = client.GetTask(context.Background(), taskID)
+			if err != nil {
+				fmt.Fprintf(stderr, "error: %v\n", err)
+				return 1
+			}
+		}
 	}
-	defer store.Close()
 
-	task, err := store.GetTask(context.Background(), taskID)
-	if err != nil {
-		fmt.Fprintf(stderr, "error: %v\n", err)
-		return 1
+	if task == nil {
+		store, err := storage.NewSQLiteStore(*dbPath)
+		if err != nil {
+			fmt.Fprintf(stderr, "error: failed to open storage: %v\n", err)
+			return 1
+		}
+		defer store.Close()
+
+		task, err = store.GetTask(context.Background(), taskID)
+		if err != nil {
+			fmt.Fprintf(stderr, "error: %v\n", err)
+			return 1
+		}
 	}
 
 	fmt.Fprintf(stdout, "Task ID:   %s\n", task.ID)

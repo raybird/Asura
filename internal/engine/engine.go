@@ -73,10 +73,15 @@ func defaultRunner(ctx context.Context, workspace string, prompt string) (string
 	return "", errors.New("no default runner configured")
 }
 
-func generateTaskID() string {
+// GenerateTaskID 生成唯一任務識別碼 (INT-004)
+func GenerateTaskID() string {
 	b := make([]byte, 6)
 	_, _ = rand.Read(b)
 	return fmt.Sprintf("task-%d-%s", time.Now().Unix(), hex.EncodeToString(b))
+}
+
+func generateTaskID() string {
+	return GenerateTaskID()
 }
 
 // hasUnresolvedErrorOrEmpty 判斷執行輸出是否為空或只回傳未解決的結構化錯誤（SCN-007, 修復 R-09）
@@ -139,15 +144,25 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 		UpdatedAt: now,
 	}
 
+	alreadyCreated := false
 	if req.ID != "" {
 		existing, err := e.store.GetTask(ctx, req.ID)
-		if err == nil && existing.Status == storage.StatusCancelled {
-			return existing, context.Canceled
+		if err == nil {
+			if existing.Status == storage.StatusCancelled {
+				return existing, context.Canceled
+			}
+			if existing.Status != storage.StatusPending {
+				return existing, nil
+			}
+			task = existing
+			alreadyCreated = true
 		}
 	}
 
-	if err := e.store.CreateTask(ctx, task); err != nil {
-		return nil, fmt.Errorf("create task in storage: %w", err)
+	if !alreadyCreated {
+		if err := e.store.CreateTask(ctx, task); err != nil {
+			return nil, fmt.Errorf("create task in storage: %w", err)
+		}
 	}
 
 	// 3. 條件式轉移狀態至 running (修復 F-02)

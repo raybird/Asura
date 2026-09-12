@@ -1,0 +1,99 @@
+package main
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"asura/internal/daemon"
+	"asura/internal/engine"
+	"asura/internal/storage"
+)
+
+func handleAsk(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("ask", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+
+	sockPath := fs.String("socket", os.Getenv("ASURA_SOCKET"), "path to daemon unix socket")
+	workspace := fs.String("workspace", "", "target workspace directory (defaults to current directory)")
+	customID := fs.String("id", "", "optional custom task/request ID")
+	wait := fs.Bool("wait", false, "wait for task to complete")
+
+	if err := fs.Parse(args); err != nil {
+		return 1
+	}
+
+	if *sockPath == "" {
+		*sockPath = filepath.Join(os.TempDir(), "asura.sock")
+	}
+
+	remaining := fs.Args()
+	if len(remaining) == 0 {
+		fmt.Fprintln(stderr, "error: prompt is required")
+		return 1
+	}
+	prompt := strings.Join(remaining, " ")
+
+	targetWorkspace := *workspace
+	if targetWorkspace == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			fmt.Fprintf(stderr, "error: failed to get current directory: %v\n", err)
+			return 1
+		}
+		targetWorkspace = cwd
+	}
+
+	absWorkspace, err := filepath.Abs(targetWorkspace)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: invalid workspace path: %v\n", err)
+		return 1
+	}
+
+	// 連線至 Daemon；不可用時直接報錯退出，嚴禁自動啟動或回退為獨立執行器
+	client, err := daemon.NewClient(*sockPath)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: daemon unavailable: %v\n", err)
+		return 1
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+	task, err := client.Submit(ctx, engine.SubmitRequest{
+		ID:        *customID,
+		Workspace: absWorkspace,
+		Prompt:    prompt,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintf(stdout, "Task ID: %s\n", task.ID)
+
+	if *wait {
+		for {
+			time.Sleep(50 * time.Millisecond)
+			latest, err := client.GetTask(ctx, task.ID)
+			if err != nil {
+				fmt.Fprintf(stderr, "error: failed to query task: %v\n", err)
+				return 1
+			}
+			if latest.Status == storage.StatusCompleted {
+				fmt.Fprintf(stdout, "%s\n", latest.Result)
+				return 0
+			}
+			if latest.Status == storage.StatusFailed || latest.Status == storage.StatusCancelled {
+				fmt.Fprintf(stderr, "task %s: %s\n", latest.Status, latest.ErrorMessage)
+				return 1
+			}
+		}
+	}
+
+	return 0
+}
