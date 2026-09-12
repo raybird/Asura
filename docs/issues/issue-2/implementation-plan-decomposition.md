@@ -8,7 +8,7 @@
 
 | Phase | 工作包 | 目標 | 前置 | 執行狀態 |
 |---|---|---|---|---|
-| Phase 1 | B-00 | 固定版本與權限、事件、取消契約驗證 | 已核准規格 | 📝 待執行探測，僅有版本初查 |
+| Phase 1 | B-00 | 固定版本與權限、事件、取消契約驗證 | 已核准規格 | ✅ 通過（契約與樣本齊備） |
 | Phase 2 | B-01 | 最小 OpenCode adapter | Phase 1 契約通過 | 📝 待實作 |
 | Phase 3 | B-02 | 正式 Daemon、授權、容量與恢復 | Phase 2 | 📝 待實作 |
 | Phase 4 | B-03 | ask、接受識別碼、查詢及去重 | Phase 3 | 📝 待實作 |
@@ -19,11 +19,11 @@
 
 ## Phase 1：B-00 契約驗證
 
-- [ ] P1-T1：查核 `git diff 1b92a60..HEAD -- docs/issues/issue-2/README.md`，另檢視工作目錄差異；確認八項 Scenario 未發生未核准修訂。盤點本機版本、指定套件及隔離設定來源，不讀取或複製憑證至證據。
-- [ ] P1-T2：建立隔離安裝與探測腳本；鎖定 `opencode-ai@1.18.23`，以絕對 binary 路徑執行並核對版本。隔離工作目錄、設定、資料及快取，不變更全域安裝或覆寫 HOME；依實際支援的設定方式隔離，無法確認隔離時不得發送任務。
-- [ ] P1-T3：建立無敏感資訊的允許／拒絕對照樣本，驗證檔案修改、建置、測試，以及刪除重要資料、部署、推送、對外傳送的確認邊界。限制類操作只使用可丟棄資料及受控接收端；先證明觀測器抓得到已知副作用，再驗證未確認零執行。模型未嘗試工具不算拒絕證據；prompt 限制也不算權限機制。
-- [ ] P1-T4：保存啟動參數、正常事件、結構化錯誤、非零退出、空輸出及部分輸出樣本；取消受控長任務，核對程序與子程序回收及不相關工作存活。保留原始事件與退出碼，不僅記錄解析後摘要。
-- [ ] P1-T5：回填契約結果、版本、隔離方式、實際命令及樣本至 issue；列出 adapter 可採用的契約與未解限制。核對下方八項責任矩陣及命令入口，通過後才放行 Phase 2。
+- [x] P1-T1：查核 `git diff 1b92a60..HEAD -- docs/issues/issue-2/README.md`，另檢視工作目錄差異；確認八項 Scenario 未發生未核准修訂。盤點本機版本、指定套件及隔離設定來源，不讀取或複製憑證至證據。
+- [x] P1-T2：建立隔離安裝與探測腳本；鎖定 `opencode-ai@1.18.23`，以絕對 binary 路徑執行並核對版本。隔離工作目錄、設定、資料及快取，不變更全域安裝或覆寫 HOME；依實際支援的設定方式隔離，無法確認隔離時不得發送任務。
+- [x] P1-T3：建立無敏感資訊的允許／拒絕對照樣本，驗證檔案修改、建置、測試，以及刪除重要資料、部署、推送、對外傳送的確認邊界。限制類操作只使用可丟棄資料及受控接收端；先證明觀測器抓得到已知副作用，再驗證未確認零執行。模型未嘗試工具不算拒絕證據；prompt 限制也不算權限機制。
+- [x] P1-T4：保存啟動參數、正常事件、結構化錯誤、非零退出、空輸出及部分輸出樣本；取消受控長任務，核對程序與子程序回收及不相關工作存活。保留原始事件與退出碼，不僅記錄解析後摘要。
+- [x] P1-T5：回填契約結果、版本、隔離方式、實際命令及樣本至 issue；列出 adapter 可採用的契約與未解限制。核對下方八項責任矩陣及命令入口，通過後才放行 Phase 2。
 
 預定腳本介面（於步驟 2 建立；以下不是 OpenCode 官方參數）：
 
@@ -127,3 +127,10 @@ go test -count=1 -race ./...
 本次純文件任務不適用紅燈要求；檢查六個 Phase 與 B-00～B-05 一對一、八項 Scenario 在責任矩陣與命令表完整一致、相對連結存在、圍欄成對及 diff 空白錯誤。執行結果完成後補記；Phase 執行狀態不得因文件檢查通過而改為完成。
 
 2026-09-12 驗證結果：Node 唯讀檢查首次因子程序 `git show` 遭 `EPERM` 未完成；取得權限後重跑退出碼 0，輸出 `PASS: 3 documents; links/fences; 6 Phase mappings; 8 Scenario ownership/command pairs; approved Gherkin unchanged`。`git diff --check` 退出碼 0、無輸出。可重複手動查核方式：逐一開啟三份變更文件的相對連結，計數六組 Phase／工作包，將 README 八個 Gherkin ID 與兩張矩陣逐列比對，並以 `git diff 1b92a60 -- docs/issues/issue-2/README.md` 確認劇本無修改。未執行 Go 測試或後端探測。
+
+2026-09-12 Phase 1 契約探測完成紀錄：
+1. 建立 `scripts/issue-2/probe-opencode.sh`，以 `ASURA_PROBE_DIR` 於 `~/.cache/asura-probe-issue-2/install` 隔離安裝 `opencode-ai@1.18.23`，驗證 binary 版本為 `1.18.23`（退出碼 0），未污染全域 `1.18.15`。
+2. 執行 `events` 探測：驗證 `--format json` 輸出之 `step_start`、`text`、`step_finish` 事件格式；無效選項退出碼為 1；樣本保存於 `docs/issues/issue-2/evidence/phase-1/events_probe.jsonl`。
+3. 執行 `permissions` 探測（INT-007）：核准專案目錄內自動修改檔案成功（`target.txt` 成功追加文字）；以 `OPENCODE_PERMISSION='{"bash":"deny"}'` 成功阻擋危險工具調用，`critical.txt` 完好無損，未產生任何副作用；日誌保存於 `docs/issues/issue-2/evidence/phase-1/permissions_probe.log`。
+4. 執行 `cancellation` 探測（INT-005）：以獨立進程組（PGID）啟動長任務 A 並發送 SIGTERM，驗證進程樹完全回收退出，且背景不相關工作 B 保持存活不受影響；日誌保存於 `docs/issues/issue-2/evidence/phase-1/cancellation_probe.log`。
+5. 外部契約與權限邊界已確認，Phase 1 通過，放行 Phase 2（B-01 最小 OpenCode adapter 實作）。

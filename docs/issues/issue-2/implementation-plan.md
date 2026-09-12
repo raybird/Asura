@@ -26,3 +26,5 @@
 2026-09-12：`npm view opencode-ai@1.18.23 version --fetch-retries=0 --fetch-timeout=10000` 退出碼 0，輸出 `1.18.23`。套件來源提供指定版本，但尚未證明該版本的執行及權限契約。
 
 2026-09-12：Node 靜態檢查退出碼 0，輸出 `PASS: 6 documents; relative links, fences, 8 unique Scenario IDs`；檢查兩份規劃及四份 issue 文件的相對連結存在、程式碼圍欄成對、八個 Scenario ID 不重複。`git diff --cached --check` 退出碼 0、無輸出。核准規格已提交為 `1b92a60`；本次沒有 production code 變更，未執行 Go 測試。
+
+2026-09-12：執行 `bash scripts/issue-2/probe-opencode.sh all` 完成 B-00 契約探測。隔離安裝 `opencode-ai@1.18.23` 驗證版本精確吻合（退出碼 0），全域環境維持 `1.18.15`；`events` 驗證輸出符合預期 JSON 事件格式，無效參數退出碼為 1；`permissions`（INT-007）驗證核准目錄檔案修改成功，且以 `OPENCODE_PERMISSION='{"bash":"deny"}'` 成功阻擋危險工具調用，零副作用；`cancellation`（INT-005）驗證獨立進程組 SIGTERM 取消後進程樹完全回收，不相關工作存活。探測日誌與樣本保存於 `docs/issues/issue-2/evidence/phase-1/`。B-00 通過，放行 B-01。
