@@ -89,3 +89,44 @@ func TestProcessGroup(t *testing.T) {
 		t.Errorf("expected pgid %d to be dead after KillProcessGroup", pgid)
 	}
 }
+
+func TestIsTaskProcessGroup(t *testing.T) {
+	cmd := exec.Command("sleep", "5")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	taskID := "task-test-id-123"
+	cmd.Env = append(cmd.Environ(), "ASURA_TASK_ID="+taskID)
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to start cmd: %v", err)
+	}
+	defer func() {
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+		}
+	}()
+
+	pgid, err := syscall.Getpgid(cmd.Process.Pid)
+	if err != nil {
+		t.Fatalf("failed to get pgid: %v", err)
+	}
+
+	// 1. 身分匹配時應為 true
+	if !IsTaskProcessGroup(pgid, taskID) {
+		t.Errorf("expected IsTaskProcessGroup to be true for matching taskID")
+	}
+
+	// 2. 身分不匹配時應為 false
+	if IsTaskProcessGroup(pgid, "different-task-id") {
+		t.Errorf("expected IsTaskProcessGroup to be false for mismatched taskID")
+	}
+
+	// 3. 殺死進程後應為 false
+	_ = cmd.Process.Kill()
+	_ = cmd.Wait()
+	time.Sleep(20 * time.Millisecond)
+	if IsTaskProcessGroup(pgid, taskID) {
+		t.Errorf("expected IsTaskProcessGroup to be false after process termination")
+	}
+}
+

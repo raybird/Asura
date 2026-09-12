@@ -57,9 +57,12 @@ func handleCancel(args []string, stdout, stderr io.Writer) int {
 	lockPath := taskLockPath(*dbPath, taskID)
 	lf, lErr := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600)
 	if lErr != nil {
-		// 開鎖失敗時對已登記之 PGID 實施盡力回收，防禦程序持續運行
+		// 開鎖失敗時對已登記之 PGID 實施盡力回收，防禦程序持續運行（先校驗身分，防禦 PID 重用，修復 J-01）
 		if t, err := store.GetTask(context.Background(), taskID); err == nil && t.PGID > 0 {
-			_ = opencode.KillProcessGroup(t.PGID)
+			if opencode.IsTaskProcessGroup(t.PGID, taskID) {
+				_ = opencode.KillProcessGroup(t.PGID)
+				_ = store.UpdateTaskPGID(context.Background(), taskID, 0)
+			}
 		}
 		fmt.Fprintf(stderr, "error: failed to open task lock: %v\n", lErr)
 		return 1
@@ -67,7 +70,10 @@ func handleCancel(args []string, stdout, stderr io.Writer) int {
 	if err := syscall.Flock(int(lf.Fd()), syscall.LOCK_EX); err != nil {
 		_ = lf.Close()
 		if t, err := store.GetTask(context.Background(), taskID); err == nil && t.PGID > 0 {
-			_ = opencode.KillProcessGroup(t.PGID)
+			if opencode.IsTaskProcessGroup(t.PGID, taskID) {
+				_ = opencode.KillProcessGroup(t.PGID)
+				_ = store.UpdateTaskPGID(context.Background(), taskID, 0)
+			}
 		}
 		fmt.Fprintf(stderr, "error: failed to acquire task lock: %v\n", err)
 		return 1
@@ -81,9 +87,13 @@ func handleCancel(args []string, stdout, stderr io.Writer) int {
 		targetPGID = t.PGID
 	}
 
-	// 若任務具有運行的進程組 (PGID)，發送 SIGKILL 乾淨回收整個進程樹（D-05 規範）
+	// 若任務具有運行的進程組 (PGID)，先驗證程序身分仍屬於該任務，再發送 SIGKILL（修復 J-01）
 	if targetPGID > 0 {
-		_ = opencode.KillProcessGroup(targetPGID)
+		if opencode.IsTaskProcessGroup(targetPGID, taskID) {
+			_ = opencode.KillProcessGroup(targetPGID)
+		}
+		// 標記資源回收完成，清除 PGID 避免日後重試或 PID 重用誤殺其他工作
+		_ = store.UpdateTaskPGID(context.Background(), taskID, 0)
 	}
 
 	fmt.Fprintf(stdout, "Task %s cancelled successfully\n", taskID)

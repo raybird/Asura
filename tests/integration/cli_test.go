@@ -1215,6 +1215,114 @@ func TestCLI_LatestReview_I01_CancelRetryRecoversProcess(t *testing.T) {
 	}
 }
 
+// J-01: 驗證當 PGID 被系統重用或指派給不相關進程時，取消舊任務絕不誤殺不相關進程，且收尾後將 PGID 歸零
+func TestCLI_LatestReview_J01_CancelDoesNotKillReusedPGID(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-j01-reused-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	allowedDir := filepath.Join(tmpDir, "project")
+	if err := os.MkdirAll(allowedDir, 0755); err != nil {
+		t.Fatalf("failed to create allowed dir: %v", err)
+	}
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get wd: %v", err)
+	}
+	projectRoot := filepath.Dir(filepath.Dir(wd))
+	cmdDir := filepath.Join(projectRoot, "cmd", "asura")
+
+	asuraBin := filepath.Join(tmpDir, "asura")
+	buildCmd := exec.Command("go", "build", "-race", "-o", asuraBin, cmdDir)
+	if buildOut, buildErr := buildCmd.CombinedOutput(); buildErr != nil {
+		t.Fatalf("failed to build asura binary: %v, output: %s", buildErr, string(buildOut))
+	}
+
+	// 1. 啟動一個完全獨立的測試進程（不屬於任何 asura task），模擬 PID 被系統重新分配的情境
+	unrelatedCmd := exec.Command("sleep", "10")
+	unrelatedCmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := unrelatedCmd.Start(); err != nil {
+		t.Fatalf("failed to start unrelated process: %v", err)
+	}
+	defer func() {
+		if unrelatedCmd.Process != nil {
+			_ = unrelatedCmd.Process.Kill()
+		}
+	}()
+
+	unrelatedPGID, err := syscall.Getpgid(unrelatedCmd.Process.Pid)
+	if err != nil {
+		t.Fatalf("failed to get unrelated pgid: %v", err)
+	}
+
+	// 2. 在 store 中建立一個舊 cancelled 任務，但其 PGID 恰好等於 unrelatedPGID（模擬 PGID 重用）
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open store: %v", err)
+	}
+	defer store.Close()
+
+	oldTaskID := "old-cancelled-task"
+	err = store.CreateTask(context.Background(), &storage.Task{
+		ID:        oldTaskID,
+		Workspace: allowedDir,
+		Prompt:    "echo old",
+		Status:    storage.StatusCancelled,
+		PGID:      unrelatedPGID,
+	})
+	if err != nil {
+		t.Fatalf("failed to create dummy old task: %v", err)
+	}
+
+	waitErrCh := make(chan error, 1)
+	go func() {
+		waitErrCh <- unrelatedCmd.Wait()
+	}()
+
+	// 3. 執行 asura cancel 取消該舊任務
+	cancelCmd := exec.Command(asuraBin, "cancel", "--db", dbPath, oldTaskID)
+	var cancelOut, cancelErr bytes.Buffer
+	cancelCmd.Stdout = &cancelOut
+	cancelCmd.Stderr = &cancelErr
+
+	cancelCode := 0
+	if err := cancelCmd.Run(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			cancelCode = exitErr.ExitCode()
+		} else {
+			t.Fatalf("cancelCmd error: %v", err)
+		}
+	}
+
+	if cancelCode != 0 {
+		t.Fatalf("expected cancelCmd to succeed (exit 0), got: %d, stderr: %s", cancelCode, cancelErr.String())
+	}
+
+	// 4. 關鍵斷言：不相關的進程絕不能被殺死（必須依然存活！）
+	// 若存在 J-01 漏洞，該進程會被 SIGKILL 殺死，waitErrCh 會立即收到 signal: killed
+	select {
+	case waitErr := <-waitErrCh:
+		t.Fatalf("unrelated process was killed by cancel! (PID reuse vulnerability J-01 detected): %v", waitErr)
+	case <-time.After(100 * time.Millisecond):
+		// 正常：獨立 sleep 進程依然存活並在背景執行
+	}
+
+	// 5. 驗證資料庫中的 PGID 已被歸零（標記回收完成）
+	tObj, err := store.GetTask(context.Background(), oldTaskID)
+	if err != nil {
+		t.Fatalf("failed to query task: %v", err)
+	}
+	if tObj.PGID != 0 {
+		t.Errorf("expected task PGID to be cleared to 0 after cancel, got: %d", tObj.PGID)
+	}
+}
+
+
 
 
 

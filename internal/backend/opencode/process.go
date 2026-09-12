@@ -1,9 +1,12 @@
 package opencode
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"sync"
 	"syscall"
@@ -47,6 +50,24 @@ func IsProcessGroupAlive(pgid int) bool {
 	}
 	err := syscall.Kill(-pgid, 0)
 	return err == nil
+}
+
+// IsTaskProcessGroup 驗證指定進程組是否確實屬於該任務，防止 PID 重用導致誤殺不相關程序 (修復 J-01)
+func IsTaskProcessGroup(pgid int, taskID string) bool {
+	if pgid <= 0 || taskID == "" {
+		return false
+	}
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/environ", pgid))
+	if err != nil {
+		return false
+	}
+	expected := []byte(fmt.Sprintf("ASURA_TASK_ID=%s", taskID))
+	for _, entry := range bytes.Split(data, []byte{0}) {
+		if bytes.Equal(entry, expected) {
+			return true
+		}
+	}
+	return false
 }
 
 // StartProcess 在獨立進程組中啟動指定可執行檔，並在 ctx 取消時強殺整組 PGID

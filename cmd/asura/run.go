@@ -145,6 +145,9 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 
 		// 配置獨立進程組
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		if currentTaskID != "" {
+			cmd.Env = append(os.Environ(), fmt.Sprintf("ASURA_TASK_ID=%s", currentTaskID))
+		}
 
 		var lockFile *os.File
 		if currentTaskID != "" {
@@ -194,6 +197,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 						}
 						_ = syscall.Kill(-pgid, syscall.SIGKILL)
 						_ = cmd.Wait()
+						_ = store.UpdateTaskPGID(context.Background(), currentTaskID, 0)
 						return buf.String(), context.Canceled
 					}
 				}
@@ -207,6 +211,9 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 		}
 
 		err := cmd.Wait()
+		if currentTaskID != "" {
+			_ = store.UpdateTaskPGID(context.Background(), currentTaskID, 0)
+		}
 		return buf.String(), err
 	}
 
