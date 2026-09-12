@@ -315,6 +315,24 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			}
 
 			if err := d.store.CreateTask(context.Background(), initialTask); err != nil {
+				if req.RequestID != "" && errors.Is(err, storage.ErrDuplicateRequestID) {
+					existing, getErr := d.store.GetTaskByRequestID(context.Background(), req.RequestID)
+					if getErr != nil {
+						existing, getErr = d.store.GetTask(context.Background(), req.RequestID)
+					}
+					if getErr == nil && existing != nil {
+						if existing.Fingerprint != "" && existing.Fingerprint != fp {
+							_ = encoder.Encode(IPCResponse{Error: "request ID reused with different payload"})
+							continue
+						}
+						if existing.Status == storage.StatusCancelled {
+							_ = encoder.Encode(IPCResponse{Error: "cannot redeliver cancelled request"})
+							continue
+						}
+						_ = encoder.Encode(IPCResponse{Task: existing})
+						continue
+					}
+				}
 				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("failed to persist initial task: %v", err)})
 				continue
 			}

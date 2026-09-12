@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -24,6 +25,8 @@ const (
 var (
 	// ErrTaskNotFound 代表查詢的任務不存在
 	ErrTaskNotFound = errors.New("task not found")
+	// ErrDuplicateRequestID 代表相同 request_id 的任務已存在
+	ErrDuplicateRequestID = errors.New("duplicate request_id")
 )
 
 // Task 代表本機執行的任務實體
@@ -86,7 +89,7 @@ func NewSQLiteStore(dbPath string) (*SQLiteStore, error) {
 }
 
 func (s *SQLiteStore) initSchema() error {
-	schema := `
+	createTable := `
 	CREATE TABLE IF NOT EXISTS tasks (
 		id TEXT PRIMARY KEY,
 		request_id TEXT NOT NULL DEFAULT '',
@@ -100,16 +103,56 @@ func (s *SQLiteStore) initSchema() error {
 		created_at DATETIME NOT NULL,
 		updated_at DATETIME NOT NULL
 	);
-	CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
-	CREATE INDEX IF NOT EXISTS idx_tasks_request_id ON tasks(request_id);
 	`
-	if _, err := s.db.Exec(schema); err != nil {
-		return err
+	if _, err := s.db.Exec(createTable); err != nil {
+		return fmt.Errorf("create table: %w", err)
 	}
-	// 容錯升級既有表
-	_, _ = s.db.Exec("ALTER TABLE tasks ADD COLUMN request_id TEXT NOT NULL DEFAULT ''")
-	_, _ = s.db.Exec("ALTER TABLE tasks ADD COLUMN fingerprint TEXT NOT NULL DEFAULT ''")
+
+	// 容錯升級既有表：先確保 request_id 與 fingerprint 欄位存在再建立索引
+	cols, err := s.getTableColumns("tasks")
+	if err != nil {
+		return fmt.Errorf("get table columns: %w", err)
+	}
+	if !cols["request_id"] {
+		if _, err := s.db.Exec("ALTER TABLE tasks ADD COLUMN request_id TEXT NOT NULL DEFAULT ''"); err != nil {
+			return fmt.Errorf("add column request_id: %w", err)
+		}
+	}
+	if !cols["fingerprint"] {
+		if _, err := s.db.Exec("ALTER TABLE tasks ADD COLUMN fingerprint TEXT NOT NULL DEFAULT ''"); err != nil {
+			return fmt.Errorf("add column fingerprint: %w", err)
+		}
+	}
+
+	indices := `
+	CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_request_id_unique ON tasks(request_id) WHERE request_id != '';
+	`
+	if _, err := s.db.Exec(indices); err != nil {
+		return fmt.Errorf("create indices: %w", err)
+	}
 	return nil
+}
+
+func (s *SQLiteStore) getTableColumns(tableName string) (map[string]bool, error) {
+	rows, err := s.db.Query(fmt.Sprintf("PRAGMA table_info(%s)", tableName))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	cols := make(map[string]bool)
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dfltValue sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dfltValue, &pk); err != nil {
+			return nil, err
+		}
+		cols[name] = true
+	}
+	return cols, rows.Err()
 }
 
 // CreateTask 將新任務寫入資料庫
@@ -142,7 +185,13 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 		task.CreatedAt,
 		task.UpdatedAt,
 	)
-	return err
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") && strings.Contains(err.Error(), "request_id") {
+			return ErrDuplicateRequestID
+		}
+		return err
+	}
+	return nil
 }
 
 // GetTask 依任務 ID 查詢任務狀態與結果

@@ -810,6 +810,99 @@ func TestINT004RedeliveryUnit(t *testing.T) {
 	}
 }
 
+// 驗證高並發下相同 RequestID 同時提交時之原子去重性：後端僅執行一次，且所有並發連線皆回傳相同 Task ID (INT-004-REDELIVERY)
+func TestDaemon_ConcurrentRedeliveryDedupAtomic(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-atomic-dedup-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	sockPath := filepath.Join(tmpDir, "asura.sock")
+
+	var executionCount atomic.Int32
+	runner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		executionCount.Add(1)
+		time.Sleep(50 * time.Millisecond)
+		return "concurrent-dedup-success", nil
+	}
+
+	eng := engine.NewEngine(store, policy, engine.WithRunner(runner))
+	d := NewDaemon(Config{
+		SocketPath: sockPath,
+		MaxWorkers: 4,
+		MaxQueue:   10,
+	}, store, policy, WithEngine(eng))
+
+	if err := d.Start(); err != nil {
+		t.Fatalf("daemon start failed: %v", err)
+	}
+	defer d.Close()
+
+	const concurrentWorkers = 8
+	var wg sync.WaitGroup
+	results := make([]*storage.Task, concurrentWorkers)
+	errs := make([]error, concurrentWorkers)
+	startBarrier := make(chan struct{})
+
+	for i := 0; i < concurrentWorkers; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			client, err := NewClient(sockPath)
+			if err != nil {
+				errs[idx] = err
+				return
+			}
+			defer client.Close()
+
+			<-startBarrier // 同步起跑
+
+			task, err := client.Submit(context.Background(), engine.SubmitRequest{
+				ID:        "concurrent-atomic-req-001",
+				Workspace: tmpDir,
+				Prompt:    "dedup-task",
+			})
+			results[idx] = task
+			errs[idx] = err
+		}(i)
+	}
+
+	close(startBarrier)
+	wg.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("worker %d submit failed: %v", i, err)
+		}
+	}
+
+	firstID := results[0].ID
+	for i, res := range results {
+		if res == nil {
+			t.Fatalf("worker %d returned nil task", i)
+		}
+		if res.ID != firstID {
+			t.Errorf("worker %d got different Task ID: %s vs %s", i, res.ID, firstID)
+		}
+	}
+
+	// 等待執行完成
+	time.Sleep(150 * time.Millisecond)
+
+	if count := executionCount.Load(); count != 1 {
+		t.Errorf("expected exactly 1 execution, got %d (violates INT-004-REDELIVERY concurrent atomic dedup)", count)
+	}
+}
+
 // TestDaemon_INT007_PermissionPolicy 驗證 Daemon 預設持有並注入 INT-007 核准操作邊界
 func TestDaemon_INT007_PermissionPolicy(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "asura-int007-perm-*")

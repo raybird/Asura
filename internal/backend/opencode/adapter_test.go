@@ -2,6 +2,8 @@ package opencode
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -59,3 +61,43 @@ func TestINT007Unit(t *testing.T) {
 		t.Errorf("expected error for empty output, got nil")
 	}
 }
+
+// 驗證當後端進程 exit 0 但輸出事件串流包含 error 事件時，Adapter.Run 必須傳遞錯誤與部分輸出，不得偽稱成功
+func TestAdapter_Run_BackendErrorWithExitZero(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakeBin := filepath.Join(tmpDir, "fake_opencode.sh")
+
+	script := `#!/bin/sh
+if [ "$1" = "--version" ]; then
+    echo "1.18.23"
+    exit 0
+fi
+cat << 'EOF'
+{"type":"step_start","part":{"type":"step-start"}}
+{"type":"text","part":{"type":"text","text":"部分完成的文字"}}
+{"type":"error","error":{"message":"模型配額已耗盡 (429 Rate Limit)"}}
+{"type":"step_finish","part":{"reason":"error"}}
+EOF
+exit 0
+`
+	if err := os.WriteFile(fakeBin, []byte(script), 0755); err != nil {
+		t.Fatalf("write fake binary failed: %v", err)
+	}
+
+	adapter := NewAdapter(AdapterConfig{
+		BinaryPath:      fakeBin,
+		ExpectedVersion: "1.18.23",
+	})
+
+	out, err := adapter.Run(context.Background(), tmpDir, "test error propagation")
+	if err == nil {
+		t.Fatalf("expected error from adapter.Run when event stream contains error, got nil (out: %q)", out)
+	}
+	if !strings.Contains(err.Error(), "backend error") {
+		t.Errorf("expected error to contain 'backend error', got %v", err)
+	}
+	if !strings.Contains(out, "部分完成的文字") {
+		t.Errorf("expected partial output to be preserved, got %q", out)
+	}
+}
+

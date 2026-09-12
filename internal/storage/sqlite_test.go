@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
@@ -267,3 +268,166 @@ func TestSQLiteStore_RecoverInterruptedTasks(t *testing.T) {
 		t.Errorf("expected non-empty error message for interrupted pending task")
 	}
 }
+
+// 驗證從不具備 request_id/fingerprint 欄位的舊版 SQLite 資料庫進行遷移升級
+func TestSQLiteStore_UpgradeFromOldSchemaWithoutRequestID(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-storage-upgrade-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "legacy.db")
+
+	// 1. 建立舊版 schema（無 request_id 與 fingerprint 欄位）
+	oldDB, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open old db failed: %v", err)
+	}
+	legacySchema := `
+	CREATE TABLE tasks (
+		id TEXT PRIMARY KEY,
+		prompt TEXT NOT NULL,
+		workspace TEXT NOT NULL,
+		status TEXT NOT NULL,
+		result TEXT NOT NULL DEFAULT '',
+		error_message TEXT NOT NULL DEFAULT '',
+		pgid INTEGER NOT NULL DEFAULT 0,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	);
+	CREATE INDEX idx_tasks_status ON tasks(status);
+	`
+	if _, err := oldDB.Exec(legacySchema); err != nil {
+		oldDB.Close()
+		t.Fatalf("exec legacy schema failed: %v", err)
+	}
+	// 插入一筆舊資料
+	now := time.Now().UTC()
+	_, err = oldDB.Exec(`
+	INSERT INTO tasks (id, prompt, workspace, status, result, error_message, pgid, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, "legacy-task-1", "legacy prompt", "/tmp", "completed", "done", "", 0, now, now)
+	if err != nil {
+		oldDB.Close()
+		t.Fatalf("insert legacy task failed: %v", err)
+	}
+	oldDB.Close()
+
+	// 2. 以 NewSQLiteStore 開啟，預期順利執行 schema 遷移與補齊欄位、建立索引
+	store, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed on legacy DB: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+
+	// 3. 能讀取舊任務且欄位預設值正確
+	legacyTask, err := store.GetTask(ctx, "legacy-task-1")
+	if err != nil {
+		t.Fatalf("GetTask failed for legacy task: %v", err)
+	}
+	if legacyTask.RequestID != "" || legacyTask.Fingerprint != "" {
+		t.Errorf("expected empty request_id/fingerprint, got %q, %q", legacyTask.RequestID, legacyTask.Fingerprint)
+	}
+
+	// 4. 能正常寫入含 request_id 與 fingerprint 的新任務
+	newTask := &Task{
+		ID:          "new-task-1",
+		RequestID:   "req-123",
+		Fingerprint: "fp-123",
+		Prompt:      "new prompt",
+		Workspace:   "/tmp",
+		Status:      StatusPending,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if err := store.CreateTask(ctx, newTask); err != nil {
+		t.Fatalf("CreateTask failed on upgraded DB: %v", err)
+	}
+
+	// 5. 能透過 GetTaskByRequestID 查回
+	found, err := store.GetTaskByRequestID(ctx, "req-123")
+	if err != nil {
+		t.Fatalf("GetTaskByRequestID failed: %v", err)
+	}
+	if found.ID != newTask.ID {
+		t.Errorf("expected task ID %q, got %q", newTask.ID, found.ID)
+	}
+}
+
+// 驗證 SQLite 部分唯一索引：相同非空 RequestID 會觸發 ErrDuplicateRequestID，而多個空 RequestID 不受限制
+func TestSQLiteStore_DuplicateRequestIDUniqueIndex(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-storage-unique-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "test.db")
+	store, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// 1. 寫入第一筆非空 RequestID
+	task1 := &Task{
+		ID:        "task-1",
+		RequestID: "req-dup-1",
+		Prompt:    "prompt 1",
+		Workspace: "/tmp",
+		Status:    StatusPending,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.CreateTask(ctx, task1); err != nil {
+		t.Fatalf("CreateTask task1 failed: %v", err)
+	}
+
+	// 2. 寫入相同 RequestID 的第二筆任務，預期回傳 ErrDuplicateRequestID
+	task2 := &Task{
+		ID:        "task-2",
+		RequestID: "req-dup-1",
+		Prompt:      "prompt 2",
+		Workspace:   "/tmp",
+		Status:      StatusPending,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if err := store.CreateTask(ctx, task2); err != ErrDuplicateRequestID {
+		t.Fatalf("expected ErrDuplicateRequestID, got %v", err)
+	}
+
+	// 3. 寫入兩筆空字串 RequestID，部分唯一索引不應衝突
+	emptyReqTask1 := &Task{
+		ID:        "task-empty-1",
+		RequestID: "",
+		Prompt:    "prompt empty 1",
+		Workspace: "/tmp",
+		Status:    StatusPending,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.CreateTask(ctx, emptyReqTask1); err != nil {
+		t.Fatalf("CreateTask emptyReqTask1 failed: %v", err)
+	}
+
+	emptyReqTask2 := &Task{
+		ID:        "task-empty-2",
+		RequestID: "",
+		Prompt:    "prompt empty 2",
+		Workspace: "/tmp",
+		Status:    StatusPending,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.CreateTask(ctx, emptyReqTask2); err != nil {
+		t.Fatalf("CreateTask emptyReqTask2 failed: %v", err)
+	}
+}
+

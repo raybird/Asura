@@ -245,9 +245,12 @@ func (a *Adapter) Run(ctx context.Context, workspace string, prompt string) (str
 	}
 
 	if extractErr != nil {
-		// 若抽取失敗但有原始輸出，回傳原始輸出
+		// 若抽取失敗或包含後端錯誤，保留部分抽取文字或原始輸出，但必須回傳錯誤
+		if extracted != "" {
+			return extracted, extractErr
+		}
 		if rawStdout != "" {
-			return rawStdout, nil
+			return rawStdout, extractErr
 		}
 		return "", extractErr
 	}
