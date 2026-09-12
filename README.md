@@ -47,9 +47,18 @@ go build -o bin/asura ./cmd/asura
 
 ### 2. 常用 CLI 指令
 
-#### 提交並執行任務 (run)
+#### 提交自然語言 AI 任務 (ask)
 ```bash
-# 本機執行指令並追蹤任務
+# 透過 Daemon 中樞提交 AI 任務（非同步接受立即回傳 Task ID，斷線不中斷）
+./bin/asura ask --workspace /path/to/project "分析專案代碼並整理函式呼叫圖"
+
+# 提交並等待任務完成輸出結果
+./bin/asura ask --workspace /path/to/project --wait "執行測試並回報結果"
+```
+
+#### 本機直接執行指令 (run)
+```bash
+# 本機直接執行 shell 指令並追蹤任務
 ./bin/asura run \
   --workspace /path/to/project \
   --allowed-roots /path/to/project \
@@ -58,12 +67,13 @@ go build -o bin/asura ./cmd/asura
 
 #### 查詢任務狀態 (status)
 ```bash
+# 向 Daemon 或儲存層查詢指定任務狀態與已保存結果
 ./bin/asura status <task-id>
 ```
 
 #### 安全取消任務 (cancel)
 ```bash
-# 立即終止任務進程組並確保孤兒進程完全回收
+# 從共同入口發送取消請求，終止任務進程組並確保進程樹安全回收
 ./bin/asura cancel <task-id>
 ```
 
@@ -72,7 +82,9 @@ go build -o bin/asura ./cmd/asura
 ## 架構設計與議題文件
 
 - **系統架構設計規範**：請參閱 [架構設計文件](docs/superpowers/specs/2026-09-11-asura-architecture-design.md)，涵蓋信任邊界、排程拓撲、進程模型與 D-01 至 D-09 技術決策。
-- **議題追蹤與驗收劇本**：請參閱 [Issue 1 本機執行核心](docs/issues/issue-1/README.md) 與 [實作計畫](docs/issues/issue-1/implementation-plan.md)。
+- **議題追蹤與驗收劇本**：
+  - [Issue 1 本機執行核心](docs/issues/issue-1/README.md) 與 [實作計畫](docs/issues/issue-1/implementation-plan.md)
+  - [Issue 2 本機 AI 執行路徑整合 (Phase 1.5)](docs/issues/issue-2/README.md) 與 [實作計畫拆解](docs/issues/issue-2/implementation-plan-decomposition.md)
 
 ---
 

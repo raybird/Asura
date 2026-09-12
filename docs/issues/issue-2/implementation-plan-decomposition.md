@@ -13,7 +13,7 @@
 | Phase 3 | B-02 | 正式 Daemon、授權、容量與恢復 | Phase 2 | ✅ 通過（Daemon 授權與容量控制驗證全綠） |
 | Phase 4 | B-03 | ask、接受識別碼、查詢及去重 | Phase 3 | ✅ 通過（非同步接受、斷線追蹤與去重驗證全綠） |
 | Phase 5 | B-04 | 共同取消入口 | Phase 4 | ✅ 通過（共同取消協調、精準回收、終態一致與重啟恢復全綠） |
-| Phase 6 | B-05 | 完整回歸與操作文件 | Phase 5 | 📝 待執行 |
+| Phase 6 | B-05 | 完整回歸與操作文件 | Phase 5 | ✅ 通過（全套八項 Scenario、全套 race 回歸全綠與文件更新） |
 
 最大風險與首要驗證理由引用 README「風險與首要驗證」。Phase 1 驗證外部契約，不把探測成功等同 Asura 端到端成功；INT-002 的零啟動由服務端負責，不能交給已啟動的後端補救。Phase 1 不通過時停止 adapter 實作，提供證據逐題確認，不自行換版、全面自動核准或降低驗收要求。
 
@@ -74,9 +74,9 @@ bash scripts/issue-2/probe-opencode.sh cancellation
 
 ## Phase 6：B-05 完整回歸與交付
 
-- [ ] P6-T1：執行全部八項 Scenario，包含固定版本真實後端、並行 CLI、接受回應遺失、取消及重啟；逐項核對測試確實執行且未 skip。
-- [ ] P6-T2：執行全套 race 回歸與 shell 相容性檢查，核對 Phase 2～5 四段證據齊備。
-- [ ] P6-T3：依實際行為更新使用文件，涵蓋手動 Daemon、允許清單、ask／status／cancel、滿載與恢復；依文件在隔離環境重做操作。
+- [x] P6-T1：執行全部八項 Scenario，包含固定版本真實後端、並行 CLI、接受回應遺失、取消及重啟；逐項核對測試確實執行且未 skip。
+- [x] P6-T2：執行全套 race 回歸與 shell 相容性檢查，核對 Phase 2～5 四段證據齊備。
+- [x] P6-T3：依實際行為更新使用文件，涵蓋手動 Daemon、允許清單、ask／status／cancel、滿載與恢復；依文件在隔離環境重做操作。
 
 完成證據：八項 Scenario 全綠、既有回歸全綠、操作步驟可重複；需要獨立 review 時另依專案 gate 留存 artifact，不能以本拆解當作審查通過。
 
@@ -172,3 +172,8 @@ go test -count=1 -race ./...
      - 外迴圈測試：`TestINT005`（PASS）、`TestINT006`（PASS）、`TestRunCLI_UsageAndValidation` cancel 驗證（PASS）。
      - 全套回歸：`go test -count=1 -race ./...` 全數 PASS（耗時 54.3s）。
 7. Phase 5 通過，放行 Phase 6（B-05 完整回歸與交付）。
+8. 2026-09-12 Phase 6 完整回歸與交付完成紀錄：
+   - 執行八項已核准 Scenario 完整外迴圈驗收（P6-T1）：`TestINT001` 至 `TestINT007` 及 `TestINT004-REDELIVERY` 全數 PASS，逐項核對無任何 skip；證據保存於 `docs/issues/issue-2/evidence/phase-6/scenario_results.log`。
+   - 執行全套 race 回歸測試（P6-T2）：`go test -count=1 -race ./...` 全數 PASS（耗時 52.8s，零 Data Race）；證據保存於 `docs/issues/issue-2/evidence/phase-6/full_regression_race.log`。
+   - 更新使用說明與操作文件（P6-T3）：更新根目錄 `README.md`，詳述 `asura ask`、`asura run`、`asura status`、`asura cancel` 之使用方式與邊界規範。
+   - Phase 1～Phase 6 全數驗證通過，Issue #2 正式實作收斂完成，準備交付！
