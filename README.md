@@ -47,13 +47,19 @@ go build -o bin/asura ./cmd/asura
 
 ### 2. 常用 CLI 指令
 
+#### 啟動 Daemon 服務中樞 (daemon)
+```bash
+# 啟動常駐執行中樞（監聽 Unix Domain Socket，集中管理排程與執行容量）
+./bin/asura daemon --socket /tmp/asura.sock --allowed-roots /path/to/project --workers 2 --queue 10
+```
+
 #### 提交自然語言 AI 任務 (ask)
 ```bash
 # 透過 Daemon 中樞提交 AI 任務（非同步接受立即回傳 Task ID，斷線不中斷）
-./bin/asura ask --workspace /path/to/project "分析專案代碼並整理函式呼叫圖"
+./bin/asura ask --socket /tmp/asura.sock --workspace /path/to/project "分析專案代碼並整理函式呼叫圖"
 
 # 提交並等待任務完成輸出結果
-./bin/asura ask --workspace /path/to/project --wait "執行測試並回報結果"
+./bin/asura ask --socket /tmp/asura.sock --workspace /path/to/project --wait "執行測試並回報結果"
 ```
 
 #### 本機直接執行指令 (run)

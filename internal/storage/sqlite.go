@@ -29,6 +29,8 @@ var (
 // Task 代表本機執行的任務實體
 type Task struct {
 	ID           string     `json:"id"`
+	RequestID    string     `json:"request_id,omitempty"`
+	Fingerprint  string     `json:"fingerprint,omitempty"`
 	Prompt       string     `json:"prompt"`
 	Workspace    string     `json:"workspace"`
 	Status       TaskStatus `json:"status"`
@@ -87,6 +89,8 @@ func (s *SQLiteStore) initSchema() error {
 	schema := `
 	CREATE TABLE IF NOT EXISTS tasks (
 		id TEXT PRIMARY KEY,
+		request_id TEXT NOT NULL DEFAULT '',
+		fingerprint TEXT NOT NULL DEFAULT '',
 		prompt TEXT NOT NULL,
 		workspace TEXT NOT NULL,
 		status TEXT NOT NULL,
@@ -97,9 +101,15 @@ func (s *SQLiteStore) initSchema() error {
 		updated_at DATETIME NOT NULL
 	);
 	CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+	CREATE INDEX IF NOT EXISTS idx_tasks_request_id ON tasks(request_id);
 	`
-	_, err := s.db.Exec(schema)
-	return err
+	if _, err := s.db.Exec(schema); err != nil {
+		return err
+	}
+	// 容錯升級既有表
+	_, _ = s.db.Exec("ALTER TABLE tasks ADD COLUMN request_id TEXT NOT NULL DEFAULT ''")
+	_, _ = s.db.Exec("ALTER TABLE tasks ADD COLUMN fingerprint TEXT NOT NULL DEFAULT ''")
+	return nil
 }
 
 // CreateTask 將新任務寫入資料庫
@@ -108,8 +118,8 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 		return errors.New("task cannot be nil")
 	}
 	query := `
-	INSERT INTO tasks (id, prompt, workspace, status, result, error_message, pgid, created_at, updated_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO tasks (id, request_id, fingerprint, prompt, workspace, status, result, error_message, pgid, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	now := time.Now().UTC()
 	if task.CreatedAt.IsZero() {
@@ -121,6 +131,8 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 
 	_, err := s.db.ExecContext(ctx, query,
 		task.ID,
+		task.RequestID,
+		task.Fingerprint,
 		task.Prompt,
 		task.Workspace,
 		string(task.Status),
@@ -136,7 +148,7 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 // GetTask 依任務 ID 查詢任務狀態與結果
 func (s *SQLiteStore) GetTask(ctx context.Context, id string) (*Task, error) {
 	query := `
-	SELECT id, prompt, workspace, status, result, error_message, pgid, created_at, updated_at
+	SELECT id, request_id, fingerprint, prompt, workspace, status, result, error_message, pgid, created_at, updated_at
 	FROM tasks
 	WHERE id = ?
 	`
@@ -146,6 +158,8 @@ func (s *SQLiteStore) GetTask(ctx context.Context, id string) (*Task, error) {
 	var statusStr string
 	err := row.Scan(
 		&task.ID,
+		&task.RequestID,
+		&task.Fingerprint,
 		&task.Prompt,
 		&task.Workspace,
 		&statusStr,
@@ -160,6 +174,46 @@ func (s *SQLiteStore) GetTask(ctx context.Context, id string) (*Task, error) {
 	}
 	if err != nil {
 		return nil, fmt.Errorf("query task: %w", err)
+	}
+
+	task.Status = TaskStatus(statusStr)
+	return &task, nil
+}
+
+// GetTaskByRequestID 依用戶端 Request ID 查詢最新任務
+func (s *SQLiteStore) GetTaskByRequestID(ctx context.Context, requestID string) (*Task, error) {
+	if requestID == "" {
+		return nil, ErrTaskNotFound
+	}
+	query := `
+	SELECT id, request_id, fingerprint, prompt, workspace, status, result, error_message, pgid, created_at, updated_at
+	FROM tasks
+	WHERE request_id = ?
+	ORDER BY created_at DESC
+	LIMIT 1
+	`
+	row := s.db.QueryRowContext(ctx, query, requestID)
+
+	var task Task
+	var statusStr string
+	err := row.Scan(
+		&task.ID,
+		&task.RequestID,
+		&task.Fingerprint,
+		&task.Prompt,
+		&task.Workspace,
+		&statusStr,
+		&task.Result,
+		&task.ErrorMessage,
+		&task.PGID,
+		&task.CreatedAt,
+		&task.UpdatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrTaskNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("query task by request_id: %w", err)
 	}
 
 	task.Status = TaskStatus(statusStr)

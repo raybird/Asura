@@ -809,3 +809,84 @@ func TestINT004RedeliveryUnit(t *testing.T) {
 		t.Errorf("expected exactly 1 execution, got %d (violates INT-004-REDELIVERY)", count)
 	}
 }
+
+// TestDaemon_INT007_PermissionPolicy 驗證 Daemon 預設持有並注入 INT-007 核准操作邊界
+func TestDaemon_INT007_PermissionPolicy(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-int007-perm-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, _ := storage.NewSQLiteStore(dbPath)
+	defer store.Close()
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	d := NewDaemon(Config{
+		SocketPath: filepath.Join(tmpDir, "asura.sock"),
+	}, store, policy)
+
+	cfg := d.OpenCodeConfig()
+	if cfg.ExpectedVersion != "1.18.23" {
+		t.Errorf("expected OpenCode ExpectedVersion '1.18.23', got %q", cfg.ExpectedVersion)
+	}
+	if !strings.Contains(cfg.Permission, "edit") || !strings.Contains(cfg.Permission, "ask") {
+		t.Errorf("expected DefaultApprovedPermissionPolicy in Daemon config, got %q", cfg.Permission)
+	}
+}
+
+// TestDaemon_RequestID_FingerprintSafety 驗證 RequestID 重用時防範 fingerprint 不符與已取消之任務
+func TestDaemon_RequestID_FingerprintSafety(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-fp-safety-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, _ := storage.NewSQLiteStore(dbPath)
+	defer store.Close()
+	policy := auth.NewPolicy([]string{tmpDir})
+	sockPath := filepath.Join(tmpDir, "asura.sock")
+
+	eng := engine.NewEngine(store, policy, engine.WithRunner(func(ctx context.Context, ws, p string) (string, error) {
+		return "ok", nil
+	}))
+
+	d := NewDaemon(Config{SocketPath: sockPath}, store, policy, WithEngine(eng))
+	if err := d.Start(); err != nil {
+		t.Fatalf("daemon start failed: %v", err)
+	}
+	defer d.Close()
+
+	client, err := NewClient(sockPath)
+	if err != nil {
+		t.Fatalf("client connect failed: %v", err)
+	}
+	defer client.Close()
+
+	// 第一次提交
+	_, err = client.Submit(context.Background(), engine.SubmitRequest{
+		ID:        "shared-req-id",
+		Workspace: tmpDir,
+		Prompt:    "original prompt",
+	})
+	if err != nil {
+		t.Fatalf("first submit failed: %v", err)
+	}
+
+	// 相同 RequestID 但不同 Prompt (fingerprint 不符)，必須被拒絕
+	_, err = client.Submit(context.Background(), engine.SubmitRequest{
+		ID:        "shared-req-id",
+		Workspace: tmpDir,
+		Prompt:    "different mismatched prompt",
+	})
+	if err == nil {
+		t.Fatalf("expected error for mismatched fingerprint on same RequestID, got nil")
+	}
+	if !strings.Contains(err.Error(), "different payload") {
+		t.Errorf("expected error to explain payload mismatch, got: %v", err)
+	}
+}
+

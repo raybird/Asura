@@ -24,6 +24,11 @@ import (
 // When 使用者傳入自然語言任務
 // Then 任務交給指定後端且不被當作 shell 命令，使用者可重新查得保存結果
 func TestINT001(t *testing.T) {
+	binPath, binErr := opencode.ResolveOpenCodeBinary("", "1.18.23")
+	if binErr != nil {
+		t.Skipf("opencode 1.18.23 not available in this environment: %v; skipping contract test", binErr)
+	}
+
 	tmpDir, err := os.MkdirTemp("", "asura-int001-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
@@ -40,7 +45,9 @@ func TestINT001(t *testing.T) {
 	policy := auth.NewPolicy([]string{tmpDir})
 
 	// 注入真實 OpenCode Adapter 執行器
-	adapter := opencode.NewAdapter(opencode.AdapterConfig{})
+	adapter := opencode.NewAdapter(opencode.AdapterConfig{
+		BinaryPath: binPath,
+	})
 	eng := engine.NewEngine(store, policy, engine.WithRunner(adapter.Run))
 
 	ctx := context.Background()
@@ -65,6 +72,11 @@ func TestINT001(t *testing.T) {
 // When 後端需要修改專案檔案
 // Then 可在核准範圍內自動執行，但限制操作未取得確認時不執行
 func TestINT007(t *testing.T) {
+	binPath, binErr := opencode.ResolveOpenCodeBinary("", "1.18.23")
+	if binErr != nil {
+		t.Skipf("opencode 1.18.23 not available in this environment: %v; skipping contract test", binErr)
+	}
+
 	tmpDir, err := os.MkdirTemp("", "asura-int007-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
@@ -78,7 +90,7 @@ func TestINT007(t *testing.T) {
 	}
 
 	adapter := opencode.NewAdapter(opencode.AdapterConfig{
-		BinaryPath: filepath.Join(os.Getenv("HOME"), ".cache/asura-probe-issue-2/install/node_modules/.bin/opencode"),
+		BinaryPath: binPath,
 		Permission: `{"bash":"deny"}`,
 	})
 
@@ -545,12 +557,9 @@ func TestINT005(t *testing.T) {
 		t.Errorf("expected task A status cancelled, got %s", cancelTask.Status)
 	}
 
-	// 等待回收完成
-	time.Sleep(100 * time.Millisecond)
-
-	// 驗證 1: 任務 A 的進程組已被安全回收 (不在存活狀態)
+	// 驗證 1: 同步回收契約——CancelTask 返回的當下，任務 A 的進程組已確認被安全回收 (不在存活狀態)
 	if opencode.IsProcessGroupAlive(pgidA) {
-		t.Errorf("expected process group A (%d) to be terminated, but still alive", pgidA)
+		t.Errorf("expected process group A (%d) to be terminated immediately upon CancelTask return, but still alive", pgidA)
 	}
 
 	// 驗證 2: 不相關工作 B 保持存活 (不受影響)

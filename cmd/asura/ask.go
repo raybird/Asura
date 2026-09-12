@@ -19,7 +19,7 @@ func handleAsk(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("ask", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
-	sockPath := fs.String("socket", os.Getenv("ASURA_SOCKET"), "path to daemon unix socket")
+	sockPath := fs.String("socket", DefaultSocketPath(), "path to daemon unix socket")
 	workspace := fs.String("workspace", "", "target workspace directory (defaults to current directory)")
 	customID := fs.String("id", "", "optional custom task/request ID")
 	wait := fs.Bool("wait", false, "wait for task to complete")
@@ -29,7 +29,7 @@ func handleAsk(args []string, stdout, stderr io.Writer) int {
 	}
 
 	if *sockPath == "" {
-		*sockPath = filepath.Join(os.TempDir(), "asura.sock")
+		*sockPath = DefaultSocketPath()
 	}
 
 	remaining := fs.Args()

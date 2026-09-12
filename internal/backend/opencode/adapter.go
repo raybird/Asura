@@ -25,8 +25,9 @@ var (
 
 // AdapterConfig 定義 OpenCode Adapter 的執行設定
 type AdapterConfig struct {
-	BinaryPath  string
-	ConfigDir   string
+	BinaryPath       string
+	ExpectedVersion  string
+	ConfigDir        string
 	Permission       string // JSON string for OPENCODE_PERMISSION
 	DisableAuto      bool
 	OnProcessStarted func(ctx context.Context, pgid int)
@@ -38,16 +39,60 @@ type Adapter struct {
 	cfg AdapterConfig
 }
 
+// ValidateOpenCodeVersion 檢查二進位檔版本是否符合預期
+func ValidateOpenCodeVersion(binPath string, expectedVersion string) error {
+	out, err := exec.Command(binPath, "--version").Output()
+	if err != nil {
+		return fmt.Errorf("execute opencode --version: %w", err)
+	}
+	ver := strings.TrimSpace(string(out))
+	if expectedVersion != "" && !strings.HasPrefix(ver, expectedVersion) {
+		return fmt.Errorf("unsupported opencode version: expected %s, got %s", expectedVersion, ver)
+	}
+	return nil
+}
+
+// ResolveOpenCodeBinary 解析並驗證 OpenCode 二進位檔路徑與版本
+func ResolveOpenCodeBinary(preferredPath string, expectedVersion string) (string, error) {
+	if preferredPath != "" {
+		if err := ValidateOpenCodeVersion(preferredPath, expectedVersion); err != nil {
+			return "", err
+		}
+		return preferredPath, nil
+	}
+
+	// 1. 優先檢查隔離安裝目錄
+	home, err := os.UserHomeDir()
+	if err == nil {
+		isolatedBin := filepath.Join(home, ".cache/asura-probe-issue-2/install/node_modules/.bin/opencode")
+		if _, err := os.Stat(isolatedBin); err == nil {
+			if vErr := ValidateOpenCodeVersion(isolatedBin, expectedVersion); vErr == nil {
+				return isolatedBin, nil
+			}
+		}
+	}
+
+	// 2. 檢查 PATH
+	pathBin, err := exec.LookPath("opencode")
+	if err == nil {
+		vErr := ValidateOpenCodeVersion(pathBin, expectedVersion)
+		if vErr == nil {
+			return pathBin, nil
+		}
+		return "", fmt.Errorf("opencode found in PATH but version invalid: %w", vErr)
+	}
+
+	return "", fmt.Errorf("%w: valid opencode %s not found in probe path or PATH", ErrNoBinary, expectedVersion)
+}
+
 // NewAdapter 建立新的 OpenCode Adapter 實例
 func NewAdapter(cfg AdapterConfig) *Adapter {
+	if cfg.ExpectedVersion == "" {
+		cfg.ExpectedVersion = "1.18.23"
+	}
 	if cfg.BinaryPath == "" {
-		// 預設檢查隔離安裝目錄
-		home, err := os.UserHomeDir()
-		if err == nil {
-			isolatedBin := filepath.Join(home, ".cache/asura-probe-issue-2/install/node_modules/.bin/opencode")
-			if _, err := os.Stat(isolatedBin); err == nil {
-				cfg.BinaryPath = isolatedBin
-			}
+		if resolved, err := ResolveOpenCodeBinary("", cfg.ExpectedVersion); err == nil {
+			cfg.BinaryPath = resolved
 		}
 	}
 	return &Adapter{cfg: cfg}
@@ -87,9 +132,17 @@ func (a *Adapter) ExtractResultFromEvents(output string) (string, error) {
 		if evt.IsRateLimit {
 			lastErr = "rate limit exceeded"
 		}
+		if evt.Type == "error" && evt.ErrorMessage != "" {
+			lastErr = evt.ErrorMessage
+		}
 	}
 
 	result := strings.TrimSpace(sb.String())
+	// 遵循審查建議：保留 partial output + terminal error，避免先收到 text、後收到 429/error 時被判成成功
+	if lastErr != "" {
+		return result, fmt.Errorf("backend error: %s", lastErr)
+	}
+
 	if result != "" {
 		return result, nil
 	}
@@ -99,23 +152,20 @@ func (a *Adapter) ExtractResultFromEvents(output string) (string, error) {
 		return trimmed, nil
 	}
 
-	if lastErr != "" {
-		return "", fmt.Errorf("backend error: %s", lastErr)
-	}
-
 	return "", ErrEmptyResult
 }
 
 // Run 執行自然語言任務，解析事件串流並回傳文字結果 (INT-001, INT-007)
 // 自然語言 prompt 直接作為參數傳入，不經過 shell 解譯。
 func (a *Adapter) Run(ctx context.Context, workspace string, prompt string) (string, error) {
-	binPath := a.cfg.BinaryPath
-	if binPath == "" {
-		var err error
-		binPath, err = exec.LookPath("opencode")
-		if err != nil {
-			return "", fmt.Errorf("%w: lookpath failed: %v", ErrNoBinary, err)
-		}
+	expectedVer := a.cfg.ExpectedVersion
+	if expectedVer == "" {
+		expectedVer = "1.18.23"
+	}
+
+	binPath, err := ResolveOpenCodeBinary(a.cfg.BinaryPath, expectedVer)
+	if err != nil {
+		return "", err
 	}
 
 	args := []string{"run", "--format", "json", "--dir", workspace}

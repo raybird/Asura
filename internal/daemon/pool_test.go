@@ -99,4 +99,63 @@ func TestWorkerPool(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("排水關閉 (Drain): 已進入佇列之任務在 Close 時必須完整執行完畢", func(t *testing.T) {
+		pool := NewWorkerPool(1, 2)
+
+		var executedA, executedB, executedC atomic.Bool
+		startedA := make(chan struct{})
+
+		// 任務 A: 佔住唯一 worker
+		_, errA := pool.SubmitAsync(context.Background(), func() error {
+			close(startedA)
+			time.Sleep(50 * time.Millisecond)
+			executedA.Store(true)
+			return nil
+		})
+		if errA != nil {
+			t.Fatalf("submit A failed: %v", errA)
+		}
+
+		<-startedA
+
+		// 任務 B, C: 進入佇列
+		_, errB := pool.SubmitAsync(context.Background(), func() error {
+			time.Sleep(10 * time.Millisecond)
+			executedB.Store(true)
+			return nil
+		})
+		if errB != nil {
+			t.Fatalf("submit B failed: %v", errB)
+		}
+
+		_, errC := pool.SubmitAsync(context.Background(), func() error {
+			time.Sleep(10 * time.Millisecond)
+			executedC.Store(true)
+			return nil
+		})
+		if errC != nil {
+			t.Fatalf("submit C failed: %v", errC)
+		}
+
+		// 呼叫 Close()，此時 pool 應停止接受新任務，但必須把 A, B, C 全部 drain 執行完畢
+		pool.Close()
+
+		if !executedA.Load() {
+			t.Errorf("expected task A to be executed")
+		}
+		if !executedB.Load() {
+			t.Errorf("expected task B to be drained and executed, but was abandoned")
+		}
+		if !executedC.Load() {
+			t.Errorf("expected task C to be drained and executed, but was abandoned")
+		}
+
+		// 關閉後再提交應被拒絕
+		errD := pool.Submit(context.Background(), func() error { return nil })
+		if !errors.Is(errD, ErrPoolClosed) {
+			t.Errorf("expected ErrPoolClosed after Close(), got %v", errD)
+		}
+	})
 }
+

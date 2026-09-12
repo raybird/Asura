@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,11 +24,25 @@ var (
 	ErrDaemonAlreadyRunning = errors.New("daemon already running")
 )
 
+// DefaultApprovedPermissionPolicy 定義 INT-007 核准之安全操作邊界：
+// 允許修改/build/test，但刪除重要資料、部署、push、對外傳送必須另行確認
+const DefaultApprovedPermissionPolicy = `{"*":"ask","read":"allow","edit":"allow","build":"allow","test":"allow","bash":"ask"}`
+
+// OpenCodeRuntimeConfig 定義 Daemon 底層執行器配置
+type OpenCodeRuntimeConfig struct {
+	BinaryPath      string
+	ExpectedVersion string
+	ConfigDir       string
+	Permission      string
+	DisableAuto     bool
+}
+
 // Config 定義 Daemon 運行參數
 type Config struct {
-	SocketPath string
-	MaxWorkers int
-	MaxQueue   int
+	SocketPath     string
+	MaxWorkers     int
+	MaxQueue       int
+	OpenCodeConfig OpenCodeRuntimeConfig
 }
 
 // Daemon 實作單一守護進程中樞
@@ -54,6 +69,18 @@ func WithEngine(eng *engine.Engine) DaemonOption {
 	}
 }
 
+// WithOpenCodeConfig 注入執行器執行設定
+func WithOpenCodeConfig(cfg OpenCodeRuntimeConfig) DaemonOption {
+	return func(d *Daemon) {
+		d.cfg.OpenCodeConfig = cfg
+	}
+}
+
+// OpenCodeConfig 回傳 Daemon 當前配置之 OpenCodeRuntimeConfig
+func (d *Daemon) OpenCodeConfig() OpenCodeRuntimeConfig {
+	return d.cfg.OpenCodeConfig
+}
+
 // NewDaemon 建立新的 Daemon 實例
 func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts ...DaemonOption) *Daemon {
 	if cfg.MaxWorkers <= 0 {
@@ -61,6 +88,12 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 	}
 	if cfg.MaxQueue < 0 {
 		cfg.MaxQueue = 10
+	}
+	if cfg.OpenCodeConfig.ExpectedVersion == "" {
+		cfg.OpenCodeConfig.ExpectedVersion = "1.18.23"
+	}
+	if cfg.OpenCodeConfig.Permission == "" {
+		cfg.OpenCodeConfig.Permission = DefaultApprovedPermissionPolicy
 	}
 
 	d := &Daemon{
@@ -77,6 +110,11 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 
 	if d.engine == nil {
 		adapter := opencode.NewAdapter(opencode.AdapterConfig{
+			BinaryPath:      d.cfg.OpenCodeConfig.BinaryPath,
+			ExpectedVersion: d.cfg.OpenCodeConfig.ExpectedVersion,
+			ConfigDir:       d.cfg.OpenCodeConfig.ConfigDir,
+			Permission:      d.cfg.OpenCodeConfig.Permission,
+			DisableAuto:     d.cfg.OpenCodeConfig.DisableAuto,
 			OnProcessStarted: func(ctx context.Context, pgid int) {
 				if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
 					_ = store.UpdateTaskPGID(context.Background(), taskID, pgid)
@@ -203,6 +241,9 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				continue
 			}
 			task, err := d.store.GetTask(context.Background(), req.TaskID)
+			if err != nil && req.TaskID != "" {
+				task, err = d.store.GetTaskByRequestID(context.Background(), req.TaskID)
+			}
 			if err != nil {
 				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("task not found: %v", err)})
 				continue
@@ -214,12 +255,18 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				_ = encoder.Encode(IPCResponse{Error: "task_id required for cancel"})
 				continue
 			}
-			err := d.engine.CancelTask(req.TaskID)
+			targetID := req.TaskID
+			if _, err := d.store.GetTask(context.Background(), targetID); err != nil {
+				if t, rErr := d.store.GetTaskByRequestID(context.Background(), targetID); rErr == nil {
+					targetID = t.ID
+				}
+			}
+			err := d.engine.CancelTask(targetID)
 			if err != nil {
 				_ = encoder.Encode(IPCResponse{Error: err.Error()})
 				continue
 			}
-			task, _ := d.store.GetTask(context.Background(), req.TaskID)
+			task, _ := d.store.GetTask(context.Background(), targetID)
 			_ = encoder.Encode(IPCResponse{Task: task})
 
 		case "submit":
@@ -231,28 +278,40 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				}
 			}
 
+			// 計算請求 Fingerprint 確保同 Request ID 之 payload 一致性（防止撞 PK 或錯置）
+			fp := fmt.Sprintf("%x", sha256.Sum256([]byte(req.Workspace+":"+req.Prompt)))
+
 			// 遵循 INT-004-REDELIVERY：同 RequestID 且非 Cancelled 任務時直接回傳既有任務
 			if req.RequestID != "" {
-				existing, err := d.store.GetTask(context.Background(), req.RequestID)
-				if err == nil && existing != nil && existing.Status != storage.StatusCancelled {
+				existing, err := d.store.GetTaskByRequestID(context.Background(), req.RequestID)
+				if err != nil {
+					existing, err = d.store.GetTask(context.Background(), req.RequestID)
+				}
+				if err == nil && existing != nil {
+					if existing.Fingerprint != "" && existing.Fingerprint != fp {
+						_ = encoder.Encode(IPCResponse{Error: "request ID reused with different payload"})
+						continue
+					}
+					if existing.Status == storage.StatusCancelled {
+						_ = encoder.Encode(IPCResponse{Error: "cannot redeliver cancelled request"})
+						continue
+					}
 					_ = encoder.Encode(IPCResponse{Task: existing})
 					continue
 				}
 			}
 
-			taskID := req.RequestID
-			if taskID == "" {
-				taskID = engine.GenerateTaskID()
-			}
-
+			taskID := engine.GenerateTaskID()
 			now := time.Now().UTC()
 			initialTask := &storage.Task{
-				ID:        taskID,
-				Prompt:    req.Prompt,
-				Workspace: req.Workspace,
-				Status:    storage.StatusPending,
-				CreatedAt: now,
-				UpdatedAt: now,
+				ID:          taskID,
+				RequestID:   req.RequestID,
+				Fingerprint: fp,
+				Prompt:      req.Prompt,
+				Workspace:   req.Workspace,
+				Status:      storage.StatusPending,
+				CreatedAt:   now,
+				UpdatedAt:   now,
 			}
 
 			if err := d.store.CreateTask(context.Background(), initialTask); err != nil {

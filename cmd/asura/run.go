@@ -41,6 +41,8 @@ func RunCLI(args []string, stdout, stderr io.Writer) int {
 	subargs := args[1:]
 
 	switch subcmd {
+	case "daemon":
+		return handleDaemon(subargs, stdout, stderr)
 	case "run":
 		return handleRun(subargs, stdout, stderr)
 	case "ask":
@@ -60,6 +62,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage: asura <command> [options] [arguments]")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Commands:")
+	fmt.Fprintln(w, "  daemon  Start the central execution daemon")
 	fmt.Fprintln(w, "  run     Submit and execute a task in a workspace")
 	fmt.Fprintln(w, "  ask     Submit a natural language AI task via Daemon")
 	fmt.Fprintln(w, "  status  Query the execution status and result of a task")

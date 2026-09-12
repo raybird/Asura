@@ -3,12 +3,15 @@ package engine
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
 	"asura/internal/auth"
+	"asura/internal/backend/opencode"
 	"asura/internal/storage"
 )
 
@@ -132,3 +135,77 @@ func TestEngineCancel(t *testing.T) {
 		t.Errorf("expected idempotent cancellation to return nil for cancelled task, got: %v", err)
 	}
 }
+
+// TestEngineCancel_SynchronouslyTerminatesProcessGroup: 驗證共同取消入口在返回時，進程組必須已確實回收 (INT-005 同步契約)
+func TestEngineCancel_SynchronouslyTerminatesProcessGroup(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-cancel-sync-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	started := make(chan struct{})
+	var pgid int
+
+	runner := func(ctx context.Context, ws string, prompt string) (string, error) {
+		cmd := exec.CommandContext(ctx, "sleep", "30")
+		opencode.ConfigureProcessGroup(cmd)
+		if err := cmd.Start(); err != nil {
+			return "", err
+		}
+		p, err := syscall.Getpgid(cmd.Process.Pid)
+		if err != nil {
+			p = cmd.Process.Pid
+		}
+		pgid = p
+		taskID := TaskIDFromContext(ctx)
+		if taskID != "" {
+			_ = store.UpdateTaskPGID(context.Background(), taskID, pgid)
+		}
+		close(started)
+
+		go func() {
+			<-ctx.Done()
+			_ = opencode.KillProcessGroup(p)
+		}()
+
+		err = cmd.Wait()
+		return "partial output", err
+	}
+
+	eng := NewEngine(store, policy, WithRunner(runner))
+	ctx := context.Background()
+
+	go func() {
+		_, _ = eng.SubmitTask(ctx, SubmitRequest{
+			ID:        "sync-cancel-task",
+			Workspace: tmpDir,
+			Prompt:    "run sleep",
+		})
+	}()
+
+	<-started
+	// 確保 store 中已登記 PGID
+	time.Sleep(20 * time.Millisecond)
+
+	// 呼叫共同取消入口
+	cancelErr := eng.CancelTask("sync-cancel-task")
+	if cancelErr != nil {
+		t.Fatalf("CancelTask failed: %v", cancelErr)
+	}
+
+	// 關鍵驗證：CancelTask 返回的當下，進程組必須已經死亡，不得要求呼叫端 sleep！
+	if opencode.IsProcessGroupAlive(pgid) {
+		t.Errorf("process group %d was still alive immediately after CancelTask returned", pgid)
+	}
+}
+
