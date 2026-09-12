@@ -697,3 +697,134 @@ func TestCLI_ReviewFixes_R04_ConcurrentOutput(t *testing.T) {
 	}
 }
 
+// G-01: 驗證跨行程排他握手——在執行端啟動延遲期間發出取消，握手確保子進程絕不啟動且 0 副作用
+func TestCLI_LatestReview_G01_HandshakeCancelBeforeStart(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-g01-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	allowedDir := filepath.Join(tmpDir, "project")
+	if err := os.MkdirAll(allowedDir, 0755); err != nil {
+		t.Fatalf("failed to create allowed dir: %v", err)
+	}
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get wd: %v", err)
+	}
+	projectRoot := filepath.Dir(filepath.Dir(wd))
+	cmdDir := filepath.Join(projectRoot, "cmd", "asura")
+
+	asuraBin := filepath.Join(tmpDir, "asura")
+	buildCmd := exec.Command("go", "build", "-race", "-o", asuraBin, cmdDir)
+	if buildOut, buildErr := buildCmd.CombinedOutput(); buildErr != nil {
+		t.Fatalf("failed to build asura binary: %v, output: %s", buildErr, string(buildOut))
+	}
+
+	taskID := "task-g01-handshake"
+	lockPath := filepath.Join(filepath.Dir(dbPath), fmt.Sprintf(".task-%s.lock", taskID))
+	sideEffectFile := filepath.Join(allowedDir, "side_effect.marker")
+
+	// 1. 測試主程先持有該任務的排他鎖，模擬執行端被暫停在進入啟動區間前
+	lf, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		t.Fatalf("failed to create lock file: %v", err)
+	}
+	if err := syscall.Flock(int(lf.Fd()), syscall.LOCK_EX); err != nil {
+		t.Fatalf("failed to acquire initial lock: %v", err)
+	}
+
+	// 2. 啟動 asura run 子進程（會執行副作用指令：touch side_effect.marker）
+	runCmd := exec.Command(asuraBin,
+		"run",
+		"--db", dbPath,
+		"--id", taskID,
+		"--workspace", allowedDir,
+		"--allowed-roots", allowedDir,
+		fmt.Sprintf("touch %s; sleep 5", sideEffectFile),
+	)
+	var runOut, runErr bytes.Buffer
+	runCmd.Stdout = &runOut
+	runCmd.Stderr = &runErr
+	if err := runCmd.Start(); err != nil {
+		_ = syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
+		_ = lf.Close()
+		t.Fatalf("failed to start runCmd: %v", err)
+	}
+
+	// 3. 等候任務在 SQLite 中建立並轉為 running
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		_ = syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
+		_ = lf.Close()
+		t.Fatalf("failed to open store: %v", err)
+	}
+	defer store.Close()
+
+	for i := 0; i < 50; i++ {
+		tObj, err := store.GetTask(context.Background(), taskID)
+		if err == nil && tObj.Status == storage.StatusRunning {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// 4. 並發啟動 asura cancel 子進程
+	cancelCmd := exec.Command(asuraBin, "cancel", "--db", dbPath, taskID)
+	cancelDone := make(chan error, 1)
+	var cancelOut, cancelErr bytes.Buffer
+	cancelCmd.Stdout = &cancelOut
+	cancelCmd.Stderr = &cancelErr
+
+	if err := cancelCmd.Start(); err != nil {
+		_ = syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
+		_ = lf.Close()
+		t.Fatalf("failed to start cancelCmd: %v", err)
+	}
+
+	go func() {
+		cancelDone <- cancelCmd.Wait()
+	}()
+
+	// 5. 短暫等待確保 cancel 已經將 DB 更新為 cancelled 且正等待排他鎖握手
+	time.Sleep(50 * time.Millisecond)
+
+	// 6. 釋放排他鎖，放行 cancel 的握手與 run 的進入
+	_ = syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
+	_ = lf.Close()
+
+	// 7. 取消端必須順利完成握手並返回 0
+	cErr := <-cancelDone
+	if cErr != nil {
+		t.Fatalf("cancel command failed: %v, stderr: %s, stdout: %s", cErr, cancelErr.String(), cancelOut.String())
+	}
+	if !strings.Contains(cancelOut.String(), "cancelled successfully") {
+		t.Errorf("expected cancel success output, got: %s", cancelOut.String())
+	}
+
+	// 8. 執行端退出
+	_ = runCmd.Wait()
+
+	// 9. 核心斷言：副作用標記檔案絕不能存在（子進程被原子握手攔截，0 啟動，0 副作用）
+	if _, statErr := os.Stat(sideEffectFile); statErr == nil {
+		t.Fatalf("side-effect file exists! cmd.Start() was executed despite external cancel (violates G-01)")
+	}
+
+	// 10. 資料庫狀態嚴格維持 cancelled，且 PGID 為 0
+	finalTask, err := store.GetTask(context.Background(), taskID)
+	if err != nil {
+		t.Fatalf("failed to query final task: %v", err)
+	}
+	if finalTask.Status != storage.StatusCancelled {
+		t.Errorf("expected final status cancelled, got: %s", finalTask.Status)
+	}
+	if finalTask.PGID != 0 {
+		t.Errorf("expected final PGID 0 (never launched), got: %d", finalTask.PGID)
+	}
+}
+
+

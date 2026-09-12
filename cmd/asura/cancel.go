@@ -5,7 +5,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"time"
+	"os"
+	"path/filepath"
+	"syscall"
 
 	"asura/internal/auth"
 	"asura/internal/backend/opencode"
@@ -52,15 +54,19 @@ func handleCancel(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
+	// 進行跨行程排他握手：若執行端正處於啟動區間 (cmd.Start)，等候其完成 PGID 登記 (修復 G-01)
+	lockPath := filepath.Join(filepath.Dir(*dbPath), fmt.Sprintf(".task-%s.lock", taskID))
+	if lf, lErr := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600); lErr == nil {
+		_ = syscall.Flock(int(lf.Fd()), syscall.LOCK_EX)
+		_ = syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
+		_ = lf.Close()
+	}
+
+	// 握手完成：此時執行端要麼在鎖內檢查到 cancelled 而放棄啟動，要麼已經完成 cmd.Start() 並登記 PGID
 	targetPGID := task.PGID
 	if targetPGID == 0 {
-		// 若任務處於啟動過渡期尚未寫入 PGID，短暫等待其完成登記以確保強殺回收（修復 R-03）
-		for i := 0; i < 15; i++ {
-			time.Sleep(10 * time.Millisecond)
-			if t, err := store.GetTask(context.Background(), taskID); err == nil && t.PGID > 0 {
-				targetPGID = t.PGID
-				break
-			}
+		if t, err := store.GetTask(context.Background(), taskID); err == nil && t.PGID > 0 {
+			targetPGID = t.PGID
 		}
 	}
 

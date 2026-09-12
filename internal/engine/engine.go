@@ -187,8 +187,14 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 		return task, context.Canceled
 	}
 	if taskCtx.Err() == context.Canceled {
+		persistCtx, persistCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer persistCancel()
+
 		task.Status = storage.StatusCancelled
 		task.ErrorMessage = "task cancelled by user"
+		if updateErr := e.store.UpdateTaskStatus(persistCtx, task.ID, storage.StatusCancelled, "", "task cancelled by user"); updateErr != nil {
+			return task, fmt.Errorf("task cancelled before runner: persist status failed: %w", updateErr)
+		}
 		return task, taskCtx.Err()
 	}
 

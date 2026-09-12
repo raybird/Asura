@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -137,15 +138,33 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 		// 配置獨立進程組
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
-		// 在啟動進程前檢查是否已被取消，徹底防禦啟動已取消之任務與外部副作用 (修復 F-02)
+		var lockFile *os.File
+		if currentTaskID != "" {
+			lockPath := filepath.Join(filepath.Dir(*dbPath), fmt.Sprintf(".task-%s.lock", currentTaskID))
+			lf, lErr := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600)
+			if lErr == nil {
+				_ = syscall.Flock(int(lf.Fd()), syscall.LOCK_EX)
+				lockFile = lf
+			}
+		}
+
+		// 在啟動排他鎖保護下檢查是否已被取消，徹底防禦啟動已取消之任務與外部副作用 (修復 F-02, G-01)
 		if currentTaskID != "" {
 			t, err := store.GetTask(context.Background(), currentTaskID)
 			if err == nil && t.Status == storage.StatusCancelled {
+				if lockFile != nil {
+					_ = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+					_ = lockFile.Close()
+				}
 				return buf.String(), context.Canceled
 			}
 		}
 
 		if err := cmd.Start(); err != nil {
+			if lockFile != nil {
+				_ = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+				_ = lockFile.Close()
+			}
 			return buf.String(), err
 		}
 
@@ -157,12 +176,22 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 					// 檢查此任務是否在啟動前或啟動當下已被外部標記取消（修復 R-03）
 					t, err := store.GetTask(context.Background(), currentTaskID)
 					if err == nil && t.Status == storage.StatusCancelled {
+						if lockFile != nil {
+							_ = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+							_ = lockFile.Close()
+						}
 						_ = syscall.Kill(-pgid, syscall.SIGKILL)
 						_ = cmd.Wait()
 						return buf.String(), context.Canceled
 					}
 				}
 			}
+		}
+
+		// 啟動完成且已登記 PGID，釋放啟動排他鎖
+		if lockFile != nil {
+			_ = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+			_ = lockFile.Close()
 		}
 
 		err := cmd.Wait()

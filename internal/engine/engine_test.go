@@ -723,6 +723,89 @@ func TestReviewToolError(t *testing.T) {
 	}
 }
 
+// G-02: 驗證當父 Context 在任務已成為 running、runner 尚未開始時被取消，資料庫狀態確實持久化為 cancelled
+func TestLatestReview_G02_PersistOnCancelBeforeRunner(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-g02-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	var runnerCalls int32
+	runner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		atomic.AddInt32(&runnerCalls, 1)
+		return "should-not-run", nil
+	}
+
+	eng := NewEngine(store, policy, WithRunner(runner))
+
+	// 先鎖定 cancelsMu 暫停 SubmitTask 的取消登記與後續執行
+	eng.cancelsMu.Lock()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	taskID := "task-g02-test"
+
+	submitErrCh := make(chan error, 1)
+	var returnedTask *storage.Task
+
+	go func() {
+		var sErr error
+		returnedTask, sErr = eng.SubmitTask(ctx, SubmitRequest{
+			ID:        taskID,
+			Workspace: tmpDir,
+			Prompt:    "cancel-before-runner-persist",
+		})
+		submitErrCh <- sErr
+	}()
+
+	// 等候任務在資料庫中成功寫入且轉為 running
+	for i := 0; i < 50; i++ {
+		tObj, err := store.GetTask(context.Background(), taskID)
+		if err == nil && tObj.Status == storage.StatusRunning {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// 取消父 Context
+	cancel()
+
+	// 放行 cancelsMu，讓 SubmitTask 繼續執行
+	eng.cancelsMu.Unlock()
+
+	err = <-submitErrCh
+	if err == nil {
+		t.Fatalf("expected error from cancelled context, got nil")
+	}
+
+	if calls := atomic.LoadInt32(&runnerCalls); calls != 0 {
+		t.Errorf("expected runner to be called 0 times, but was called %d times", calls)
+	}
+
+	if returnedTask == nil || returnedTask.Status != storage.StatusCancelled {
+		t.Errorf("expected returned task status to be cancelled, got: %+v", returnedTask)
+	}
+
+	// 關鍵斷言 (G-02)：資料庫中任務狀態必須確實持久化為 cancelled，絕不可停留在 running！
+	saved, err := store.GetTask(context.Background(), taskID)
+	if err != nil {
+		t.Fatalf("failed to query task from store: %v", err)
+	}
+	if saved.Status != storage.StatusCancelled {
+		t.Errorf("expected DB task status to be %s, but got %s (violates G-02: remained in running)", storage.StatusCancelled, saved.Status)
+	}
+}
+
+
 
 
 

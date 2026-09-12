@@ -139,6 +139,7 @@ Feature: 可控且可追蹤的本機任務執行
 | 2026-09-12 | Task 1.7 完成並提交 commit `b48c614`；使用者明確核准 SCN-007（空輸出與結構化錯誤防禦） | Antigravity |
 | 2026-09-12 | 依使用者核准全面修復 review-86ebf6b.md 提出的 10 項缺陷（R-01~R-10），通過 go test -race 雙迴圈驗證 | Antigravity |
 | 2026-09-12 | 依使用者核准全面修復 review-79950fe.md 提出的 4 項缺陷（F-01~F-04），通過 go test -race 雙迴圈驗證 | Antigravity |
+| 2026-09-12 | 依使用者核准全面修復 review-c548a2b.md 提出的 2 項缺陷（G-01~G-02），通過 go test -race 雙迴圈驗證 | Antigravity |
 
 ---
 
