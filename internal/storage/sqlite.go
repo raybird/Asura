@@ -54,16 +54,23 @@ func NewSQLiteStore(dbPath string) (*SQLiteStore, error) {
 	// 限制單一連線池，杜絕跨連線寫入鎖死
 	db.SetMaxOpenConns(1)
 
-	// 配置 busy_timeout 與 WAL 模式（busy_timeout 必須最先執行以防止並行開庫鎖死）
+	// 配置 busy_timeout 與 WAL 模式（若遇到並發開庫鎖定則短暫重試）
 	pragmas := []string{
-		"PRAGMA busy_timeout=5000;",
+		"PRAGMA busy_timeout=10000;",
 		"PRAGMA journal_mode=WAL;",
 		"PRAGMA synchronous=NORMAL;",
 	}
 	for _, pragma := range pragmas {
-		if _, err := db.Exec(pragma); err != nil {
+		var execErr error
+		for attempt := 0; attempt < 20; attempt++ {
+			if _, execErr = db.Exec(pragma); execErr == nil {
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		if execErr != nil {
 			_ = db.Close()
-			return nil, fmt.Errorf("exec pragma %s: %w", pragma, err)
+			return nil, fmt.Errorf("exec pragma %s: %w", pragma, execErr)
 		}
 	}
 
@@ -179,6 +186,25 @@ func (s *SQLiteStore) UpdateTaskStatus(ctx context.Context, id string, status Ta
 		return ErrTaskNotFound
 	}
 	return nil
+}
+
+// UpdateTaskStatusIfPending 僅在任務處於 pending 狀態時才轉移為新狀態，防止覆寫已被外部取消的狀態 (修復 F-02)
+func (s *SQLiteStore) UpdateTaskStatusIfPending(ctx context.Context, id string, status TaskStatus) (bool, error) {
+	query := `
+	UPDATE tasks
+	SET status = ?, updated_at = ?
+	WHERE id = ? AND status = ?
+	`
+	now := time.Now().UTC()
+	res, err := s.db.ExecContext(ctx, query, string(status), now, id, string(StatusPending))
+	if err != nil {
+		return false, fmt.Errorf("update task status if pending: %w", err)
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("check rows affected: %w", err)
+	}
+	return rowsAffected > 0, nil
 }
 
 // UpdateTaskStatusIfRunning 僅在任務處於 running 狀態時才轉移狀態，防止覆寫已被外部取消的狀態 (修復 R-10)

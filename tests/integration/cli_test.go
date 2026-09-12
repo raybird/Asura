@@ -666,7 +666,7 @@ func TestCLI_ReviewFixes_R04_ConcurrentOutput(t *testing.T) {
 	cmdDir := filepath.Join(projectRoot, "cmd", "asura")
 
 	asuraBin := filepath.Join(tmpDir, "asura")
-	buildCmd := exec.Command("go", "build", "-o", asuraBin, cmdDir)
+	buildCmd := exec.Command("go", "build", "-race", "-o", asuraBin, cmdDir)
 	if buildOut, buildErr := buildCmd.CombinedOutput(); buildErr != nil {
 		t.Fatalf("failed to build asura binary: %v, output: %s", buildErr, string(buildOut))
 	}

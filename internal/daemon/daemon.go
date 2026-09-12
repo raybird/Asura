@@ -204,14 +204,16 @@ func (d *Daemon) Close() error {
 			err = d.listener.Close()
 		}
 		_ = os.Remove(d.cfg.SocketPath)
+		// 優先等待所有 Worker 任務完全排水收尾 (Drain)，在此期間持續持有排他鎖 (修復 F-01)
+		d.pool.Close()
+		d.wg.Wait()
+
+		// 所有工作完全收尾後才釋放鎖；不刪除鎖檔以避免破壞其他競爭者的 inode 鎖互斥性 (修復 F-01)
 		if d.lockFile != nil {
 			_ = syscall.Flock(int(d.lockFile.Fd()), syscall.LOCK_UN)
 			_ = d.lockFile.Close()
-			_ = os.Remove(d.cfg.SocketPath + ".lock")
 			d.lockFile = nil
 		}
-		d.pool.Close()
-		d.wg.Wait()
 	})
 	return err
 }

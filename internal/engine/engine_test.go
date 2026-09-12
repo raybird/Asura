@@ -508,4 +508,222 @@ func TestEngine_R10_DoNotOverwriteCancelledStatus(t *testing.T) {
 	}
 }
 
+// F-02: 驗證任務在轉移至 running 前或進入 runner 前被外部取消時，runner 嚴格不被執行 (0 副作用)
+func TestReviewCancelBeforeRunner(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-f02-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	var runnerCalls int32
+	runner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		atomic.AddInt32(&runnerCalls, 1)
+		return "should-not-run", nil
+	}
+
+	taskID := "task-f02-cancel-early"
+	eng1 := NewEngine(store, policy, WithRunner(runner))
+	eng2 := NewEngine(store, policy)
+
+	// 預先在 DB 中將該 task 標記為 cancelled（模擬極早期或 pending 階段取消）
+	now := time.Now().UTC()
+	taskPre := &storage.Task{
+		ID:        taskID,
+		Prompt:    "early-cancelled",
+		Workspace: tmpDir,
+		Status:    storage.StatusCancelled,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.CreateTask(context.Background(), taskPre); err != nil {
+		t.Fatalf("failed to seed pre-cancelled task: %v", err)
+	}
+
+	// 透過 eng2 再次確認取消狀態存在
+	_ = eng2.CancelTask(taskID)
+
+	// eng1 嘗試提交同 ID 任務
+	task, err := eng1.SubmitTask(context.Background(), SubmitRequest{
+		ID:        taskID,
+		Workspace: tmpDir,
+		Prompt:    "early-cancelled",
+	})
+	if err == nil {
+		t.Fatalf("expected error from pre-cancelled task, got nil")
+	}
+
+	// 斷言 runner 嚴格被呼叫 0 次
+	if calls := atomic.LoadInt32(&runnerCalls); calls != 0 {
+		t.Errorf("expected runner to be called 0 times, but was called %d times (violates F-02)", calls)
+	}
+
+	if task != nil && task.Status != storage.StatusCancelled {
+		t.Errorf("expected task status to remain %s, got %s", storage.StatusCancelled, task.Status)
+	}
+}
+
+// 驗證任務在 pending 階段被 CancelTask 後，SubmitTask 條件式轉移失敗且絕不呼叫 runner
+func TestReviewCancelInRunningBeforeRunner(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-f02-running-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	var runnerCalls int32
+	runner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		atomic.AddInt32(&runnerCalls, 1)
+		return "should-not-run", nil
+	}
+
+	taskID := "task-f02-running-cancel"
+	eng := NewEngine(store, policy, WithRunner(runner))
+
+	// 先建立任務為 pending
+	now := time.Now().UTC()
+	taskPre := &storage.Task{
+		ID:        taskID,
+		Prompt:    "cancel-before-runner",
+		Workspace: tmpDir,
+		Status:    storage.StatusPending,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.CreateTask(context.Background(), taskPre); err != nil {
+		t.Fatalf("failed to seed pending task: %v", err)
+	}
+
+	// 模擬外部在 pending 階段發出 CancelTask
+	if err := eng.CancelTask(taskID); err != nil {
+		t.Fatalf("CancelTask failed: %v", err)
+	}
+
+	task, err := eng.SubmitTask(context.Background(), SubmitRequest{
+		ID:        taskID,
+		Workspace: tmpDir,
+		Prompt:    "cancel-before-runner",
+	})
+	if err == nil {
+		t.Fatalf("expected error from cancelled task, got nil")
+	}
+
+	if calls := atomic.LoadInt32(&runnerCalls); calls != 0 {
+		t.Errorf("expected runner to be called 0 times, but was called %d times (violates F-02)", calls)
+	}
+	if task != nil && task.Status != storage.StatusCancelled {
+		t.Errorf("expected task status to be %s, got %s", storage.StatusCancelled, task.Status)
+	}
+}
+
+// F-03: 驗證當儲存層持久化失敗時，SubmitTask 明確揭露持久化錯誤而非默默忽略
+func TestReviewPersistError(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-f03-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	runner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		// 在 runner 返回前強行關閉 store，模擬資料庫故障或連線中斷
+		_ = store.Close()
+		return "partial", errors.New("backend failed")
+	}
+
+	eng := NewEngine(store, policy, WithRunner(runner))
+
+	_, err = eng.SubmitTask(context.Background(), SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "persist-fail-task",
+	})
+	if err == nil {
+		t.Fatalf("expected error from failed task and store, got nil")
+	}
+
+	errStr := err.Error()
+	if !strings.Contains(errStr, "backend failed") {
+		t.Errorf("expected error to contain original backend error 'backend failed', got: %s", errStr)
+	}
+	if !strings.Contains(errStr, "persist task status failed") {
+		t.Errorf("expected error to explicitly reveal persistence failure (F-03), got: %s", errStr)
+	}
+}
+
+// F-04: 驗證當輸出僅包含工具執行失敗 (ToolStatus="error") 且無有效產出時，任務明確標記為 failed (杜絕假成功)
+func TestReviewToolError(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-f04-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	// runner 退出碼為 0 但只輸出 tool error 事件
+	runner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		return `{"type":"tool_use","part":{"type":"tool","tool":"apply_patch","state":{"status":"error","output":"permission denied"}}}`, nil
+	}
+
+	eng := NewEngine(store, policy, WithRunner(runner))
+
+	task, err := eng.SubmitTask(context.Background(), SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "tool-error-task",
+	})
+	if err == nil {
+		t.Fatalf("expected task with tool error to fail, but got nil error (violates F-04)")
+	}
+
+	if task.Status != storage.StatusFailed {
+		t.Errorf("expected task status to be %s, but got %s (false success)", storage.StatusFailed, task.Status)
+	}
+
+	saved, err := store.GetTask(context.Background(), task.ID)
+	if err != nil {
+		t.Fatalf("failed to query task from DB: %v", err)
+	}
+	if saved.Status != storage.StatusFailed {
+		t.Errorf("expected DB task status to be %s, got %s", storage.StatusFailed, saved.Status)
+	}
+	if !strings.Contains(saved.ErrorMessage, "empty output or unresolved error") {
+		t.Errorf("expected error message to mention unresolved error, got: %s", saved.ErrorMessage)
+	}
+}
+
+
+
+
 

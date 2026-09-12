@@ -137,6 +137,14 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 		// 配置獨立進程組
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
+		// 在啟動進程前檢查是否已被取消，徹底防禦啟動已取消之任務與外部副作用 (修復 F-02)
+		if currentTaskID != "" {
+			t, err := store.GetTask(context.Background(), currentTaskID)
+			if err == nil && t.Status == storage.StatusCancelled {
+				return buf.String(), context.Canceled
+			}
+		}
+
 		if err := cmd.Start(); err != nil {
 			return buf.String(), err
 		}

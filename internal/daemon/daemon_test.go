@@ -333,3 +333,103 @@ func TestDaemonConcurrency(t *testing.T) {
 		}
 	})
 }
+
+// F-01: 驗證 Daemon 關閉排水 (Drain) 期間，排他鎖持續生效，不允許第二個 Daemon 啟動奪取擁有權
+func TestReviewOwnershipDuringDrain(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-f01-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	sockPath := filepath.Join(tmpDir, "asura-drain.sock")
+
+	blockCh := make(chan struct{})
+	unblockCh := make(chan struct{})
+	blockingRunner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		close(blockCh)
+		<-unblockCh
+		return "drain-done", nil
+	}
+
+	eng1 := engine.NewEngine(store, policy, engine.WithRunner(blockingRunner))
+	d1 := NewDaemon(Config{
+		SocketPath: sockPath,
+		MaxWorkers: 1,
+		MaxQueue:   1,
+	}, store, policy, WithEngine(eng1))
+
+	if err := d1.Start(); err != nil {
+		t.Fatalf("d1 start failed: %v", err)
+	}
+
+	client, err := NewClient(sockPath)
+	if err != nil {
+		t.Fatalf("client connect failed: %v", err)
+	}
+
+	submitDone := make(chan struct{})
+	go func() {
+		_, _ = client.Submit(context.Background(), engine.SubmitRequest{
+			Workspace: tmpDir,
+			Prompt:    "slow-task",
+		})
+		close(submitDone)
+	}()
+
+	<-blockCh // 確保任務已進入 runner 正在執行
+
+	// 並發呼叫 d1.Close()（進入 Drain 階段）
+	closeDone := make(chan struct{})
+	go func() {
+		_ = d1.Close()
+		close(closeDone)
+	}()
+
+	// 短暫等待 d1.Close() 進入 pool.Close() 與 wg.Wait()
+	time.Sleep(50 * time.Millisecond)
+
+	// 在任務未放行前，嘗試啟動 d2
+	eng2 := engine.NewEngine(store, policy)
+	d2 := NewDaemon(Config{
+		SocketPath: sockPath,
+		MaxWorkers: 1,
+		MaxQueue:   1,
+	}, store, policy, WithEngine(eng2))
+
+	err = d2.Start()
+	if err == nil {
+		_ = d2.Close()
+		close(unblockCh)
+		t.Fatalf("second daemon started while first daemon still executes a task (violates F-01)")
+	}
+	if !errors.Is(err, ErrDaemonAlreadyRunning) {
+		t.Errorf("expected ErrDaemonAlreadyRunning for d2, got: %v", err)
+	}
+
+	// 放行任務，讓 d1 順利完成 Drain 並退出
+	close(unblockCh)
+	<-closeDone
+	<-submitDone
+	_ = client.Close()
+
+	// d1 完全關閉後，d3 應能順利啟動
+	d3 := NewDaemon(Config{
+		SocketPath: sockPath,
+		MaxWorkers: 1,
+		MaxQueue:   1,
+	}, store, policy, WithEngine(eng2))
+	if err := d3.Start(); err != nil {
+		t.Errorf("expected d3 to start successfully after d1 fully drained, got: %v", err)
+	}
+	_ = d3.Close()
+}
+

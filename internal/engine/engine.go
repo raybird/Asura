@@ -97,7 +97,7 @@ func hasUnresolvedErrorOrEmpty(output string) (bool, string) {
 		}
 		evt, err := opencode.ParseEventLine(l)
 		if err == nil && evt != nil {
-			if evt.Type == "error" || evt.IsRateLimit {
+			if evt.Type == "error" || evt.IsRateLimit || evt.ToolStatus == "error" {
 				hasErrorEvent = true
 			}
 			if evt.Text != "" || (evt.Tool != "" && evt.ToolStatus != "error") {
@@ -139,13 +139,30 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 		UpdatedAt: now,
 	}
 
+	if req.ID != "" {
+		existing, err := e.store.GetTask(ctx, req.ID)
+		if err == nil && existing.Status == storage.StatusCancelled {
+			return existing, context.Canceled
+		}
+	}
+
 	if err := e.store.CreateTask(ctx, task); err != nil {
 		return nil, fmt.Errorf("create task in storage: %w", err)
 	}
 
-	// 3. 轉移狀態至 running
-	if err := e.store.UpdateTaskStatus(ctx, task.ID, storage.StatusRunning, "", ""); err != nil {
+	// 3. 條件式轉移狀態至 running (修復 F-02)
+	updated, err := e.store.UpdateTaskStatusIfPending(ctx, task.ID, storage.StatusRunning)
+	if err != nil {
 		return nil, fmt.Errorf("update task to running: %w", err)
+	}
+	if !updated {
+		latest, getErr := e.store.GetTask(ctx, task.ID)
+		if getErr == nil && latest.Status == storage.StatusCancelled {
+			task.Status = storage.StatusCancelled
+			task.ErrorMessage = latest.ErrorMessage
+			return task, context.Canceled
+		}
+		return nil, fmt.Errorf("task %s status changed unexpectedly before running", task.ID)
 	}
 	task.Status = storage.StatusRunning
 
@@ -162,6 +179,19 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 		cancel()
 	}()
 
+	// 進入 runner 前查核儲存層與 context 最新狀態，若已被外部取消則直接退出，絕不呼叫 runner (修復 F-02)
+	latestCheck, checkErr := e.store.GetTask(ctx, task.ID)
+	if checkErr == nil && latestCheck.Status == storage.StatusCancelled {
+		task.Status = storage.StatusCancelled
+		task.ErrorMessage = latestCheck.ErrorMessage
+		return task, context.Canceled
+	}
+	if taskCtx.Err() == context.Canceled {
+		task.Status = storage.StatusCancelled
+		task.ErrorMessage = "task cancelled by user"
+		return task, taskCtx.Err()
+	}
+
 	// 5. 調用後端執行
 	output, runErr := e.runner(taskCtx, req.Workspace, req.Prompt)
 
@@ -173,7 +203,9 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 	latestTask, fetchErr := e.store.GetTask(persistCtx, task.ID)
 	if fetchErr == nil && latestTask.Status == storage.StatusCancelled {
 		if output != "" {
-			_ = e.store.UpdateTaskResult(persistCtx, task.ID, output)
+			if updateErr := e.store.UpdateTaskResult(persistCtx, task.ID, output); updateErr != nil {
+				return task, fmt.Errorf("task cancelled: persist output failed: %w", updateErr)
+			}
 		}
 		task.Status = storage.StatusCancelled
 		task.Result = output
@@ -183,32 +215,38 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 
 	// 檢查內部 taskCtx 是否已被取消
 	if taskCtx.Err() == context.Canceled {
-		_ = e.store.UpdateTaskStatus(persistCtx, task.ID, storage.StatusCancelled, output, "task cancelled by user")
 		task.Status = storage.StatusCancelled
 		task.Result = output
 		task.ErrorMessage = "task cancelled by user"
+		if updateErr := e.store.UpdateTaskStatus(persistCtx, task.ID, storage.StatusCancelled, output, "task cancelled by user"); updateErr != nil {
+			return task, fmt.Errorf("task cancelled: persist status failed: %w", updateErr)
+		}
 		return task, taskCtx.Err()
 	}
 
 	if runErr != nil {
-		_ = e.store.UpdateTaskStatus(persistCtx, task.ID, storage.StatusFailed, output, runErr.Error())
 		task.Status = storage.StatusFailed
 		task.Result = output
 		task.ErrorMessage = runErr.Error()
+		if persistErr := e.store.UpdateTaskStatus(persistCtx, task.ID, storage.StatusFailed, output, runErr.Error()); persistErr != nil {
+			return task, fmt.Errorf("%w (persist task status failed: %v)", runErr, persistErr)
+		}
 		return task, runErr
 	}
 
-	// 6. 空輸出與未解決結構化錯誤防禦檢查（遵循 SCN-007，修復 R-09）
+	// 6. 空輸出與未解決結構化錯誤防禦檢查（遵循 SCN-007，修復 R-09 與 F-04）
 	if isErr, errMsg := hasUnresolvedErrorOrEmpty(output); isErr {
-		_ = e.store.UpdateTaskStatus(persistCtx, task.ID, storage.StatusFailed, output, errMsg)
 		task.Status = storage.StatusFailed
 		task.Result = output
 		task.ErrorMessage = errMsg
+		if persistErr := e.store.UpdateTaskStatus(persistCtx, task.ID, storage.StatusFailed, output, errMsg); persistErr != nil {
+			return task, fmt.Errorf("%w (persist task status failed: %v)", ErrEmptyOutput, persistErr)
+		}
 		return task, ErrEmptyOutput
 	}
 
 	// 7. 條件式記錄成功結果（修復 R-10）：僅在狀態仍為 running 時才標記為 completed，防止覆寫已被外部標記之 cancelled 狀態
-	updated, err := e.store.UpdateTaskStatusIfRunning(persistCtx, task.ID, storage.StatusCompleted, output, "")
+	updated, err = e.store.UpdateTaskStatusIfRunning(persistCtx, task.ID, storage.StatusCompleted, output, "")
 	if err != nil {
 		return nil, fmt.Errorf("update task to completed: %w", err)
 	}
@@ -216,7 +254,9 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 		latest, getErr := e.store.GetTask(persistCtx, task.ID)
 		if getErr == nil {
 			if latest.Status == storage.StatusCancelled && output != "" {
-				_ = e.store.UpdateTaskResult(persistCtx, task.ID, output)
+				if updateErr := e.store.UpdateTaskResult(persistCtx, task.ID, output); updateErr != nil {
+					return task, fmt.Errorf("task cancelled: persist output failed: %w", updateErr)
+				}
 			}
 			task.Status = latest.Status
 			task.Result = output
