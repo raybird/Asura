@@ -57,43 +57,45 @@ Feature: 可控且可追蹤的本機任務執行
     And B 仍可操作
 
   @SCN-005
-  Scenario: 部分執行失敗不自動重做副作用
-    Given 任務已產生一項可獨立計數的副作用
-    When 執行後端失敗且無法確認剩餘步驟的結果
-    Then 使用者看到已知進度與結果未知的部分
-    And 系統不自動重做該副作用
+  Scenario: SCN-005: 部分執行失敗不自動重做副作用且揭露已知進度
+    Given 任務已在工作目錄中產生一項可驗證的副作用（例如已建立暫存檔案或寫入部分輸出）
+    When 執行後端遭遇非 0 退出碼或中斷錯誤導致後續步驟無法完成
+    Then 該任務之最終狀態標記為 "failed"（而非 completed 或自動重啟為 pending）
+    And 系統絕不自動重跑或重試該任務，以杜絕重複副作用
+    And 透過 CLI status 查詢該任務時，能正確查得已產生的部分輸出與明確的失敗原因
 
   @SCN-006
-  Scenario: 重啟保留已完成結果並揭露中斷工作
-    Given 一個任務已完成且另一個任務尚在執行
-    When 守護程序意外停止後重新啟動
-    Then 已完成任務的結果仍可查得
-    And 未確認完成的工作不呈現為成功
-    And 未確認的副作用不被自動重做
+  Scenario: SCN-006: 守護程序重啟保留已完成結果並將中斷任務標記為失敗揭露原因
+    Given 系統中存在已成功完成之任務 A (status: completed) 且另一個任務 B 尚在執行中 (status: running)
+    When 守護程序意外終止或崩潰後重新啟動並執行恢復程序
+    Then 已完成任務 A 的執行結果仍完整保留且可重複查得 (status: completed)
+    And 未確認完成之任務 B 絕不呈現為成功，亦不自動從頭重新執行
+    And 任務 B 之狀態在重啟恢復後轉移為 "failed"，並明確標註 "task interrupted: system restarted or terminated unexpectedly"
 
   @SCN-007
-  Scenario: 空輸出與結構化錯誤不被當成成功
-    Given 任務後端只回傳工具事件或結構化錯誤而沒有最終文字
-    When 任務進入收尾
-    Then 使用者取得明確結果或失敗原因
-    And 補總結次數不超過核准上限
-    And 收尾不重做原任務的副作用
+  Scenario: SCN-007: 空白輸出或結構化錯誤不被當成成功且明確告知失敗原因
+    Given 任務執行後端未產出有效文字（輸出為空字串或純空白）或只回傳未解決之結構化錯誤事件
+    When 任務進入結果判定與收尾程序
+    Then 該任務之最終狀態嚴格不得標記為 "completed"
+    And 該任務之狀態必須明確標記為 "failed"
+    And 錯誤訊息明確標註 "execution produced empty output or unresolved error"，供使用者精準追蹤失敗原因
+    And 收尾程序絕不重新執行以避免重複副作用
 ```
 
 ## Gherkin 核准紀錄
 
-- **核准 commit**: `8849528`
-- **核准來源**: 對話核准（2026-09-11 使用者明確回覆「核准」）
+- **核准 commit**: `b48c614`
+- **核准來源**: 對話核准（2026-09-12 使用者明確回覆「核准」）
 
 | Scenario | 核准日期 | 狀態 |
 |---|---|---|
 | SCN-001 | 2026-09-11 | 已核准 |
 | SCN-002 | 2026-09-11 | 已核准 |
-| SCN-003 | - | 待核准 |
-| SCN-004 | - | 待核准 |
-| SCN-005 | - | 待核准 |
-| SCN-006 | - | 待核准 |
-| SCN-007 | - | 待核准 |
+| SCN-003 | 2026-09-11 | 已核准 |
+| SCN-004 | 2026-09-11 | 已核准 |
+| SCN-005 | 2026-09-11 | 已核准 |
+| SCN-006 | 2026-09-11 | 已核准 |
+| SCN-007 | 2026-09-12 | 已核准 |
 
 ## 風險與首要驗證
 
@@ -111,10 +113,10 @@ Feature: 可控且可追蹤的本機任務執行
 |---|---|---|---|
 | TBD-1 | 實際 issue 編號已確認為 issue-1；首版 CLI／Daemon／單一後端範圍待逐項核准 | 已確認 (issue-1) | 正式 issue 已建檔，待確認 SCN-001 與權限矩陣 |
 | TBD-2 | D-01 的呼叫者、專案與權限矩陣 | 進行中 | SCN-002、Phase 0；SCN-002 已核准，啟動契約探測 |
-| TBD-3 | D-02、D-03 的回退政策、接受請求語意與全域上限 | 待確認 | SCN-003、Phase 1 |
-| TBD-4 | D-05 的資源歸屬及取消期限 | 待確認 | SCN-004、Phase 0／1 |
-| TBD-5 | D-04、D-07 的部分失敗與重啟接續政策 | 待確認 | SCN-005、SCN-006、Phase 1 |
-| TBD-6 | D-06 的共同收尾、補總結上限與錯誤呈現 | 待確認 | SCN-007、Phase 1 |
+| TBD-3 | D-02、D-03 的回退政策、接受請求語意與全域上限 | 已確認 (採 Socket 互斥與 Worker Pool) | SCN-003 已核准，Task 1.4 已完成 |
+| TBD-4 | D-05 的資源歸屬及取消期限 | 已確認 (取消期限 2s，Context + PGID SIGKILL 回收) | SCN-004 已核准，Task 1.5 已完成 |
+| TBD-5 | D-04、D-07 的部分失敗與重啟接續政策 | 已確認 (不自動重試，重啟恢復標記中斷) | SCN-005、SCN-006 已完成 (Task 1.6, Task 1.7) |
+| TBD-6 | D-06 的共同收尾、補總結上限與錯誤呈現 | 已確認 (空輸出防禦為 failed，不重做副作用) | SCN-007 已核准，啟動 Task 1.8 |
 | TBD-7 | 遠端入口選擇、滿載等待、排程重送與時區政策 | 待確認 | Phase 2 的範圍及新增 Scenario |
 | TBD-8 | D-08、D-09 的能力結果、預算與效能門檻 | 待確認 | Phase 0 能力結論、Phase 3 範圍及新增 Scenario |
 
@@ -129,6 +131,21 @@ Feature: 可控且可追蹤的本機任務執行
 | 2026-09-11 | 使用者授權建立文件；整理架構決策並建立實作草案，候選行為保持待核准 | Codex |
 | 2026-09-11 | 使用者指示正式立項為 Issue 1，將草案遷移至 docs/issues/issue-1/ | Antigravity |
 | 2026-09-11 | 使用者明確核准 SCN-001 與 SCN-002，正式啟動 Phase 0 權限與後端契約探測 | Antigravity |
+| 2026-09-11 | Phase 0 全部 Task 與 Phase 1 Task 1.1~1.3 完成並提交 commit `c71fc6c` | Antigravity |
+| 2026-09-11 | 使用者明確核准 SCN-003（競爭啟動與上限控制），確認 D-02 / D-03 決策，推進 Task 1.4 | Antigravity |
+| 2026-09-11 | Task 1.4 完成並提交 commit `dccab36`；使用者明確核准 SCN-004（任務取消與資源回收） | Antigravity |
+| 2026-09-11 | Task 1.5 完成並提交 commit `27edaa4`；使用者明確核准 SCN-005（部分失敗副作用保護） | Antigravity |
+| 2026-09-11 | Task 1.6 完成並提交 commit `65da3e7`；使用者明確核准 SCN-006（重啟狀態恢復與中斷揭露） | Antigravity |
+| 2026-09-12 | Task 1.7 完成並提交 commit `b48c614`；使用者明確核准 SCN-007（空輸出與結構化錯誤防禦） | Antigravity |
+| 2026-09-12 | 依使用者核准全面修復 review-86ebf6b.md 提出的 10 項缺陷（R-01~R-10），通過 go test -race 雙迴圈驗證 | Antigravity |
+| 2026-09-12 | 依使用者核准全面修復 review-79950fe.md 提出的 4 項缺陷（F-01~F-04），通過 go test -race 雙迴圈驗證 | Antigravity |
+| 2026-09-12 | 依使用者核准全面修復 review-c548a2b.md 提出的 2 項缺陷（G-01~G-02），通過 go test -race 雙迴圈驗證 | Antigravity |
+| 2026-09-12 | 依使用者核准修復 review-75b74b1.md 提出的 H-01 跨行程平坦鎖與 fail-fast 防禦，通過 go test -race 驗證 | Antigravity |
+| 2026-09-12 | 依使用者核准修復 review-8696817.md 提出的 I-01 取消重試冪等性與進程回收防禦，通過 go test -race 驗證 | Antigravity |
+| 2026-09-12 | 依使用者核准修復 review-716416a.md 提出的 J-01 程序身分驗證與 PID 重用防禦，通過 go test -race 驗證 | Antigravity |
+| 2026-09-12 | 依使用者核准修復 review-7e76e74.md 提出的 K-01 核心 StartTime 身分驗證與三態安全回收防禦，通過 go test -race 驗證 | Antigravity |
+| 2026-09-12 | 依使用者核准修復 review-6683a0f.md 提出的 L-01 進程組孤兒生命週期身分校驗與安全回收防禦，通過 go test -race 驗證 | Antigravity |
+| 2026-09-12 | 依使用者核准修復 review-6c8895b.md 提出的 M-01 孤兒進程組身分未知保留與假成功防禦，通過 go test -race 驗證 | Antigravity |
 
 ---
 
@@ -138,4 +155,4 @@ Feature: 可控且可追蹤的本機任務執行
 
 **風險**: High（所規劃的執行系統）
 
-**狀態**: 進行中（Phase 0 契約探測）
+**狀態**: 進行中（Phase 1 最小執行核心）

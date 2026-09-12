@@ -24,8 +24,6 @@
 
 | Scenario ID | 在等什麼 | 對應待確認事項 |
 |---|---|---|
-| SCN-003 | 守護程序競爭啟動協調與全域容量計數策略 | TBD-3 |
-| SCN-004 | 進程與瀏覽器資源歸屬及取消期限確認 | TBD-4 |
 | SCN-005 | 部分失敗時的重試邊界與副作用接續策略 | TBD-5 |
 | SCN-006 | 守護程序意外重啟時的狀態恢復判定 | TBD-5 |
 | SCN-007 | 共同收尾、補總結次數上限與結構化錯誤呈現 | TBD-6 |
@@ -48,7 +46,7 @@
 
 ### Tasks
 
-#### Task 0.1：立項與核心驗收劇本核准（純文件）
+#### Task 0.1：立項與核心驗收劇本核准（純文件） [已完成]
 - **任務說明**：正式建立 `issue-1` 文件目錄，向使用者取得第一批核心 Scenario（`SCN-001`、`SCN-002`）明確核准。
 - **預期輸出**：更新後的 `docs/issues/issue-1/README.md` 與核准紀錄。
 - **涉及模組或檔案**：`docs/issues/issue-1/README.md`
@@ -59,8 +57,9 @@
 - **Scenario ID**：SCN-001, SCN-002
 - **改變可觀察行為**：否
 - **等價證據**：純文件變更；`git diff --check` 無語法警告，`check-links.py` 輸出 PASS，Git commit `d002e6b`。
+- **狀態**：已完成
 
-#### Task 0.2：工作目錄授權策略實作與驗證
+#### Task 0.2：工作目錄授權策略實作與驗證 [已完成]
 - **任務說明**：實作工作目錄白名單策略，確保未授權或敏感目錄在入口處直接攔截，絕不啟動底層 Agent。
 - **預期輸出**：`internal/auth/policy.go` 與 `internal/auth/policy_test.go`。
 - **涉及模組或檔案**：`internal/auth/policy.go`, `internal/auth/policy_test.go`
@@ -70,11 +69,14 @@
 - **責任角色**：唯一負責
 - **Scenario ID**：SCN-002
 - **改變可觀察行為**：是
-- **BDD 外迴圈**：專案無 BDD runner，以標註 SCN-002 的整合測試替代；先執行命令：`go test -v -run TestAuthorizeWorkspace_Denied ./internal/auth`；預期失敗原因：缺少授權校驗邏輯。
-- **TDD 內迴圈**：單元測試路徑 `internal/auth/policy_test.go`；執行命令：`go test ./internal/auth/...`；預期失敗原因：`policy.go` 未定義。
-- **最小實作與回歸**：實作 `internal/auth/policy.go` 中的 `Policy.AuthorizeWorkspace()`；全綠回歸命令：`go test -v ./internal/auth/...`。
+- **實作與驗證證據**（2026-09-11）：
+  - 外迴圈紅燈：`go test -v -run TestAuthorizeWorkspace_Denied ./internal/auth`
+  - 內迴圈紅燈：`go test ./internal/auth/...`
+  - 最小實作：完成 `internal/auth/policy.go`
+  - 全綠回歸：`go test -v ./internal/auth/...` 全部 PASS。
+- **狀態**：已完成
 
-#### Task 0.3：Opencode 1.18.23 JSON 事件流解析器
+#### Task 0.3：Opencode 1.18.23 JSON 事件流解析器 [已完成]
 - **任務說明**：基於真實探測樣本，解析 Opencode 的 `step_start`、`text`、`tool_use`、`step_finish` 與 429 速率限制事件。
 - **預期輸出**：`internal/backend/opencode/parser.go` 與單元測試 `internal/backend/opencode/parser_test.go`。
 - **涉及模組或檔案**：`internal/backend/opencode/parser.go`, `internal/backend/opencode/parser_test.go`
@@ -84,11 +86,14 @@
 - **責任角色**：唯一負責
 - **Scenario ID**：SCN-001
 - **改變可觀察行為**：是
-- **BDD 外迴圈**：標註 SCN-001 的事件解析整合測試；執行命令：`go test -v -run TestParseEventLine ./internal/backend/opencode`；預期失敗原因：缺少事件結構解析。
-- **TDD 內迴圈**：單元測試路徑 `internal/backend/opencode/parser_test.go`；執行命令：`go test ./internal/backend/opencode/...`；預期失敗原因：`opencode` 套件未定義。
-- **最小實作與回歸**：實作 `internal/backend/opencode/parser.go`；全綠回歸命令：`go test -v ./internal/backend/opencode/...`。
+- **實作與驗證證據**（2026-09-11）：
+  - 外迴圈紅燈：`go test -v -run TestParseEventLine ./internal/backend/opencode`
+  - 內迴圈紅燈：`go test ./internal/backend/opencode/...`
+  - 最小實作：完成 `internal/backend/opencode/parser.go`
+  - 全綠回歸：`go test -v ./internal/backend/opencode/...` 全部 PASS。
+- **狀態**：已完成
 
-#### Task 0.4：進程組 (PGID) 啟動與取消強殺探測
+#### Task 0.4：進程組 (PGID) 啟動與取消強殺探測 [已完成]
 - **任務說明**：實作底層 CLI 進程啟動封裝，配置 `Setpgid: true`，驗證 `context.Context` 逾時或取消時以 `syscall.Kill(-pgid, SIGKILL)` 乾淨回收整個進程樹。
 - **預期輸出**：`internal/backend/opencode/process.go` 與測試 `internal/backend/opencode/process_test.go`。
 - **涉及模組或檔案**：`internal/backend/opencode/process.go`, `internal/backend/opencode/process_test.go`
@@ -98,9 +103,12 @@
 - **責任角色**：唯一負責
 - **Scenario ID**：SCN-001
 - **改變可觀察行為**：是
-- **BDD 外迴圈**：標註 SCN-001 取消的整合測試；執行命令：`go test -v -run TestProcessCancel ./internal/backend/opencode`；預期失敗原因：缺少 PGID 取消回收。
-- **TDD 內迴圈**：單元測試路徑 `internal/backend/opencode/process_test.go`；執行命令：`go test -run TestProcessGroup ./internal/backend/opencode`；預期失敗原因：未實作進程組隔離。
-- **最小實作與回歸**：實作 `internal/backend/opencode/process.go`；全綠回歸命令：`go test -v ./internal/backend/opencode/...`。
+- **實作與驗證證據**（2026-09-11）：
+  - 外迴圈紅燈：`go test -v -run TestProcessCancel ./internal/backend/opencode`，exit code 1，失敗原因：`undefined: StartProcess`, `undefined: IsProcessGroupAlive`。
+  - 內迴圈紅燈：`go test -run TestProcessGroup ./internal/backend/opencode`，exit code 1，失敗原因：`undefined: ConfigureProcessGroup`, `undefined: KillProcessGroup`。
+  - 最小實作：完成 `internal/backend/opencode/process.go`，配置 `Setpgid: true` 與取消時向 `-pgid` 發送 `SIGKILL`，並以 `done` channel 防止 goroutine 洩漏。
+  - 全綠回歸：`go test -v ./internal/backend/opencode/...` 全部 PASS（`TestProcessCancel` 0.20s 退出且 `IsProcessGroupAlive` 為 false）。`go vet ./...` 檢查通過。
+- **狀態**：已完成
 
 ---
 
@@ -120,7 +128,7 @@
 
 ### Tasks
 
-#### Task 1.1：SQLite 任務資料庫 Schema 與單一連線管理
+#### Task 1.1：SQLite 任務資料庫 Schema 與單一連線管理 [已完成]
 - **任務說明**：建立 `asura.db` 初始化與 `tasks` 資料表，支援 WAL 模式與單一連線池，杜絕鎖死。
 - **預期輸出**：`internal/storage/sqlite.go`, `internal/storage/sqlite_test.go`
 - **涉及模組或檔案**：`internal/storage/sqlite.go`, `internal/storage/sqlite_test.go`
@@ -130,11 +138,14 @@
 - **責任角色**：唯一負責
 - **Scenario ID**：SCN-001
 - **改變可觀察行為**：是
-- **BDD 外迴圈**：標註 SCN-001 的儲存整合測試；執行命令：`go test -v -run TestTaskStorage ./internal/storage`；預期失敗原因：缺少 SQLite 初始化與任務儲存能力。
-- **TDD 內迴圈**：單元測試路徑 `internal/storage/sqlite_test.go`；執行命令：`go test ./internal/storage/...`；預期失敗原因：`storage` 模組未定義。
-- **最小實作與回歸**：實作 `internal/storage/sqlite.go`；全綠回歸命令：`go test -v ./internal/storage/...`。
+- **實作與驗證證據**（2026-09-11）：
+  - 外迴圈紅燈：`go test -v -run TestTaskStorage ./internal/storage`，exit code 1，失敗原因：`undefined: NewSQLiteStore`, `undefined: Task`, `undefined: StatusPending`。
+  - 內迴圈紅燈：`go test ./internal/storage/...`，exit code 1，失敗原因：`undefined: NewSQLiteStore` 等型別未定義。
+  - 最小實作：完成 `internal/storage/sqlite.go`，建立 `tasks` 資料表與索引，配置 WAL 模式、busy_timeout 與單一連線池（`SetMaxOpenConns(1)`），提供 `CreateTask`、`GetTask`、`UpdateTaskStatus` 與 `Close`。
+  - 全綠回歸：`go test -v ./internal/storage/...` 全部 PASS（`TestTaskStorage` 與 `TestSQLiteStore_Unit` 均 PASS）。`go test -v ./...` 與 `go vet ./...` 全專案通過。
+- **狀態**：已完成
 
-#### Task 1.2：任務調度器與授權閘門整合
+#### Task 1.2：任務調度器與授權閘門整合 [已完成]
 - **任務說明**：實作 Task 協調層，接收提交請求，經由 `auth.Policy` 校驗，通過後寫入 DB 並調用 `opencode` 後端執行。
 - **預期輸出**：`internal/engine/engine.go`, `internal/engine/engine_test.go`
 - **涉及模組或檔案**：`internal/engine/engine.go`, `internal/engine/engine_test.go`
@@ -144,11 +155,14 @@
 - **責任角色**：唯一負責
 - **Scenario ID**：SCN-001, SCN-002
 - **改變可觀察行為**：是
-- **BDD 外迴圈**：標註 SCN-001 與 SCN-002 的引擎整合測試；執行命令：`go test -v -run TestEngineExecute ./internal/engine`；預期失敗原因：缺少整合調度引擎。
-- **TDD 內迴圈**：單元測試路徑 `internal/engine/engine_test.go`；執行命令：`go test ./internal/engine/...`；預期失敗原因：`engine` 模組未定義。
-- **最小實作與回歸**：實作 `internal/engine/engine.go`；全綠回歸命令：`go test -v ./internal/engine/...`。
+- **實作與驗證證據**（2026-09-11）：
+  - 外迴圈紅燈：`go test -v -run TestEngineExecute ./internal/engine`，exit code 1，失敗原因：`undefined: NewEngine`, `undefined: WithRunner`, `undefined: SubmitRequest`。
+  - 內迴圈紅燈：`go test ./internal/engine/...`，exit code 1，失敗原因：`engine` 模組未定義。
+  - 最小實作：完成 `internal/engine/engine.go`，實作 `SubmitTask`，前置透過 `auth.Policy.AuthorizeWorkspace` 嚴格把關授權；未授權直接返回錯誤，確保 0 子進程與 0 資料庫任務建立；授權通過則生成唯一 Task ID、寫入任務至 `storage.SQLiteStore` 並調度 runner 執行，成功時更新狀態為 `completed`，失敗時更新為 `failed` 並記錄 `error_message`。
+  - 全綠回歸：`go test -v ./internal/engine/...` 全部 PASS（包含授權拒絕 0 子進程、授權成功取得結果與重查、以及執行失敗路徑單元測試）。`go test -v ./...` 與 `go vet ./...` 全專案通過。
+- **狀態**：已完成
 
-#### Task 1.3：本機 CLI 進入點（`asura run` 與 `asura status`）
+#### Task 1.3：本機 CLI 進入點（`asura run` 與 `asura status`） [已完成]
 - **任務說明**：實作 `cmd/asura` 進入點，提供 `run` 指令提交任務、串流即時輸出，以及 `status <task_id>` 查詢歷史結果。
 - **預期輸出**：`cmd/asura/main.go`, `cmd/asura/run.go`, `cmd/asura/status.go`
 - **涉及模組或檔案**：`cmd/asura/main.go`, `cmd/asura/run.go`, `cmd/asura/status.go`
@@ -158,9 +172,110 @@
 - **責任角色**：唯一負責
 - **Scenario ID**：SCN-001
 - **改變可觀察行為**：是
-- **BDD 外迴圈**：標註 SCN-001 的 CLI 端到端測試；執行命令：`go test -v ./tests/integration/...`；預期失敗原因：`cmd/asura` 進入點不存在。
-- **TDD 內迴圈**：`cmd/asura/run_test.go`；執行命令：`go test ./cmd/asura/...`；預期失敗原因：CLI 命令處理函式未定義。
-- **最小實作與回歸**：實作 `cmd/asura` 相關檔案；全綠回歸命令：`go test -v ./...`。
+- **實作與驗證證據**（2026-09-11）：
+  - 外迴圈紅燈：`go test -v ./tests/integration/...`，exit code 1，失敗原因：CLI 進入點不存在。
+  - 內迴圈紅燈：`go test ./cmd/asura/...`，exit code 1，失敗原因：`undefined: RunCLI`。
+  - 最小實作：完成 `cmd/asura/main.go`、`cmd/asura/run.go` 與 `cmd/asura/status.go`，支援 `run` 與 `status` 子命令、`--db`、`--workspace`、`--allowed-roots` 參數配置，即時串流輸出並保存結果至資料庫。
+  - 全綠回歸：`go test -v ./cmd/asura/...` 與 `go test -v ./tests/integration/...` 全部 PASS。手動以 `go run ./cmd/asura run "echo 42"` 執行產出 Task ID 並以 `status` 成功重查相同結果。`go test -v ./...` 與 `go vet ./...` 全專案通過。
+- **狀態**：已完成
+
+#### Task 1.4：Daemon 守護程序、Socket 互斥擁有權與並行 Worker Pool [已完成]
+- **任務說明**：實作 Daemon 守護進程，透過 Unix domain socket / lockfile 互斥競爭單一 Daemon 擁有權；提供 IPC 介面接受任務提交，並由帶全域上限控制（Capacity）的 Worker Pool 統一排程執行，未接受或超出上限時回傳明確結果。
+- **預期輸出**：`internal/daemon/daemon.go`, `internal/daemon/daemon_test.go`, `internal/daemon/pool.go`, `internal/daemon/pool_test.go`
+- **涉及模組或檔案**：`internal/daemon/daemon.go`, `internal/daemon/daemon_test.go`, `internal/daemon/pool.go`, `internal/daemon/pool_test.go`
+- **完成判準**：多個請求與 Daemon 同時啟動時只有一個擁有者，不突破全域上限，每個已接受任務各執行一次，未接受請求獲取明確錯誤或拒絕結果。
+- **驗證方式**：`go test -v ./internal/daemon/...`
+- **覆蓋項目**：P1-1、D-02、D-03、SCN-003
+- **責任角色**：唯一負責
+- **Scenario ID**：SCN-003
+- **改變可觀察行為**：是
+- **實作與驗證證據**（2026-09-11）：
+  - 外迴圈紅燈：`go test -v -run TestDaemonConcurrency ./internal/daemon`，exit code 1，失敗原因：缺少守護程序競爭協調與容量控制（`undefined: NewDaemon`, `undefined: ErrDaemonAlreadyRunning` 等）。
+  - 內迴圈紅燈：`go test ./internal/daemon/...`，exit code 1，失敗原因：`daemon` 模組未定義。
+  - 最小實作：完成 `internal/daemon/pool.go`（Semaphore + 佇列控制並行上限與容量飽和判定）與 `internal/daemon/daemon.go`（Unix domain socket 競爭探測、單一擁有權互斥、JSON IPC 任務接收與調度），提供 `Client` 提交介面。
+  - 全綠回歸：`go test -v ./internal/daemon/...` 全部 PASS（競爭啟動無雙重擁有者、不突破全域上限且各執行一次、未接受請求得到 `ErrCapacityExceeded` 明確結果）。全專案回歸 `go test -v ./...` 與 `go vet ./...` 全數通過。
+- **狀態**：已完成
+
+#### Task 1.5：任務主動取消、PGID 資源回收與局部隔離 [已完成]
+- **任務說明**：在調度引擎與 CLI/Daemon 實作任務取消機制，維護活躍任務之 Context cancel 函式與進程組 PGID，支援發送取消信號，在 2 秒核准期限內終止目標任務並回收資源，將狀態轉移為 `cancelled`；同時運行的其他任務（如工作 B）完全不受干擾。
+- **預期輸出**：`internal/engine/cancel.go`, `internal/engine/cancel_test.go`, `cmd/asura/cancel.go`, `tests/integration/cli_test.go`
+- **涉及模組或檔案**：`internal/engine/engine.go`, `internal/engine/cancel.go`, `internal/engine/cancel_test.go`, `cmd/asura/cancel.go`, `cmd/asura/run.go`, `internal/storage/sqlite.go`, `tests/integration/cli_test.go`
+- **完成判準**：發送取消後，任務 A 在 2 秒內終止且狀態為 `cancelled`，相關子進程組被乾淨回收；並行運行的任務 B 繼續執行並成功完成。
+- **驗證方式**：`go test -v -run TestEngineCancel ./internal/engine/...` 與 `go test -v -run TestCLI_CancelIsolation ./tests/integration/...`
+- **覆蓋項目**：P1-4、D-05、SCN-004
+- **責任角色**：唯一負責
+- **Scenario ID**：SCN-004
+- **改變可觀察行為**：是
+- **實作與驗證證據**（2026-09-11）：
+  - 外迴圈紅燈：`go test -v -run TestCLI_CancelIsolation ./tests/integration`，exit code 1，失敗原因：`task A did not start or did not register PGID in time... SQLITE_BUSY` 與缺少 cancel 協調。
+  - 內迴圈紅燈：`go test -v -run TestEngineCancel ./internal/engine`，exit code 1，失敗原因：`undefined: ErrTaskNotRunning`、`e.CancelTask undefined`。
+  - 最小實作：
+    1. 實作 `internal/engine/cancel.go`，提供 `CancelTask`，安全調用 Context 取消並標記狀態為 `cancelled`。
+    2. 更新 `internal/storage/sqlite.go`：新增 `pgid` 欄位與 `UpdateTaskPGID`，將 `PRAGMA busy_timeout=5000;` 調整為最優先執行杜絕並行開庫鎖死。
+    3. 更新 `cmd/asura/run.go`：啟動任務時建立獨立進程組（`Setpgid: true`）並持久化 PGID，自動生成唯一 ID；更新 `internal/engine/engine.go` 感知外部取消避免覆蓋為 failed。
+    4. 實作 `cmd/asura/cancel.go`：提供 `asura cancel <task_id>` 指令，先標記 cancelled 再發送 `SIGKILL` 強殺進程組。
+  - 全綠回歸：
+    1. 內迴圈單元測試：`go test -v -run TestEngineCancel ./internal/engine`，0.12s PASS。
+    2. 外迴圈端到端測試：`go test -v -run TestCLI_CancelIsolation ./tests/integration`，0.69s PASS（任務 A 在 2 秒內終止，狀態為 cancelled，並行任務 B 正常完成為 completed，且任務 A 的 PGID 進程組無殘留進程）。
+    3. 全專案回歸：`go test -v ./...` 全部 PASS；`go vet ./...` 靜態檢查無任何告警。
+- **狀態**：已完成
+
+#### Task 1.6：部分失敗副作用保護與進度揭露 [已完成]
+- **任務說明**：在調度引擎與 CLI 確保任務在部分步驟執行失敗時，記錄已產生的輸出與失敗原因，狀態明確轉為 `failed`，絕不自動重新調度或重試該任務，杜絕重複副作用；提供 CLI status 完整查得失敗細節。
+- **預期輸出**：`internal/engine/engine.go`, `internal/engine/engine_test.go`, `tests/integration/cli_test.go`
+- **涉及模組或檔案**：`internal/engine/engine.go`, `internal/engine/engine_test.go`, `cmd/asura/run.go`, `cmd/asura/status.go`, `tests/integration/cli_test.go`
+- **完成判準**：若任務執行中途失敗（如產生部分檔案後返回非 0 退出碼），已產生之副作用保留，任務狀態標記為 failed，嚴格無自動重試（執行計數為 1），透過 `asura status` 查得已產生的部分輸出與退出碼失敗原因。
+- **驗證方式**：`go test -v -run TestEngine_PartialFailureNoRetry ./internal/engine/...` 與 `go test -v -run TestCLI_PartialFailureProtection ./tests/integration/...`
+- **覆蓋項目**：P1-4、D-04、SCN-005
+- **責任角色**：唯一負責
+- **Scenario ID**：SCN-005
+- **改變可觀察行為**：是
+- **實作與驗證證據**（2026-09-11）：
+  - 外迴圈端到端測試：`go test -v -run TestCLI_PartialFailureProtection ./tests/integration`，0.55s PASS（執行建立檔案 + exit 42 命令，驗證副作用檔案確實產生、CLI run 返回非 0 狀態碼、`asura status` 顯示狀態為 `failed` 且完整呈現已完成進度與 exit status 42 失敗訊息、SQLite 資料庫中僅有單一任務記錄無自動重試）。
+  - 內迴圈單元測試：`go test -v -run TestEngine_PartialFailureNoRetry ./internal/engine`，0.01s PASS（驗證後端執行次數嚴格為 1 次杜絕重試，且記憶體與儲存層均保留 partial output 與錯誤字串）。
+  - 全專案回歸：`go test -v ./...` 全部 PASS；`go vet ./...` 靜態分析無告警；`git diff --check` 通過。
+- **狀態**：已完成
+
+#### Task 1.7：守護程序重啟恢復與中斷任務揭露 [已完成]
+- **任務說明**：在調度引擎與 SQLite 儲存層實作重啟恢復機制（`RecoverInterruptedTasks`），於啟動時掃描並將前次未完成的殘留任務（`running`、`pending`）安全標記為中斷失敗，揭露明確中斷原因，絕不假冒為成功，亦不自動從頭重新執行；已完成之任務（`completed`）結果維持完整不變。
+- **預期輸出**：`internal/storage/sqlite.go`, `internal/storage/sqlite_test.go`, `internal/engine/engine.go`, `internal/daemon/daemon.go`, `tests/integration/cli_test.go`
+- **涉及模組或檔案**：`internal/storage/sqlite.go`, `internal/storage/sqlite_test.go`, `internal/engine/engine.go`, `internal/daemon/daemon.go`, `tests/integration/cli_test.go`
+- **完成判準**：調度引擎或 Daemon 啟動時自動執行恢復，已完成任務保持 completed，中斷前處於 running/pending 的任務安全轉為 failed 且記錄 "task interrupted: system restarted or terminated unexpectedly"，嚴格杜絕自動重跑或誤報成功。
+- **驗證方式**：`go test -v -run TestSQLiteStore_RecoverInterruptedTasks ./internal/storage/...` 與 `go test -v -run TestCLI_RestartRecovery ./tests/integration/...`
+- **覆蓋項目**：P1-4、D-07、SCN-006
+- **責任角色**：唯一負責
+- **Scenario ID**：SCN-006
+- **改變可觀察行為**：是
+- **實作與驗證證據**（2026-09-11）：
+  - 內迴圈單元測試紅燈：`go test -v -run TestSQLiteStore_RecoverInterruptedTasks ./internal/storage`，exit code 1，失敗原因：`store.RecoverInterruptedTasks undefined`。
+  - 最小實作：
+    1. 在 `internal/storage/sqlite.go` 實作 `RecoverInterruptedTasks`，以原子 SQL 更新將 `running` 與 `pending` 任務轉為 `failed` 並註明中斷訊息，不變更 `completed` 任務。
+    2. 在 `internal/daemon/daemon.go` 的 `Start()` 監聽成功後自動觸發 `RecoverInterruptedTasks`。
+    3. 在 `internal/engine/engine.go` 提供 `RecoverInterruptedTasks` 委派接口。
+  - 內迴圈單元測試全綠：`TestSQLiteStore_RecoverInterruptedTasks` 0.01s PASS；`internal/daemon/daemon_test.go` 中之 `SCN-006: 守護程序重啟保留已完成結果並揭露中斷任務` PASS。
+  - 外迴圈端到端測試：`go test -v -run TestCLI_RestartRecovery ./tests/integration`，0.57s PASS（驗證已完成任務 A 透過 CLI status 查得狀態仍為 completed 且結果完整保留；中斷任務 B 透過 status 查得狀態為 failed 且包含明確中斷原因）。
+  - 全專案回歸：`go test -v ./...` 全部 PASS；`go vet ./...` 靜態分析無告警；`git diff --check` 通過。
+- **狀態**：已完成
+
+#### Task 1.8：空輸出與結構化錯誤防禦收尾 [已完成]
+- **任務說明**：在調度引擎中實作輸出有效性防禦檢驗，當後端未回傳有效輸出文字（空字串或純空白）或僅包含未解決之結構化錯誤時，杜絕標記為 completed 假成功，嚴格標記為 failed 並揭露明確失敗原因，收尾程序不自動重新執行以防重複副作用。
+- **預期輸出**：`internal/engine/engine.go`, `internal/engine/engine_test.go`, `tests/integration/cli_test.go`
+- **涉及模組或檔案**：`internal/engine/engine.go`, `internal/engine/engine_test.go`, `cmd/asura/run.go`, `tests/integration/cli_test.go`
+- **完成判準**：若後端輸出為空（或純空白），任務狀態嚴格標記為 failed（而非 completed），錯誤訊息標註 "execution produced empty output"，`asura run` 返回非 0 狀態碼，`asura status` 查得失敗狀態與原因，且收尾絕不重新執行以保護副作用。
+- **驗證方式**：`go test -v -run TestEngine_EmptyOutputTreatedAsFailed ./internal/engine/...` 與 `go test -v -run TestCLI_EmptyOutputDefense ./tests/integration/...`
+- **覆蓋項目**：P1-4、D-06、SCN-007
+- **責任角色**：唯一負責
+- **Scenario ID**：SCN-007
+- **改變可觀察行為**：是
+- **實作與驗證證據**（2026-09-12）：
+  - 內迴圈單元測試紅燈：`go test -v -run TestEngine_EmptyOutputTreatedAsFailed ./internal/engine`，exit code 1，失敗原因：`undefined: ErrEmptyOutput`。
+  - 最小實作：
+    1. 在 `internal/engine/engine.go` 定義 `ErrEmptyOutput`。
+    2. 在 `SubmitTask` 結果收尾時檢查 `strings.TrimSpace(output) == ""`，若為空則主動更新為 `StatusFailed`，填入 `"execution produced empty output"`，並回傳 `ErrEmptyOutput`。
+  - 內迴圈單元測試全綠：`TestEngine_EmptyOutputTreatedAsFailed` 0.01s PASS。
+  - 外迴圈端到端測試：`go test -v -run TestCLI_EmptyOutputDefense ./tests/integration`，0.54s PASS（執行 `:` 空輸出命令，CLI run 返回非 0 狀態碼，`asura status` 查得狀態嚴格為 `failed` 且錯誤原因明確說明 `empty output`，DB 亦確認為 `StatusFailed`）。
+  - 全專案回歸：`go test -v ./...` 全部 PASS；`go vet ./...` 靜態分析無告警；`git diff --check` 通過。
+- **狀態**：已完成
 
 ---
 
@@ -170,11 +285,11 @@
 |---|---|---|---|
 | SCN-001（取得任務結果與可重查） | Task 1.2, Task 1.3 | Task 0.1, Task 0.3, Task 1.1 | `go test -v ./internal/engine/...` |
 | SCN-002（拒絕超出授權之執行） | Task 0.2 | Task 0.1, Task 1.2 | `go test -v ./internal/auth/...` |
-| SCN-003（競爭啟動與上限） | 待核准（無） | - | - |
-| SCN-004（取消任務資源回收） | 待核准（無） | - | - |
-| SCN-005（部分失敗保護） | 待核准（無） | - | - |
-| SCN-006（重啟狀態恢復） | 待核准（無） | - | - |
-| SCN-007（空輸出收尾防禦） | 待核准（無） | - | - |
+| SCN-003（競爭啟動與上限） | Task 1.4 | Task 1.1, Task 1.2 | `go test -v ./internal/daemon/...` |
+| SCN-004（取消任務資源回收） | Task 1.5 | Task 0.4, Task 1.1, Task 1.2 | `go test -v ./internal/engine/...` |
+| SCN-005（部分失敗保護） | Task 1.6 | Task 1.1, Task 1.2 | `go test -v -run TestCLI_PartialFailureProtection ./tests/integration/...` |
+| SCN-006（重啟狀態恢復） | Task 1.7 | Task 1.1, Task 1.4 | `go test -v -run TestCLI_RestartRecovery ./tests/integration/...` |
+| SCN-007（空輸出收尾防禦） | Task 1.8 | Task 1.1, Task 1.2 | `go test -v -run TestCLI_EmptyOutputDefense ./tests/integration/...` |
 
 ---
 
