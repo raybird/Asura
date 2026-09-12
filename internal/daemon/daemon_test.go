@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -433,3 +434,171 @@ func TestReviewOwnershipDuringDrain(t *testing.T) {
 	_ = d3.Close()
 }
 
+// TestINT002Unit 驗證 Daemon 於進入 WorkerPool 與後端前直接拒絕未授權專案 (INT-002 內迴圈)
+func TestINT002Unit(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-int002-unit-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	allowedDir := filepath.Join(tmpDir, "allowed")
+	unauthorizedDir := filepath.Join(tmpDir, "unauthorized")
+	_ = os.MkdirAll(allowedDir, 0755)
+	_ = os.MkdirAll(unauthorizedDir, 0755)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{allowedDir})
+	sockPath := filepath.Join(tmpDir, "asura.sock")
+
+	runnerCalled := false
+	testRunner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		runnerCalled = true
+		return "ok", nil
+	}
+
+	eng := engine.NewEngine(store, policy, engine.WithRunner(testRunner))
+	d := NewDaemon(Config{
+		SocketPath: sockPath,
+		MaxWorkers: 1,
+		MaxQueue:   1,
+	}, store, policy, WithEngine(eng))
+
+	if err := d.Start(); err != nil {
+		t.Fatalf("daemon start failed: %v", err)
+	}
+	defer d.Close()
+
+	client, err := NewClient(sockPath)
+	if err != nil {
+		t.Fatalf("client connect failed: %v", err)
+	}
+	defer client.Close()
+
+	// 提交未授權目錄
+	task, err := client.Submit(context.Background(), engine.SubmitRequest{
+		Workspace: unauthorizedDir,
+		Prompt:    "some prompt",
+	})
+
+	if err == nil {
+		t.Fatalf("expected error for unauthorized workspace, got nil")
+	}
+	if !strings.Contains(err.Error(), "unauthorized") {
+		t.Errorf("expected error message to contain 'unauthorized', got %v", err)
+	}
+	if task != nil {
+		t.Errorf("expected nil task for rejected submission, got %+v", task)
+	}
+	if runnerCalled {
+		t.Errorf("runner must not be called for rejected submission")
+	}
+}
+
+// TestINT003Unit 驗證多個客戶端並發提交時共用 WorkerPool 容量且超額被拒 (INT-003 內迴圈)
+func TestINT003Unit(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-int003-unit-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	sockPath := filepath.Join(tmpDir, "asura.sock")
+
+	blockCh := make(chan struct{})
+	unblockCh := make(chan struct{})
+
+	blockingRunner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		select {
+		case blockCh <- struct{}{}:
+		default:
+		}
+		<-unblockCh
+		return "done", nil
+	}
+
+	eng := engine.NewEngine(store, policy, engine.WithRunner(blockingRunner))
+	// 容量：1 個 worker + 1 個隊列 = 容量 2
+	d := NewDaemon(Config{
+		SocketPath: sockPath,
+		MaxWorkers: 1,
+		MaxQueue:   1,
+	}, store, policy, WithEngine(eng))
+
+	if err := d.Start(); err != nil {
+		t.Fatalf("daemon start failed: %v", err)
+	}
+	defer d.Close()
+
+	client1, err := NewClient(sockPath)
+	if err != nil {
+		t.Fatalf("client1 connect failed: %v", err)
+	}
+	defer client1.Close()
+
+	client2, err := NewClient(sockPath)
+	if err != nil {
+		t.Fatalf("client2 connect failed: %v", err)
+	}
+	defer client2.Close()
+
+	client3, err := NewClient(sockPath)
+	if err != nil {
+		t.Fatalf("client3 connect failed: %v", err)
+	}
+	defer client3.Close()
+
+	// 任務 1：佔用 worker
+	go func() {
+		_, _ = client1.Submit(context.Background(), engine.SubmitRequest{
+			Workspace: tmpDir,
+			Prompt:    "task-1",
+		})
+	}()
+
+	<-blockCh // 確認任務 1 正在執行
+
+	// 任務 2：佔用 queue (容量已滿)
+	qDone := make(chan struct{})
+	go func() {
+		_, _ = client2.Submit(context.Background(), engine.SubmitRequest{
+			Workspace: tmpDir,
+			Prompt:    "task-2",
+		})
+		close(qDone)
+	}()
+
+	// 稍微等待任務 2 進入 queue
+	time.Sleep(50 * time.Millisecond)
+
+	// 任務 3：超過容量，必須收到滿載錯誤
+	_, err = client3.Submit(context.Background(), engine.SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "task-3-overflow",
+	})
+
+	if err == nil {
+		t.Fatalf("expected capacity exceeded error for client3, got nil")
+	}
+	if !strings.Contains(err.Error(), "capacity exceeded") {
+		t.Errorf("expected error to contain 'capacity exceeded', got %v", err)
+	}
+
+	// 解除阻塞並收尾
+	close(unblockCh)
+	<-qDone
+}

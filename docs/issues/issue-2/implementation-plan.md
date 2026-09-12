@@ -30,3 +30,5 @@
 2026-09-12：執行 `bash scripts/issue-2/probe-opencode.sh all` 完成 B-00 契約探測。隔離安裝 `opencode-ai@1.18.23` 驗證版本精確吻合（退出碼 0），全域環境維持 `1.18.15`；`events` 驗證輸出符合預期 JSON 事件格式，無效參數退出碼為 1；`permissions`（INT-007）驗證核准目錄檔案修改成功，且以 `OPENCODE_PERMISSION='{"bash":"deny"}'` 成功阻擋危險工具調用，零副作用；`cancellation`（INT-005）驗證獨立進程組 SIGTERM 取消後進程樹完全回收，不相關工作存活。探測日誌與樣本保存於 `docs/issues/issue-2/evidence/phase-1/`。B-00 通過，放行 B-01。
 
 2026-09-12：完成 B-01 OpenCode Adapter 實作（`internal/backend/opencode/adapter.go`），prompt 不經 shell 解譯，支援 `OPENCODE_PERMISSION` 與進程組取消管理。完成 `TestINT001Unit`、`TestINT007Unit`、`TestINT001`、`TestINT007` 之紅綠重構雙迴圈驗證，`go test -count=1 -race ./...` 回歸全綠。證據記錄於 `docs/issues/issue-2/evidence/phase-2/test_results.log`。B-01 通過，放行 B-02。
+
+2026-09-12：完成 B-02 Daemon 正式啟動與服務端授權政策實作。在進入 WorkerPool 前先行校驗專案授權清單（INT-002），未授權直接拒絕；`NewDaemon` 預設注入 OpenCode Adapter；完成 `TestINT002Unit`、`TestINT003Unit`、`TestINT002`、`TestINT003` 雙迴圈驗證與 `go test -count=1 -race ./...` 全套回歸。證據記錄於 `docs/issues/issue-2/evidence/phase-3/test_results.log`。B-02 通過，放行 B-03。

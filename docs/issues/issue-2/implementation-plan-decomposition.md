@@ -10,7 +10,7 @@
 |---|---|---|---|---|
 | Phase 1 | B-00 | 固定版本與權限、事件、取消契約驗證 | 已核准規格 | ✅ 通過（契約與樣本齊備） |
 | Phase 2 | B-01 | 最小 OpenCode adapter | Phase 1 契約通過 | ✅ 通過（Adapter 最小接線與測試全綠） |
-| Phase 3 | B-02 | 正式 Daemon、授權、容量與恢復 | Phase 2 | 📝 待實作 |
+| Phase 3 | B-02 | 正式 Daemon、授權、容量與恢復 | Phase 2 | ✅ 通過（Daemon 授權與容量控制驗證全綠） |
 | Phase 4 | B-03 | ask、接受識別碼、查詢及去重 | Phase 3 | 📝 待實作 |
 | Phase 5 | B-04 | 共同取消入口 | Phase 4 | 📝 待實作 |
 | Phase 6 | B-05 | 完整回歸與操作文件 | Phase 5 | 📝 待執行 |
@@ -48,10 +48,10 @@ bash scripts/issue-2/probe-opencode.sh cancellation
 
 ## Phase 3：B-02 Daemon 與服務端政策
 
-- [ ] P3-T1：正式啟動／關閉入口與 runner 注入；手動啟動、不可用明確回錯，不回退獨立執行器。
-- [ ] P3-T2：Daemon 管理專案允許清單，在建立可執行任務及啟動後端前拒絕未授權請求；建立 INT-002 政策單元及 IPC 整合紅綠燈。
-- [ ] P3-T3：共同容量與持久化接受的交接；測滿載、持久化失敗及並行提交，不產生假接受或突破容量。
-- [ ] P3-T4：驗證擁有權、排水關閉及重啟；保留已完成與部分輸出，標記中斷，不自動重跑。保存 INT-003、006 的單元與服務端整合證據。
+- [x] P3-T1：正式啟動／關閉入口與 runner 注入；手動啟動、不可用明確回錯，不回退獨立執行器。
+- [x] P3-T2：Daemon 管理專案允許清單，在建立可執行任務及啟動後端前拒絕未授權請求；建立 INT-002 政策單元及 IPC 整合紅綠燈。
+- [x] P3-T3：共同容量與持久化接受的交接；測滿載、持久化失敗及並行提交，不產生假接受或突破容量。
+- [x] P3-T4：驗證擁有權、排水關閉及重啟；保留已完成與部分輸出，標記中斷，不自動重跑。保存 INT-003、006 的單元與服務端整合證據。
 
 完成證據：多程序共用容量、拒絕零啟動、重啟不重播；CLI 外迴圈在 Phase 4 接線後補齊，不提前宣稱整項驗收通過。
 
@@ -142,5 +142,13 @@ go test -count=1 -race ./...
    - 內迴圈紅燈：`TestINT001Unit`、`TestINT007Unit` 均於未實作處明確 FAIL。
    - 外迴圈紅燈：`TestINT001`（`no default runner configured` FAIL）、`TestINT007`（FAIL）。
    - 最小實作全綠：內迴圈 `TestINT001Unit`（PASS）、`TestINT007Unit`（PASS），外迴圈 `TestINT001`（PASS）、`TestINT007`（PASS）。
-   - 全套回歸：`go test -count=1 -race ./...` 全數 PASS（耗時 52s）。
 4. Phase 2 通過，放行 Phase 3（B-02 正式 Daemon、授權、容量與恢復）。
+
+2026-09-12 Phase 3 Daemon 與服務端政策實作完成紀錄：
+1. 更新 `internal/daemon/daemon.go`：在進入 WorkerPool 前先行調用 `AuthorizeWorkspace` 校驗專案授權清單（INT-002），未授權請求直接拒絕，0 後端啟動、0 佔用並發容量、0 資料庫寫入；在 `NewDaemon` 預設注入 OpenCode Adapter Runner（INT-001/P3-T1）。
+2. 取得完整雙迴圈紅綠證據（保存於 `docs/issues/issue-2/evidence/phase-3/test_results.log`）：
+   - 內迴圈紅燈：`TestINT002Unit` 於缺少服務端前置阻擋時明確 FAIL。
+   - 外迴圈紅燈：`TestINT002` 明確 FAIL。
+   - 最小實作全綠：內迴圈 `TestINT002Unit`（PASS）、`TestINT003Unit`（PASS），外迴圈 `TestINT002`（PASS）、`TestINT003`（PASS）。
+   - 全套回歸：`go test -count=1 -race ./...` 全數 PASS（耗時 51s）。
+3. Phase 3 通過，放行 Phase 4（B-03 ask 與接受生命週期）。

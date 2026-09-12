@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"asura/internal/auth"
+	"asura/internal/backend/opencode"
 	"asura/internal/engine"
 	"asura/internal/storage"
 )
@@ -74,7 +75,8 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 	}
 
 	if d.engine == nil {
-		d.engine = engine.NewEngine(store, policy)
+		adapter := opencode.NewAdapter(opencode.AdapterConfig{})
+		d.engine = engine.NewEngine(store, policy, engine.WithRunner(adapter.Run))
 	}
 
 	return d
@@ -168,6 +170,14 @@ func (d *Daemon) handleConn(conn net.Conn) {
 	if err := decoder.Decode(&req); err != nil {
 		_ = encoder.Encode(IPCResponse{Error: "invalid request payload"})
 		return
+	}
+
+	// 遵循 INT-002 與 P3-T2：在進入 WorkerPool 與啟動後端前，Daemon 服務端直接校驗專案授權清單
+	if d.policy != nil {
+		if err := d.policy.AuthorizeWorkspace(req.Workspace); err != nil {
+			_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unauthorized workspace: %v", err)})
+			return
+		}
 	}
 
 	var task *storage.Task
