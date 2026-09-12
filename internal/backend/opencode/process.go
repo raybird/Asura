@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"syscall"
 )
@@ -68,6 +69,62 @@ func IsTaskProcessGroup(pgid int, taskID string) bool {
 		}
 	}
 	return false
+}
+
+// GetProcessStartTime 讀取指定 PID 的核心啟動時間戳記（/proc/<pid>/stat 欄位 22），不受受控命令環境變數竄改影響 (修復 K-01)
+func GetProcessStartTime(pid int) (string, error) {
+	if pid <= 0 {
+		return "", errors.New("invalid pid")
+	}
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	if err != nil {
+		return "", err
+	}
+	lastIdx := bytes.LastIndexByte(data, ')')
+	if lastIdx == -1 || lastIdx+2 >= len(data) {
+		return "", errors.New("malformed /proc/stat")
+	}
+	fields := strings.Fields(string(data[lastIdx+2:]))
+	// fields[0] 為 state (第 3 欄)，starttime 為第 22 欄，故索引為 22 - 3 = 19
+	if len(fields) <= 19 {
+		return "", errors.New("insufficient fields in /proc/stat")
+	}
+	return fields[19], nil
+}
+
+// VerifyTaskProcess 嚴格進行三態進程身分檢驗：
+// - (true, nil): 確認進程存在且身分（StartTime 或 TaskID 標記）吻合，確屬該任務。
+// - (false, nil): 確認進程不存在，或身分明確不匹配（PID 重用）。
+// - (false, err): 遭遇權限不足或其他系統錯誤，無法確認身分。
+func VerifyTaskProcess(pid int, expectedStartTime string, taskID string) (bool, error) {
+	if pid <= 0 {
+		return false, nil
+	}
+	st, err := GetProcessStartTime(pid)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			// 進程已不存在，確認已結束
+			return false, nil
+		}
+		// 無法確認身分，回傳錯誤（防禦 K-01）
+		return false, err
+	}
+
+	// 若有記錄 expectedStartTime，以核心不可變 StartTime 比對
+	if expectedStartTime != "" {
+		if st == expectedStartTime {
+			return true, nil
+		}
+		// StartTime 不一致，確認 PID 已被系統重新分配給不相關工作（防禦 J-01）
+		return false, nil
+	}
+
+	// 若無 StartTime 元資料，回退檢查環境變數 ASURA_TASK_ID
+	if taskID != "" && IsTaskProcessGroup(pid, taskID) {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // StartProcess 在獨立進程組中啟動指定可執行檔，並在 ctx 取消時強殺整組 PGID

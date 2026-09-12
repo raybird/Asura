@@ -143,6 +143,7 @@ Feature: 可控且可追蹤的本機任務執行
 | 2026-09-12 | 依使用者核准修復 review-75b74b1.md 提出的 H-01 跨行程平坦鎖與 fail-fast 防禦，通過 go test -race 驗證 | Antigravity |
 | 2026-09-12 | 依使用者核准修復 review-8696817.md 提出的 I-01 取消重試冪等性與進程回收防禦，通過 go test -race 驗證 | Antigravity |
 | 2026-09-12 | 依使用者核准修復 review-716416a.md 提出的 J-01 程序身分驗證與 PID 重用防禦，通過 go test -race 驗證 | Antigravity |
+| 2026-09-12 | 依使用者核准修復 review-7e76e74.md 提出的 K-01 核心 StartTime 身分驗證與三態安全回收防禦，通過 go test -race 驗證 | Antigravity |
 
 ---
 

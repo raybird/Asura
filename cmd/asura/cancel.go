@@ -6,13 +6,71 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
+	"strings"
 	"syscall"
+	"time"
 
 	"asura/internal/auth"
 	"asura/internal/backend/opencode"
 	"asura/internal/engine"
 	"asura/internal/storage"
 )
+
+// readTaskLockMetadata 自鎖檔讀取執行端登記的不可變核心身分資訊 (pgid, startTime)
+func readTaskLockMetadata(lockPath string) (int, string) {
+	data, err := os.ReadFile(lockPath)
+	if err != nil {
+		return 0, ""
+	}
+	content := strings.TrimSpace(string(data))
+	if content == "" {
+		return 0, ""
+	}
+	parts := strings.SplitN(content, ":", 2)
+	if len(parts) != 2 {
+		return 0, ""
+	}
+	p, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, ""
+	}
+	return p, parts[1]
+}
+
+// safeKillTaskProcessGroup 進行三態安全回收 (修復 J-01, K-01):
+// - 確認屬於此任務：發送 SIGKILL，等待確認進程組終結，確認後清零 PGID，回傳 nil
+// - 確認不屬於此任務或已結束：不發信號，清零 PGID，回傳 nil (無副作用的成功)
+// - 無法確認：回傳錯誤，絕不清零 PGID，絕不宣告成功
+func safeKillTaskProcessGroup(store *storage.SQLiteStore, taskID string, targetPGID int, expectedStartTime string) error {
+	if targetPGID <= 0 {
+		return nil
+	}
+
+	matched, err := opencode.VerifyTaskProcess(targetPGID, expectedStartTime, taskID)
+	if err != nil {
+		// 無法確認身分，嚴禁清空 PGID 或視為已回收 (修復 K-01)
+		return fmt.Errorf("unable to verify process identity: %w", err)
+	}
+
+	if matched {
+		_ = opencode.KillProcessGroup(targetPGID)
+		// 等候並確認進程組確實退出（最多等待 1 秒）
+		for i := 0; i < 50; i++ {
+			if !opencode.IsProcessGroupAlive(targetPGID) {
+				break
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		if opencode.IsProcessGroupAlive(targetPGID) {
+			_ = opencode.KillProcessGroup(targetPGID)
+		}
+	}
+
+	// 確認原進程已被回收，或原進程已死／已被系統重用：清空 PGID 標記回收完成
+	_ = store.UpdateTaskPGID(context.Background(), taskID, 0)
+	return nil
+}
 
 func handleCancel(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("cancel", flag.ContinueOnError)
@@ -57,23 +115,19 @@ func handleCancel(args []string, stdout, stderr io.Writer) int {
 	lockPath := taskLockPath(*dbPath, taskID)
 	lf, lErr := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600)
 	if lErr != nil {
-		// 開鎖失敗時對已登記之 PGID 實施盡力回收，防禦程序持續運行（先校驗身分，防禦 PID 重用，修復 J-01）
+		// 開鎖失敗時嘗試盡力回收已登記之 PGID
+		_, metaStartTime := readTaskLockMetadata(lockPath)
 		if t, err := store.GetTask(context.Background(), taskID); err == nil && t.PGID > 0 {
-			if opencode.IsTaskProcessGroup(t.PGID, taskID) {
-				_ = opencode.KillProcessGroup(t.PGID)
-				_ = store.UpdateTaskPGID(context.Background(), taskID, 0)
-			}
+			_ = safeKillTaskProcessGroup(store, taskID, t.PGID, metaStartTime)
 		}
 		fmt.Fprintf(stderr, "error: failed to open task lock: %v\n", lErr)
 		return 1
 	}
 	if err := syscall.Flock(int(lf.Fd()), syscall.LOCK_EX); err != nil {
 		_ = lf.Close()
+		_, metaStartTime := readTaskLockMetadata(lockPath)
 		if t, err := store.GetTask(context.Background(), taskID); err == nil && t.PGID > 0 {
-			if opencode.IsTaskProcessGroup(t.PGID, taskID) {
-				_ = opencode.KillProcessGroup(t.PGID)
-				_ = store.UpdateTaskPGID(context.Background(), taskID, 0)
-			}
+			_ = safeKillTaskProcessGroup(store, taskID, t.PGID, metaStartTime)
 		}
 		fmt.Fprintf(stderr, "error: failed to acquire task lock: %v\n", err)
 		return 1
@@ -81,19 +135,19 @@ func handleCancel(args []string, stdout, stderr io.Writer) int {
 	_ = syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
 	_ = lf.Close()
 
-	// 握手完成：此時執行端要麼在鎖內檢查到 cancelled 而放棄啟動，要麼已經完成 cmd.Start() 並登記 PGID
+	// 握手完成：從鎖檔讀取不可變 StartTime 元資料，並重查最新 PGID
+	_, metaStartTime := readTaskLockMetadata(lockPath)
 	targetPGID := task.PGID
 	if t, err := store.GetTask(context.Background(), taskID); err == nil && t.PGID > 0 {
 		targetPGID = t.PGID
 	}
 
-	// 若任務具有運行的進程組 (PGID)，先驗證程序身分仍屬於該任務，再發送 SIGKILL（修復 J-01）
+	// 實施三態進程身分檢驗與安全回收 (修復 J-01, K-01)
 	if targetPGID > 0 {
-		if opencode.IsTaskProcessGroup(targetPGID, taskID) {
-			_ = opencode.KillProcessGroup(targetPGID)
+		if killErr := safeKillTaskProcessGroup(store, taskID, targetPGID, metaStartTime); killErr != nil {
+			fmt.Fprintf(stderr, "error: failed to recycle process: %v\n", killErr)
+			return 1
 		}
-		// 標記資源回收完成，清除 PGID 避免日後重試或 PID 重用誤殺其他工作
-		_ = store.UpdateTaskPGID(context.Background(), taskID, 0)
 	}
 
 	fmt.Fprintf(stdout, "Task %s cancelled successfully\n", taskID)

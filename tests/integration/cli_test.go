@@ -1322,6 +1322,104 @@ func TestCLI_LatestReview_J01_CancelDoesNotKillReusedPGID(t *testing.T) {
 	}
 }
 
+// K-01: 驗證受控命令執行 exec env -i 清空環境變數時，取消端仍能透過核心不可變身分成功識別並回收程序，絕無殘留副作用
+func TestCLI_LatestReview_K01_CancelRecoversCleanEnvProcess(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-k01-cleanenv-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	allowedDir := filepath.Join(tmpDir, "project")
+	if err := os.MkdirAll(allowedDir, 0755); err != nil {
+		t.Fatalf("failed to create allowed dir: %v", err)
+	}
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get wd: %v", err)
+	}
+	projectRoot := filepath.Dir(filepath.Dir(wd))
+	cmdDir := filepath.Join(projectRoot, "cmd", "asura")
+
+	asuraBin := filepath.Join(tmpDir, "asura")
+	buildCmd := exec.Command("go", "build", "-race", "-o", asuraBin, cmdDir)
+	if buildOut, buildErr := buildCmd.CombinedOutput(); buildErr != nil {
+		t.Fatalf("failed to build asura binary: %v, output: %s", buildErr, string(buildOut))
+	}
+
+	taskID := "task-clean-env"
+	startedMarker := filepath.Join(allowedDir, "started.marker")
+	sideEffectFile := filepath.Join(allowedDir, "still_executed.marker")
+
+	// 1. 啟動執行 exec env -i 清空所有環境變數的命令
+	runCmd := exec.Command(asuraBin,
+		"run",
+		"--db", dbPath,
+		"--id", taskID,
+		"--workspace", allowedDir,
+		"--allowed-roots", allowedDir,
+		fmt.Sprintf("exec env -i PATH=/usr/bin:/bin sh -c 'touch %s; sleep 3; touch %s'", startedMarker, sideEffectFile),
+	)
+	var runOut, runErr bytes.Buffer
+	runCmd.Stdout = &runOut
+	runCmd.Stderr = &runErr
+
+	if err := runCmd.Start(); err != nil {
+		t.Fatalf("failed to start runCmd: %v", err)
+	}
+
+	// 2. 等候任務進入 running 且已 touch started.marker（代表 exec env -i 已執行，環境已清空）
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open store: %v", err)
+	}
+	defer store.Close()
+
+	for i := 0; i < 50; i++ {
+		tObj, err := store.GetTask(context.Background(), taskID)
+		_, statErr := os.Stat(startedMarker)
+		if err == nil && tObj.Status == storage.StatusRunning && statErr == nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	// 3. 執行 asura cancel
+	cancelCmd := exec.Command(asuraBin, "cancel", "--db", dbPath, taskID)
+	var cancelOut, cancelErr bytes.Buffer
+	cancelCmd.Stdout = &cancelOut
+	cancelCmd.Stderr = &cancelErr
+
+	if err := cancelCmd.Run(); err != nil {
+		t.Fatalf("cancel command failed: %v, stderr: %s, stdout: %s", err, cancelErr.String(), cancelOut.String())
+	}
+
+	// 4. 等候 runCmd 結束
+	_ = runCmd.Wait()
+
+	// 5. 核心斷言：原程序必須已被回收，副作用檔案絕不能產生！
+	// 若存在 K-01 漏洞（因找不到 ASURA_TASK_ID 而略過 SIGKILL），程序會繼續執行並建立 sideEffectFile
+	if _, statErr := os.Stat(sideEffectFile); statErr == nil {
+		t.Fatalf("side-effect marker appeared! Clean-env process was not killed (violates K-01)")
+	}
+
+	// 6. 驗證任務最終狀態為 cancelled，且 PGID 已被清零
+	finalTask, err := store.GetTask(context.Background(), taskID)
+	if err != nil {
+		t.Fatalf("failed to query final task: %v", err)
+	}
+	if finalTask.Status != storage.StatusCancelled {
+		t.Errorf("expected final status cancelled, got: %s", finalTask.Status)
+	}
+	if finalTask.PGID != 0 {
+		t.Errorf("expected final PGID 0 (cleared), got: %d", finalTask.PGID)
+	}
+}
+
+
 
 
 

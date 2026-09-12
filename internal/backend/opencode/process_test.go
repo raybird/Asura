@@ -130,3 +130,61 @@ func TestIsTaskProcessGroup(t *testing.T) {
 	}
 }
 
+func TestVerifyTaskProcess_StartTime(t *testing.T) {
+	// 啟動一個執行 exec env -i 清空環境變數的進程
+	cmd := exec.Command("sh", "-c", "exec env -i sleep 5")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to start cmd: %v", err)
+	}
+	defer func() {
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+		}
+	}()
+
+	pid := cmd.Process.Pid
+
+	// 1. 取得核心 StartTime
+	st, err := GetProcessStartTime(pid)
+	if err != nil {
+		t.Fatalf("GetProcessStartTime failed: %v", err)
+	}
+	if st == "" {
+		t.Errorf("expected non-empty start time")
+	}
+
+	// 2. 身分校驗：雖然環境變數已被清空，但核心 StartTime 一致時必須驗證成功 (修復 K-01)
+	matched, err := VerifyTaskProcess(pid, st, "any-task-id")
+	if err != nil {
+		t.Fatalf("VerifyTaskProcess unexpected error: %v", err)
+	}
+	if !matched {
+		t.Errorf("expected VerifyTaskProcess to match by startTime even with clean env")
+	}
+
+	// 3. StartTime 不匹配時必須返回 false (防禦 J-01 PID 重用)
+	matched, err = VerifyTaskProcess(pid, "mismatched-start-time", "any-task-id")
+	if err != nil {
+		t.Fatalf("VerifyTaskProcess unexpected error: %v", err)
+	}
+	if matched {
+		t.Errorf("expected VerifyTaskProcess to be false for mismatched startTime")
+	}
+
+	// 4. 進程退出後必須返回 (false, nil)
+	_ = cmd.Process.Kill()
+	_ = cmd.Wait()
+	time.Sleep(20 * time.Millisecond)
+	matched, err = VerifyTaskProcess(pid, st, "any-task-id")
+	if err != nil {
+		t.Fatalf("VerifyTaskProcess unexpected error on dead process: %v", err)
+	}
+	if matched {
+		t.Errorf("expected VerifyTaskProcess to be false for dead process")
+	}
+}
+
+

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"asura/internal/auth"
+	"asura/internal/backend/opencode"
 	"asura/internal/engine"
 	"asura/internal/storage"
 )
@@ -188,6 +189,12 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 			if err == nil {
 				if currentTaskID != "" {
 					_ = store.UpdateTaskPGID(ctx, currentTaskID, pgid)
+					// 記錄不可變核心 StartTime 至鎖檔中供取消端嚴格核驗身分 (修復 K-01)
+					if st, stErr := opencode.GetProcessStartTime(cmd.Process.Pid); stErr == nil && lockFile != nil {
+						_ = lockFile.Truncate(0)
+						_, _ = lockFile.Seek(0, 0)
+						_, _ = lockFile.WriteString(fmt.Sprintf("%d:%s", pgid, st))
+					}
 					// 檢查此任務是否在啟動前或啟動當下已被外部標記取消（修復 R-03）
 					t, err := store.GetTask(context.Background(), currentTaskID)
 					if err == nil && t.Status == storage.StatusCancelled {
@@ -213,6 +220,8 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 		err := cmd.Wait()
 		if currentTaskID != "" {
 			_ = store.UpdateTaskPGID(context.Background(), currentTaskID, 0)
+			lockPath := taskLockPath(*dbPath, currentTaskID)
+			_ = os.WriteFile(lockPath, []byte(""), 0600)
 		}
 		return buf.String(), err
 	}
