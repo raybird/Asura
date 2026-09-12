@@ -2,18 +2,21 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
+	"syscall"
 	"testing"
+	"time"
 
 	"asura/internal/auth"
 	"asura/internal/backend/opencode"
 	"asura/internal/daemon"
 	"asura/internal/engine"
 	"asura/internal/storage"
-	"sync/atomic"
-	"time"
 )
 
 // TestINT001: 自然語言任務經真實後端取得可追蹤結果 (INT-001 外迴圈)
@@ -431,5 +434,218 @@ func TestINT004Redelivery(t *testing.T) {
 
 	if count := executionCount.Load(); count != 1 {
 		t.Errorf("expected exactly 1 execution, got %d (violates INT-004-REDELIVERY)", count)
+	}
+}
+
+// TestINT005: 從共同入口取消任務並如實揭露回收狀態 (INT-005 外迴圈)
+// Given 任務 A 執行中且另有不相關工作 B
+// When 使用者要求取消 A
+// Then 確認回收成功才宣告完成，且 B 不受影響
+func TestINT005(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-int005-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	sockPath := filepath.Join(tmpDir, "asura.sock")
+
+	// 啟動一個外部獨立進程作為不相關工作 B
+	cmdB := exec.Command("sleep", "30")
+	opencode.ConfigureProcessGroup(cmdB)
+	if err := cmdB.Start(); err != nil {
+		t.Fatalf("failed to start independent process B: %v", err)
+	}
+	defer func() {
+		if cmdB.Process != nil {
+			_ = cmdB.Process.Kill()
+		}
+	}()
+
+	pgidB, _ := syscall.Getpgid(cmdB.Process.Pid)
+	if pgidB <= 0 {
+		pgidB = cmdB.Process.Pid
+	}
+
+	startedA := make(chan struct{})
+	var pgidA int
+	runnerA := func(ctx context.Context, ws string, prompt string) (string, error) {
+		cmdA := exec.CommandContext(ctx, "sleep", "30")
+		opencode.ConfigureProcessGroup(cmdA)
+		if err := cmdA.Start(); err != nil {
+			return "", err
+		}
+		pgidA, _ = syscall.Getpgid(cmdA.Process.Pid)
+		if pgidA <= 0 {
+			pgidA = cmdA.Process.Pid
+		}
+		if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
+			_ = store.UpdateTaskPGID(context.Background(), taskID, pgidA)
+		}
+
+		close(startedA)
+
+		go func() {
+			<-ctx.Done()
+			_ = opencode.KillProcessGroup(pgidA)
+		}()
+
+		err := cmdA.Wait()
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return "partial output from A", ctx.Err()
+		}
+		return "done", err
+	}
+
+	eng := engine.NewEngine(store, policy, engine.WithRunner(runnerA))
+	d := daemon.NewDaemon(daemon.Config{
+		SocketPath: sockPath,
+		MaxWorkers: 2,
+		MaxQueue:   2,
+	}, store, policy, daemon.WithEngine(eng))
+
+	if err := d.Start(); err != nil {
+		t.Fatalf("daemon start failed: %v", err)
+	}
+	defer d.Close()
+
+	client, err := daemon.NewClient(sockPath)
+	if err != nil {
+		t.Fatalf("client connect failed: %v", err)
+	}
+	defer client.Close()
+
+	// 提交任務 A
+	taskA, err := client.Submit(context.Background(), engine.SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "task-A-to-be-cancelled",
+	})
+	if err != nil {
+		t.Fatalf("submit A failed: %v", err)
+	}
+
+	// 等待任務 A 啟動
+	<-startedA
+	time.Sleep(50 * time.Millisecond)
+
+	// 從共同入口取消任務 A
+	cancelTask, err := client.CancelTask(context.Background(), taskA.ID)
+	if err != nil {
+		t.Fatalf("CancelTask A failed: %v", err)
+	}
+	if cancelTask.Status != storage.StatusCancelled {
+		t.Errorf("expected task A status cancelled, got %s", cancelTask.Status)
+	}
+
+	// 等待回收完成
+	time.Sleep(100 * time.Millisecond)
+
+	// 驗證 1: 任務 A 的進程組已被安全回收 (不在存活狀態)
+	if opencode.IsProcessGroupAlive(pgidA) {
+		t.Errorf("expected process group A (%d) to be terminated, but still alive", pgidA)
+	}
+
+	// 驗證 2: 不相關工作 B 保持存活 (不受影響)
+	if !opencode.IsProcessGroupAlive(pgidB) {
+		t.Errorf("expected process group B (%d) to remain alive, but was terminated", pgidB)
+	}
+
+	// 驗證 3: 查詢任務 A 終態一致
+	latestA, err := client.GetTask(context.Background(), taskA.ID)
+	if err != nil {
+		t.Fatalf("GetTask A failed: %v", err)
+	}
+	if latestA.Status != storage.StatusCancelled {
+		t.Errorf("expected queried status cancelled, got %s", latestA.Status)
+	}
+	if latestA.Result != "partial output from A" {
+		t.Errorf("expected partial output retained, got %q", latestA.Result)
+	}
+}
+
+// TestINT006: 後端失敗與服務重啟保留追蹤資訊 (INT-006 外迴圈)
+// Given 任務已有可追蹤識別且可能產生部分輸出
+// When 後端失敗或執行服務中斷後重新啟動
+// Then 可查得明確失敗或中斷結果及已持久化的輸出，不標記為成功或重跑
+func TestINT006(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-int006-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	sockPath := filepath.Join(tmpDir, "asura.sock")
+
+	// 模擬產生一個執行中（running）且已持久化部分輸出的中斷任務
+	interruptedTask := &storage.Task{
+		ID:        "interrupted-task-001",
+		Workspace: tmpDir,
+		Prompt:    "task-interrupted-by-crash",
+		Status:    storage.StatusRunning,
+		Result:    "partial-output-before-crash",
+		CreatedAt: time.Now().UTC().Add(-1 * time.Minute),
+		UpdatedAt: time.Now().UTC().Add(-30 * time.Second),
+	}
+	if err := store.CreateTask(context.Background(), interruptedTask); err != nil {
+		t.Fatalf("create interrupted task failed: %v", err)
+	}
+	_ = store.UpdateTaskStatus(context.Background(), interruptedTask.ID, storage.StatusRunning, "partial-output-before-crash", "")
+
+	// 重新啟動中樞服務 (模擬重啟執行 RecoverInterruptedTasks)
+	eng := engine.NewEngine(store, policy)
+	recovered, err := eng.RecoverInterruptedTasks(context.Background())
+	if err != nil {
+		t.Fatalf("RecoverInterruptedTasks failed: %v", err)
+	}
+	if recovered < 1 {
+		t.Errorf("expected at least 1 recovered task, got %d", recovered)
+	}
+
+	d := daemon.NewDaemon(daemon.Config{
+		SocketPath: sockPath,
+		MaxWorkers: 2,
+		MaxQueue:   2,
+	}, store, policy, daemon.WithEngine(eng))
+
+	if err := d.Start(); err != nil {
+		t.Fatalf("daemon start failed: %v", err)
+	}
+	defer d.Close()
+
+	client, err := daemon.NewClient(sockPath)
+	if err != nil {
+		t.Fatalf("client connect failed: %v", err)
+	}
+	defer client.Close()
+
+	// 重新查詢該中斷任務
+	task, err := client.GetTask(context.Background(), "interrupted-task-001")
+	if err != nil {
+		t.Fatalf("GetTask failed: %v", err)
+	}
+
+	if task.Status != storage.StatusFailed {
+		t.Errorf("expected status failed for interrupted task, got %s", task.Status)
+	}
+	if task.Result != "partial-output-before-crash" {
+		t.Errorf("expected partial output to be preserved, got %q", task.Result)
+	}
+	if !strings.Contains(task.ErrorMessage, "interrupted") {
+		t.Errorf("expected error message to explain interruption, got %q", task.ErrorMessage)
 	}
 }

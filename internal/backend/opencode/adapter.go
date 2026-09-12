@@ -27,8 +27,10 @@ var (
 type AdapterConfig struct {
 	BinaryPath  string
 	ConfigDir   string
-	Permission  string // JSON string for OPENCODE_PERMISSION
-	DisableAuto bool
+	Permission       string // JSON string for OPENCODE_PERMISSION
+	DisableAuto      bool
+	OnProcessStarted func(ctx context.Context, pgid int)
+	OnProcessExited  func(ctx context.Context, pgid int)
 }
 
 // Adapter 負責調度固定版本 OpenCode CLI 執行 AI 任務並解析事件串流
@@ -150,6 +152,10 @@ func (a *Adapter) Run(ctx context.Context, workspace string, prompt string) (str
 		pgid = cmd.Process.Pid
 	}
 
+	if a.cfg.OnProcessStarted != nil {
+		a.cfg.OnProcessStarted(ctx, pgid)
+	}
+
 	// 支援 Context 取消時發送信號並清理進程組
 	doneChan := make(chan struct{})
 	var closeOnce sync.Once
@@ -165,6 +171,10 @@ func (a *Adapter) Run(ctx context.Context, workspace string, prompt string) (str
 
 	waitErr := cmd.Wait()
 	closeOnce.Do(func() { close(doneChan) })
+
+	if a.cfg.OnProcessExited != nil {
+		a.cfg.OnProcessExited(ctx, pgid)
+	}
 
 	rawStdout := stdoutBuf.String()
 	extracted, extractErr := a.ExtractResultFromEvents(rawStdout)

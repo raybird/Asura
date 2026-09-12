@@ -12,7 +12,7 @@
 | Phase 2 | B-01 | 最小 OpenCode adapter | Phase 1 契約通過 | ✅ 通過（Adapter 最小接線與測試全綠） |
 | Phase 3 | B-02 | 正式 Daemon、授權、容量與恢復 | Phase 2 | ✅ 通過（Daemon 授權與容量控制驗證全綠） |
 | Phase 4 | B-03 | ask、接受識別碼、查詢及去重 | Phase 3 | ✅ 通過（非同步接受、斷線追蹤與去重驗證全綠） |
-| Phase 5 | B-04 | 共同取消入口 | Phase 4 | 📝 待實作 |
+| Phase 5 | B-04 | 共同取消入口 | Phase 4 | ✅ 通過（共同取消協調、精準回收、終態一致與重啟恢復全綠） |
 | Phase 6 | B-05 | 完整回歸與操作文件 | Phase 5 | 📝 待執行 |
 
 最大風險與首要驗證理由引用 README「風險與首要驗證」。Phase 1 驗證外部契約，不把探測成功等同 Asura 端到端成功；INT-002 的零啟動由服務端負責，不能交給已啟動的後端補救。Phase 1 不通過時停止 adapter 實作，提供證據逐題確認，不自行換版、全面自動核准或降低驗收要求。
@@ -66,9 +66,9 @@ bash scripts/issue-2/probe-opencode.sh cancellation
 
 ## Phase 5：B-04 共同取消
 
-- [ ] P5-T1：共同入口協調啟動、程序身分登記與取消，不複製 CLI 專屬回收邏輯。
-- [ ] P5-T2：取消 A、保留 B；覆蓋啟動競爭、程序身分未知、回收失敗與部分輸出保存。未知回報錯誤並保留追蹤，不偽稱完成。
-- [ ] P5-T3：透過正式 CLI 執行 INT-005、006；保存共同收尾單元與外迴圈四段證據。
+- [x] P5-T1：共同入口協調啟動、程序身分登記與取消，不複製 CLI 專屬回收邏輯。
+- [x] P5-T2：取消 A、保留 B；覆蓋啟動競爭、程序身分未知、回收失敗與部分輸出保存。未知回報錯誤並保留追蹤，不偽稱完成。
+- [x] P5-T3：透過正式 CLI 執行 INT-005、006；保存共同收尾單元與外迴圈四段證據。
 
 完成證據：取消成功必須有資源回收證據，資料庫及查詢終態一致，不影響不相關程序。
 
@@ -162,3 +162,13 @@ go test -count=1 -race ./...
      - 外迴圈測試：`TestINT004`（PASS）、`TestINT004Redelivery`（PASS）、`TestRunCLI_UsageAndValidation` ask 驗證（PASS）。
      - 全套回歸：`go test -count=1 -race ./...` 全數 PASS（耗時 48.8s）。
 5. Phase 4 通過，放行 Phase 5（B-04 共同取消入口）。
+6. 2026-09-12 Phase 5 共同取消入口實作完成紀錄：
+   - 實作進程身分登記與生命週期管理（P5-T1）：`internal/backend/opencode/adapter.go` 新增 `OnProcessStarted` 與 `OnProcessExited`，協調 `cmd.Start()` 取得之 PGID 登記至儲存層並於收尾時清零。
+   - 實作 Daemon 共同取消協調與 CLI `asura cancel` 取消轉發：優先經 Unix Socket 連線 Daemon 調用 `CancelTask`，透過 Context 取消調用 `KillProcessGroup(pgid)` 安全終結目標進程樹。
+   - 驗證三態回收與旁支工作存活（INT-005 / P5-T2）：執行長任務 A 與獨立工作 B，取消 A 時成功回收 A 進程樹，且獨立工作 B 保持存活不受波及；查詢 A 終態一致保留 partial output。
+   - 驗證中斷恢復與終態持久（INT-006 / P5-T2）：驗證重啟中樞調用 `RecoverInterruptedTasks` 將 running 孤兒任務轉為 failed，完整保留崩潰前已持久化之輸出，不重跑副作用。
+   - 取得完整雙迴圈紅綠證據（保存於 `docs/issues/issue-2/evidence/phase-5/test_results.log`）：
+     - 內迴圈測試：`TestEngineCancel`（PASS）、`TestProcessCancel`（PASS）、`TestProcessGroup`（PASS）、`TestIsTaskProcessGroup`（PASS）。
+     - 外迴圈測試：`TestINT005`（PASS）、`TestINT006`（PASS）、`TestRunCLI_UsageAndValidation` cancel 驗證（PASS）。
+     - 全套回歸：`go test -count=1 -race ./...` 全數 PASS（耗時 54.3s）。
+7. Phase 5 通過，放行 Phase 6（B-05 完整回歸與交付）。

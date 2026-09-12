@@ -78,4 +78,16 @@ func TestRunCLI_UsageAndValidation(t *testing.T) {
 			t.Errorf("expected 'daemon unavailable' in stderr, got: %s", stderr.String())
 		}
 	})
+
+	t.Run("cancel 指令缺少 task_id 返回非 0 狀態碼", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		code := RunCLI([]string{"cancel"}, out, stderr)
+		if code == 0 {
+			t.Errorf("expected non-zero exit code, got 0")
+		}
+		if !strings.Contains(stderr.String(), "task_id is required") {
+			t.Errorf("expected 'task_id is required' in stderr, got: %s", stderr.String())
+		}
+	})
 }

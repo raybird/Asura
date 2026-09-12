@@ -80,6 +80,21 @@ func GenerateTaskID() string {
 	return fmt.Sprintf("task-%d-%s", time.Now().Unix(), hex.EncodeToString(b))
 }
 
+type taskIDKey struct{}
+
+// ContextWithTaskID 將 taskID 注入 context
+func ContextWithTaskID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, taskIDKey{}, id)
+}
+
+// TaskIDFromContext 自 context 萃取 taskID
+func TaskIDFromContext(ctx context.Context) string {
+	if val, ok := ctx.Value(taskIDKey{}).(string); ok {
+		return val
+	}
+	return ""
+}
+
 func generateTaskID() string {
 	return GenerateTaskID()
 }
@@ -182,7 +197,7 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 	task.Status = storage.StatusRunning
 
 	// 4. 配置獨立 Cancel Context 並登記
-	taskCtx, cancel := context.WithCancel(ctx)
+	taskCtx, cancel := context.WithCancel(ContextWithTaskID(ctx, task.ID))
 	e.cancelsMu.Lock()
 	e.cancels[task.ID] = cancel
 	e.cancelsMu.Unlock()

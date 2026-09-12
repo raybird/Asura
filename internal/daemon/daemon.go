@@ -76,7 +76,18 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 	}
 
 	if d.engine == nil {
-		adapter := opencode.NewAdapter(opencode.AdapterConfig{})
+		adapter := opencode.NewAdapter(opencode.AdapterConfig{
+			OnProcessStarted: func(ctx context.Context, pgid int) {
+				if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
+					_ = store.UpdateTaskPGID(context.Background(), taskID, pgid)
+				}
+			},
+			OnProcessExited: func(ctx context.Context, pgid int) {
+				if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
+					_ = store.UpdateTaskPGID(context.Background(), taskID, 0)
+				}
+			},
+		})
 		d.engine = engine.NewEngine(store, policy, engine.WithRunner(adapter.Run))
 	}
 
@@ -375,6 +386,29 @@ func (c *Client) GetTask(ctx context.Context, taskID string) (*storage.Task, err
 	return resp.Task, nil
 }
 
+// CancelTask 向 Daemon 發送任務取消請求 (INT-005)
+func (c *Client) CancelTask(ctx context.Context, taskID string) (*storage.Task, error) {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action: "cancel",
+		TaskID: taskID,
+	}); err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if resp.Error != "" {
+		return nil, errors.New(resp.Error)
+	}
+
+	return resp.Task, nil
+}
 
 // Close 關閉用戶端連線
 func (c *Client) Close() error {
