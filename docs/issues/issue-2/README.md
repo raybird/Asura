@@ -7,6 +7,7 @@
 - [需求現況分析](requirement-analysis.md)
 - [技術取捨](technical-analysis.md)
 - [實作計畫](implementation-plan.md)
+- [Phase 1～6 任務拆解](implementation-plan-decomposition.md)
 
 ## 現況與最小邊界
 
@@ -190,6 +191,7 @@ INT-004 依第 4 項增加下列已核准的失敗路徑，作為原劇本的補
 | 2026-09-12 | 記錄使用者總體核准及六項逐題決策；補充 INT-004-REDELIVERY 驗收，副作用操作範圍續列 TBD-6 |
 | 2026-09-12 | 第七題操作範圍獲核准；TBD-6 已解決，新增 INT-007 及驗證對應 |
 | 2026-09-12 | 建立 Issue #2，提交核准規格至 `1b92a60`；回填核准指標，未改變驗收行為。核准來源段的「未執行 git commit」為提交前紀錄 |
+| 2026-09-12 | 依使用者指定完成 B-00～B-05 的六個 Phase 拆解、八項 Scenario 責任與雙迴圈命令；僅文件規劃，未執行隔離安裝及契約探測，驗收行為不變 |
 
 **分級**：Large（跨 CLI、Daemon、Engine、後端及持久化整合）。
 
