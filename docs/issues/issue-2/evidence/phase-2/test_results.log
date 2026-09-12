@@ -1,0 +1,67 @@
+=== Phase 2 (B-01) 測試證據紀錄 (2026-09-12) ===
+
+[1. 內迴圈紅燈 (P2-T1)]
+$ go test -count=1 -v ./internal/backend/opencode -run '^TestINT001Unit$'
+=== RUN   TestINT001Unit
+    adapter_test.go:19: ExtractResultFromEvents failed: extract not implemented
+--- FAIL: TestINT001Unit (0.00s)
+FAIL
+FAIL	asura/internal/backend/opencode	0.005s
+
+$ go test -count=1 -v ./internal/backend/opencode -run '^TestINT007Unit$'
+=== RUN   TestINT007Unit
+    adapter_test.go:50: ExtractResultFromEvents failed on denied output: extract not implemented
+--- FAIL: TestINT007Unit (0.00s)
+FAIL
+FAIL	asura/internal/backend/opencode	0.005s
+
+[2. 外迴圈紅燈 (P2-T1)]
+$ go test -count=1 -v ./tests/integration -run '^TestINT001$'
+=== RUN   TestINT001
+    int_test.go:46: SubmitTask failed as expected: no default runner configured
+    int_test.go:50: expected task status completed, got task=&{... failed  no default runner configured ...}
+--- FAIL: TestINT001 (0.01s)
+FAIL
+FAIL	asura/tests/integration	0.018s
+
+$ go test -count=1 -v ./tests/integration -run '^TestINT007$'
+=== RUN   TestINT007
+    int_test.go:82: adapter.Run failed: adapter not implemented
+--- FAIL: TestINT007 (0.00s)
+FAIL
+FAIL	asura/tests/integration	0.007s
+
+[3. 最小實作後內外迴圈綠燈 (P2-T2, P2-T3)]
+$ go test -count=1 -v ./internal/backend/opencode -run '^TestINT001Unit$'
+=== RUN   TestINT001Unit
+--- PASS: TestINT001Unit (10.01s)
+PASS
+ok  	asura/internal/backend/opencode	10.015s
+
+$ go test -count=1 -v ./internal/backend/opencode -run '^TestINT007Unit$'
+=== RUN   TestINT007Unit
+--- PASS: TestINT007Unit (0.00s)
+PASS
+ok  	asura/internal/backend/opencode	0.004s
+
+$ go test -count=1 -v ./tests/integration -run '^TestINT001$'
+=== RUN   TestINT001
+--- PASS: TestINT001 (8.17s)
+PASS
+ok  	asura/tests/integration	8.179s
+
+$ go test -count=1 -v ./tests/integration -run '^TestINT007$'
+=== RUN   TestINT007
+--- PASS: TestINT007 (25.06s)
+PASS
+ok  	asura/tests/integration	25.062s
+
+[4. 全套 race 回歸測試 (P2-T3)]
+$ go test -count=1 -race ./...
+ok  	asura/cmd/asura	1.025s
+ok  	asura/internal/auth	1.026s
+ok  	asura/internal/backend/opencode	11.470s
+ok  	asura/internal/daemon	1.647s
+ok  	asura/internal/engine	1.547s
+ok  	asura/internal/storage	1.110s
+ok  	asura/tests/integration	52.692s

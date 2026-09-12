@@ -9,7 +9,7 @@
 | Phase | 工作包 | 目標 | 前置 | 執行狀態 |
 |---|---|---|---|---|
 | Phase 1 | B-00 | 固定版本與權限、事件、取消契約驗證 | 已核准規格 | ✅ 通過（契約與樣本齊備） |
-| Phase 2 | B-01 | 最小 OpenCode adapter | Phase 1 契約通過 | 📝 待實作 |
+| Phase 2 | B-01 | 最小 OpenCode adapter | Phase 1 契約通過 | ✅ 通過（Adapter 最小接線與測試全綠） |
 | Phase 3 | B-02 | 正式 Daemon、授權、容量與恢復 | Phase 2 | 📝 待實作 |
 | Phase 4 | B-03 | ask、接受識別碼、查詢及去重 | Phase 3 | 📝 待實作 |
 | Phase 5 | B-04 | 共同取消入口 | Phase 4 | 📝 待實作 |
@@ -40,9 +40,9 @@ bash scripts/issue-2/probe-opencode.sh cancellation
 
 ## Phase 2：B-01 後端 adapter
 
-- [ ] P2-T1：以 Phase 1 真實樣本建立事件、錯誤、空輸出與部分輸出測試；先取得對應外迴圈及單元紅燈，再接 runner。
-- [ ] P2-T2：最小化接線啟動參數、專案目錄、權限與結果轉換；自然語言不經 shell 解譯。保留錯誤、部分輸出及取消資訊，不以輸出非空判成功。
-- [ ] P2-T3：執行 adapter 整合與單元測試，保存最小實作及重構後綠燈。INT-001、005、006、007 在此僅完成後端責任，正式入口驗收仍待後續 Phase。
+- [x] P2-T1：以 Phase 1 真實樣本建立事件、錯誤、空輸出與部分輸出測試；先取得對應外迴圈及單元紅燈，再接 runner。
+- [x] P2-T2：最小化接線啟動參數、專案目錄、權限與結果轉換；自然語言不經 shell 解譯。保留錯誤、部分輸出及取消資訊，不以輸出非空判成功。
+- [x] P2-T3：執行 adapter 整合與單元測試，保存最小實作及重構後綠燈。INT-001、005、006、007 在此僅完成後端責任，正式入口驗收仍待後續 Phase。
 
 完成證據：固定真實後端可重複驗證成功、失敗、權限及取消契約；不以 mock 取代後端驗收。
 
@@ -134,3 +134,13 @@ go test -count=1 -race ./...
 3. 執行 `permissions` 探測（INT-007）：核准專案目錄內自動修改檔案成功（`target.txt` 成功追加文字）；以 `OPENCODE_PERMISSION='{"bash":"deny"}'` 成功阻擋危險工具調用，`critical.txt` 完好無損，未產生任何副作用；日誌保存於 `docs/issues/issue-2/evidence/phase-1/permissions_probe.log`。
 4. 執行 `cancellation` 探測（INT-005）：以獨立進程組（PGID）啟動長任務 A 並發送 SIGTERM，驗證進程樹完全回收退出，且背景不相關工作 B 保持存活不受影響；日誌保存於 `docs/issues/issue-2/evidence/phase-1/cancellation_probe.log`。
 5. 外部契約與權限邊界已確認，Phase 1 通過，放行 Phase 2（B-01 最小 OpenCode adapter 實作）。
+
+2026-09-12 Phase 2 Adapter 實作完成紀錄：
+1. 實作 `internal/backend/opencode/adapter.go`，調度隔離版本 OpenCode CLI（`1.18.23`），prompt 以直接參數傳入，不經由 shell 解譯；支援 `OPENCODE_PERMISSION` 與 `ConfigureProcessGroup` 取消管理。
+2. 實作事件解析 `ExtractResultFromEvents`，自 JSON 事件串流萃取 `text` 回答，並正確處理 `IsRateLimit`、結構化錯誤與空輸出。
+3. 取得完整雙迴圈紅綠證據（保存於 `docs/issues/issue-2/evidence/phase-2/test_results.log`）：
+   - 內迴圈紅燈：`TestINT001Unit`、`TestINT007Unit` 均於未實作處明確 FAIL。
+   - 外迴圈紅燈：`TestINT001`（`no default runner configured` FAIL）、`TestINT007`（FAIL）。
+   - 最小實作全綠：內迴圈 `TestINT001Unit`（PASS）、`TestINT007Unit`（PASS），外迴圈 `TestINT001`（PASS）、`TestINT007`（PASS）。
+   - 全套回歸：`go test -count=1 -race ./...` 全數 PASS（耗時 52s）。
+4. Phase 2 通過，放行 Phase 3（B-02 正式 Daemon、授權、容量與恢復）。
