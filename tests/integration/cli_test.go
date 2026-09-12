@@ -1076,6 +1076,146 @@ func TestCLI_LatestReview_H01_LockFailureAbort(t *testing.T) {
 	}
 }
 
+// I-01: 驗證取消握手失敗後，修復鎖檔再次重試 cancel 能夠成功完成握手並回收正在運行的程序，絕不產生殘留副作用
+func TestCLI_LatestReview_I01_CancelRetryRecoversProcess(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-i01-retry-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	allowedDir := filepath.Join(tmpDir, "project")
+	if err := os.MkdirAll(allowedDir, 0755); err != nil {
+		t.Fatalf("failed to create allowed dir: %v", err)
+	}
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get wd: %v", err)
+	}
+	projectRoot := filepath.Dir(filepath.Dir(wd))
+	cmdDir := filepath.Join(projectRoot, "cmd", "asura")
+
+	asuraBin := filepath.Join(tmpDir, "asura")
+	buildCmd := exec.Command("go", "build", "-race", "-o", asuraBin, cmdDir)
+	if buildOut, buildErr := buildCmd.CombinedOutput(); buildErr != nil {
+		t.Fatalf("failed to build asura binary: %v, output: %s", buildErr, string(buildOut))
+	}
+
+	taskID := "task-i01-retry"
+	h := sha256.Sum256([]byte(taskID))
+	safeName := fmt.Sprintf(".task-%s.lock", hex.EncodeToString(h[:16]))
+	lockPath := filepath.Join(filepath.Dir(dbPath), safeName)
+
+	startedMarker := filepath.Join(allowedDir, "started.marker")
+	sideEffectFile := filepath.Join(allowedDir, "still_executed.marker")
+
+	// 1. 啟動 asura run，先 touch started.marker，然後 sleep 3 秒後建立副作用檔案
+	runCmd := exec.Command(asuraBin,
+		"run",
+		"--db", dbPath,
+		"--id", taskID,
+		"--workspace", allowedDir,
+		"--allowed-roots", allowedDir,
+		fmt.Sprintf("touch %s; sleep 3; touch %s", startedMarker, sideEffectFile),
+	)
+	var runOut, runErr bytes.Buffer
+	runCmd.Stdout = &runOut
+	runCmd.Stderr = &runErr
+
+	if err := runCmd.Start(); err != nil {
+		t.Fatalf("failed to start runCmd: %v", err)
+	}
+
+	// 2. 等候任務在 store 中建立、狀態為 running，且已建立 started.marker
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open store: %v", err)
+	}
+	defer store.Close()
+
+	for i := 0; i < 50; i++ {
+		tObj, err := store.GetTask(context.Background(), taskID)
+		_, statErr := os.Stat(startedMarker)
+		if err == nil && tObj.Status == storage.StatusRunning && statErr == nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	// 3. 將鎖檔權限設為 0000 模擬開鎖失敗
+	if err := os.Chmod(lockPath, 0000); err != nil {
+		t.Fatalf("failed to chmod lock file to 0000: %v", err)
+	}
+
+	// 4. 第一次執行 cancel：預期失敗退出碼 1
+	cancelCmd1 := exec.Command(asuraBin, "cancel", "--db", dbPath, taskID)
+	var cancelOut1, cancelErr1 bytes.Buffer
+	cancelCmd1.Stdout = &cancelOut1
+	cancelCmd1.Stderr = &cancelErr1
+
+	code1 := 0
+	if err := cancelCmd1.Run(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			code1 = exitErr.ExitCode()
+		}
+	}
+	if code1 == 0 {
+		t.Fatalf("expected cancel 1 to fail due to permission denied, got exit code 0")
+	}
+	if !strings.Contains(cancelErr1.String(), "failed to open task lock") {
+		t.Fatalf("expected cancel 1 stderr to report failed to open task lock, got: %s", cancelErr1.String())
+	}
+
+	// 5. 恢復鎖檔權限為 0600
+	if err := os.Chmod(lockPath, 0600); err != nil {
+		t.Fatalf("failed to chmod lock file back to 0600: %v", err)
+	}
+
+	// 6. 第二次執行 cancel（重試取消）：必須成功握手、回收進程並返回 0
+	cancelCmd2 := exec.Command(asuraBin, "cancel", "--db", dbPath, taskID)
+	var cancelOut2, cancelErr2 bytes.Buffer
+	cancelCmd2.Stdout = &cancelOut2
+	cancelCmd2.Stderr = &cancelErr2
+
+	code2 := 0
+	if err := cancelCmd2.Run(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			code2 = exitErr.ExitCode()
+		} else {
+			t.Fatalf("cancel 2 unexpected error: %v", err)
+		}
+	}
+
+	if code2 != 0 {
+		t.Fatalf("expected cancel 2 to succeed after restoring lock permission, got code: %d, stderr: %s, stdout: %s",
+			code2, cancelErr2.String(), cancelOut2.String())
+	}
+	if !strings.Contains(cancelOut2.String(), "cancelled successfully") {
+		t.Errorf("expected cancel 2 stdout to contain 'cancelled successfully', got: %s", cancelOut2.String())
+	}
+
+	// 7. 等候 runCmd 結束
+	_ = runCmd.Wait()
+
+	// 8. 驗證進程已被回收，副作用標記絕不能出現
+	if _, statErr := os.Stat(sideEffectFile); statErr == nil {
+		t.Fatalf("side-effect marker appeared! Process was not killed during cancel retry (violates I-01)")
+	}
+
+	// 9. 驗證資料庫狀態為 cancelled
+	finalTask, err := store.GetTask(context.Background(), taskID)
+	if err != nil {
+		t.Fatalf("failed to query final task: %v", err)
+	}
+	if finalTask.Status != storage.StatusCancelled {
+		t.Errorf("expected task status to be cancelled, got: %s", finalTask.Status)
+	}
+}
+
+
 
 
 

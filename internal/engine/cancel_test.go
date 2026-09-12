@@ -125,4 +125,10 @@ func TestEngineCancel(t *testing.T) {
 	if err == nil {
 		t.Errorf("expected error cancelling non-existent task, got nil")
 	}
+
+	// 測試對已取消任務再次呼叫 CancelTask 具備冪等性且返回 nil (修復 I-01)
+	err = eng.CancelTask("task-A-cancel")
+	if err != nil {
+		t.Errorf("expected idempotent cancellation to return nil for cancelled task, got: %v", err)
+	}
 }

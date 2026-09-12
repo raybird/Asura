@@ -33,6 +33,11 @@ func (e *Engine) CancelTask(taskID string) error {
 		return fmt.Errorf("task not found: %w", err)
 	}
 
+	// 若任務已被標記為 cancelled，允許冪等取消以支援握手失敗後的重試與資源回收 (修復 I-01)
+	if task.Status == storage.StatusCancelled {
+		return nil
+	}
+
 	if task.Status != storage.StatusRunning && task.Status != storage.StatusPending {
 		return fmt.Errorf("%w: task status is %s", ErrTaskNotRunning, task.Status)
 	}
