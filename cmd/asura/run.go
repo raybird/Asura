@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"flag"
 	"fmt"
@@ -20,6 +21,13 @@ import (
 	"asura/internal/engine"
 	"asura/internal/storage"
 )
+
+// taskLockPath 根據 DB 路徑與 Task ID 產生跨行程平坦互斥鎖路徑，防止 Task ID 特殊字元導致路徑跳脫或目錄不存在 (修復 H-01)
+func taskLockPath(dbPath, taskID string) string {
+	h := sha256.Sum256([]byte(taskID))
+	safeName := fmt.Sprintf(".task-%s.lock", hex.EncodeToString(h[:16]))
+	return filepath.Join(filepath.Dir(dbPath), safeName)
+}
 
 // RunCLI 為 CLI 總進入點函式
 func RunCLI(args []string, stdout, stderr io.Writer) int {
@@ -140,12 +148,16 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 
 		var lockFile *os.File
 		if currentTaskID != "" {
-			lockPath := filepath.Join(filepath.Dir(*dbPath), fmt.Sprintf(".task-%s.lock", currentTaskID))
+			lockPath := taskLockPath(*dbPath, currentTaskID)
 			lf, lErr := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600)
-			if lErr == nil {
-				_ = syscall.Flock(int(lf.Fd()), syscall.LOCK_EX)
-				lockFile = lf
+			if lErr != nil {
+				return "", fmt.Errorf("acquire task lock open: %w", lErr)
 			}
+			if err := syscall.Flock(int(lf.Fd()), syscall.LOCK_EX); err != nil {
+				_ = lf.Close()
+				return "", fmt.Errorf("acquire task lock flock: %w", err)
+			}
+			lockFile = lf
 		}
 
 		// 在啟動排他鎖保護下檢查是否已被取消，徹底防禦啟動已取消之任務與外部副作用 (修復 F-02, G-01)

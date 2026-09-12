@@ -3,6 +3,8 @@ package integration
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
@@ -726,7 +728,9 @@ func TestCLI_LatestReview_G01_HandshakeCancelBeforeStart(t *testing.T) {
 	}
 
 	taskID := "task-g01-handshake"
-	lockPath := filepath.Join(filepath.Dir(dbPath), fmt.Sprintf(".task-%s.lock", taskID))
+	h := sha256.Sum256([]byte(taskID))
+	safeName := fmt.Sprintf(".task-%s.lock", hex.EncodeToString(h[:16]))
+	lockPath := filepath.Join(filepath.Dir(dbPath), safeName)
 	sideEffectFile := filepath.Join(allowedDir, "side_effect.marker")
 
 	// 1. 測試主程先持有該任務的排他鎖，模擬執行端被暫停在進入啟動區間前
@@ -826,5 +830,252 @@ func TestCLI_LatestReview_G01_HandshakeCancelBeforeStart(t *testing.T) {
 		t.Errorf("expected final PGID 0 (never launched), got: %d", finalTask.PGID)
 	}
 }
+
+// H-01: 驗證 Task ID 包含路徑跳脫/階層字元（如 batch/task-1）時，仍能使用平坦鎖檔完成排他握手與取消，且失敗時不得未持鎖執行
+func TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-h01-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	allowedDir := filepath.Join(tmpDir, "project")
+	if err := os.MkdirAll(allowedDir, 0755); err != nil {
+		t.Fatalf("failed to create allowed dir: %v", err)
+	}
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get wd: %v", err)
+	}
+	projectRoot := filepath.Dir(filepath.Dir(wd))
+	cmdDir := filepath.Join(projectRoot, "cmd", "asura")
+
+	asuraBin := filepath.Join(tmpDir, "asura")
+	buildCmd := exec.Command("go", "build", "-race", "-o", asuraBin, cmdDir)
+	if buildOut, buildErr := buildCmd.CombinedOutput(); buildErr != nil {
+		t.Fatalf("failed to build asura binary: %v, output: %s", buildErr, string(buildOut))
+	}
+
+	taskID := "batch/task-1"
+	h := sha256.Sum256([]byte(taskID))
+	safeName := fmt.Sprintf(".task-%s.lock", hex.EncodeToString(h[:16]))
+	lockPath := filepath.Join(filepath.Dir(dbPath), safeName)
+	sideEffectFile := filepath.Join(allowedDir, "side_effect.marker")
+
+	// 1. 測試主程先持有平坦鎖檔排他鎖
+	lf, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		t.Fatalf("failed to create lock file: %v", err)
+	}
+	if err := syscall.Flock(int(lf.Fd()), syscall.LOCK_EX); err != nil {
+		t.Fatalf("failed to acquire initial lock: %v", err)
+	}
+
+	// 2. 啟動含有路徑字元 ID 的 asura run
+	runCmd := exec.Command(asuraBin,
+		"run",
+		"--db", dbPath,
+		"--id", taskID,
+		"--workspace", allowedDir,
+		"--allowed-roots", allowedDir,
+		fmt.Sprintf("touch %s; sleep 5", sideEffectFile),
+	)
+	var runOut, runErr bytes.Buffer
+	runCmd.Stdout = &runOut
+	runCmd.Stderr = &runErr
+	if err := runCmd.Start(); err != nil {
+		_ = syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
+		_ = lf.Close()
+		t.Fatalf("failed to start runCmd: %v", err)
+	}
+
+	// 3. 等候任務在 SQLite 中建立並轉為 running
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		_ = syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
+		_ = lf.Close()
+		t.Fatalf("failed to open store: %v", err)
+	}
+	defer store.Close()
+
+	for i := 0; i < 50; i++ {
+		tObj, err := store.GetTask(context.Background(), taskID)
+		if err == nil && tObj.Status == storage.StatusRunning {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// 在測試主程仍持有鎖期間，檢查 run 是否被阻塞：副作用標記絕不能產生
+	// 若存在 H-01 漏洞（鎖檔路徑錯誤且忽略失敗），runCmd 會在此時直接啟動子進程並產生副作用！
+	time.Sleep(100 * time.Millisecond)
+	if _, statErr := os.Stat(sideEffectFile); statErr == nil {
+		_ = syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
+		_ = lf.Close()
+		_ = runCmd.Process.Kill()
+		t.Fatalf("side-effect marker appeared while lock held! H-01 lock bypass detected (cmd.Start was not guarded by lock)")
+	}
+
+	// 4. 並發啟動 asura cancel 子進程
+	cancelCmd := exec.Command(asuraBin, "cancel", "--db", dbPath, taskID)
+	cancelDone := make(chan error, 1)
+	var cancelOut, cancelErr bytes.Buffer
+	cancelCmd.Stdout = &cancelOut
+	cancelCmd.Stderr = &cancelErr
+
+	if err := cancelCmd.Start(); err != nil {
+		_ = syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
+		_ = lf.Close()
+		t.Fatalf("failed to start cancelCmd: %v", err)
+	}
+
+	go func() {
+		cancelDone <- cancelCmd.Wait()
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+
+	// 5. 釋放排他鎖，放行握手
+	_ = syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
+	_ = lf.Close()
+
+	cErr := <-cancelDone
+	if cErr != nil {
+		t.Fatalf("cancel command failed: %v, stderr: %s, stdout: %s", cErr, cancelErr.String(), cancelOut.String())
+	}
+	if !strings.Contains(cancelOut.String(), "cancelled successfully") {
+		t.Errorf("expected cancel success output, got: %s", cancelOut.String())
+	}
+
+	_ = runCmd.Wait()
+
+	if _, statErr := os.Stat(sideEffectFile); statErr == nil {
+		t.Fatalf("side-effect file exists! cmd.Start() was executed despite external cancel")
+	}
+
+	finalTask, err := store.GetTask(context.Background(), taskID)
+	if err != nil {
+		t.Fatalf("failed to query final task: %v", err)
+	}
+	if finalTask.Status != storage.StatusCancelled {
+		t.Errorf("expected final status cancelled, got: %s", finalTask.Status)
+	}
+	if finalTask.PGID != 0 {
+		t.Errorf("expected final PGID 0 (never launched), got: %d", finalTask.PGID)
+	}
+}
+
+// H-01: 驗證取得啟動鎖失敗時，執行端立即終止絕不啟動程序，取消端亦不得宣告握手完成
+func TestCLI_LatestReview_H01_LockFailureAbort(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-h01-abort-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	allowedDir := filepath.Join(tmpDir, "project")
+	if err := os.MkdirAll(allowedDir, 0755); err != nil {
+		t.Fatalf("failed to create allowed dir: %v", err)
+	}
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get wd: %v", err)
+	}
+	projectRoot := filepath.Dir(filepath.Dir(wd))
+	cmdDir := filepath.Join(projectRoot, "cmd", "asura")
+
+	asuraBin := filepath.Join(tmpDir, "asura")
+	buildCmd := exec.Command("go", "build", "-race", "-o", asuraBin, cmdDir)
+	if buildOut, buildErr := buildCmd.CombinedOutput(); buildErr != nil {
+		t.Fatalf("failed to build asura binary: %v, output: %s", buildErr, string(buildOut))
+	}
+
+	taskID := "task-lock-fail"
+	h := sha256.Sum256([]byte(taskID))
+	safeName := fmt.Sprintf(".task-%s.lock", hex.EncodeToString(h[:16]))
+	lockPath := filepath.Join(filepath.Dir(dbPath), safeName)
+	sideEffectFile := filepath.Join(allowedDir, "side_effect.marker")
+
+	// 預先建立鎖檔並設為不可讀寫 (0000)，造成 os.OpenFile 權限拒絕
+	if err := os.WriteFile(lockPath, []byte(""), 0000); err != nil {
+		t.Fatalf("failed to create dummy lock file: %v", err)
+	}
+	_ = os.Chmod(lockPath, 0000)
+
+	// 1. 執行端：無法取得鎖時必須返回非 0，且不得執行命令（無副作用）
+	runCmd := exec.Command(asuraBin,
+		"run",
+		"--db", dbPath,
+		"--id", taskID,
+		"--workspace", allowedDir,
+		"--allowed-roots", allowedDir,
+		fmt.Sprintf("touch %s", sideEffectFile),
+	)
+	var runOut, runErr bytes.Buffer
+	runCmd.Stdout = &runOut
+	runCmd.Stderr = &runErr
+
+	runCode := 0
+	if err := runCmd.Run(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			runCode = exitErr.ExitCode()
+		} else {
+			t.Fatalf("runCmd unexpected error: %v", err)
+		}
+	}
+
+	if runCode == 0 {
+		t.Errorf("expected runCmd to fail when lock cannot be opened, got 0")
+	}
+	if !strings.Contains(runErr.String(), "acquire task lock") {
+		t.Errorf("expected stderr to report lock error, got: %s", runErr.String())
+	}
+	if _, statErr := os.Stat(sideEffectFile); statErr == nil {
+		t.Fatalf("side effect file was created! Task executed despite lock open failure")
+	}
+
+	// 2. 取消端：在 DB 內任務為 running 的情況下，鎖檔無法開啟時不得宣稱成功
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open store: %v", err)
+	}
+	defer store.Close()
+
+	if err := store.UpdateTaskStatus(context.Background(), taskID, storage.StatusRunning, "", ""); err != nil {
+		t.Fatalf("failed to reset task status to running: %v", err)
+	}
+
+	cancelCmd := exec.Command(asuraBin, "cancel", "--db", dbPath, taskID)
+	var cancelOut, cancelErr bytes.Buffer
+	cancelCmd.Stdout = &cancelOut
+	cancelCmd.Stderr = &cancelErr
+
+	cancelCode := 0
+	if err := cancelCmd.Run(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			cancelCode = exitErr.ExitCode()
+		} else {
+			t.Fatalf("cancelCmd unexpected error: %v", err)
+		}
+	}
+
+	if cancelCode == 0 {
+		t.Errorf("expected cancelCmd to fail when lock cannot be opened, got 0")
+	}
+	if !strings.Contains(cancelErr.String(), "failed to open task lock") {
+		t.Errorf("expected stderr to mention 'failed to open task lock', got: %s", cancelErr.String())
+	}
+	if strings.Contains(cancelOut.String(), "cancelled successfully") {
+		t.Errorf("cancelCmd should not claim success when lock handshake failed")
+	}
+}
+
+
 
 
