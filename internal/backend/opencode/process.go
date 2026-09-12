@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -122,6 +123,136 @@ func VerifyTaskProcess(pid int, expectedStartTime string, taskID string) (bool, 
 	// 若無 StartTime 元資料，回退檢查環境變數 ASURA_TASK_ID
 	if taskID != "" && IsTaskProcessGroup(pid, taskID) {
 		return true, nil
+	}
+
+	return false, nil
+}
+
+// TaskProcessMetadata 封裝任務子進程組在啟動時記錄之身分驗證元資料 (修復 K-01, L-01)
+type TaskProcessMetadata struct {
+	PGID            int
+	StartTime       string
+	RunnerPID       int
+	RunnerStartTime string
+}
+
+// hasProcessGroupMemberWithTaskID 掃描 /proc 檢查指定進程組內之存活孤兒進程是否持有 ASURA_TASK_ID 標記 (修復 L-01)
+func hasProcessGroupMemberWithTaskID(pgid int, taskID string) (bool, error) {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return false, err
+	}
+	expectedEnv := []byte(fmt.Sprintf("ASURA_TASK_ID=%s", taskID))
+	var lastErr error
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		pid, err := strconv.Atoi(entry.Name())
+		if err != nil {
+			continue
+		}
+
+		data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+		if err != nil {
+			continue
+		}
+		lastIdx := bytes.LastIndexByte(data, ')')
+		if lastIdx == -1 || lastIdx+2 >= len(data) {
+			continue
+		}
+		fields := strings.Fields(string(data[lastIdx+2:]))
+		// fields[0]=state, fields[1]=ppid, fields[2]=pgrp
+		if len(fields) <= 2 {
+			continue
+		}
+		pgrp, err := strconv.Atoi(fields[2])
+		if err != nil || pgrp != pgid {
+			continue
+		}
+
+		// 找到該進程組成員，檢查其 environ
+		envData, envErr := os.ReadFile(fmt.Sprintf("/proc/%d/environ", pid))
+		if envErr != nil {
+			if !errors.Is(envErr, os.ErrNotExist) {
+				lastErr = envErr
+			}
+			continue
+		}
+		for _, e := range bytes.Split(envData, []byte{0}) {
+			if bytes.Equal(e, expectedEnv) {
+				return true, nil
+			}
+		}
+	}
+
+	if lastErr != nil {
+		return false, lastErr
+	}
+	return false, nil
+}
+
+// VerifyTaskProcessGroup 嚴格進行三態進程組身分檢驗 (修復 J-01, K-01, L-01)：
+// - (true, nil): 確認進程組存在，且進程組 Leader 或存活之孤兒子進程／監護 Runner 身分吻合，確屬該任務。
+// - (false, nil): 確認進程組已無任何成員存活，或存活之進程組身分明確不匹配（PID/PGID 重用）。
+// - (false, err): 遭遇權限不足或其他系統錯誤，無法確認身分（防禦盲目回收與假綠燈）。
+func VerifyTaskProcessGroup(pgid int, meta TaskProcessMetadata, taskID string) (bool, error) {
+	if pgid <= 0 {
+		return false, nil
+	}
+
+	// 核心不變式：若進程組已無任何成員存活（包含主進程與所有衍生孤兒子進程），核心必返回 ESRCH。
+	// 充分且必要確認整組已死，方能宣告已回收 (修復 L-01)。
+	if !IsProcessGroupAlive(pgid) {
+		return false, nil
+	}
+
+	// 進程組內至少還有 1 個存活成員。
+	// 第一步：檢查 Leader 進程（PID == PGID）
+	st, err := GetProcessStartTime(pgid)
+	if err == nil {
+		// Leader 存活！比對 Leader StartTime
+		if meta.StartTime != "" {
+			if st == meta.StartTime {
+				return true, nil
+			}
+			// Leader 存活但 StartTime 不符：證明 PID 已被系統重用分配給不相干的新進程（防禦 J-01）
+			return false, nil
+		}
+		// 若無 StartTime，比對環境變數
+		if taskID != "" && IsTaskProcessGroup(pgid, taskID) {
+			return true, nil
+		}
+		return false, nil
+	}
+
+	// 若讀取 Leader 發生錯誤，且並非「Leader 已不存在 (os.ErrNotExist)」：
+	// 例如權限不足（EACCES），此時無法確認身分，回傳錯誤（防禦 K-01）
+	if !errors.Is(err, os.ErrNotExist) {
+		return false, err
+	}
+
+	// 第二步：Leader 已死亡退出，但進程組依然存活（L-01 孤兒進程組場景）。
+	// 需要確認該存活的進程組是否確實源自該任務：
+	// A. 驗證執行端 Runner：若當初啟動該子進程的 Runner PID 仍存活且 Runner StartTime 吻合，
+	//    證明此進程組係由當前維持運行的 Runner 所監督衍生，確屬該任務。
+	if meta.RunnerPID > 0 && meta.RunnerStartTime != "" {
+		runnerST, rErr := GetProcessStartTime(meta.RunnerPID)
+		if rErr == nil && runnerST == meta.RunnerStartTime {
+			return true, nil
+		}
+	}
+
+	// B. 若 Runner 已結束或無 Runner 憑證，掃描進程檢查組內孤兒子進程是否持有 ASURA_TASK_ID 標記
+	if taskID != "" {
+		matched, sErr := hasProcessGroupMemberWithTaskID(pgid, taskID)
+		if sErr != nil {
+			return false, sErr
+		}
+		if matched {
+			return true, nil
+		}
 	}
 
 	return false, nil

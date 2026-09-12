@@ -2,6 +2,8 @@ package opencode
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"os/exec"
 	"syscall"
 	"testing"
@@ -106,6 +108,7 @@ func TestIsTaskProcessGroup(t *testing.T) {
 		}
 	}()
 
+	time.Sleep(20 * time.Millisecond)
 	pgid, err := syscall.Getpgid(cmd.Process.Pid)
 	if err != nil {
 		t.Fatalf("failed to get pgid: %v", err)
@@ -184,6 +187,99 @@ func TestVerifyTaskProcess_StartTime(t *testing.T) {
 	}
 	if matched {
 		t.Errorf("expected VerifyTaskProcess to be false for dead process")
+	}
+}
+
+func TestVerifyTaskProcessGroup_OrphanGroup(t *testing.T) {
+	// 建立包含背景孤兒進程的命令：Leader 率先 exit 0，背景 sleep 繼續執行持有同一 PGID
+	taskID := "task-orphan-unit-test"
+	cmd := exec.Command("sh", "-c", "(sleep 5) & exit 0")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Env = append(cmd.Environ(), "ASURA_TASK_ID="+taskID)
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to start cmd: %v", err)
+	}
+	leaderPID := cmd.Process.Pid
+	pgid, err := syscall.Getpgid(leaderPID)
+	if err != nil {
+		t.Fatalf("failed to get pgid: %v", err)
+	}
+
+	leaderST, _ := GetProcessStartTime(leaderPID)
+	runnerPID := os.Getpid()
+	runnerST, _ := GetProcessStartTime(runnerPID)
+
+	meta := TaskProcessMetadata{
+		PGID:            pgid,
+		StartTime:       leaderST,
+		RunnerPID:       runnerPID,
+		RunnerStartTime: runnerST,
+	}
+
+	// 等候 Leader 主進程 exit 0
+	_ = cmd.Wait()
+
+	// 確保 Leader 進程已不存在
+	for i := 0; i < 50; i++ {
+		if _, err := os.Stat(fmt.Sprintf("/proc/%d", leaderPID)); os.IsNotExist(err) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// 1. 進程組依然存活（有孤兒 sleep 5）
+	if !IsProcessGroupAlive(pgid) {
+		t.Fatalf("expected orphan process group to be alive")
+	}
+
+	// 2. 身分校驗：Leader 已死，但有 Runner 監護憑證，必須識別為真 (修復 L-01)
+	matched, err := VerifyTaskProcessGroup(pgid, meta, taskID)
+	if err != nil {
+		t.Fatalf("VerifyTaskProcessGroup unexpected error: %v", err)
+	}
+	if !matched {
+		t.Errorf("expected VerifyTaskProcessGroup to match orphan group by runner metadata")
+	}
+
+	// 3. 身分校驗：即使無 Runner 憑證，藉由組內孤兒成員之 ASURA_TASK_ID 也必須識別為真
+	metaWithoutRunner := TaskProcessMetadata{
+		PGID:      pgid,
+		StartTime: leaderST,
+	}
+	matchedNoRunner, err := VerifyTaskProcessGroup(pgid, metaWithoutRunner, taskID)
+	if err != nil {
+		t.Fatalf("VerifyTaskProcessGroup unexpected error: %v", err)
+	}
+	if !matchedNoRunner {
+		t.Errorf("expected VerifyTaskProcessGroup to match orphan group by child environ")
+	}
+
+	// 4. 身分校驗：若 TaskID 與 Runner 憑證皆不匹配，必須識別為偽 (防禦 PID/PGID 重用)
+	matchedFake, err := VerifyTaskProcessGroup(pgid, TaskProcessMetadata{PGID: pgid, StartTime: leaderST, RunnerPID: 9999999}, "wrong-task-id")
+	if err != nil {
+		t.Fatalf("VerifyTaskProcessGroup unexpected error on fake meta: %v", err)
+	}
+	if matchedFake {
+		t.Errorf("expected VerifyTaskProcessGroup to be false for wrong metadata")
+	}
+
+	// 5. 終結整組孤兒進程
+	if err := KillProcessGroup(pgid); err != nil {
+		t.Fatalf("KillProcessGroup failed: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	// 6. 進程組完全死後，IsProcessGroupAlive 應為 false，VerifyTaskProcessGroup 應返回 (false, nil)
+	if IsProcessGroupAlive(pgid) {
+		t.Errorf("expected process group to be dead after KillProcessGroup")
+	}
+	matchedDead, err := VerifyTaskProcessGroup(pgid, meta, taskID)
+	if err != nil {
+		t.Fatalf("VerifyTaskProcessGroup unexpected error on dead group: %v", err)
+	}
+	if matchedDead {
+		t.Errorf("expected VerifyTaskProcessGroup to be false for dead group")
 	}
 }
 

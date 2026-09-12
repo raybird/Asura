@@ -184,16 +184,20 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 			return buf.String(), err
 		}
 
+		var pgid int
 		if cmd.Process != nil {
-			pgid, err := syscall.Getpgid(cmd.Process.Pid)
+			p, err := syscall.Getpgid(cmd.Process.Pid)
 			if err == nil {
+				pgid = p
 				if currentTaskID != "" {
 					_ = store.UpdateTaskPGID(ctx, currentTaskID, pgid)
-					// 記錄不可變核心 StartTime 至鎖檔中供取消端嚴格核驗身分 (修復 K-01)
+					// 記錄不可變核心 StartTime 與執行端 Runner 憑證至鎖檔中供取消端嚴格核驗身分 (修復 K-01, L-01)
+					runnerPID := os.Getpid()
+					runnerST, _ := opencode.GetProcessStartTime(runnerPID)
 					if st, stErr := opencode.GetProcessStartTime(cmd.Process.Pid); stErr == nil && lockFile != nil {
 						_ = lockFile.Truncate(0)
 						_, _ = lockFile.Seek(0, 0)
-						_, _ = lockFile.WriteString(fmt.Sprintf("%d:%s", pgid, st))
+						_, _ = lockFile.WriteString(fmt.Sprintf("%d:%s:%d:%s", pgid, st, runnerPID, runnerST))
 					}
 					// 檢查此任務是否在啟動前或啟動當下已被外部標記取消（修復 R-03）
 					t, err := store.GetTask(context.Background(), currentTaskID)
@@ -202,7 +206,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 							_ = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
 							_ = lockFile.Close()
 						}
-						_ = syscall.Kill(-pgid, syscall.SIGKILL)
+						_ = opencode.KillProcessGroup(pgid)
 						_ = cmd.Wait()
 						_ = store.UpdateTaskPGID(context.Background(), currentTaskID, 0)
 						return buf.String(), context.Canceled
@@ -219,9 +223,17 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 
 		err := cmd.Wait()
 		if currentTaskID != "" {
-			_ = store.UpdateTaskPGID(context.Background(), currentTaskID, 0)
-			lockPath := taskLockPath(*dbPath, currentTaskID)
-			_ = os.WriteFile(lockPath, []byte(""), 0600)
+			// 若任務已被標記取消，確保殘留之背景孤兒進程組一併被擊殺 (修復 L-01)
+			t, _ := store.GetTask(context.Background(), currentTaskID)
+			if t != nil && t.Status == storage.StatusCancelled && pgid > 0 {
+				_ = opencode.KillProcessGroup(pgid)
+			}
+			// 僅在進程組已無存活成員時才清空 PGID 與鎖檔
+			if !opencode.IsProcessGroupAlive(pgid) {
+				_ = store.UpdateTaskPGID(context.Background(), currentTaskID, 0)
+				lockPath := taskLockPath(*dbPath, currentTaskID)
+				_ = os.WriteFile(lockPath, []byte(""), 0600)
+			}
 		}
 		return buf.String(), err
 	}

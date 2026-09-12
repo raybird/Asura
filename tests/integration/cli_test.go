@@ -1419,6 +1419,112 @@ func TestCLI_LatestReview_K01_CancelRecoversCleanEnvProcess(t *testing.T) {
 	}
 }
 
+// L-01: 驗證進程組 Leader 率先退出、但背景孤兒子進程仍在執行時，取消端絕不因 Leader 不存在而誤判整組已回收，並能完整回收整個進程組
+func TestCLI_LatestReview_L01_CancelRecoversOrphanProcessGroup(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-l01-orphan-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	allowedDir := filepath.Join(tmpDir, "project")
+	if err := os.MkdirAll(allowedDir, 0755); err != nil {
+		t.Fatalf("failed to create allowed dir: %v", err)
+	}
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get wd: %v", err)
+	}
+	projectRoot := filepath.Dir(filepath.Dir(wd))
+	cmdDir := filepath.Join(projectRoot, "cmd", "asura")
+
+	asuraBin := filepath.Join(tmpDir, "asura")
+	buildCmd := exec.Command("go", "build", "-race", "-o", asuraBin, cmdDir)
+	if buildOut, buildErr := buildCmd.CombinedOutput(); buildErr != nil {
+		t.Fatalf("failed to build asura binary: %v, output: %s", buildErr, string(buildOut))
+	}
+
+	taskID := "task-orphan-group"
+	childStartedMarker := filepath.Join(allowedDir, "child_started.marker")
+	childSideEffectFile := filepath.Join(allowedDir, "child_still_executed.marker")
+
+	// 1. 啟動命令：在背景派生子進程，Leader 程序先行 exit 0 退出，留下背景子進程持有同一 PGID
+	runCmd := exec.Command(asuraBin,
+		"run",
+		"--db", dbPath,
+		"--id", taskID,
+		"--workspace", allowedDir,
+		"--allowed-roots", allowedDir,
+		fmt.Sprintf("(touch %s; sleep 3; touch %s) & echo LEADER_EXIT; exit 0", childStartedMarker, childSideEffectFile),
+	)
+	var runOut, runErr bytes.Buffer
+	runCmd.Stdout = &runOut
+	runCmd.Stderr = &runErr
+
+	if err := runCmd.Start(); err != nil {
+		t.Fatalf("failed to start runCmd: %v", err)
+	}
+
+	// 2. 等候任務進入 running、子進程 touch child_started.marker，且主程序已輸出 LEADER_EXIT
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open store: %v", err)
+	}
+	defer store.Close()
+
+	var targetPGID int
+	for i := 0; i < 50; i++ {
+		tObj, err := store.GetTask(context.Background(), taskID)
+		_, statErr := os.Stat(childStartedMarker)
+		if err == nil && tObj.Status == storage.StatusRunning && statErr == nil && tObj.PGID > 0 {
+			targetPGID = tObj.PGID
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if targetPGID == 0 {
+		t.Fatalf("target task PGID was not registered")
+	}
+
+	// 短暫等待確保 Leader 進程 exit 0 退出（/proc/<targetPGID>/stat 消失），但進程組仍存活
+	time.Sleep(100 * time.Millisecond)
+
+	// 3. 執行 asura cancel
+	cancelCmd := exec.Command(asuraBin, "cancel", "--db", dbPath, taskID)
+	var cancelOut, cancelErr bytes.Buffer
+	cancelCmd.Stdout = &cancelOut
+	cancelCmd.Stderr = &cancelErr
+
+	if err := cancelCmd.Run(); err != nil {
+		t.Fatalf("cancel command failed: %v, stderr: %s, stdout: %s", err, cancelErr.String(), cancelOut.String())
+	}
+
+	// 4. 等候 runCmd 結束
+	_ = runCmd.Wait()
+
+	// 5. 核心斷言：背景孤兒子進程必須被 SIGKILL 回收，副作用檔案絕不能產生！
+	// 若存在 L-01 漏洞（因 Leader 不存在而誤判整組已結束），子程序會繼續執行並建立 childSideEffectFile
+	if _, statErr := os.Stat(childSideEffectFile); statErr == nil {
+		t.Fatalf("child side-effect marker appeared! Orphan process group was not killed (violates L-01)")
+	}
+
+	// 6. 驗證任務最終狀態為 cancelled，且 PGID 已被清零
+	finalTask, err := store.GetTask(context.Background(), taskID)
+	if err != nil {
+		t.Fatalf("failed to query final task: %v", err)
+	}
+	if finalTask.Status != storage.StatusCancelled {
+		t.Errorf("expected final status cancelled, got: %s", finalTask.Status)
+	}
+	if finalTask.PGID != 0 {
+		t.Errorf("expected final PGID 0 (cleared), got: %d", finalTask.PGID)
+	}
+}
+
+
 
 
 

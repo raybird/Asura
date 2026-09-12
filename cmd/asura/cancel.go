@@ -17,37 +17,43 @@ import (
 	"asura/internal/storage"
 )
 
-// readTaskLockMetadata 自鎖檔讀取執行端登記的不可變核心身分資訊 (pgid, startTime)
-func readTaskLockMetadata(lockPath string) (int, string) {
+// readTaskLockMetadata 自鎖檔讀取執行端登記的不可變核心身分資訊
+func readTaskLockMetadata(lockPath string) opencode.TaskProcessMetadata {
 	data, err := os.ReadFile(lockPath)
 	if err != nil {
-		return 0, ""
+		return opencode.TaskProcessMetadata{}
 	}
 	content := strings.TrimSpace(string(data))
 	if content == "" {
-		return 0, ""
+		return opencode.TaskProcessMetadata{}
 	}
-	parts := strings.SplitN(content, ":", 2)
-	if len(parts) != 2 {
-		return 0, ""
+	parts := strings.Split(content, ":")
+	meta := opencode.TaskProcessMetadata{}
+	if len(parts) >= 1 {
+		meta.PGID, _ = strconv.Atoi(parts[0])
 	}
-	p, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return 0, ""
+	if len(parts) >= 2 {
+		meta.StartTime = parts[1]
 	}
-	return p, parts[1]
+	if len(parts) >= 3 {
+		meta.RunnerPID, _ = strconv.Atoi(parts[2])
+	}
+	if len(parts) >= 4 {
+		meta.RunnerStartTime = parts[3]
+	}
+	return meta
 }
 
-// safeKillTaskProcessGroup 進行三態安全回收 (修復 J-01, K-01):
+// safeKillTaskProcessGroup 進行三態安全回收 (修復 J-01, K-01, L-01):
 // - 確認屬於此任務：發送 SIGKILL，等待確認進程組終結，確認後清零 PGID，回傳 nil
 // - 確認不屬於此任務或已結束：不發信號，清零 PGID，回傳 nil (無副作用的成功)
 // - 無法確認：回傳錯誤，絕不清零 PGID，絕不宣告成功
-func safeKillTaskProcessGroup(store *storage.SQLiteStore, taskID string, targetPGID int, expectedStartTime string) error {
+func safeKillTaskProcessGroup(store *storage.SQLiteStore, taskID string, targetPGID int, meta opencode.TaskProcessMetadata) error {
 	if targetPGID <= 0 {
 		return nil
 	}
 
-	matched, err := opencode.VerifyTaskProcess(targetPGID, expectedStartTime, taskID)
+	matched, err := opencode.VerifyTaskProcessGroup(targetPGID, meta, taskID)
 	if err != nil {
 		// 無法確認身分，嚴禁清空 PGID 或視為已回收 (修復 K-01)
 		return fmt.Errorf("unable to verify process identity: %w", err)
@@ -64,10 +70,14 @@ func safeKillTaskProcessGroup(store *storage.SQLiteStore, taskID string, targetP
 		}
 		if opencode.IsProcessGroupAlive(targetPGID) {
 			_ = opencode.KillProcessGroup(targetPGID)
+			time.Sleep(20 * time.Millisecond)
+		}
+		if opencode.IsProcessGroupAlive(targetPGID) {
+			return fmt.Errorf("process group %d still alive after kill", targetPGID)
 		}
 	}
 
-	// 確認原進程已被回收，或原進程已死／已被系統重用：清空 PGID 標記回收完成
+	// 確認原進程組已被回收，或進程組已死／已被系統重用：清空 PGID 標記回收完成
 	_ = store.UpdateTaskPGID(context.Background(), taskID, 0)
 	return nil
 }
@@ -116,18 +126,18 @@ func handleCancel(args []string, stdout, stderr io.Writer) int {
 	lf, lErr := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600)
 	if lErr != nil {
 		// 開鎖失敗時嘗試盡力回收已登記之 PGID
-		_, metaStartTime := readTaskLockMetadata(lockPath)
+		meta := readTaskLockMetadata(lockPath)
 		if t, err := store.GetTask(context.Background(), taskID); err == nil && t.PGID > 0 {
-			_ = safeKillTaskProcessGroup(store, taskID, t.PGID, metaStartTime)
+			_ = safeKillTaskProcessGroup(store, taskID, t.PGID, meta)
 		}
 		fmt.Fprintf(stderr, "error: failed to open task lock: %v\n", lErr)
 		return 1
 	}
 	if err := syscall.Flock(int(lf.Fd()), syscall.LOCK_EX); err != nil {
 		_ = lf.Close()
-		_, metaStartTime := readTaskLockMetadata(lockPath)
+		meta := readTaskLockMetadata(lockPath)
 		if t, err := store.GetTask(context.Background(), taskID); err == nil && t.PGID > 0 {
-			_ = safeKillTaskProcessGroup(store, taskID, t.PGID, metaStartTime)
+			_ = safeKillTaskProcessGroup(store, taskID, t.PGID, meta)
 		}
 		fmt.Fprintf(stderr, "error: failed to acquire task lock: %v\n", err)
 		return 1
@@ -135,16 +145,19 @@ func handleCancel(args []string, stdout, stderr io.Writer) int {
 	_ = syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
 	_ = lf.Close()
 
-	// 握手完成：從鎖檔讀取不可變 StartTime 元資料，並重查最新 PGID
-	_, metaStartTime := readTaskLockMetadata(lockPath)
+	// 握手完成：從鎖檔讀取不可變身分元資料，並重查最新 PGID
+	meta := readTaskLockMetadata(lockPath)
 	targetPGID := task.PGID
 	if t, err := store.GetTask(context.Background(), taskID); err == nil && t.PGID > 0 {
 		targetPGID = t.PGID
 	}
+	if targetPGID <= 0 && meta.PGID > 0 {
+		targetPGID = meta.PGID
+	}
 
-	// 實施三態進程身分檢驗與安全回收 (修復 J-01, K-01)
+	// 實施三態進程組身分檢驗與安全回收 (修復 J-01, K-01, L-01)
 	if targetPGID > 0 {
-		if killErr := safeKillTaskProcessGroup(store, taskID, targetPGID, metaStartTime); killErr != nil {
+		if killErr := safeKillTaskProcessGroup(store, taskID, targetPGID, meta); killErr != nil {
 			fmt.Fprintf(stderr, "error: failed to recycle process: %v\n", killErr)
 			return 1
 		}
