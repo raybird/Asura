@@ -255,7 +255,10 @@ func VerifyTaskProcessGroup(pgid int, meta TaskProcessMetadata, taskID string) (
 		}
 	}
 
-	return false, nil
+	// C. Leader 已死、Runner 已不存在或不符，且存活孤兒成員未持有任務身分標記（例如遭 exec env -i 清除）：
+	// 進程組雖存活但身分無法核驗。依 M-01 規範，絕不能假定不相干或視為已回收，必須保留未知狀態回傳錯誤，
+	// 嚴禁清空 PGID 或宣稱取消成功，亦不得盲目強殺未確認身分之進程組。
+	return false, fmt.Errorf("process group %d is alive with orphan members, but identity cannot be verified (leader exited, runner unavailable, no task identity in orphans)", pgid)
 }
 
 // StartProcess 在獨立進程組中啟動指定可執行檔，並在 ctx 取消時強殺整組 PGID

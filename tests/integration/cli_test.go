@@ -1524,6 +1524,125 @@ func TestCLI_LatestReview_L01_CancelRecoversOrphanProcessGroup(t *testing.T) {
 	}
 }
 
+// M-01: 驗證當子命令清除環境變數、Leader 率先退出且 Runner 崩潰中斷時，取消端無法確認孤兒進程組身分，必須失敗報錯、保留 PGID 追蹤且拒絕假成功
+func TestCLI_LatestReview_M01_OrphanUnknownIdentityFailsSafely(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-m01-orphan-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	allowedDir := filepath.Join(tmpDir, "project")
+	if err := os.MkdirAll(allowedDir, 0755); err != nil {
+		t.Fatalf("failed to create allowed dir: %v", err)
+	}
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get wd: %v", err)
+	}
+	projectRoot := filepath.Dir(filepath.Dir(wd))
+	cmdDir := filepath.Join(projectRoot, "cmd", "asura")
+
+	asuraBin := filepath.Join(tmpDir, "asura")
+	buildCmd := exec.Command("go", "build", "-race", "-o", asuraBin, cmdDir)
+	if buildOut, buildErr := buildCmd.CombinedOutput(); buildErr != nil {
+		t.Fatalf("failed to build asura binary: %v, output: %s", buildErr, string(buildOut))
+	}
+
+	taskID := "task-m01-unknown-orphan"
+
+	// 1. 啟動命令：以 exec env -i 清除環境變數，Leader 衍生 sleep 3 孤兒子進程後 exit 0
+	runCmd := exec.Command(asuraBin,
+		"run",
+		"--db", dbPath,
+		"--id", taskID,
+		"--workspace", allowedDir,
+		"--allowed-roots", allowedDir,
+		"exec env -i PATH=/usr/bin:/bin sh -c \"(sleep 4) & echo LEADER_EXIT; exit 0\"",
+	)
+	var runOut, runErr bytes.Buffer
+	runCmd.Stdout = &runOut
+	runCmd.Stderr = &runErr
+
+	if err := runCmd.Start(); err != nil {
+		t.Fatalf("failed to start runCmd: %v", err)
+	}
+
+	// 2. 等候任務進入 running 且已登記 PGID
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open store: %v", err)
+	}
+	defer store.Close()
+
+	var targetPGID int
+	for i := 0; i < 50; i++ {
+		tObj, err := store.GetTask(context.Background(), taskID)
+		if err == nil && tObj.Status == storage.StatusRunning && tObj.PGID > 0 {
+			targetPGID = tObj.PGID
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if targetPGID == 0 {
+		t.Fatalf("target task PGID was not registered")
+	}
+
+	// 確保測試結束時清理孤兒進程組
+	defer func() {
+		_ = syscall.Kill(-targetPGID, syscall.SIGKILL)
+	}()
+
+	// 3. 等候 Leader 程序 exit 0 退出（/proc/<targetPGID>/stat 消失），並中止 Runner 模擬崩潰中斷
+	for i := 0; i < 50; i++ {
+		if _, statErr := os.Stat(fmt.Sprintf("/proc/%d", targetPGID)); os.IsNotExist(statErr) {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	// 中止 Runner 進程
+	_ = runCmd.Process.Kill()
+	_ = runCmd.Wait()
+
+	// 確保組內孤兒進程依然存活
+	if err := syscall.Kill(-targetPGID, 0); err != nil {
+		t.Fatalf("expected orphan process group %d to be alive, got: %v", targetPGID, err)
+	}
+
+	// 4. 執行 asura cancel：因為 Leader 已死、Runner 已死且孤兒無 ASURA_TASK_ID 標記，身分無法確認
+	cancelCmd := exec.Command(asuraBin, "cancel", "--db", dbPath, taskID)
+	var cancelOut, cancelErr bytes.Buffer
+	cancelCmd.Stdout = &cancelOut
+	cancelCmd.Stderr = &cancelErr
+
+	err = cancelCmd.Run()
+
+	// 5. 斷言（M-01 核心規範）：
+	// 取消端絕不能當成已成功回收，嚴禁返回 0，必須失敗報錯！
+	if err == nil {
+		t.Fatalf("expected cancel command to fail with unknown identity error, but succeeded: stdout=%s", cancelOut.String())
+	}
+
+	// 驗證 stderr 揭露無法確認身分之錯誤
+	if !strings.Contains(cancelErr.String(), "unable to verify process identity") {
+		t.Errorf("expected stderr to contain 'unable to verify process identity', got: %s", cancelErr.String())
+	}
+
+	// 6. 驗證 SQLite 中的 PGID 必須完好保留（嚴禁清零抹煞未知進程組之追蹤）
+	finalTask, err := store.GetTask(context.Background(), taskID)
+	if err != nil {
+		t.Fatalf("failed to query final task: %v", err)
+	}
+	if finalTask.PGID != targetPGID {
+		t.Errorf("expected final PGID to be preserved as %d, got: %d (cleared violates M-01)", targetPGID, finalTask.PGID)
+	}
+}
+
+
 
 
 

@@ -255,10 +255,10 @@ func TestVerifyTaskProcessGroup_OrphanGroup(t *testing.T) {
 		t.Errorf("expected VerifyTaskProcessGroup to match orphan group by child environ")
 	}
 
-	// 4. 身分校驗：若 TaskID 與 Runner 憑證皆不匹配，必須識別為偽 (防禦 PID/PGID 重用)
+	// 4. 身分校驗：若 TaskID 與 Runner 憑證皆不匹配，必須回傳錯誤（防禦未知孤兒進程組被誤判已回收，修復 M-01）
 	matchedFake, err := VerifyTaskProcessGroup(pgid, TaskProcessMetadata{PGID: pgid, StartTime: leaderST, RunnerPID: 9999999}, "wrong-task-id")
-	if err != nil {
-		t.Fatalf("VerifyTaskProcessGroup unexpected error on fake meta: %v", err)
+	if err == nil {
+		t.Fatalf("expected VerifyTaskProcessGroup to return error for unknown orphan identity, but got nil")
 	}
 	if matchedFake {
 		t.Errorf("expected VerifyTaskProcessGroup to be false for wrong metadata")
