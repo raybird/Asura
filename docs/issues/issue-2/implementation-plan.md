@@ -22,3 +22,5 @@
 本次立項僅修改文件，不適用紅燈要求；以 Markdown 連結、Scenario 編號與 `git diff --cached --check` 靜態檢查替代。實際檢查結果於完成後補記，未執行 production 回歸。
 
 2026-09-12：`npm view opencode-ai@1.18.23 version --fetch-retries=0 --fetch-timeout=10000` 退出碼 0，輸出 `1.18.23`。套件來源提供指定版本，但尚未證明該版本的執行及權限契約。
+
+2026-09-12：Node 靜態檢查退出碼 0，輸出 `PASS: 6 documents; relative links, fences, 8 unique Scenario IDs`；檢查兩份規劃及四份 issue 文件的相對連結存在、程式碼圍欄成對、八個 Scenario ID 不重複。`git diff --cached --check` 退出碼 0、無輸出。核准規格已提交為 `1b92a60`；本次沒有 production code 變更，未執行 Go 測試。
