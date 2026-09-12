@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, "issue-*" ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Test & Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          cache: true
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test with Race Detector
+        run: go test -count=1 -race -v ./...
+
+      - name: Build CLI
+        run: go build -v ./cmd/asura
