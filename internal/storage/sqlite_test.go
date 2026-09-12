@@ -431,3 +431,118 @@ func TestSQLiteStore_DuplicateRequestIDUniqueIndex(t *testing.T) {
 	}
 }
 
+// 驗證既有資料庫若已存在重複的 RequestID，遷移策略保留所有歷史任務並明確保留最早任務之 RequestID，使唯一索引能順利建立
+func TestSQLiteStore_UpgradeFromSchemaWithDuplicateRequestIDs(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-storage-dup-upgrade-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "dup.db")
+
+	// 1. 建立具有 request_id 欄位但無唯一索引的 schema（模擬前一版本環境）
+	oldDB, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open old db failed: %v", err)
+	}
+	schemaWithDup := `
+	CREATE TABLE tasks (
+		id TEXT PRIMARY KEY,
+		request_id TEXT NOT NULL DEFAULT '',
+		fingerprint TEXT NOT NULL DEFAULT '',
+		prompt TEXT NOT NULL,
+		workspace TEXT NOT NULL,
+		status TEXT NOT NULL,
+		result TEXT NOT NULL DEFAULT '',
+		error_message TEXT NOT NULL DEFAULT '',
+		pgid INTEGER NOT NULL DEFAULT 0,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	);
+	CREATE INDEX idx_tasks_status ON tasks(status);
+	CREATE INDEX idx_tasks_request_id ON tasks(request_id);
+	`
+	if _, err := oldDB.Exec(schemaWithDup); err != nil {
+		oldDB.Close()
+		t.Fatalf("exec schemaWithDup failed: %v", err)
+	}
+
+	// 插入兩筆相同非空 RequestID 的歷史任務，created_at 刻意分開
+	timeEarlier := time.Date(2026, 9, 12, 10, 0, 0, 0, time.UTC)
+	timeLater := time.Date(2026, 9, 12, 10, 5, 0, 0, time.UTC)
+
+	_, err = oldDB.Exec(`
+	INSERT INTO tasks (id, request_id, fingerprint, prompt, workspace, status, result, error_message, pgid, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?),
+	       (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`,
+		"task-earlier", "req-shared-dup", "fp1", "prompt 1", "/tmp", "completed", "result 1", "", 0, timeEarlier, timeEarlier,
+		"task-later", "req-shared-dup", "fp1", "prompt 2", "/tmp", "completed", "result 2", "", 0, timeLater, timeLater,
+	)
+	if err != nil {
+		oldDB.Close()
+		t.Fatalf("insert duplicate request_id tasks failed: %v", err)
+	}
+	oldDB.Close()
+
+	// 2. 以 NewSQLiteStore 開啟，預期順利執行去重遷移策略並建立唯一索引，不應拋出 UNIQUE constraint failed
+	store, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed on DB with duplicate request_ids: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+
+	// 3. 驗證所有歷史任務均被完整保留（未被 DELETE）
+	task1, err := store.GetTask(ctx, "task-earlier")
+	if err != nil {
+		t.Fatalf("GetTask failed for task-earlier: %v", err)
+	}
+	if task1.Result != "result 1" {
+		t.Errorf("task-earlier result corrupted, got %q", task1.Result)
+	}
+
+	task2, err := store.GetTask(ctx, "task-later")
+	if err != nil {
+		t.Fatalf("GetTask failed for task-later: %v", err)
+	}
+	if task2.Result != "result 2" {
+		t.Errorf("task-later result corrupted, got %q", task2.Result)
+	}
+
+	// 4. 驗證明確的 Request ID 對應策略：最早的任務保留該 Request ID
+	if task1.RequestID != "req-shared-dup" {
+		t.Errorf("expected task-earlier to retain request_id 'req-shared-dup', got %q", task1.RequestID)
+	}
+	// 後續任務之 RequestID 降級為空字串，解除唯一衝突
+	if task2.RequestID != "" {
+		t.Errorf("expected task-later request_id to be cleared to '', got %q", task2.RequestID)
+	}
+
+	// 5. 驗證透過 GetTaskByRequestID 能準確查回最早的任務
+	foundByReq, err := store.GetTaskByRequestID(ctx, "req-shared-dup")
+	if err != nil {
+		t.Fatalf("GetTaskByRequestID failed: %v", err)
+	}
+	if foundByReq.ID != "task-earlier" {
+		t.Errorf("expected GetTaskByRequestID to return 'task-earlier', got %q", foundByReq.ID)
+	}
+
+	// 6. 驗證唯一索引已生效：嘗試寫入相同的 request_id 會被阻擋
+	newDupTask := &Task{
+		ID:        "task-new-dup",
+		RequestID: "req-shared-dup",
+		Prompt:    "new dup prompt",
+		Workspace: "/tmp",
+		Status:    StatusPending,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+	if err := store.CreateTask(ctx, newDupTask); err != ErrDuplicateRequestID {
+		t.Errorf("expected ErrDuplicateRequestID from unique index, got %v", err)
+	}
+}
+
+

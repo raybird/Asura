@@ -9,6 +9,7 @@
 - [實作計畫](implementation-plan.md)
 - [Phase 1～6 任務拆解](implementation-plan-decomposition.md)
 - [提交 9d263de 審查報告](review-9d263de.md)（2026-09-13：RETURN TO execute-task，兩項 P1、一項 P2）
+- [提交 3cfa259 審查報告](review-3cfa259.md)（2026-09-13：RETURN TO execute-task，一項 P1）
 
 ## 現況與最小邊界
 
@@ -188,6 +189,8 @@ INT-004 依第 4 項增加下列已核准的失敗路徑，作為原劇本的補
 
 | 日期 | 異動 |
 |---|---|
+| 2026-09-13 | 依 BDD/TDD 完成 `review-3cfa259` 所列 P1 缺失修復（在建立唯一索引前執行歷史任務去重遷移，保留所有歷史任務並明確保留最早任務之 Request ID），全套 race 回歸通過 |
+| 2026-09-13 | 持久化使用者提供的 `3cfa259` 審查結果；發現既有重複 Request ID 阻斷唯一索引升級，判定 RETURN TO execute-task，詳見審查報告 |
 | 2026-09-13 | 依 BDD/TDD 完成 `review-9d263de` 所列 3 項缺失修復（資料庫遷移順序、並行 Request ID 原子去重、Adapter.Run 後端錯誤傳遞），雙迴圈紅綠燈與全套 race 回歸通過 |
 | 2026-09-13 | 持久化使用者提供的 `9d263de` 審查結果；發現資料庫升級、並行重送與事件錯誤傳遞缺失，判定 RETURN TO execute-task，詳見審查報告；本次僅整理文件 |
 | 2026-09-12 | 依合併後程式現況建立 Phase 1.5 的候選驗收、工作包、相依與雙迴圈規劃；未實作 |

@@ -124,6 +124,28 @@ func (s *SQLiteStore) initSchema() error {
 		}
 	}
 
+	// 針對既有資料庫中可能已存在的重複 request_id，執行歷史保留之去重遷移：
+	// 保留 created_at 最早（同時間則 id 字典序較小）的任務之 request_id，其餘重複任務之 request_id 降級為 ''
+	// 完整保留所有歷史任務本體、執行結果與狀態，同時消除建立部分唯一索引之衝突。
+	dedupQuery := `
+	UPDATE tasks
+	SET request_id = ''
+	WHERE request_id != ''
+	  AND id NOT IN (
+	    SELECT id FROM (
+	      SELECT id, ROW_NUMBER() OVER (
+	        PARTITION BY request_id 
+	        ORDER BY created_at ASC, id ASC
+	      ) AS rn
+	      FROM tasks
+	      WHERE request_id != ''
+	    ) WHERE rn = 1
+	  );
+	`
+	if _, err := s.db.Exec(dedupQuery); err != nil {
+		return fmt.Errorf("deduplicate existing request_ids: %w", err)
+	}
+
 	indices := `
 	CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 	CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_request_id_unique ON tasks(request_id) WHERE request_id != '';
