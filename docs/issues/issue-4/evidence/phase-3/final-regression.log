@@ -5,5 +5,8 @@ ok  	asura/internal/daemon	1.037s
 ok  	asura/internal/engine	1.026s
 ok  	asura/internal/opencode	1.018s
 ok  	asura/internal/storage	1.025s
-ok  	asura/internal/web	1.020s
-ok  	asura/tests/integration	2.181s
+ok  	--- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (5.16s)
+    cli_test.go:956: side-effect file exists! cmd.Start() was executed despite external cancel
+FAIL
+FAIL	asura/tests/integration	114.119s
+FAIL

@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -123,6 +124,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && strings.HasSuffix(id, "/cancel") {
 			req.Action = "cancel"
 			id = strings.TrimSuffix(id, "/cancel")
+		} else if r.Method == http.MethodGet && strings.HasSuffix(id, "/result") {
+			id = strings.TrimSuffix(id, "/result")
+			s.handleResultPagination(w, r, id)
+			return
 		} else if r.Method == http.MethodGet {
 			req.Action = "status"
 		} else {
@@ -259,4 +264,85 @@ func (s *Server) exchange(parent context.Context, req daemon.IPCRequest) (daemon
 	}
 	err = json.NewDecoder(conn).Decode(&resp)
 	return resp, err
+}
+
+// 2026-09-13 WEB-007：結果分頁讀取，以 Unicode rune 進行安全邊界切片，避免每頁無界載入。
+func (s *Server) handleResultPagination(w http.ResponseWriter, r *http.Request, taskID string) {
+	if taskID == "" || strings.Contains(taskID, "/") {
+		http.NotFound(w, r)
+		return
+	}
+	offsetStr := r.URL.Query().Get("offset")
+	limitStr := r.URL.Query().Get("limit")
+	if offsetStr == "" || limitStr == "" {
+		http.Error(w, "offset and limit query parameters are required", http.StatusBadRequest)
+		return
+	}
+	offset, err1 := strconv.Atoi(offsetStr)
+	limit, err2 := strconv.Atoi(limitStr)
+	if err1 != nil || err2 != nil || offset < 0 || limit <= 0 {
+		http.Error(w, "invalid pagination parameters", http.StatusBadRequest)
+		return
+	}
+	if limit > 10000 {
+		limit = 10000
+	}
+
+	resp, err := s.exchange(r.Context(), daemon.IPCRequest{Action: "status", TaskID: taskID})
+	if err != nil {
+		http.Error(w, "daemon unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if resp.Error != "" {
+		code := http.StatusBadRequest
+		message := "task operation rejected"
+		switch {
+		case strings.HasPrefix(resp.Error, "unauthorized workspace:"):
+			code = http.StatusForbidden
+			message = "workspace not authorized"
+		case strings.HasPrefix(resp.Error, "task not found"):
+			code = http.StatusNotFound
+			message = "task not found"
+		}
+		http.Error(w, message, code)
+		return
+	}
+	if resp.Task == nil {
+		http.Error(w, "invalid daemon response", http.StatusBadGateway)
+		return
+	}
+
+	runes := []rune(resp.Task.Result)
+	total := len(runes)
+	data := ""
+	hasMore := false
+	if offset < total {
+		end := offset + limit
+		if end < total {
+			hasMore = true
+		} else {
+			end = total
+		}
+		data = string(runes[offset:end])
+	}
+
+	resultPage := struct {
+		TaskID  string `json:"task_id"`
+		Offset  int    `json:"offset"`
+		Limit   int    `json:"limit"`
+		Total   int    `json:"total"`
+		Data    string `json:"data"`
+		HasMore bool   `json:"has_more"`
+	}{
+		TaskID:  resp.Task.ID,
+		Offset:  offset,
+		Limit:   limit,
+		Total:   total,
+		Data:    data,
+		HasMore: hasMore,
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resultPage)
 }

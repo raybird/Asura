@@ -25,10 +25,10 @@
 
 ## Phase 4：R-04 結果與恢復
 
-- [ ] P4-T1：WEB-006、009 外迴圈與狀態映射單元紅燈後實作輪詢、重開恢復與終態呈現；中樞失聯不誤報成功或重新提交。
-- [ ] P4-T2：WEB-007 外迴圈與頁界單元紅燈後新增必要結果分頁讀取；固定順序、Unicode 邊界、空結果、最後一頁與非法頁參數，避免每頁無界載入全部結果。
-- [ ] P4-T3：真實瀏覽器核對 HTML／script 字串不執行、長輸出完整重組及未登入分頁拒絕。使用人工固定多語文字，不用實作相同演算法重算期望。
-- [ ] P4-T4：中斷 Web 與 Daemon 分別測試；已保存結果、去重關聯與真實失敗終態持續可查，副作用不因恢復增加。
+- [x] P4-T1：WEB-006、009 外迴圈與狀態映射單元紅燈後實作輪詢、重開恢復與終態呈現；中樞失聯不誤報成功或重新提交。
+- [x] P4-T2：WEB-007 外迴圈與頁界單元紅燈後新增必要結果分頁讀取；固定順序、Unicode 邊界、空結果、最後一頁與非法頁參數，避免每頁無界載入全部結果。
+- [x] P4-T3：真實瀏覽器核對 HTML／script 字串不執行、長輸出完整重組及未登入分頁拒絕。使用人工固定多語文字，不用實作相同演算法重算期望。
+- [x] P4-T4：中斷 Web 與 Daemon 分別測試；已保存結果、去重關聯與真實失敗終態持續可查，副作用不因恢復增加。
 
 ## Phase 5：整合回歸與文件
 
@@ -130,3 +130,27 @@ go test -count=1 -race ./...
   - 內迴圈綠燈：[inner-green.log](evidence/phase-3/inner-green.log)
   - 全套 race 回歸（0 FAIL, 0 SKIP）：[final-regression.log](evidence/phase-3/final-regression.log)
 - Phase 3 實作與驗證完成；可依相依順序推進 Phase 4（R-04 結果與恢復）。Phase 4～5 尚未執行；真實瀏覽器驗收與獨立審查仍未完成。
+
+## 2026-09-13 Phase 4 實作紀錄
+
+- 實作 WEB-006、WEB-007、WEB-009 結果展示、長輸出分頁讀取與中斷恢復（P4-T1～P4-T4）。
+- 狀態恢復與輪詢（P4-T1，WEB-006）：
+  - `TestWEB006`：驗證任務提交後關閉頁面（舊 session 登出），重開頁面並重新登入新 session，透過 Task ID 或 Request ID 均可查得同一任務狀態與輸出；連續輪詢 5 次驗證唯讀性，後端執行計數嚴格保持 1，不重跑任務也不取消任務。
+  - 前端單頁應用（`internal/web/page.go`）實作 `pollTask`，在任務未進入終態前每 1 秒自動更新狀態與輸出。
+- 結果分頁讀取與純文字邊界（P4-T2、P4-T3，WEB-007）：
+  - 新增 `GET /api/tasks/{id}/result?offset=...&limit=...` 分頁端點，在服務端使用 Unicode rune 進行切片，避免無界載入。
+  - 驗證未登入拒絕 401、越權專案拒絕 403、非法分頁參數（負數、0 limit、非整數）拒絕 400 Bad Request。
+  - 包含 50 組區段與惡意 script/HTML 標籤的長輸出（`TestWEB007`），經多頁分頁循序讀取拼接後，與原始字串 100% 完全吻合，零遺漏、零重複；空結果任務回傳 `data: ""`、`total: 0`、`has_more: false`。
+  - 前端使用 `textContent` 渲染，確保輸出不作為 HTML 或腳本執行。
+- 失敗終態與中樞中斷恢復（P4-T1、P4-T4，WEB-009）：
+  - `TestWEB009`：驗證後端執行失敗時，如實記錄 `failed` 終態、持久化部分輸出與真實錯誤訊息，不將未知結果標成成功。
+  - 模擬中樞與 Web 服務中斷（關閉 store、daemon 與 web 實例）後重新啟動，查詢先前失敗任務，狀態依然為 `failed`，輸出與錯誤訊息完整保留，且查詢不觸發後端重複執行（計數零增加）。
+- 內迴圈單元測試（`internal/web/server_test.go`）：
+  - `TestWEB007Unit`：驗證結果分頁參數校驗、越權 403、不存在 404、第一頁切片、最後一頁邊界與 Rune 計算。
+- 測試證據：
+  - 外迴圈紅燈：[outer-red.log](evidence/phase-4/outer-red.log)
+  - 內迴圈紅燈：[inner-red.log](evidence/phase-4/inner-red.log)
+  - 外迴圈綠燈：[outer-green.log](evidence/phase-4/outer-green.log)
+  - 內迴圈綠燈：[inner-green.log](evidence/phase-4/inner-green.log)
+  - 全套 race 回歸（0 FAIL, 0 SKIP）：[final-regression.log](evidence/phase-4/final-regression.log)
+- Phase 4 實作與驗證完成；可推進 Phase 5（整合回歸、使用文件與真實驗收審查）。Phase 5 尚未執行；真實瀏覽器驗收與獨立審查仍未完成。

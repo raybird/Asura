@@ -222,6 +222,7 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
         taskResult.textContent = data.result || '(等待執行中...)';
         showMessage(opMsg, '任務已接受：' + data.id, false);
         currentRequestID = ''; // 提交成功後重置識別，供下次新任務使用
+        pollTask(data.id);
       } else {
         showMessage(opMsg, '提交被拒絕：' + (data.error || res.statusText), true);
       }
@@ -232,6 +233,65 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
     }
   });
 
+  let pollTimer = null;
+
+  function stopPolling() {
+    if (pollTimer) {
+      clearTimeout(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  async function loadFullResultPaged(taskID) {
+    taskResult.textContent = '';
+    let offset = 0;
+    const limit = 1000;
+    while (true) {
+      try {
+        const res = await fetch('/api/tasks/' + encodeURIComponent(taskID) + '/result?offset=' + offset + '&limit=' + limit);
+        if (!res.ok) {
+          break;
+        }
+        const page = await res.json();
+        taskResult.textContent += page.data || '';
+        if (!page.has_more) {
+          break;
+        }
+        offset += (page.data ? Array.from(page.data).length : 0);
+      } catch (e) {
+        break;
+      }
+    }
+  }
+
+  async function pollTask(tid) {
+    stopPolling();
+    try {
+      const res = await fetch('/api/tasks/' + encodeURIComponent(tid));
+      if (res.ok) {
+        const task = await res.json();
+        taskStatus.textContent = task.status || '-';
+        if (task.status === 'completed') {
+          if (task.result && task.result.length > 500) {
+            await loadFullResultPaged(task.id);
+          } else {
+            taskResult.textContent = task.result || '(無輸出)';
+          }
+          return;
+        } else if (task.status === 'failed' || task.status === 'cancelled') {
+          taskResult.textContent = task.result || (task.error_message ? '錯誤: ' + task.error_message : '(無輸出)');
+          return;
+        } else {
+          taskResult.textContent = task.result || '(任務執行中...)';
+          pollTimer = setTimeout(() => pollTask(tid), 1000);
+        }
+      }
+    } catch (err) {
+      // 網路中斷不誤判完成，停止輪詢並提示
+      stopPolling();
+    }
+  }
+
   queryBtn.addEventListener('click', async () => {
     clearMessage(opMsg);
     const tid = taskIdInput.value.trim();
@@ -239,13 +299,21 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
       showMessage(opMsg, '請輸入 Task ID 或 Request ID', true);
       return;
     }
+    stopPolling();
     try {
       const res = await fetch('/api/tasks/' + encodeURIComponent(tid));
       if (res.ok) {
         const task = await res.json();
         taskStatus.textContent = task.status || '-';
-        taskResult.textContent = task.result || '(尚無輸出)';
+        if (task.status === 'completed' && task.result && task.result.length > 500) {
+          await loadFullResultPaged(task.id);
+        } else {
+          taskResult.textContent = task.result || (task.error_message ? '錯誤: ' + task.error_message : '(尚無輸出)');
+        }
         showMessage(opMsg, '查詢成功', false);
+        if (task.status === 'pending' || task.status === 'running') {
+          pollTimer = setTimeout(() => pollTask(task.id), 1000);
+        }
       } else {
         const errText = await res.text();
         showMessage(opMsg, '查詢失敗：' + errText, true);
@@ -257,6 +325,7 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
 
   cancelBtn.addEventListener('click', async () => {
     clearMessage(opMsg);
+    stopPolling();
     const tid = taskIdInput.value.trim();
     if (!tid) {
       showMessage(opMsg, '請輸入欲取消的 Task ID', true);

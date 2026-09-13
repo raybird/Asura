@@ -367,3 +367,102 @@ func TestWEB008Unit(t *testing.T) {
 		}
 	}
 }
+
+// 2026-09-13 WEB-007：結果分頁讀取之參數驗證、狀態映射與分頁邊界單元測試
+func TestWEB007Unit(t *testing.T) {
+	mockSock := startMockSocket(t, func(req daemon.IPCRequest) daemon.IPCResponse {
+		if req.Action == "status" {
+			switch req.TaskID {
+			case "task-unauthorized":
+				return daemon.IPCResponse{Error: "unauthorized workspace: /outside"}
+			case "task-not-found":
+				return daemon.IPCResponse{Error: "task not found"}
+			case "task-long":
+				return daemon.IPCResponse{
+					Task: &storage.Task{
+						ID:        "task-long",
+						Workspace: "/tmp",
+						Status:    storage.StatusCompleted,
+						Result:    "【測試】0123456789ABCDEF", // 18 runes
+					},
+				}
+			}
+		}
+		return daemon.IPCResponse{Error: "unknown action"}
+	})
+
+	s, err := web.NewServer(web.Config{Key: secret, Origin: origin, SocketPath: mockSock})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wLogin := request(s, "POST", "/api/login", `{"key":"`+secret+`"}`, origin, nil)
+	c := wLogin.Result().Cookies()[0]
+
+	// 1. 未登入拒絕 401
+	wNoAuth := request(s, "GET", "/api/tasks/task-long/result?offset=0&limit=10", "", origin, nil)
+	if wNoAuth.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for unauthenticated result query, got %d", wNoAuth.Code)
+	}
+
+	// 2. 非法分頁參數拒絕 400 Bad Request
+	for _, badURL := range []string{
+		"/api/tasks/task-long/result?offset=-1&limit=10",
+		"/api/tasks/task-long/result?offset=0&limit=0",
+		"/api/tasks/task-long/result?offset=0&limit=-5",
+		"/api/tasks/task-long/result?offset=abc&limit=10",
+		"/api/tasks/task-long/result?offset=0&limit=xyz",
+	} {
+		wBad := request(s, "GET", badURL, "", origin, c)
+		if wBad.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for %q, got %d", badURL, wBad.Code)
+		}
+	}
+
+	// 3. 越權專案任務拒絕 403 Forbidden
+	wUnauth := request(s, "GET", "/api/tasks/task-unauthorized/result?offset=0&limit=10", "", origin, c)
+	if wUnauth.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for unauthorized workspace task, got %d", wUnauth.Code)
+	}
+
+	// 4. 不存在任務回傳 404 Not Found
+	wNotFound := request(s, "GET", "/api/tasks/task-not-found/result?offset=0&limit=10", "", origin, c)
+	if wNotFound.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for missing task, got %d", wNotFound.Code)
+	}
+
+	// 5. 正常分頁讀取：第一頁 (offset=0, limit=6)
+	wPage1 := request(s, "GET", "/api/tasks/task-long/result?offset=0&limit=6", "", origin, c)
+	if wPage1.Code != http.StatusOK {
+		t.Fatalf("expected 200 for page 1, got %d (body: %s)", wPage1.Code, wPage1.Body.String())
+	}
+	var p1 struct {
+		TaskID  string `json:"task_id"`
+		Offset  int    `json:"offset"`
+		Limit   int    `json:"limit"`
+		Total   int    `json:"total"`
+		Data    string `json:"data"`
+		HasMore bool   `json:"has_more"`
+	}
+	if err := json.Unmarshal(wPage1.Body.Bytes(), &p1); err != nil {
+		t.Fatalf("unmarshal page 1: %v", err)
+	}
+	if p1.TaskID != "task-long" || p1.Offset != 0 || p1.Limit != 6 || p1.Total != 20 || p1.Data != "【測試】01" || !p1.HasMore {
+		t.Errorf("unexpected page 1: %+v", p1)
+	}
+
+	// 6. 正常分頁讀取：最後一頁 (offset=16, limit=10)
+	wPageLast := request(s, "GET", "/api/tasks/task-long/result?offset=16&limit=10", "", origin, c)
+	if wPageLast.Code != http.StatusOK {
+		t.Fatalf("expected 200 for last page, got %d", wPageLast.Code)
+	}
+	var pLast struct {
+		Offset  int    `json:"offset"`
+		Total   int    `json:"total"`
+		Data    string `json:"data"`
+		HasMore bool   `json:"has_more"`
+	}
+	_ = json.Unmarshal(wPageLast.Body.Bytes(), &pLast)
+	if pLast.Offset != 16 || pLast.Total != 20 || pLast.Data != "CDEF" || pLast.HasMore {
+		t.Errorf("unexpected last page: %+v", pLast)
+	}
+}

@@ -3,6 +3,8 @@ package integration
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -873,5 +875,339 @@ func TestWEB008ProjectsAndPage(t *testing.T) {
 		if !strings.Contains(strings.ToLower(bodyIndex), strings.ToLower(keyElem)) {
 			t.Errorf("expected HTML to contain %q element or id", keyElem)
 		}
+	}
+}
+
+// 2026-09-13 WEB-006：關閉頁面後恢復狀態與結果（重開登入查詢、定時輪詢、查詢不重跑任務）
+func TestWEB006(t *testing.T) {
+	f := startWeb(t)
+	c1 := f.login(t)
+
+	// 1. 提交任務
+	reqID := "web-006-track-id"
+	codeSubmit, taskAccepted, _ := f.submitTask(t, engine.SubmitRequest{
+		ID:        reqID,
+		Workspace: f.root,
+		Prompt:    "prompt-web-006",
+	}, c1)
+	if codeSubmit != http.StatusAccepted {
+		t.Fatalf("submit task failed: %d", codeSubmit)
+	}
+
+	// 2. 模擬關閉頁面：登出舊工作階段
+	codeLogout, _, _ := f.call(t, "POST", "/api/logout", "", f.server.URL, c1)
+	if codeLogout != http.StatusNoContent {
+		t.Fatalf("logout failed: %d", codeLogout)
+	}
+
+	// 3. 重新開啟頁面並登入新工作階段
+	c2 := f.login(t)
+
+	// 4. 透過 Task ID 查詢，確認狀態與結果正常恢復
+	deadline := time.Now().Add(3 * time.Second)
+	var finalTask *storage.Task
+	for time.Now().Before(deadline) {
+		codeQ, bodyQ, _ := f.call(t, "GET", "/api/tasks/"+taskAccepted.ID, "", f.server.URL, c2)
+		if codeQ == http.StatusOK {
+			var cur storage.Task
+			if err := json.Unmarshal([]byte(bodyQ), &cur); err == nil && cur.Status == storage.StatusCompleted {
+				finalTask = &cur
+				break
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if finalTask == nil {
+		t.Fatalf("task was not found or failed to complete after reopening")
+	}
+	if finalTask.Result != "KNOWN-RESULT" {
+		t.Errorf("expected result KNOWN-RESULT, got %q", finalTask.Result)
+	}
+
+	// 5. 亦可透過 Request ID 恢復查詢
+	codeQR, bodyQR, _ := f.call(t, "GET", "/api/tasks/"+reqID, "", f.server.URL, c2)
+	if codeQR != http.StatusOK {
+		t.Errorf("expected 200 querying by request_id, got %d", codeQR)
+	}
+	var taskByReq storage.Task
+	_ = json.Unmarshal([]byte(bodyQR), &taskByReq)
+	if taskByReq.ID != taskAccepted.ID {
+		t.Errorf("expected same task ID when queried by request_id, got %s vs %s", taskByReq.ID, taskAccepted.ID)
+	}
+
+	// 6. 模擬前端開啟頁面定期輪詢，連續查詢 5 次，驗證查詢為唯讀操作，不重跑任務也不取消任務
+	initialStarts := f.starts.Load()
+	for i := 0; i < 5; i++ {
+		codePoll, _, _ := f.call(t, "GET", "/api/tasks/"+taskAccepted.ID, "", f.server.URL, c2)
+		if codePoll != http.StatusOK {
+			t.Errorf("poll %d failed: %d", i, codePoll)
+		}
+	}
+	if f.starts.Load() != initialStarts {
+		t.Fatalf("polling triggered duplicate execution, starts was %d, now %d", initialStarts, f.starts.Load())
+	}
+}
+
+// 2026-09-13 WEB-007：長輸出以純文字分頁交付（未登入拒絕、非法參數、Unicode 邊界、依序還原且不執行 HTML/script）
+func TestWEB007(t *testing.T) {
+	f := startWeb(t)
+	c := f.login(t)
+
+	// 建立包含多語文字、emoji、特殊字元與包含惡意 HTML / script 樣式標籤之長輸出
+	// 人工固定真相來源，不重複實作切片邏輯
+	baseText := "<script>alert('xss');</script><div>【測試報告】繁體中文 Unicode 邊界測試 🚀 數字 1234567890 符號 &amp; < > \" ' 結尾</div>\n"
+	var sb strings.Builder
+	for i := 0; i < 50; i++ {
+		sb.WriteString(fmt.Sprintf("=== 區段 %02d ===\n", i))
+		sb.WriteString(baseText)
+	}
+	fullText := sb.String()
+	totalChars := len([]rune(fullText))
+
+	// 在 store 中預先建立一筆已完成之長輸出任務
+	taskID := "web-007-long-task"
+	task := &storage.Task{
+		ID:        taskID,
+		Workspace: f.root,
+		Status:    storage.StatusCompleted,
+		Result:    fullText,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	if err := f.store.CreateTask(context.Background(), task); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. 未登入請求分頁讀取拒絕 401
+	codeNoAuth, _, _ := f.call(t, "GET", "/api/tasks/"+taskID+"/result?offset=0&limit=500", "", f.server.URL, nil)
+	if codeNoAuth != http.StatusUnauthorized {
+		t.Errorf("expected 401 for unauthenticated result pagination, got %d", codeNoAuth)
+	}
+
+	// 2. 越權專案任務之結果分頁讀取拒絕 403
+	deniedTask := &storage.Task{
+		ID:        "web-007-denied-task",
+		Workspace: f.outside,
+		Status:    storage.StatusCompleted,
+		Result:    "SECRET_OUTSIDE",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	if err := f.store.CreateTask(context.Background(), deniedTask); err != nil {
+		t.Fatal(err)
+	}
+	codeDenied, _, _ := f.call(t, "GET", "/api/tasks/web-007-denied-task/result?offset=0&limit=100", "", f.server.URL, c)
+	if codeDenied != http.StatusForbidden {
+		t.Errorf("expected 403 for unauthorized workspace task result, got %d", codeDenied)
+	}
+
+	// 3. 非法頁參數拒絕 400 Bad Request
+	for _, badParam := range []string{
+		"?offset=-1&limit=100",
+		"?offset=0&limit=0",
+		"?offset=0&limit=-10",
+		"?offset=abc&limit=100",
+		"?offset=0&limit=xyz",
+	} {
+		codeBad, _, _ := f.call(t, "GET", "/api/tasks/"+taskID+"/result"+badParam, "", f.server.URL, c)
+		if codeBad != http.StatusBadRequest {
+			t.Errorf("expected 400 for bad query param %q, got %d", badParam, codeBad)
+		}
+	}
+
+	// 4. 登入後依序分頁讀取全部結果頁，驗證完整還原且無重複無遺漏
+	pageSize := 500
+	var reconstructed strings.Builder
+	offset := 0
+	for {
+		url := fmt.Sprintf("/api/tasks/%s/result?offset=%d&limit=%d", taskID, offset, pageSize)
+		code, body, _ := f.call(t, "GET", url, "", f.server.URL, c)
+		if code != http.StatusOK {
+			t.Fatalf("pagination fetch failed at offset %d: %d body=%s", offset, code, body)
+		}
+		var page struct {
+			TaskID  string `json:"task_id"`
+			Offset  int    `json:"offset"`
+			Limit   int    `json:"limit"`
+			Total   int    `json:"total"`
+			Data    string `json:"data"`
+			HasMore bool   `json:"has_more"`
+		}
+		if err := json.Unmarshal([]byte(body), &page); err != nil {
+			t.Fatalf("unmarshal page response failed: %v", err)
+		}
+		if page.Total != totalChars {
+			t.Errorf("expected total %d runes, got %d", totalChars, page.Total)
+		}
+		reconstructed.WriteString(page.Data)
+		if !page.HasMore {
+			break
+		}
+		offset += len([]rune(page.Data))
+	}
+
+	// 斷言：完全還原原始保存字串
+	if reconstructed.String() != fullText {
+		t.Fatalf("reconstructed text does not match original text; len original=%d, len reconstructed=%d", len(fullText), len(reconstructed.String()))
+	}
+
+	// 5. 空結果分頁驗證：空結果任務回傳 data: "", total: 0, has_more: false
+	emptyTask := &storage.Task{
+		ID:        "web-007-empty-task",
+		Workspace: f.root,
+		Status:    storage.StatusCompleted,
+		Result:    "",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	if err := f.store.CreateTask(context.Background(), emptyTask); err != nil {
+		t.Fatal(err)
+	}
+	codeEmpty, bodyEmpty, _ := f.call(t, "GET", "/api/tasks/web-007-empty-task/result?offset=0&limit=100", "", f.server.URL, c)
+	if codeEmpty != http.StatusOK {
+		t.Fatalf("expected 200 for empty task result, got %d", codeEmpty)
+	}
+	var emptyPage struct {
+		Total   int    `json:"total"`
+		Data    string `json:"data"`
+		HasMore bool   `json:"has_more"`
+	}
+	_ = json.Unmarshal([]byte(bodyEmpty), &emptyPage)
+	if emptyPage.Total != 0 || emptyPage.Data != "" || emptyPage.HasMore {
+		t.Errorf("expected empty page response, got %+v", emptyPage)
+	}
+}
+
+// 2026-09-13 WEB-009：失敗與服務重啟保留真實結果（失敗終態保留輸出、重啟後可查、不誤報成功、不自動重跑）
+func TestWEB009(t *testing.T) {
+	failDir := t.TempDir()
+	failSock := filepath.Join(failDir, "fail.sock")
+	dbPath := filepath.Join(failDir, "tasks.db")
+	failStore, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	failPolicy := auth.NewPolicy([]string{failDir})
+
+	var runCount atomic.Int32
+	failEng := engine.NewEngine(failStore, failPolicy, engine.WithRunner(func(ctx context.Context, ws, prompt string) (string, error) {
+		runCount.Add(1)
+		if strings.Contains(prompt, "fail-task") {
+			return "PARTIAL-OUTPUT-BEFORE-CRASH", errors.New("backend process exited with code 1")
+		}
+		return "NORMAL-SUCCESS", nil
+	}))
+
+	daemonInstance := daemon.NewDaemon(daemon.Config{SocketPath: failSock}, failStore, failPolicy, daemon.WithEngine(failEng))
+	if err := daemonInstance.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	webSrv := httptest.NewUnstartedServer(nil)
+	ws, err := web.NewServer(web.Config{
+		Key:        "fixture-secret",
+		Origin:     "http://" + webSrv.Listener.Addr().String(),
+		SocketPath: failSock,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	webSrv.Config.Handler = ws
+	webSrv.Start()
+
+	f := &webFixture{root: failDir, store: failStore, server: webSrv, socket: failSock}
+	c := f.login(t)
+
+	// 1. 提交失敗任務
+	codeF, taskF, _ := f.submitTask(t, engine.SubmitRequest{
+		ID:        "web-009-fail-req",
+		Workspace: failDir,
+		Prompt:    "fail-task",
+	}, c)
+	if codeF != http.StatusAccepted {
+		t.Fatalf("submit fail task failed: %d", codeF)
+	}
+
+	// 等待任務完成（進入 failed 狀態）
+	deadline := time.Now().Add(3 * time.Second)
+	var finalFailTask *storage.Task
+	for time.Now().Before(deadline) {
+		qCode, qBody, _ := f.call(t, "GET", "/api/tasks/"+taskF.ID, "", f.server.URL, c)
+		if qCode == http.StatusOK {
+			var t storage.Task
+			if err := json.Unmarshal([]byte(qBody), &t); err == nil && t.Status == storage.StatusFailed {
+				finalFailTask = &t
+				break
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if finalFailTask == nil {
+		t.Fatalf("task did not transition to failed status")
+	}
+	// 驗證失敗終態與已持久化輸出
+	if finalFailTask.Status != storage.StatusFailed {
+		t.Errorf("expected status failed, got %s", finalFailTask.Status)
+	}
+	if !strings.Contains(finalFailTask.Result, "PARTIAL-OUTPUT-BEFORE-CRASH") {
+		t.Errorf("expected partial output preserved, got %q", finalFailTask.Result)
+	}
+	if !strings.Contains(finalFailTask.ErrorMessage, "exited with code 1") {
+		t.Errorf("expected real error message, got %q", finalFailTask.ErrorMessage)
+	}
+
+	// 2. 中樞中斷後重啟情境：關閉 Daemon 與 Web，重新初始化
+	webSrv.Close()
+	daemonInstance.Close()
+	failStore.Close()
+
+	// 重新啟動儲存、中樞與 Web
+	reopenedStore, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { reopenedStore.Close() })
+	reopenedDaemon := daemon.NewDaemon(daemon.Config{SocketPath: failSock}, reopenedStore, failPolicy, daemon.WithEngine(failEng))
+	if err := reopenedDaemon.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { reopenedDaemon.Close() })
+
+	reopenedWebSrv := httptest.NewUnstartedServer(nil)
+	reopenedWS, err := web.NewServer(web.Config{
+		Key:        "fixture-secret",
+		Origin:     "http://" + reopenedWebSrv.Listener.Addr().String(),
+		SocketPath: failSock,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reopenedWebSrv.Config.Handler = reopenedWS
+	reopenedWebSrv.Start()
+	t.Cleanup(reopenedWebSrv.Close)
+
+	fReopened := &webFixture{root: failDir, store: reopenedStore, server: reopenedWebSrv, socket: failSock}
+	cReopened := fReopened.login(t)
+
+	// 透過 Web 查詢先前失敗的任務
+	startsBeforeReopenQuery := runCount.Load()
+	qCodeReopen, qBodyReopen, _ := fReopened.call(t, "GET", "/api/tasks/"+taskF.ID, "", fReopened.server.URL, cReopened)
+	if qCodeReopen != http.StatusOK {
+		t.Fatalf("query task after restart failed: %d (body: %s)", qCodeReopen, qBodyReopen)
+	}
+	var restoredTask storage.Task
+	if err := json.Unmarshal([]byte(qBodyReopen), &restoredTask); err != nil {
+		t.Fatalf("unmarshal restored task: %v", err)
+	}
+	// 斷言：不將未知結果標成成功，狀態依然為 failed，輸出依然完整
+	if restoredTask.Status != storage.StatusFailed {
+		t.Errorf("expected restored status failed, got %s", restoredTask.Status)
+	}
+	if restoredTask.Result != finalFailTask.Result {
+		t.Errorf("restored result mismatch: %q vs %q", restoredTask.Result, finalFailTask.Result)
+	}
+	// 斷言：查詢不重跑副作用
+	if runCount.Load() != startsBeforeReopenQuery {
+		t.Errorf("reopen query triggered backend rerun, count=%d vs %d", runCount.Load(), startsBeforeReopenQuery)
 	}
 }
