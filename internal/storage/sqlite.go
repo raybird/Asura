@@ -16,6 +16,7 @@ type TaskStatus string
 
 const (
 	StatusPending   TaskStatus = "pending"
+	StatusQueued    TaskStatus = "queued"
 	StatusRunning   TaskStatus = "running"
 	StatusCompleted TaskStatus = "completed"
 	StatusFailed    TaskStatus = "failed"
@@ -402,6 +403,25 @@ func (s *SQLiteStore) UpdateTaskStatusIfPending(ctx context.Context, id string, 
 	res, err := s.db.ExecContext(ctx, query, string(status), now, id, string(StatusPending))
 	if err != nil {
 		return false, fmt.Errorf("update task status if pending: %w", err)
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("check rows affected: %w", err)
+	}
+	return rowsAffected > 0, nil
+}
+
+// UpdateTaskStatusIfPendingOrQueued 僅在任務處於 pending 或 queued 狀態時才轉移為新狀態
+func (s *SQLiteStore) UpdateTaskStatusIfPendingOrQueued(ctx context.Context, id string, status TaskStatus) (bool, error) {
+	query := `
+	UPDATE tasks
+	SET status = ?, updated_at = ?
+	WHERE id = ? AND (status = ? OR status = ?)
+	`
+	now := time.Now().UTC()
+	res, err := s.db.ExecContext(ctx, query, string(status), now, id, string(StatusPending), string(StatusQueued))
+	if err != nil {
+		return false, fmt.Errorf("update task status if pending or queued: %w", err)
 	}
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {

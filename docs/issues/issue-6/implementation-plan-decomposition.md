@@ -74,29 +74,29 @@
 
 ---
 
-## Phase 2 — 容量調度器升級（同專案互斥佇列與保留通道）
+## Phase 2 — 容量調度器升級（同專案互斥佇列與保留通道）✅
 
 ### Goal
-落實 CRON-001（同專案互斥排隊與依序執行）與 CRON-002（保留互動通道與背景容量上限），阻斷並行寫入衝突並保障人類即時互動能力。
+落實 CRON-001（同專案互斥排隊與依序執行）與 CRON-002（保留互動通道與背景容量上限），阻斷並行寫入衝突並保障人類即時互動能力。（2026-09-13 實作完成，內外迴圈全綠，日誌留存於 `evidence/phase-2/`）
 
 ### Deliverables
 - `internal/daemon/pool.go`：擴充 WorkerPool 支援背景專用容量上限（`maxCronWorkers = 1`）與保留互動通道。
 - `internal/daemon/workspace_queue.go`：實作專案級別排他鎖與佇列狀態機。
-- `internal/daemon/daemon.go`：整合同專案互斥排隊至 `Submit` 流程，任務回傳 `queued` 狀態。
+- `internal/daemon/daemon.go`：整合同專案互斥排隊至 `Submit` 流程，任務回傳 `queued` 狀態並依序喚醒。
 
 ### Dependencies
 - Phase 1 儲存層支援。
 
 ### Tasks
 
-#### Task 2.1：WorkerPool 保留互動通道與配額控制
-- **任務說明**：在 WorkerPool 內劃分互動任務（interactive）與背景任務（cron），限制背景任務同時執行的 Worker 上限為 1，保留其餘 Workers 專門服務即時互動任務。
+#### Task 2.1：WorkerPool 保留互動通道與配額控制 ✅
+- **任務說明**：在 WorkerPool 內劃分互動任務（interactive）與背景任務（cron），限制背景任務同時執行的 Worker 上限為 1，保留其餘 Workers 專門服務即時互動任務。（2026-09-13 完成）
 - **預期輸出**：`internal/daemon/pool.go` 支援任務來源分類與背景配額守門。
 - **涉及模組或檔案**：`internal/daemon/pool.go`, `internal/daemon/pool_test.go`
 - **完成判準**：
   1. 當 1 個背景 Cron 任務在執行時，後續背景任務進入等待，不得佔用第 2 個 Worker。
   2. 此時提交互動任務，可立即取得第 2 個 Worker 啟動執行，不受背景任務阻礙。
-- **驗證方式**：`go test -count=1 -v ./internal/daemon -run '^TestWorkerPool_InteractiveChannelReserved$'`
+- **驗證方式**：`go test -count=1 -v ./internal/daemon -run '^TestWorkerPool_CapacityClassification$'`
 - **覆蓋項目**：S-01 容量與寫入政策、CRON-002
 - **責任角色**：唯一負責
 - **Scenario ID**：CRON-002
@@ -104,15 +104,15 @@
 - **BDD 外迴圈**：
   - 測試檔案：`tests/integration/cron_test.go:TestCRON002_InteractiveChannelReserved`
   - 命令：`go test -count=1 -v ./tests/integration -run '^TestCRON002_InteractiveChannelReserved$'`
-  - 預期失敗原因：背景任務佔用 Worker 後，互動任務被阻塞或逾時。
+  - 紅綠日誌：`evidence/phase-2/outer-red.log`, `evidence/phase-2/outer-green.log`
 - **TDD 內迴圈**：
-  - 測試檔案：`internal/daemon/pool_test.go:TestWorkerPool_InteractiveChannelReserved`
-  - 命令：`go test -count=1 -v ./internal/daemon -run '^TestWorkerPool_InteractiveChannelReserved$'`
-  - 預期失敗原因：WorkerPool 未提供依 TaskType 分配之配額機制。
-- **最小實作與回歸**：修改 `internal/daemon/pool.go` 加入通道計數保護；執行 `go test -count=1 -race ./internal/daemon` 全綠。
+  - 測試檔案：`internal/daemon/pool_test.go:TestWorkerPool_CapacityClassification`
+  - 命令：`go test -count=1 -v ./internal/daemon -run '^TestWorkerPool_CapacityClassification$'`
+  - 紅綠日誌：`evidence/phase-2/inner-red.log`, `evidence/phase-2/inner-green.log`
+- **最小實作與回歸**：修改 `internal/daemon/pool.go` 加入通道分類排隊與雙通道調度；全套回歸見 `evidence/phase-2/final-regression.log`。
 
-#### Task 2.2：同專案互斥排隊（Workspace Serialization Queue）
-- **任務說明**：在 Daemon 中樞實作專案目錄排他鎖。當 Workspace 內已有執行中任務時，同目錄新任務標記為 `queued` 狀態進入專案佇列，待前一任務結束後依序自動派工。
+#### Task 2.2：同專案互斥排隊（Workspace Serialization Queue）✅
+- **任務說明**：在 Daemon 中樞實作專案目錄排他鎖。當 Workspace 內已有執行中任務時，同目錄新任務標記為 `queued` 狀態進入專案佇列，待前一任務結束後依序自動派工。（2026-09-13 完成）
 - **預期輸出**：`internal/daemon/workspace_queue.go` 專案鎖管理邏輯，並串入 `daemon.go` 的 `Submit` 與任務結束回呼。
 - **涉及模組或檔案**：`internal/daemon/daemon.go`, `internal/daemon/workspace_queue.go`, `internal/daemon/workspace_queue_test.go`
 - **完成判準**：
@@ -127,12 +127,12 @@
 - **BDD 外迴圈**：
   - 測試檔案：`tests/integration/cron_test.go:TestCRON001_WorkspaceMutexQueue`
   - 命令：`go test -count=1 -v ./tests/integration -run '^TestCRON001_WorkspaceMutexQueue$'`
-  - 預期失敗原因：同專案兩個任務同時進入 running 且並發執行。
+  - 紅綠日誌：`evidence/phase-2/outer-red.log`, `evidence/phase-2/outer-green.log`
 - **TDD 內迴圈**：
-  - 測試檔案：`internal/daemon/workspace_queue_test.go:TestWorkspaceQueue_SerializeExecution`
-  - 命令：`go test -count=1 -v ./internal/daemon -run '^TestWorkspaceQueue_SerializeExecution$'`
-  - 預期失敗原因：未實作專案排他鎖或未回傳 queued 狀態。
-- **最小實作與回歸**：在 `internal/daemon/` 實作專案鎖；執行 `go test -count=1 -race ./internal/daemon` 與外迴圈整合測試全綠。
+  - 測試檔案：`internal/daemon/workspace_queue_test.go:TestWorkspaceQueue_ExclusiveAccess`
+  - 命令：`go test -count=1 -v ./internal/daemon -run '^TestWorkspaceQueue_ExclusiveAccess$'`
+  - 紅綠日誌：`evidence/phase-2/inner-red.log`, `evidence/phase-2/inner-green.log`
+- **最小實作與回歸**：在 `internal/daemon/` 實作專案排他佇列與喚醒，消除並發去重時的專案鎖競態；全套回歸見 `evidence/phase-2/final-regression.log`。
 
 ---
 

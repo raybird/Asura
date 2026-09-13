@@ -13,146 +13,209 @@ var (
 	ErrPoolClosed = errors.New("worker pool closed")
 )
 
-// WorkerPool 限制全域並行執行任務數量
+// TaskClass 代表任務類別（人類即時互動 vs 背景定時排程）
+type TaskClass string
+
+const (
+	TaskClassInteractive TaskClass = "interactive"
+	TaskClassCron        TaskClass = "cron"
+)
+
+// CapacityConfig 定義容量調度器配置
+// 遵循 CRON-002：隨時保留至少 1 個 Worker 給即時互動任務，背景 Cron 佔用不得超過 MaxCronWorkers
+type CapacityConfig struct {
+	MaxWorkers     int
+	MaxCronWorkers int
+	MaxQueue       int
+}
+
+// WorkerPool 限制全域並行執行任務數量並實作分類容量調度
 type WorkerPool struct {
-	maxWorkers int
-	maxQueue   int
-	running    int
-	queue      chan taskItem
-	mu         sync.Mutex
-	isClosing  bool
-	closeOnce  sync.Once
-	wg         sync.WaitGroup
+	maxWorkers       int
+	maxCronWorkers   int
+	maxQueue         int
+	running          int
+	runningCron      int
+	interactiveQueue []taskItem
+	cronQueue        []taskItem
+	mu               sync.Mutex
+	isClosing        bool
+	closeOnce        sync.Once
+	wg               sync.WaitGroup
 }
 
 type taskItem struct {
 	ctx    context.Context
+	class  TaskClass
 	fn     func() error
 	result chan error
 }
 
-// NewWorkerPool 初始化指定 Worker 數與佇列長度的 WorkerPool
-// 遵循 R-02：以互斥鎖原子保護 Worker 額度交接與佇列檢查，徹底杜絕佇列停滯
+// NewWorkerPool 初始化指定 Worker 數與佇列長度的 WorkerPool（向後相容）
 func NewWorkerPool(maxWorkers int, maxQueue int) *WorkerPool {
-	if maxWorkers <= 0 {
-		maxWorkers = 1
+	maxCron := 1
+	if maxWorkers <= 1 {
+		maxCron = 1
 	}
-	if maxQueue < 0 {
-		maxQueue = 0
+	return NewWorkerPoolWithCapacity(CapacityConfig{
+		MaxWorkers:     maxWorkers,
+		MaxCronWorkers: maxCron,
+		MaxQueue:       maxQueue,
+	})
+}
+
+// NewWorkerPoolWithCapacity 初始化具備分類容量控制的 WorkerPool
+// 遵循 CRON-002：保留互動通道與背景容量上限
+func NewWorkerPoolWithCapacity(cfg CapacityConfig) *WorkerPool {
+	if cfg.MaxWorkers <= 0 {
+		cfg.MaxWorkers = 1
+	}
+	if cfg.MaxCronWorkers <= 0 {
+		cfg.MaxCronWorkers = 1
+	}
+	if cfg.MaxCronWorkers > cfg.MaxWorkers {
+		cfg.MaxCronWorkers = cfg.MaxWorkers
+	}
+	if cfg.MaxQueue < 0 {
+		cfg.MaxQueue = 0
 	}
 
 	return &WorkerPool{
-		maxWorkers: maxWorkers,
-		maxQueue:   maxQueue,
-		queue:      make(chan taskItem, maxQueue),
+		maxWorkers:       cfg.MaxWorkers,
+		maxCronWorkers:   cfg.MaxCronWorkers,
+		maxQueue:         cfg.MaxQueue,
+		interactiveQueue: make([]taskItem, 0, cfg.MaxQueue),
+		cronQueue:        make([]taskItem, 0, cfg.MaxQueue),
 	}
 }
 
-// Submit 提交任務至 WorkerPool，若容量已滿立即回傳 ErrCapacityExceeded
+// Submit 提交任務至 WorkerPool（預設為 TaskClassInteractive），若容量已滿立即回傳 ErrCapacityExceeded
 func (p *WorkerPool) Submit(ctx context.Context, fn func() error) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-
-	item := taskItem{
-		ctx:    ctx,
-		fn:     fn,
-		result: make(chan error, 1),
-	}
-
-	p.mu.Lock()
-	if p.isClosing {
-		p.mu.Unlock()
-		return ErrPoolClosed
-	}
-
-	if p.running < p.maxWorkers {
-		p.running++
-		p.wg.Add(1)
-		go p.workerLoop(item)
-		p.mu.Unlock()
-	} else {
-		// Worker 已達上限，嘗試排入佇列
-		select {
-		case p.queue <- item:
-			p.mu.Unlock()
-		default:
-			p.mu.Unlock()
-			return ErrCapacityExceeded
-		}
+	resChan, err := p.SubmitAsyncClassified(ctx, TaskClassInteractive, fn)
+	if err != nil {
+		return err
 	}
 
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case err := <-item.result:
+	case err := <-resChan:
 		return err
 	}
 }
 
-// SubmitAsync 異步提交任務至 WorkerPool，確認有執行或排隊容量後立即回傳結果 channel 與 nil (INT-004, P4-T2)
+// SubmitAsync 異步提交任務至 WorkerPool（預設為 TaskClassInteractive）
 func (p *WorkerPool) SubmitAsync(ctx context.Context, fn func() error) (<-chan error, error) {
+	return p.SubmitAsyncClassified(ctx, TaskClassInteractive, fn)
+}
+
+// SubmitAsyncClassified 異步提交指定類別之任務至 WorkerPool
+func (p *WorkerPool) SubmitAsyncClassified(ctx context.Context, class TaskClass, fn func() error) (<-chan error, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
 	}
 
+	if class == "" {
+		class = TaskClassInteractive
+	}
+
 	item := taskItem{
 		ctx:    ctx,
+		class:  class,
 		fn:     fn,
 		result: make(chan error, 1),
 	}
 
 	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	if p.isClosing {
-		p.mu.Unlock()
 		return nil, ErrPoolClosed
 	}
 
-	if p.running < p.maxWorkers {
-		p.running++
-		p.wg.Add(1)
-		go p.workerLoop(item)
-		p.mu.Unlock()
-	} else {
-		select {
-		case p.queue <- item:
-			p.mu.Unlock()
-		default:
-			p.mu.Unlock()
-			return nil, ErrCapacityExceeded
-		}
+	queuedCount := len(p.interactiveQueue) + len(p.cronQueue)
+
+	canStartDirectly := false
+	if class == TaskClassInteractive && p.running < p.maxWorkers {
+		canStartDirectly = true
+	} else if class == TaskClassCron && p.running < p.maxWorkers && p.runningCron < p.maxCronWorkers {
+		canStartDirectly = true
 	}
 
+	if !canStartDirectly && queuedCount >= p.maxQueue {
+		return nil, ErrCapacityExceeded
+	}
+
+	if class == TaskClassCron {
+		p.cronQueue = append(p.cronQueue, item)
+	} else {
+		p.interactiveQueue = append(p.interactiveQueue, item)
+	}
+
+	p.maybeStartWorkersLocked()
 	return item.result, nil
+}
+
+func (p *WorkerPool) popNextRunnableLocked() (taskItem, bool) {
+	// 優先挑選互動任務，隨時保證人類互動體驗
+	if len(p.interactiveQueue) > 0 && p.running < p.maxWorkers {
+		item := p.interactiveQueue[0]
+		p.interactiveQueue = p.interactiveQueue[1:]
+		return item, true
+	}
+	// 檢查 Cron 任務是否符合配額上限
+	if len(p.cronQueue) > 0 && p.running < p.maxWorkers && p.runningCron < p.maxCronWorkers {
+		item := p.cronQueue[0]
+		p.cronQueue = p.cronQueue[1:]
+		return item, true
+	}
+	return taskItem{}, false
+}
+
+func (p *WorkerPool) maybeStartWorkersLocked() {
+	for {
+		item, found := p.popNextRunnableLocked()
+		if !found {
+			break
+		}
+		p.running++
+		if item.class == TaskClassCron {
+			p.runningCron++
+		}
+		p.wg.Add(1)
+		go p.workerLoop(item)
+	}
 }
 
 func (p *WorkerPool) workerLoop(initialItem taskItem) {
 	defer p.wg.Done()
-	p.executeItem(initialItem)
+	curItem := initialItem
 
 	for {
+		p.executeItem(curItem)
+
 		p.mu.Lock()
-		select {
-		case item, ok := <-p.queue:
-			p.mu.Unlock()
-			if !ok {
-				// 佇列已關閉且已清空，退出 worker
-				p.mu.Lock()
-				p.running--
-				p.mu.Unlock()
-				return
-			}
-			p.executeItem(item)
-		default:
-			// 佇列為空，原子釋放 Worker 額度並退出（徹底修復 R-02 佇列殘留停滯）
-			p.running--
+		if curItem.class == TaskClassCron {
+			p.runningCron--
+		}
+		p.running--
+
+		nextItem, found := p.popNextRunnableLocked()
+		if !found {
 			p.mu.Unlock()
 			return
 		}
+
+		p.running++
+		if nextItem.class == TaskClassCron {
+			p.runningCron++
+		}
+		p.maybeStartWorkersLocked()
+		p.mu.Unlock()
+
+		curItem = nextItem
 	}
 }
 
@@ -173,9 +236,8 @@ func (p *WorkerPool) Close() {
 	p.closeOnce.Do(func() {
 		p.mu.Lock()
 		p.isClosing = true
-		close(p.queue)
+		p.maybeStartWorkersLocked()
 		p.mu.Unlock()
 	})
 	p.wg.Wait()
 }
-

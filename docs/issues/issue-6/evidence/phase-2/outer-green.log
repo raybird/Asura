@@ -1,0 +1,6 @@
+=== RUN   TestCRON001_WorkspaceMutexQueue
+--- PASS: TestCRON001_WorkspaceMutexQueue (0.12s)
+=== RUN   TestCRON002_InteractiveChannelReserved
+--- PASS: TestCRON002_InteractiveChannelReserved (0.10s)
+PASS
+ok  	asura/tests/integration	0.229s

@@ -159,3 +159,78 @@ func TestWorkerPool(t *testing.T) {
 	})
 }
 
+func TestWorkerPool_CapacityClassification(t *testing.T) {
+	cfg := CapacityConfig{
+		MaxWorkers:     2,
+		MaxCronWorkers: 1,
+		MaxQueue:       5,
+	}
+	pool := NewWorkerPoolWithCapacity(cfg)
+	defer pool.Close()
+
+	cron1Started := make(chan struct{})
+	cron1Block := make(chan struct{})
+	cron2Started := make(chan struct{})
+	interactiveStarted := make(chan struct{})
+
+	// 1. 提交 Cron 任務 1，應立即執行並佔用唯一背景 worker
+	_, err := pool.SubmitAsyncClassified(context.Background(), TaskClassCron, func() error {
+		close(cron1Started)
+		<-cron1Block
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("submit cron 1 failed: %v", err)
+	}
+
+	select {
+	case <-cron1Started:
+	case <-time.After(time.Second):
+		t.Fatalf("cron 1 did not start")
+	}
+
+	// 2. 提交 Cron 任務 2，應受限於 MaxCronWorkers=1 而進入佇列等待
+	_, err = pool.SubmitAsyncClassified(context.Background(), TaskClassCron, func() error {
+		close(cron2Started)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("submit cron 2 failed: %v", err)
+	}
+
+	// 驗證 cron 2 未搶佔保留給人類互動通道的 worker
+	select {
+	case <-cron2Started:
+		t.Fatalf("cron 2 started unexpectedly when MaxCronWorkers=1 is already saturated")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	// 3. 提交 Interactive 任務，應立即取得保留的 worker 執行
+	resChan, err := pool.SubmitAsyncClassified(context.Background(), TaskClassInteractive, func() error {
+		close(interactiveStarted)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("submit interactive failed: %v", err)
+	}
+
+	select {
+	case <-interactiveStarted:
+	case <-time.After(time.Second):
+		t.Fatalf("interactive task did not start immediately")
+	}
+
+	if err := <-resChan; err != nil {
+		t.Fatalf("interactive task returned error: %v", err)
+	}
+
+	// 4. 釋放 Cron 1，Cron 2 應隨後被喚醒執行
+	close(cron1Block)
+
+	select {
+	case <-cron2Started:
+	case <-time.After(time.Second):
+		t.Fatalf("cron 2 did not start after cron 1 finished")
+	}
+}
+

@@ -1,0 +1,12 @@
+# asura/internal/daemon [asura/internal/daemon.test]
+internal/daemon/pool_test.go:163:9: undefined: CapacityConfig
+internal/daemon/pool_test.go:168:10: undefined: NewWorkerPoolWithCapacity
+internal/daemon/pool_test.go:177:61: undefined: TaskClassCron
+internal/daemon/pool_test.go:193:60: undefined: TaskClassCron
+internal/daemon/pool_test.go:209:67: undefined: TaskClassInteractive
+internal/daemon/workspace_queue_test.go:10:9: undefined: NewWorkspaceQueue
+internal/daemon/workspace_queue_test.go:29:9: undefined: NewWorkspaceQueue
+internal/daemon/workspace_queue_test.go:76:9: undefined: NewWorkspaceQueue
+internal/daemon/workspace_queue_test.go:92:9: undefined: NewWorkspaceQueue
+FAIL	asura/internal/daemon [build failed]
+FAIL

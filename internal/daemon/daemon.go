@@ -41,6 +41,7 @@ type OpenCodeRuntimeConfig struct {
 type Config struct {
 	SocketPath     string
 	MaxWorkers     int
+	MaxCronWorkers int
 	MaxQueue       int
 	OpenCodeConfig OpenCodeRuntimeConfig
 }
@@ -52,11 +53,33 @@ type Daemon struct {
 	policy    *auth.Policy
 	engine    *engine.Engine
 	pool      *WorkerPool
-	listener  net.Listener
-	lockFile  *os.File
-	closed    chan struct{}
-	closeOnce sync.Once
-	wg        sync.WaitGroup
+	wsQueue    *WorkspaceQueue
+	inFlight   int
+	inFlightMu sync.Mutex
+	listener   net.Listener
+	lockFile   *os.File
+	closed     chan struct{}
+	closeOnce  sync.Once
+	wg         sync.WaitGroup
+}
+
+func (d *Daemon) tryAcquireCapacity() bool {
+	d.inFlightMu.Lock()
+	defer d.inFlightMu.Unlock()
+	maxCapacity := d.cfg.MaxWorkers + d.cfg.MaxQueue
+	if d.inFlight >= maxCapacity {
+		return false
+	}
+	d.inFlight++
+	return true
+}
+
+func (d *Daemon) releaseCapacity() {
+	d.inFlightMu.Lock()
+	if d.inFlight > 0 {
+		d.inFlight--
+	}
+	d.inFlightMu.Unlock()
 }
 
 // DaemonOption 用於自訂 Daemon 設定
@@ -86,6 +109,9 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 	if cfg.MaxWorkers <= 0 {
 		cfg.MaxWorkers = 2
 	}
+	if cfg.MaxCronWorkers <= 0 {
+		cfg.MaxCronWorkers = 1
+	}
 	if cfg.MaxQueue < 0 {
 		cfg.MaxQueue = 10
 	}
@@ -97,11 +123,16 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 	}
 
 	d := &Daemon{
-		cfg:    cfg,
-		store:  store,
-		policy: policy,
-		pool:   NewWorkerPool(cfg.MaxWorkers, cfg.MaxQueue),
-		closed: make(chan struct{}),
+		cfg:     cfg,
+		store:   store,
+		policy:  policy,
+		pool:    NewWorkerPoolWithCapacity(CapacityConfig{
+			MaxWorkers:     cfg.MaxWorkers,
+			MaxCronWorkers: cfg.MaxCronWorkers,
+			MaxQueue:       cfg.MaxQueue,
+		}),
+		wsQueue: NewWorkspaceQueue(),
+		closed:  make(chan struct{}),
 	}
 
 	for _, opt := range opts {
@@ -200,11 +231,12 @@ func (d *Daemon) acceptLoop() {
 
 // IPCRequest 定義用戶端提交之請求
 type IPCRequest struct {
-	Action    string `json:"action,omitempty"`
-	RequestID string `json:"request_id,omitempty"`
-	TaskID    string `json:"task_id,omitempty"`
-	Workspace string `json:"workspace,omitempty"`
-	Prompt    string `json:"prompt,omitempty"`
+	Action    string    `json:"action,omitempty"`
+	RequestID string    `json:"request_id,omitempty"`
+	TaskID    string    `json:"task_id,omitempty"`
+	Workspace string    `json:"workspace,omitempty"`
+	Prompt    string    `json:"prompt,omitempty"`
+	Class     TaskClass `json:"class,omitempty"`
 }
 
 // IPCResponse 定義傳回用戶端之結果
@@ -273,6 +305,10 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				continue
 			}
 			targetID := target.ID
+			if target.Status == storage.StatusQueued {
+				d.wsQueue.Remove(target.Workspace, targetID)
+				d.releaseCapacity()
+			}
 			err = d.engine.CancelTask(targetID)
 			if err != nil {
 				_ = encoder.Encode(IPCResponse{Error: err.Error()})
@@ -324,8 +360,15 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				}
 			}
 
+			// 遵循 SCN-004 與 INT-003：檢查全域容量上限（Worker 執行槽位 + 佇列排隊槽位）
+			if !d.tryAcquireCapacity() {
+				_ = encoder.Encode(IPCResponse{Error: ErrCapacityExceeded.Error()})
+				continue
+			}
+
 			taskID := engine.GenerateTaskID()
 			now := time.Now().UTC()
+
 			initialTask := &storage.Task{
 				ID:          taskID,
 				RequestID:   req.RequestID,
@@ -338,6 +381,7 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			}
 
 			if err := d.store.CreateTask(context.Background(), initialTask); err != nil {
+				d.releaseCapacity()
 				if req.RequestID != "" && errors.Is(err, storage.ErrDuplicateRequestID) {
 					existing, getErr := d.store.GetTaskByRequestID(context.Background(), req.RequestID)
 					if getErr != nil {
@@ -364,16 +408,24 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				continue
 			}
 
-			_, err := d.pool.SubmitAsync(context.Background(), func() error {
-				_, runErr := d.engine.SubmitTask(context.Background(), engine.SubmitRequest{
-					ID:        taskID,
-					Workspace: req.Workspace,
-					Prompt:    req.Prompt,
-				})
-				return runErr
-			})
+			// 遵循 CRON-001：同專案嚴格互斥依序排隊（僅創建任務之勝者競爭專案鎖）
+			acquired, _ := d.wsQueue.TryAcquire(req.Workspace, taskID)
+			if !acquired {
+				// 專案忙碌中，更新狀態為 queued 並排入專案佇列，待前任務完成後依序喚醒
+				initialTask.Status = storage.StatusQueued
+				_ = d.store.UpdateTaskStatus(context.Background(), taskID, storage.StatusQueued, "", "")
+				_ = encoder.Encode(IPCResponse{Task: initialTask})
+				continue
+			}
 
+			taskClass := req.Class
+			if taskClass == "" {
+				taskClass = TaskClassInteractive
+			}
+			err := d.dispatchTask(taskID, req.Workspace, req.Prompt, taskClass)
 			if err != nil {
+				d.releaseCapacity()
+				d.wsQueue.Release(req.Workspace, taskID)
 				_ = d.store.DeleteTask(context.Background(), taskID)
 				_ = encoder.Encode(IPCResponse{Error: err.Error()})
 				continue
@@ -384,6 +436,57 @@ func (d *Daemon) handleConn(conn net.Conn) {
 
 		default:
 			_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unknown action: %s", action)})
+		}
+	}
+}
+
+func (d *Daemon) dispatchTask(taskID, workspace, prompt string, class TaskClass) error {
+	_, err := d.pool.SubmitAsyncClassified(context.Background(), class, func() error {
+		defer func() {
+			d.releaseCapacity()
+			nextTaskID, hasNext := d.wsQueue.Release(workspace, taskID)
+			if hasNext && nextTaskID != "" {
+				d.wakeQueuedTask(nextTaskID, workspace, class)
+			}
+		}()
+
+		_, runErr := d.engine.SubmitTask(context.Background(), engine.SubmitRequest{
+			ID:        taskID,
+			Workspace: workspace,
+			Prompt:    prompt,
+		})
+		return runErr
+	})
+	return err
+}
+
+func (d *Daemon) wakeQueuedTask(taskID, workspace string, defaultClass TaskClass) {
+	task, err := d.store.GetTask(context.Background(), taskID)
+	if err != nil || task == nil {
+		d.releaseCapacity()
+		nextTaskID, hasNext := d.wsQueue.Release(workspace, taskID)
+		if hasNext && nextTaskID != "" {
+			d.wakeQueuedTask(nextTaskID, workspace, defaultClass)
+		}
+		return
+	}
+
+	if task.Status != storage.StatusQueued {
+		d.releaseCapacity()
+		nextTaskID, hasNext := d.wsQueue.Release(workspace, taskID)
+		if hasNext && nextTaskID != "" {
+			d.wakeQueuedTask(nextTaskID, workspace, defaultClass)
+		}
+		return
+	}
+
+	err = d.dispatchTask(task.ID, task.Workspace, task.Prompt, defaultClass)
+	if err != nil {
+		d.releaseCapacity()
+		_ = d.store.UpdateTaskStatus(context.Background(), task.ID, storage.StatusFailed, "", err.Error())
+		nextTaskID, hasNext := d.wsQueue.Release(workspace, taskID)
+		if hasNext && nextTaskID != "" {
+			d.wakeQueuedTask(nextTaskID, workspace, defaultClass)
 		}
 	}
 }
