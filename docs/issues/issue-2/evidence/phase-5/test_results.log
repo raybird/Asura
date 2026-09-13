@@ -1,0 +1,45 @@
+ok  	asura/cmd/asura	1.024s
+ok  	asura/internal/auth	1.020s
+ok  	asura/internal/backend/opencode	10.448s
+ok  	asura/internal/daemon	2.164s
+ok  	asura/internal/engine	1.573s
+ok  	asura/internal/storage	1.114s
+ok  	asura/tests/integration	54.260s
+=== RUN   TestCLI_CancelIsolation
+--- PASS: TestCLI_CancelIsolation (0.78s)
+=== RUN   TestCLI_LatestReview_G01_HandshakeCancelBeforeStart
+--- PASS: TestCLI_LatestReview_G01_HandshakeCancelBeforeStart (1.96s)
+=== RUN   TestCLI_LatestReview_I01_CancelRetryRecoversProcess
+--- PASS: TestCLI_LatestReview_I01_CancelRetryRecoversProcess (1.89s)
+=== RUN   TestCLI_LatestReview_J01_CancelDoesNotKillReusedPGID
+--- PASS: TestCLI_LatestReview_J01_CancelDoesNotKillReusedPGID (2.00s)
+=== RUN   TestCLI_LatestReview_K01_CancelRecoversCleanEnvProcess
+--- PASS: TestCLI_LatestReview_K01_CancelRecoversCleanEnvProcess (1.98s)
+=== RUN   TestCLI_LatestReview_L01_CancelRecoversOrphanProcessGroup
+--- PASS: TestCLI_LatestReview_L01_CancelRecoversOrphanProcessGroup (2.17s)
+=== RUN   TestINT005
+--- PASS: TestINT005 (0.19s)
+=== RUN   TestINT006
+--- PASS: TestINT006 (0.02s)
+PASS
+ok  	asura/tests/integration	12.011s
+=== RUN   TestEngineCancel
+--- PASS: TestEngineCancel (0.14s)
+=== RUN   TestEngine_R05_PersistOnCancelledParentContext
+--- PASS: TestEngine_R05_PersistOnCancelledParentContext (0.04s)
+=== RUN   TestEngine_R06_PreservePartialOutputOnCancel
+--- PASS: TestEngine_R06_PreservePartialOutputOnCancel (0.03s)
+=== RUN   TestEngine_R10_DoNotOverwriteCancelledStatus
+--- PASS: TestEngine_R10_DoNotOverwriteCancelledStatus (0.03s)
+=== RUN   TestReviewCancelBeforeRunner
+--- PASS: TestReviewCancelBeforeRunner (0.02s)
+=== RUN   TestReviewCancelInRunningBeforeRunner
+--- PASS: TestReviewCancelInRunningBeforeRunner (0.02s)
+=== RUN   TestLatestReview_G02_PersistOnCancelBeforeRunner
+--- PASS: TestLatestReview_G02_PersistOnCancelBeforeRunner (0.04s)
+PASS
+ok  	asura/internal/engine	1.355s
+=== RUN   TestProcessCancel
+--- PASS: TestProcessCancel (0.20s)
+PASS
+ok  	asura/internal/backend/opencode	1.225s

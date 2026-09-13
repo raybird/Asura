@@ -1,0 +1,52 @@
+=== Phase 3 (B-02) 測試證據紀錄 (2026-09-12) ===
+
+[1. 內迴圈紅燈 (P3-T2)]
+$ go test -count=1 -v ./internal/daemon -run '^TestINT002Unit$'
+=== RUN   TestINT002Unit
+    daemon_test.go:494: expected error message to contain 'unauthorized', got workspace authorization denied: workspace is not in allowed roots
+--- FAIL: TestINT002Unit (0.01s)
+FAIL
+FAIL	asura/internal/daemon	0.016s
+
+[2. 外迴圈紅燈 (P3-T2)]
+$ go test -count=1 -v ./tests/integration -run '^TestINT002$'
+=== RUN   TestINT002
+    int_test.go:150: expected error to contain 'unauthorized', got workspace authorization denied: workspace is not in allowed roots
+--- FAIL: TestINT002 (0.01s)
+FAIL
+FAIL	asura/tests/integration	0.015s
+
+[3. 最小實作後內外迴圈綠燈 (P3-T1 ~ P3-T4)]
+$ go test -count=1 -v ./internal/daemon -run '^TestINT002Unit$'
+=== RUN   TestINT002Unit
+--- PASS: TestINT002Unit (0.01s)
+PASS
+ok  	asura/internal/daemon	0.017s
+
+$ go test -count=1 -v ./tests/integration -run '^TestINT002$'
+=== RUN   TestINT002
+--- PASS: TestINT002 (0.01s)
+PASS
+ok  	asura/tests/integration	0.015s
+
+$ go test -count=1 -race -v ./internal/daemon -run '^TestINT003Unit$'
+=== RUN   TestINT003Unit
+--- PASS: TestINT003Unit (0.10s)
+PASS
+ok  	asura/internal/daemon	1.127s
+
+$ go test -count=1 -v ./tests/integration -run '^TestINT003$'
+=== RUN   TestINT003
+--- PASS: TestINT003 (0.06s)
+PASS
+ok  	asura/tests/integration	0.072s
+
+[4. 全套 race 回歸測試 (P3-T4)]
+$ go test -count=1 -race ./...
+ok  	asura/cmd/asura	1.055s
+ok  	asura/internal/auth	1.064s
+ok  	asura/internal/backend/opencode	11.551s
+ok  	asura/internal/daemon	1.745s
+ok  	asura/internal/engine	1.548s
+ok  	asura/internal/storage	1.109s
+ok  	asura/tests/integration	51.681s

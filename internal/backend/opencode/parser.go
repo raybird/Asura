@@ -13,15 +13,16 @@ type TokenUsage struct {
 }
 
 type Event struct {
-	Type        string     `json:"type"`
-	Timestamp   int64      `json:"timestamp"`
-	SessionID   string     `json:"sessionID"`
-	Text        string     `json:"text,omitempty"`
-	Tool        string     `json:"tool,omitempty"`
-	ToolStatus  string     `json:"tool_status,omitempty"`
-	Tokens      TokenUsage `json:"tokens,omitempty"`
-	IsRateLimit bool       `json:"is_rate_limit,omitempty"`
-	RawJSON     string     `json:"-"`
+	Type         string     `json:"type"`
+	Timestamp    int64      `json:"timestamp"`
+	SessionID    string     `json:"sessionID"`
+	Text         string     `json:"text,omitempty"`
+	Tool         string     `json:"tool,omitempty"`
+	ToolStatus   string     `json:"tool_status,omitempty"`
+	Tokens       TokenUsage `json:"tokens,omitempty"`
+	IsRateLimit  bool       `json:"is_rate_limit,omitempty"`
+	ErrorMessage string     `json:"error_message,omitempty"`
+	RawJSON      string     `json:"-"`
 }
 
 type rawEvent struct {
@@ -64,6 +65,7 @@ func ParseEventLine(line string) (*Event, error) {
 	}
 
 	if raw.Error != nil {
+		evt.ErrorMessage = raw.Error.Message
 		if raw.Error.StatusCode == 429 || strings.Contains(strings.ToLower(raw.Error.Message), "rate limit") {
 			evt.IsRateLimit = true
 		}

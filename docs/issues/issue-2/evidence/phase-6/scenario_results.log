@@ -1,0 +1,18 @@
+=== RUN   TestINT001
+--- PASS: TestINT001 (6.67s)
+=== RUN   TestINT007
+--- PASS: TestINT007 (23.86s)
+=== RUN   TestINT002
+--- PASS: TestINT002 (0.02s)
+=== RUN   TestINT003
+--- PASS: TestINT003 (0.07s)
+=== RUN   TestINT004
+--- PASS: TestINT004 (0.12s)
+=== RUN   TestINT004Redelivery
+--- PASS: TestINT004Redelivery (0.17s)
+=== RUN   TestINT005
+--- PASS: TestINT005 (0.17s)
+=== RUN   TestINT006
+--- PASS: TestINT006 (0.01s)
+PASS
+ok  	asura/tests/integration	31.087s

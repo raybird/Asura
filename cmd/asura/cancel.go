@@ -13,6 +13,7 @@ import (
 
 	"asura/internal/auth"
 	"asura/internal/backend/opencode"
+	"asura/internal/daemon"
 	"asura/internal/engine"
 	"asura/internal/storage"
 )
@@ -87,6 +88,7 @@ func handleCancel(args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 
 	dbPath := fs.String("db", "asura.db", "path to SQLite database")
+	sockPath := fs.String("socket", os.Getenv("ASURA_SOCKET"), "path to daemon unix socket")
 
 	if err := fs.Parse(args); err != nil {
 		return 1
@@ -98,6 +100,21 @@ func handleCancel(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	taskID := remaining[0]
+
+	// 遵循 P5-T1：若 Daemon 可用，透過共同 Unix Socket 入口發送取消請求
+	if *sockPath != "" {
+		client, err := daemon.NewClient(*sockPath)
+		if err == nil {
+			defer client.Close()
+			_, cancelErr := client.CancelTask(context.Background(), taskID)
+			if cancelErr != nil {
+				fmt.Fprintf(stderr, "error: failed to cancel task via daemon: %v\n", cancelErr)
+				return 1
+			}
+			fmt.Fprintf(stdout, "Task %s cancelled successfully\n", taskID)
+			return 0
+		}
+	}
 
 	store, err := storage.NewSQLiteStore(*dbPath)
 	if err != nil {

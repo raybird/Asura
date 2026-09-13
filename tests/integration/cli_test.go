@@ -1642,6 +1642,141 @@ func TestCLI_LatestReview_M01_OrphanUnknownIdentityFailsSafely(t *testing.T) {
 	}
 }
 
+// TestCLI_DaemonLifecycle: 驗證正式 asura daemon 子進程啟動、接受 ask 請求與 SIGTERM 優雅關閉 (MUST FIX 3)
+func TestCLI_DaemonLifecycle(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-daemon-cli-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	sockPath := filepath.Join(tmpDir, "asura.sock")
+	dbPath := filepath.Join(tmpDir, "asura.db")
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get wd: %v", err)
+	}
+	projectRoot := filepath.Dir(filepath.Dir(wd))
+	asuraBin := filepath.Join(tmpDir, "asura")
+
+	buildCmd := exec.Command("go", "build", "-o", asuraBin, "./cmd/asura")
+	buildCmd.Dir = projectRoot
+	if out, err := buildCmd.CombinedOutput(); err != nil {
+		t.Fatalf("build asura binary failed: %v, out: %s", err, string(out))
+	}
+
+	// 1. 啟動 asura daemon 子進程
+	// 建立隔離的 fake opencode 二進位檔，防止 CLI Daemon 嘗試連接真實模型造成 Drain 等待逾時
+	fakeDir := t.TempDir()
+	fakeBin := filepath.Join(fakeDir, "opencode")
+	fakeScript := `#!/bin/sh
+if [ "$1" = "--version" ]; then
+    echo "1.18.23"
+    exit 0
+fi
+echo '{"type":"step_start","part":{"type":"step-start"}}'
+echo '{"type":"text","part":{"type":"text","text":"cli daemon task done"}}'
+echo '{"type":"step_finish","part":{"reason":"stop"}}'
+exit 0
+`
+	if err := os.WriteFile(fakeBin, []byte(fakeScript), 0755); err != nil {
+		t.Fatalf("failed to write fake opencode: %v", err)
+	}
+
+	daemonCmd := exec.Command(asuraBin, "daemon",
+		"--socket", sockPath,
+		"--db", dbPath,
+		"--allowed-roots", tmpDir,
+		"--workers", "2",
+		"--queue", "5",
+	)
+	daemonCmd.Env = append(os.Environ(), "PATH="+fakeDir+":"+os.Getenv("PATH"))
+	var daemonOut, daemonErr bytes.Buffer
+	daemonCmd.Stdout = &daemonOut
+	daemonCmd.Stderr = &daemonErr
+
+	if err := daemonCmd.Start(); err != nil {
+		t.Fatalf("daemon start failed: %v", err)
+	}
+
+	// 2. 等待 socket 就緒
+	ready := false
+	for i := 0; i < 50; i++ {
+		if _, err := os.Stat(sockPath); err == nil {
+			ready = true
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !ready {
+		_ = daemonCmd.Process.Kill()
+		t.Fatalf("daemon socket %s not ready within 2.5s; stderr: %s", sockPath, daemonErr.String())
+	}
+
+	// 3. 透過 asura ask 提交任務 (需等待結果或取得 ID)
+	askCmd := exec.Command(asuraBin, "ask",
+		"--socket", sockPath,
+		"--workspace", tmpDir,
+		"測試 CLI 啟動之 Daemon",
+	)
+	var askOut, askErr bytes.Buffer
+	askCmd.Stdout = &askOut
+	askCmd.Stderr = &askErr
+
+	if err := askCmd.Run(); err != nil {
+		_ = daemonCmd.Process.Kill()
+		t.Fatalf("ask command failed: %v, stderr: %s", err, askErr.String())
+	}
+
+	askOutStr := askOut.String()
+	if !strings.Contains(askOutStr, "Task ID: ") {
+		_ = daemonCmd.Process.Kill()
+		t.Fatalf("expected ask output to contain 'Task ID:', got: %s", askOutStr)
+	}
+
+	lines := strings.Split(strings.TrimSpace(askOutStr), "\n")
+	taskID := strings.TrimSpace(strings.TrimPrefix(lines[0], "Task ID:"))
+
+	// 4. 透過 asura status 查詢
+	statusCmd := exec.Command(asuraBin, "status",
+		"--socket", sockPath,
+		"--db", dbPath,
+		taskID,
+	)
+	var statusOut, statusErr bytes.Buffer
+	statusCmd.Stdout = &statusOut
+	statusCmd.Stderr = &statusErr
+
+	if err := statusCmd.Run(); err != nil {
+		_ = daemonCmd.Process.Kill()
+		t.Fatalf("status command failed: %v, stderr: %s", err, statusErr.String())
+	}
+
+	if !strings.Contains(statusOut.String(), taskID) {
+		_ = daemonCmd.Process.Kill()
+		t.Errorf("expected status output to contain %s, got: %s", taskID, statusOut.String())
+	}
+
+	// 5. 發送 SIGTERM 觸發優雅關閉
+	if err := daemonCmd.Process.Signal(syscall.SIGTERM); err != nil {
+		_ = daemonCmd.Process.Kill()
+		t.Fatalf("failed to send SIGTERM to daemon: %v", err)
+	}
+
+	// 等待 daemon 進程退出
+	daemonWaitErr := daemonCmd.Wait()
+	if daemonWaitErr != nil {
+		t.Errorf("daemon exit error: %v, stderr: %s", daemonWaitErr, daemonErr.String())
+	}
+
+	// 6. 驗證 socket 已被安全清理
+	if _, err := os.Stat(sockPath); !os.IsNotExist(err) {
+		t.Errorf("expected socket %s to be removed on graceful shutdown", sockPath)
+	}
+}
+
+
 
 
 

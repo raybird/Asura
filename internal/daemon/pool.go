@@ -20,7 +20,7 @@ type WorkerPool struct {
 	running    int
 	queue      chan taskItem
 	mu         sync.Mutex
-	closed     chan struct{}
+	isClosing  bool
 	closeOnce  sync.Once
 	wg         sync.WaitGroup
 }
@@ -45,15 +45,12 @@ func NewWorkerPool(maxWorkers int, maxQueue int) *WorkerPool {
 		maxWorkers: maxWorkers,
 		maxQueue:   maxQueue,
 		queue:      make(chan taskItem, maxQueue),
-		closed:     make(chan struct{}),
 	}
 }
 
 // Submit 提交任務至 WorkerPool，若容量已滿立即回傳 ErrCapacityExceeded
 func (p *WorkerPool) Submit(ctx context.Context, fn func() error) error {
 	select {
-	case <-p.closed:
-		return ErrPoolClosed
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
@@ -66,11 +63,9 @@ func (p *WorkerPool) Submit(ctx context.Context, fn func() error) error {
 	}
 
 	p.mu.Lock()
-	select {
-	case <-p.closed:
+	if p.isClosing {
 		p.mu.Unlock()
 		return ErrPoolClosed
-	default:
 	}
 
 	if p.running < p.maxWorkers {
@@ -92,11 +87,47 @@ func (p *WorkerPool) Submit(ctx context.Context, fn func() error) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-p.closed:
-		return ErrPoolClosed
 	case err := <-item.result:
 		return err
 	}
+}
+
+// SubmitAsync 異步提交任務至 WorkerPool，確認有執行或排隊容量後立即回傳結果 channel 與 nil (INT-004, P4-T2)
+func (p *WorkerPool) SubmitAsync(ctx context.Context, fn func() error) (<-chan error, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	item := taskItem{
+		ctx:    ctx,
+		fn:     fn,
+		result: make(chan error, 1),
+	}
+
+	p.mu.Lock()
+	if p.isClosing {
+		p.mu.Unlock()
+		return nil, ErrPoolClosed
+	}
+
+	if p.running < p.maxWorkers {
+		p.running++
+		p.wg.Add(1)
+		go p.workerLoop(item)
+		p.mu.Unlock()
+	} else {
+		select {
+		case p.queue <- item:
+			p.mu.Unlock()
+		default:
+			p.mu.Unlock()
+			return nil, ErrCapacityExceeded
+		}
+	}
+
+	return item.result, nil
 }
 
 func (p *WorkerPool) workerLoop(initialItem taskItem) {
@@ -106,12 +137,15 @@ func (p *WorkerPool) workerLoop(initialItem taskItem) {
 	for {
 		p.mu.Lock()
 		select {
-		case <-p.closed:
-			p.running--
+		case item, ok := <-p.queue:
 			p.mu.Unlock()
-			return
-		case item := <-p.queue:
-			p.mu.Unlock()
+			if !ok {
+				// 佇列已關閉且已清空，退出 worker
+				p.mu.Lock()
+				p.running--
+				p.mu.Unlock()
+				return
+			}
 			p.executeItem(item)
 		default:
 			// 佇列為空，原子釋放 Worker 額度並退出（徹底修復 R-02 佇列殘留停滯）
@@ -124,9 +158,6 @@ func (p *WorkerPool) workerLoop(initialItem taskItem) {
 
 func (p *WorkerPool) executeItem(item taskItem) {
 	select {
-	case <-p.closed:
-		item.result <- ErrPoolClosed
-		return
 	case <-item.ctx.Done():
 		item.result <- item.ctx.Err()
 		return
@@ -137,10 +168,14 @@ func (p *WorkerPool) executeItem(item taskItem) {
 	item.result <- err
 }
 
-// Close 關閉 WorkerPool 並等待所有正在進行的任務結束
+// Close 關閉 WorkerPool 並等待所有正在進行與排隊中的任務完成排水 (Drain)
 func (p *WorkerPool) Close() {
 	p.closeOnce.Do(func() {
-		close(p.closed)
+		p.mu.Lock()
+		p.isClosing = true
+		close(p.queue)
+		p.mu.Unlock()
 	})
 	p.wg.Wait()
 }
+

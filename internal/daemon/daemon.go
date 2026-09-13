@@ -2,9 +2,11 @@ package daemon
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"sync"
@@ -12,6 +14,7 @@ import (
 	"time"
 
 	"asura/internal/auth"
+	"asura/internal/backend/opencode"
 	"asura/internal/engine"
 	"asura/internal/storage"
 )
@@ -21,11 +24,25 @@ var (
 	ErrDaemonAlreadyRunning = errors.New("daemon already running")
 )
 
+// DefaultApprovedPermissionPolicy 定義 INT-007 核准之安全操作邊界：
+// 允許修改/build/test，但刪除重要資料、部署、push、對外傳送必須另行確認
+const DefaultApprovedPermissionPolicy = `{"*":"ask","read":"allow","edit":"allow","build":"allow","test":"allow","bash":"ask"}`
+
+// OpenCodeRuntimeConfig 定義 Daemon 底層執行器配置
+type OpenCodeRuntimeConfig struct {
+	BinaryPath      string
+	ExpectedVersion string
+	ConfigDir       string
+	Permission      string
+	DisableAuto     bool
+}
+
 // Config 定義 Daemon 運行參數
 type Config struct {
-	SocketPath string
-	MaxWorkers int
-	MaxQueue   int
+	SocketPath     string
+	MaxWorkers     int
+	MaxQueue       int
+	OpenCodeConfig OpenCodeRuntimeConfig
 }
 
 // Daemon 實作單一守護進程中樞
@@ -52,6 +69,18 @@ func WithEngine(eng *engine.Engine) DaemonOption {
 	}
 }
 
+// WithOpenCodeConfig 注入執行器執行設定
+func WithOpenCodeConfig(cfg OpenCodeRuntimeConfig) DaemonOption {
+	return func(d *Daemon) {
+		d.cfg.OpenCodeConfig = cfg
+	}
+}
+
+// OpenCodeConfig 回傳 Daemon 當前配置之 OpenCodeRuntimeConfig
+func (d *Daemon) OpenCodeConfig() OpenCodeRuntimeConfig {
+	return d.cfg.OpenCodeConfig
+}
+
 // NewDaemon 建立新的 Daemon 實例
 func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts ...DaemonOption) *Daemon {
 	if cfg.MaxWorkers <= 0 {
@@ -59,6 +88,12 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 	}
 	if cfg.MaxQueue < 0 {
 		cfg.MaxQueue = 10
+	}
+	if cfg.OpenCodeConfig.ExpectedVersion == "" {
+		cfg.OpenCodeConfig.ExpectedVersion = "1.18.23"
+	}
+	if cfg.OpenCodeConfig.Permission == "" {
+		cfg.OpenCodeConfig.Permission = DefaultApprovedPermissionPolicy
 	}
 
 	d := &Daemon{
@@ -74,7 +109,24 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 	}
 
 	if d.engine == nil {
-		d.engine = engine.NewEngine(store, policy)
+		adapter := opencode.NewAdapter(opencode.AdapterConfig{
+			BinaryPath:      d.cfg.OpenCodeConfig.BinaryPath,
+			ExpectedVersion: d.cfg.OpenCodeConfig.ExpectedVersion,
+			ConfigDir:       d.cfg.OpenCodeConfig.ConfigDir,
+			Permission:      d.cfg.OpenCodeConfig.Permission,
+			DisableAuto:     d.cfg.OpenCodeConfig.DisableAuto,
+			OnProcessStarted: func(ctx context.Context, pgid int) {
+				if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
+					_ = store.UpdateTaskPGID(context.Background(), taskID, pgid)
+				}
+			},
+			OnProcessExited: func(ctx context.Context, pgid int) {
+				if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
+					_ = store.UpdateTaskPGID(context.Background(), taskID, 0)
+				}
+			},
+		})
+		d.engine = engine.NewEngine(store, policy, engine.WithRunner(adapter.Run))
 	}
 
 	return d
@@ -148,8 +200,11 @@ func (d *Daemon) acceptLoop() {
 
 // IPCRequest 定義用戶端提交之請求
 type IPCRequest struct {
-	Workspace string `json:"workspace"`
-	Prompt    string `json:"prompt"`
+	Action    string `json:"action,omitempty"`
+	RequestID string `json:"request_id,omitempty"`
+	TaskID    string `json:"task_id,omitempty"`
+	Workspace string `json:"workspace,omitempty"`
+	Prompt    string `json:"prompt,omitempty"`
 }
 
 // IPCResponse 定義傳回用戶端之結果
@@ -164,35 +219,146 @@ func (d *Daemon) handleConn(conn net.Conn) {
 	decoder := json.NewDecoder(conn)
 	encoder := json.NewEncoder(conn)
 
-	var req IPCRequest
-	if err := decoder.Decode(&req); err != nil {
-		_ = encoder.Encode(IPCResponse{Error: "invalid request payload"})
-		return
-	}
-
-	var task *storage.Task
-	var submitErr error
-
-	// 透過 WorkerPool 限流調度
-	err := d.pool.Submit(context.Background(), func() error {
-		task, submitErr = d.engine.SubmitTask(context.Background(), engine.SubmitRequest{
-			Workspace: req.Workspace,
-			Prompt:    req.Prompt,
-		})
-		return submitErr
-	})
-
-	if err != nil {
-		if errors.Is(err, ErrCapacityExceeded) || errors.Is(err, ErrPoolClosed) {
-			_ = encoder.Encode(IPCResponse{Error: err.Error()})
+	for {
+		var req IPCRequest
+		if err := decoder.Decode(&req); err != nil {
+			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
+				return
+			}
+			_ = encoder.Encode(IPCResponse{Error: "invalid request payload"})
 			return
 		}
-		// 後端任務執行失敗：保留 Task 實體與 Error 一併回傳 (修復 R-08)
-		_ = encoder.Encode(IPCResponse{Task: task, Error: err.Error()})
-		return
-	}
 
-	_ = encoder.Encode(IPCResponse{Task: task})
+		action := req.Action
+		if action == "" {
+			action = "submit"
+		}
+
+		switch action {
+		case "status":
+			if req.TaskID == "" {
+				_ = encoder.Encode(IPCResponse{Error: "task_id required for status query"})
+				continue
+			}
+			task, err := d.store.GetTask(context.Background(), req.TaskID)
+			if err != nil && req.TaskID != "" {
+				task, err = d.store.GetTaskByRequestID(context.Background(), req.TaskID)
+			}
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("task not found: %v", err)})
+				continue
+			}
+			_ = encoder.Encode(IPCResponse{Task: task})
+
+		case "cancel":
+			if req.TaskID == "" {
+				_ = encoder.Encode(IPCResponse{Error: "task_id required for cancel"})
+				continue
+			}
+			targetID := req.TaskID
+			if _, err := d.store.GetTask(context.Background(), targetID); err != nil {
+				if t, rErr := d.store.GetTaskByRequestID(context.Background(), targetID); rErr == nil {
+					targetID = t.ID
+				}
+			}
+			err := d.engine.CancelTask(targetID)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: err.Error()})
+				continue
+			}
+			task, _ := d.store.GetTask(context.Background(), targetID)
+			_ = encoder.Encode(IPCResponse{Task: task})
+
+		case "submit":
+			// 遵循 INT-002 與 P3-T2：在進入 WorkerPool 與啟動後端前，Daemon 服務端直接校驗專案授權清單
+			if d.policy != nil {
+				if err := d.policy.AuthorizeWorkspace(req.Workspace); err != nil {
+					_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unauthorized workspace: %v", err)})
+					continue
+				}
+			}
+
+			// 計算請求 Fingerprint 確保同 Request ID 之 payload 一致性（防止撞 PK 或錯置）
+			fp := fmt.Sprintf("%x", sha256.Sum256([]byte(req.Workspace+":"+req.Prompt)))
+
+			// 遵循 INT-004-REDELIVERY：同 RequestID 且非 Cancelled 任務時直接回傳既有任務
+			if req.RequestID != "" {
+				existing, err := d.store.GetTaskByRequestID(context.Background(), req.RequestID)
+				if err != nil {
+					existing, err = d.store.GetTask(context.Background(), req.RequestID)
+				}
+				if err == nil && existing != nil {
+					if existing.Fingerprint != "" && existing.Fingerprint != fp {
+						_ = encoder.Encode(IPCResponse{Error: "request ID reused with different payload"})
+						continue
+					}
+					if existing.Status == storage.StatusCancelled {
+						_ = encoder.Encode(IPCResponse{Error: "cannot redeliver cancelled request"})
+						continue
+					}
+					_ = encoder.Encode(IPCResponse{Task: existing})
+					continue
+				}
+			}
+
+			taskID := engine.GenerateTaskID()
+			now := time.Now().UTC()
+			initialTask := &storage.Task{
+				ID:          taskID,
+				RequestID:   req.RequestID,
+				Fingerprint: fp,
+				Prompt:      req.Prompt,
+				Workspace:   req.Workspace,
+				Status:      storage.StatusPending,
+				CreatedAt:   now,
+				UpdatedAt:   now,
+			}
+
+			if err := d.store.CreateTask(context.Background(), initialTask); err != nil {
+				if req.RequestID != "" && errors.Is(err, storage.ErrDuplicateRequestID) {
+					existing, getErr := d.store.GetTaskByRequestID(context.Background(), req.RequestID)
+					if getErr != nil {
+						existing, getErr = d.store.GetTask(context.Background(), req.RequestID)
+					}
+					if getErr == nil && existing != nil {
+						if existing.Fingerprint != "" && existing.Fingerprint != fp {
+							_ = encoder.Encode(IPCResponse{Error: "request ID reused with different payload"})
+							continue
+						}
+						if existing.Status == storage.StatusCancelled {
+							_ = encoder.Encode(IPCResponse{Error: "cannot redeliver cancelled request"})
+							continue
+						}
+						_ = encoder.Encode(IPCResponse{Task: existing})
+						continue
+					}
+				}
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("failed to persist initial task: %v", err)})
+				continue
+			}
+
+			_, err := d.pool.SubmitAsync(context.Background(), func() error {
+				_, runErr := d.engine.SubmitTask(context.Background(), engine.SubmitRequest{
+					ID:        taskID,
+					Workspace: req.Workspace,
+					Prompt:    req.Prompt,
+				})
+				return runErr
+			})
+
+			if err != nil {
+				_ = d.store.DeleteTask(context.Background(), taskID)
+				_ = encoder.Encode(IPCResponse{Error: err.Error()})
+				continue
+			}
+
+			// 遵循 P4-T2：容量及持久化成功後、後端完成前回傳 Task ID
+			_ = encoder.Encode(IPCResponse{Task: initialTask})
+
+		default:
+			_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unknown action: %s", action)})
+		}
+	}
 }
 
 // Close 關閉 Daemon 並釋放 Socket 與 WorkerPool 資源
@@ -242,6 +408,8 @@ func (c *Client) Submit(ctx context.Context, req engine.SubmitRequest) (*storage
 	decoder := json.NewDecoder(c.conn)
 
 	if err := encoder.Encode(IPCRequest{
+		Action:    "submit",
+		RequestID: req.ID,
 		Workspace: req.Workspace,
 		Prompt:    req.Prompt,
 	}); err != nil {
@@ -262,6 +430,58 @@ func (c *Client) Submit(ctx context.Context, req engine.SubmitRequest) (*storage
 
 	if resp.Task == nil {
 		return nil, errors.New("empty task in response")
+	}
+
+	return resp.Task, nil
+}
+
+// GetTask 向 Daemon 查詢指定任務狀態 (INT-004)
+func (c *Client) GetTask(ctx context.Context, taskID string) (*storage.Task, error) {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action: "status",
+		TaskID: taskID,
+	}); err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if resp.Error != "" {
+		return nil, errors.New(resp.Error)
+	}
+
+	if resp.Task == nil {
+		return nil, errors.New("task not found")
+	}
+
+	return resp.Task, nil
+}
+
+// CancelTask 向 Daemon 發送任務取消請求 (INT-005)
+func (c *Client) CancelTask(ctx context.Context, taskID string) (*storage.Task, error) {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action: "cancel",
+		TaskID: taskID,
+	}); err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if resp.Error != "" {
+		return nil, errors.New(resp.Error)
 	}
 
 	return resp.Task, nil

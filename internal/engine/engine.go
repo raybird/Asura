@@ -36,6 +36,7 @@ type Engine struct {
 	policy    *auth.Policy
 	runner    RunnerFunc
 	cancels   map[string]context.CancelFunc
+	doneChs   map[string]chan struct{}
 	cancelsMu sync.Mutex
 }
 
@@ -55,6 +56,7 @@ func NewEngine(store *storage.SQLiteStore, policy *auth.Policy, opts ...Option) 
 		store:   store,
 		policy:  policy,
 		cancels: make(map[string]context.CancelFunc),
+		doneChs: make(map[string]chan struct{}),
 	}
 
 	for _, opt := range opts {
@@ -73,10 +75,30 @@ func defaultRunner(ctx context.Context, workspace string, prompt string) (string
 	return "", errors.New("no default runner configured")
 }
 
-func generateTaskID() string {
+// GenerateTaskID 生成唯一任務識別碼 (INT-004)
+func GenerateTaskID() string {
 	b := make([]byte, 6)
 	_, _ = rand.Read(b)
 	return fmt.Sprintf("task-%d-%s", time.Now().Unix(), hex.EncodeToString(b))
+}
+
+type taskIDKey struct{}
+
+// ContextWithTaskID 將 taskID 注入 context
+func ContextWithTaskID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, taskIDKey{}, id)
+}
+
+// TaskIDFromContext 自 context 萃取 taskID
+func TaskIDFromContext(ctx context.Context) string {
+	if val, ok := ctx.Value(taskIDKey{}).(string); ok {
+		return val
+	}
+	return ""
+}
+
+func generateTaskID() string {
+	return GenerateTaskID()
 }
 
 // hasUnresolvedErrorOrEmpty 判斷執行輸出是否為空或只回傳未解決的結構化錯誤（SCN-007, 修復 R-09）
@@ -139,20 +161,36 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 		UpdatedAt: now,
 	}
 
+	alreadyCreated := false
 	if req.ID != "" {
 		existing, err := e.store.GetTask(ctx, req.ID)
-		if err == nil && existing.Status == storage.StatusCancelled {
-			return existing, context.Canceled
+		if err == nil {
+			if existing.Status == storage.StatusCancelled {
+				return existing, context.Canceled
+			}
+			if existing.Status != storage.StatusPending {
+				return existing, nil
+			}
+			task = existing
+			alreadyCreated = true
 		}
 	}
 
-	if err := e.store.CreateTask(ctx, task); err != nil {
-		return nil, fmt.Errorf("create task in storage: %w", err)
+	if !alreadyCreated {
+		if err := e.store.CreateTask(ctx, task); err != nil {
+			return nil, fmt.Errorf("create task in storage: %w", err)
+		}
 	}
 
 	// 3. 條件式轉移狀態至 running (修復 F-02)
 	updated, err := e.store.UpdateTaskStatusIfPending(ctx, task.ID, storage.StatusRunning)
 	if err != nil {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			task.Status = storage.StatusCancelled
+			task.ErrorMessage = "task cancelled by user"
+			_ = e.store.UpdateTaskStatus(context.Background(), task.ID, storage.StatusCancelled, "", "task cancelled by user")
+			return task, ctx.Err()
+		}
 		return nil, fmt.Errorf("update task to running: %w", err)
 	}
 	if !updated {
@@ -167,16 +205,20 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 	task.Status = storage.StatusRunning
 
 	// 4. 配置獨立 Cancel Context 並登記
-	taskCtx, cancel := context.WithCancel(ctx)
+	taskCtx, cancel := context.WithCancel(ContextWithTaskID(ctx, task.ID))
+	doneCh := make(chan struct{})
 	e.cancelsMu.Lock()
 	e.cancels[task.ID] = cancel
+	e.doneChs[task.ID] = doneCh
 	e.cancelsMu.Unlock()
 
 	defer func() {
 		e.cancelsMu.Lock()
 		delete(e.cancels, task.ID)
+		delete(e.doneChs, task.ID)
 		e.cancelsMu.Unlock()
 		cancel()
+		close(doneCh)
 	}()
 
 	// 進入 runner 前查核儲存層與 context 最新狀態，若已被外部取消則直接退出，絕不呼叫 runner (修復 F-02)
