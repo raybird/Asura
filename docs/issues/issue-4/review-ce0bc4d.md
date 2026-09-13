@@ -221,6 +221,12 @@
 4. **儲存層長輸出串流支援**（對應 NICE TO HAVE 問題 4）：
    後續若任務結果常態性超過數十 MB，可於 `internal/storage` 擴充結果切片查詢 API，直接在 SQL 查詢層進行字元截取，避免 Web 服務端分配過大記憶體。
 
+### 2026-09-13 審查修復追蹤
+- **問題 1（Session LRU 驅逐，SHOULD FIX）**：已於 2026-09-13 修復完成。活躍 session 達到 128 上限時自動逐出最早過期之 session，騰出空間給新登入請求，由 `internal/web/session_test.go:TestSession_EvictOldestWhenCapacityReached` 驗證通過。
+- **問題 2（後端測試解耦，SHOULD FIX）**：依據《手術式修改》與《Monorepo 規則》，不於本次 Issue #4 Web PR 跨模組重構 Issue #2 既有測試，保留於後續獨立任務處理。
+- **問題 3（0.0.0.0 提示，NICE TO HAVE）**：已於 2026-09-13 修復完成。當 `-listen` 包含 `0.0.0.0` 且未提供 `-origin` 時，CLI 啟動輸出警告提醒，由 `cmd/asura/run_test.go` 驗證通過。
+- **問題 4（長輸出分頁串流，NICE TO HAVE）**：現階段資料量規模維持簡單實作，待後續海量日誌需求再行擴充。
+
 ---
 
 ## 流程判定

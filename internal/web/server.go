@@ -221,9 +221,17 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(s.sessions) >= 128 {
-		s.mu.Unlock()
-		http.Error(w, "session capacity exceeded", http.StatusTooManyRequests)
-		return
+		var oldestKey [32]byte
+		var oldestExp time.Time
+		first := true
+		for key, expiry := range s.sessions {
+			if first || expiry.Before(oldestExp) {
+				oldestKey = key
+				oldestExp = expiry
+				first = false
+			}
+		}
+		delete(s.sessions, oldestKey)
 	}
 	s.sessions[sha256.Sum256([]byte(token))] = now.Add(12 * time.Hour)
 	s.mu.Unlock()

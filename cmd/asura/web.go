@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -42,6 +43,9 @@ func handleWeb(args []string, stdout, stderr io.Writer) int {
 	origin := *originFlag
 	if origin == "" {
 		origin = "http://" + *listenAddr
+		if strings.HasPrefix(*listenAddr, "0.0.0.0") {
+			fmt.Fprintln(stderr, "warning: listening on 0.0.0.0 without explicit -origin; browsers accessing via LAN IP or localhost may be rejected by origin/host protection unless -origin is set")
+		}
 	}
 
 	serverHandler, err := web.NewServer(web.Config{
