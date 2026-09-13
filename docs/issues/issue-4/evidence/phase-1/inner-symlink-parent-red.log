@@ -1,0 +1,10 @@
+日期：2026-09-13
+命令：go test -count=1 -v ./internal/auth -run '^TestWEB002Unit$'
+退出碼：1
+=== RUN   TestWEB002Unit
+    web_test.go:23: outside symlink authorized: /tmp/TestWEB002Unit1389038799/001/escape/..
+    web_test.go:23: outside symlink authorized: /tmp/TestWEB002Unit1389038799/001/escape/../new-project
+--- FAIL: TestWEB002Unit (0.00s)
+FAIL
+FAIL	asura/internal/auth	0.004s
+FAIL

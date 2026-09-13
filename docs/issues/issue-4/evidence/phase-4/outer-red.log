@@ -1,0 +1,16 @@
+=== RUN   TestWEB006
+--- PASS: TestWEB006 (0.02s)
+=== RUN   TestWEB007
+    web_test.go:1001: expected 403 for unauthorized workspace task result, got 404
+    web_test.go:1014: expected 400 for bad query param "?offset=-1&limit=100", got 404
+    web_test.go:1014: expected 400 for bad query param "?offset=0&limit=0", got 404
+    web_test.go:1014: expected 400 for bad query param "?offset=0&limit=-10", got 404
+    web_test.go:1014: expected 400 for bad query param "?offset=abc&limit=100", got 404
+    web_test.go:1014: expected 400 for bad query param "?offset=0&limit=xyz", got 404
+    web_test.go:1026: pagination fetch failed at offset 0: 404 body=404 page not found
+--- FAIL: TestWEB007 (0.01s)
+=== RUN   TestWEB009
+--- PASS: TestWEB009 (0.01s)
+FAIL
+FAIL	asura/tests/integration	0.050s
+FAIL

@@ -1,0 +1,26 @@
+=== RUN   TestWEB002Daemon
+--- PASS: TestWEB002Daemon (1.13s)
+=== RUN   TestWEB001
+--- PASS: TestWEB001 (0.02s)
+=== RUN   TestWEB002
+--- PASS: TestWEB002 (0.03s)
+=== RUN   TestWEB010
+--- PASS: TestWEB010 (0.01s)
+=== RUN   TestWEB003
+--- PASS: TestWEB003 (0.03s)
+=== RUN   TestWEB004
+--- PASS: TestWEB004 (0.01s)
+=== RUN   TestWEB005
+--- PASS: TestWEB005 (0.01s)
+=== RUN   TestWEB008
+--- PASS: TestWEB008 (0.02s)
+=== RUN   TestWEB008ProjectsAndPage
+--- PASS: TestWEB008ProjectsAndPage (0.01s)
+=== RUN   TestWEB006
+--- PASS: TestWEB006 (0.02s)
+=== RUN   TestWEB007
+--- PASS: TestWEB007 (0.02s)
+=== RUN   TestWEB009
+--- PASS: TestWEB009 (0.01s)
+PASS
+ok  	asura/tests/integration	1.333s

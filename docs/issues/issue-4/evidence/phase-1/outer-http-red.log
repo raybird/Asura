@@ -1,0 +1,18 @@
+日期：2026-09-13
+命令：go test -count=1 -v ./tests/integration -run '^TestWEB(001|002|010)$'
+退出碼：1
+=== RUN   TestWEB001
+    web_test.go:73: login: 404 404 page not found
+         cookies=0
+--- FAIL: TestWEB001 (0.01s)
+=== RUN   TestWEB002
+    web_test.go:90: login: 404 404 page not found
+         cookies=0
+--- FAIL: TestWEB002 (0.01s)
+=== RUN   TestWEB010
+    web_test.go:108: login: 404 404 page not found
+         cookies=0
+--- FAIL: TestWEB010 (0.01s)
+FAIL
+FAIL	asura/tests/integration	0.032s
+FAIL

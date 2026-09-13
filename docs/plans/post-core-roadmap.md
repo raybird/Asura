@@ -23,6 +23,8 @@
 
 ## Phase 2A：單一遠端入口工作包
 
+2026-09-13 補充：已建立 [Issue #4](https://github.com/raybird/Asura/issues/4)，選定本人使用的私人 Web 入口，十項驗收已核准並完成[正式拆解](../issues/issue-4/implementation-plan-decomposition.md)。下列候選敘述保留為規劃歷史，現行核准與進度以 [Issue 4 README](../issues/issue-4/README.md) 為準。
+
 以下是規劃候選，未建立可開工的實作 Task；入口及驗收核准後才正式 decompose。
 
 | 工作包 | 順序與內容 | 完成證據 |

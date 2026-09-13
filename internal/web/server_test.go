@@ -1,0 +1,468 @@
+package web_test
+
+import (
+	"encoding/json"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"asura/internal/daemon"
+	"asura/internal/storage"
+	"asura/internal/web"
+)
+
+const origin = "https://asura.example"
+const secret = "test-only-secret-please-do-not-use"
+
+func request(s http.Handler, method, path, body, source string, cookie *http.Cookie) *httptest.ResponseRecorder {
+	r := httptest.NewRequest(method, origin+path, strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	if source != "" {
+		r.Header.Set("Origin", source)
+	}
+	if cookie != nil {
+		r.AddCookie(cookie)
+	}
+	w := httptest.NewRecorder()
+	s.ServeHTTP(w, r)
+	return w
+}
+
+// 2026-09-13 WEB-001：以 HTTP 狀態與 cookie 屬性驗證登入邊界。
+func TestWEB001Unit(t *testing.T) {
+	s, err := web.NewServer(web.Config{Key: secret, Origin: origin, SocketPath: "/does-not-exist.sock"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, body := range []string{`{"key":"wrong"}`, `{}`, `{"key":"` + secret + `","allowed_roots":["/"]}`} {
+		w := request(s, "POST", "/api/login", body, origin, nil)
+		if w.Code != http.StatusUnauthorized && w.Code != http.StatusBadRequest {
+			t.Errorf("bad login: %d", w.Code)
+		}
+		if len(w.Result().Cookies()) != 0 {
+			t.Error("bad login created a session")
+		}
+	}
+	w := request(s, "POST", "/api/login", `{"key":"`+secret+`"}`, origin, nil)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("valid login: %d %s", w.Code, w.Body.String())
+	}
+	cookies := w.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("cookies: %v", cookies)
+	}
+	c := cookies[0]
+	if !c.HttpOnly || !c.Secure || c.SameSite != http.SameSiteStrictMode || c.Path != "/" || c.Value == secret {
+		t.Errorf("unsafe session cookie: %+v", c)
+	}
+	if strings.Contains(w.Body.String(), secret) || w.Header().Get("Cache-Control") != "no-store" {
+		t.Error("login leaks or caches secret")
+	}
+	for _, cookie := range []*http.Cookie{nil, {Name: c.Name, Value: "forged"}} {
+		w = request(s, "GET", "/api/tasks/private", "", origin, cookie)
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("unauthenticated read: %d", w.Code)
+		}
+	}
+	for _, cfg := range []web.Config{{Origin: origin, SocketPath: "/tmp/d.sock"}, {Key: secret, Origin: "https://asura.example/path", SocketPath: "/tmp/d.sock"}, {Key: secret, Origin: origin}} {
+		if _, err := web.NewServer(cfg); err == nil {
+			t.Errorf("invalid config accepted: %+v", cfg)
+		}
+	}
+}
+
+// 2026-09-13 WEB-010：即使持有 cookie，跨站、偽造 Host 與登出後均不得操作。
+func TestWEB010Unit(t *testing.T) {
+	s, err := web.NewServer(web.Config{Key: secret, Origin: origin, SocketPath: "/does-not-exist.sock"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := request(s, "POST", "/api/login", `{"key":"`+secret+`"}`, origin, nil)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("login: %d", w.Code)
+	}
+	c := w.Result().Cookies()[0]
+	for _, source := range []string{"https://evil.example", "null", ""} {
+		w = request(s, "POST", "/api/tasks", `{}`, source, c)
+		if w.Code != http.StatusForbidden {
+			t.Errorf("cross-site request %q: %d", source, w.Code)
+		}
+	}
+	r := httptest.NewRequest("GET", origin+"/api/tasks/private", nil)
+	r.Host = "evil.example"
+	r.AddCookie(c)
+	r.Header.Set("X-Forwarded-Host", "asura.example")
+	w = httptest.NewRecorder()
+	s.ServeHTTP(w, r)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("forged Host: %d", w.Code)
+	}
+	w = request(s, "POST", "/api/logout", `{}`, origin, c)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("logout: %d", w.Code)
+	}
+	w = request(s, "GET", "/api/tasks/private", "", origin, c)
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("revoked cookie: %d", w.Code)
+	}
+}
+
+func startMockSocket(t *testing.T, handler func(req daemon.IPCRequest) daemon.IPCResponse) string {
+	t.Helper()
+	sockPath := filepath.Join(t.TempDir(), "mock.sock")
+	l, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { l.Close() })
+	go func() {
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer c.Close()
+				var req daemon.IPCRequest
+				if err := json.NewDecoder(c).Decode(&req); err == nil {
+					resp := handler(req)
+					_ = json.NewEncoder(c).Encode(resp)
+				}
+			}(conn)
+		}
+	}()
+	return sockPath
+}
+
+// 2026-09-13 WEB-003：提交參數校驗、中樞錯誤映射與接受回應格式化
+func TestWEB003Unit(t *testing.T) {
+	mockSock := startMockSocket(t, func(req daemon.IPCRequest) daemon.IPCResponse {
+		if req.Action == "submit" {
+			if req.Workspace == "/capped" {
+				return daemon.IPCResponse{Error: daemon.ErrCapacityExceeded.Error()}
+			}
+			return daemon.IPCResponse{
+				Task: &storage.Task{
+					ID:        "task-accepted-1",
+					RequestID: req.RequestID,
+					Workspace: req.Workspace,
+					Prompt:    req.Prompt,
+					Status:    storage.StatusPending,
+					CreatedAt: time.Now(),
+					UpdatedAt: time.Now(),
+				},
+			}
+		}
+		return daemon.IPCResponse{Error: "unknown action"}
+	})
+
+	s, err := web.NewServer(web.Config{Key: secret, Origin: origin, SocketPath: mockSock})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wLogin := request(s, "POST", "/api/login", `{"key":"`+secret+`"}`, origin, nil)
+	c := wLogin.Result().Cookies()[0]
+
+	// 1. 缺少必要欄位或畸形 JSON 拒絕 400
+	for _, badBody := range []string{
+		`{}`,
+		`{"id":""}`,
+		`{"id":"test","workspace":"/tmp"}`,
+		`{"id":"test","prompt":"prompt"}`,
+		`{"id":"test","workspace":"/tmp","prompt":"   "}`,
+		`{"id":"test","workspace":"/tmp","prompt":"p","unknown_field":1}`,
+		`not-json`,
+	} {
+		w := request(s, "POST", "/api/tasks", badBody, origin, c)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for body %q, got %d", badBody, w.Code)
+		}
+	}
+
+	// 2. 正常提交回傳 202 與 Task JSON
+	validBody := `{"id":"valid-req","workspace":"/tmp","prompt":"run task"}`
+	wValid := request(s, "POST", "/api/tasks", validBody, origin, c)
+	if wValid.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d", wValid.Code)
+	}
+	if ct := wValid.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+		t.Errorf("expected application/json, got %q", ct)
+	}
+	var task storage.Task
+	if err := json.Unmarshal(wValid.Body.Bytes(), &task); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if task.ID != "task-accepted-1" || task.RequestID != "valid-req" {
+		t.Errorf("unexpected task: %+v", task)
+	}
+
+	// 3. 容量超出回傳 503 capacity exceeded
+	cappedBody := `{"id":"capped-req","workspace":"/capped","prompt":"run task"}`
+	wCapped := request(s, "POST", "/api/tasks", cappedBody, origin, c)
+	if wCapped.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 for capacity exceeded, got %d", wCapped.Code)
+	}
+	if !strings.Contains(wCapped.Body.String(), "capacity exceeded") {
+		t.Errorf("expected 'capacity exceeded' in body, got %q", wCapped.Body.String())
+	}
+}
+
+// 2026-09-13 WEB-004：同識別重送時回傳原任務並保持 202
+func TestWEB004Unit(t *testing.T) {
+	mockSock := startMockSocket(t, func(req daemon.IPCRequest) daemon.IPCResponse {
+		return daemon.IPCResponse{
+			Task: &storage.Task{
+				ID:        "original-task-id",
+				RequestID: req.RequestID,
+				Workspace: req.Workspace,
+				Prompt:    req.Prompt,
+				Status:    storage.StatusRunning,
+			},
+		}
+	})
+	s, err := web.NewServer(web.Config{Key: secret, Origin: origin, SocketPath: mockSock})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wLogin := request(s, "POST", "/api/login", `{"key":"`+secret+`"}`, origin, nil)
+	c := wLogin.Result().Cookies()[0]
+
+	body := `{"id":"idempotent-key","workspace":"/tmp","prompt":"prompt"}`
+	w1 := request(s, "POST", "/api/tasks", body, origin, c)
+	w2 := request(s, "POST", "/api/tasks", body, origin, c)
+	if w1.Code != http.StatusAccepted || w2.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 for both submissions, got %d and %d", w1.Code, w2.Code)
+	}
+	var t1, t2 storage.Task
+	_ = json.Unmarshal(w1.Body.Bytes(), &t1)
+	_ = json.Unmarshal(w2.Body.Bytes(), &t2)
+	if t1.ID != "original-task-id" || t2.ID != "original-task-id" {
+		t.Errorf("expected original-task-id, got %s and %s", t1.ID, t2.ID)
+	}
+}
+
+// 2026-09-13 WEB-005：重送衝突（異內容、已取消）之 HTTP 錯誤映射為 400
+func TestWEB005Unit(t *testing.T) {
+	mockSock := startMockSocket(t, func(req daemon.IPCRequest) daemon.IPCResponse {
+		if req.Prompt == "different" {
+			return daemon.IPCResponse{Error: "request ID reused with different payload"}
+		}
+		if req.Prompt == "cancelled" {
+			return daemon.IPCResponse{Error: "cannot redeliver cancelled request"}
+		}
+		return daemon.IPCResponse{Task: &storage.Task{ID: "new-task-id"}}
+	})
+	s, err := web.NewServer(web.Config{Key: secret, Origin: origin, SocketPath: mockSock})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wLogin := request(s, "POST", "/api/login", `{"key":"`+secret+`"}`, origin, nil)
+	c := wLogin.Result().Cookies()[0]
+
+	// 1. 同識別異內容拒絕 400
+	wDiff := request(s, "POST", "/api/tasks", `{"id":"dup-key","workspace":"/tmp","prompt":"different"}`, origin, c)
+	if wDiff.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for different payload, got %d", wDiff.Code)
+	}
+	if !strings.Contains(wDiff.Body.String(), "request ID reused with different payload") {
+		t.Errorf("expected conflict message in body, got %q", wDiff.Body.String())
+	}
+
+	// 2. 已取消任務重送拒絕 400
+	wCancelled := request(s, "POST", "/api/tasks", `{"id":"dup-key","workspace":"/tmp","prompt":"cancelled"}`, origin, c)
+	if wCancelled.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for cancelled redelivery, got %d", wCancelled.Code)
+	}
+	if !strings.Contains(wCancelled.Body.String(), "cannot redeliver cancelled request") {
+		t.Errorf("expected cancelled redelivery message in body, got %q", wCancelled.Body.String())
+	}
+}
+
+// 2026-09-13 WEB-008：共同取消錯誤映射、專案列表 API 與操作頁面交付單元測試
+func TestWEB008Unit(t *testing.T) {
+	mockSock := startMockSocket(t, func(req daemon.IPCRequest) daemon.IPCResponse {
+		switch req.Action {
+		case "cancel":
+			if req.TaskID == "missing-task" {
+				return daemon.IPCResponse{Error: "task not found"}
+			}
+			return daemon.IPCResponse{
+				Task: &storage.Task{
+					ID:     req.TaskID,
+					Status: storage.StatusCancelled,
+				},
+			}
+		case "projects":
+			return daemon.IPCResponse{
+				Projects: []string{"/project/alpha", "/project/beta"},
+			}
+		}
+		return daemon.IPCResponse{Error: "unknown action"}
+	})
+
+	s, err := web.NewServer(web.Config{Key: secret, Origin: origin, SocketPath: mockSock})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wLogin := request(s, "POST", "/api/login", `{"key":"`+secret+`"}`, origin, nil)
+	c := wLogin.Result().Cookies()[0]
+
+	// 1. 成功取消映射 200 且狀態為 cancelled
+	wCancel := request(s, "POST", "/api/tasks/task-to-cancel/cancel", `{}`, origin, c)
+	if wCancel.Code != http.StatusOK {
+		t.Fatalf("expected 200 for cancel, got %d (body: %s)", wCancel.Code, wCancel.Body.String())
+	}
+	var cancelledTask storage.Task
+	if err := json.Unmarshal(wCancel.Body.Bytes(), &cancelledTask); err != nil {
+		t.Fatalf("unmarshal cancel resp: %v", err)
+	}
+	if cancelledTask.Status != storage.StatusCancelled {
+		t.Errorf("expected cancelled status, got %s", cancelledTask.Status)
+	}
+
+	// 2. 取消不存在任務映射 404
+	wMissing := request(s, "POST", "/api/tasks/missing-task/cancel", `{}`, origin, c)
+	if wMissing.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for missing task cancel, got %d", wMissing.Code)
+	}
+	if !strings.Contains(wMissing.Body.String(), "task not found") {
+		t.Errorf("expected 'task not found', got %q", wMissing.Body.String())
+	}
+
+	// 3. GET /api/projects 未登入拒絕 401
+	wNoAuthProjects := request(s, "GET", "/api/projects", "", origin, nil)
+	if wNoAuthProjects.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for unauth /api/projects, got %d", wNoAuthProjects.Code)
+	}
+
+	// 4. GET /api/projects 已登入回傳專案清單 200
+	wProjects := request(s, "GET", "/api/projects", "", origin, c)
+	if wProjects.Code != http.StatusOK {
+		t.Fatalf("expected 200 for /api/projects, got %d (body: %s)", wProjects.Code, wProjects.Body.String())
+	}
+	var projs []string
+	if err := json.Unmarshal(wProjects.Body.Bytes(), &projs); err != nil {
+		t.Fatalf("unmarshal projects: %v", err)
+	}
+	if len(projs) != 2 || projs[0] != "/project/alpha" || projs[1] != "/project/beta" {
+		t.Errorf("unexpected projects list: %+v", projs)
+	}
+
+	// 5. GET / 交付 HTML 頁面
+	wPage := request(s, "GET", "/", "", origin, nil)
+	if wPage.Code != http.StatusOK {
+		t.Fatalf("expected 200 for GET /, got %d", wPage.Code)
+	}
+	if ct := wPage.Header().Get("Content-Type"); !strings.Contains(ct, "text/html") {
+		t.Errorf("expected text/html content-type, got %q", ct)
+	}
+	bodyStr := wPage.Body.String()
+	for _, expectedElem := range []string{"project-select", "prompt", "task-id", "cancel", "submit", "login"} {
+		if !strings.Contains(strings.ToLower(bodyStr), strings.ToLower(expectedElem)) {
+			t.Errorf("expected HTML page to contain element %q", expectedElem)
+		}
+	}
+}
+
+// 2026-09-13 WEB-007：結果分頁讀取之參數驗證、狀態映射與分頁邊界單元測試
+func TestWEB007Unit(t *testing.T) {
+	mockSock := startMockSocket(t, func(req daemon.IPCRequest) daemon.IPCResponse {
+		if req.Action == "status" {
+			switch req.TaskID {
+			case "task-unauthorized":
+				return daemon.IPCResponse{Error: "unauthorized workspace: /outside"}
+			case "task-not-found":
+				return daemon.IPCResponse{Error: "task not found"}
+			case "task-long":
+				return daemon.IPCResponse{
+					Task: &storage.Task{
+						ID:        "task-long",
+						Workspace: "/tmp",
+						Status:    storage.StatusCompleted,
+						Result:    "【測試】0123456789ABCDEF", // 18 runes
+					},
+				}
+			}
+		}
+		return daemon.IPCResponse{Error: "unknown action"}
+	})
+
+	s, err := web.NewServer(web.Config{Key: secret, Origin: origin, SocketPath: mockSock})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wLogin := request(s, "POST", "/api/login", `{"key":"`+secret+`"}`, origin, nil)
+	c := wLogin.Result().Cookies()[0]
+
+	// 1. 未登入拒絕 401
+	wNoAuth := request(s, "GET", "/api/tasks/task-long/result?offset=0&limit=10", "", origin, nil)
+	if wNoAuth.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for unauthenticated result query, got %d", wNoAuth.Code)
+	}
+
+	// 2. 非法分頁參數拒絕 400 Bad Request
+	for _, badURL := range []string{
+		"/api/tasks/task-long/result?offset=-1&limit=10",
+		"/api/tasks/task-long/result?offset=0&limit=0",
+		"/api/tasks/task-long/result?offset=0&limit=-5",
+		"/api/tasks/task-long/result?offset=abc&limit=10",
+		"/api/tasks/task-long/result?offset=0&limit=xyz",
+	} {
+		wBad := request(s, "GET", badURL, "", origin, c)
+		if wBad.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for %q, got %d", badURL, wBad.Code)
+		}
+	}
+
+	// 3. 越權專案任務拒絕 403 Forbidden
+	wUnauth := request(s, "GET", "/api/tasks/task-unauthorized/result?offset=0&limit=10", "", origin, c)
+	if wUnauth.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for unauthorized workspace task, got %d", wUnauth.Code)
+	}
+
+	// 4. 不存在任務回傳 404 Not Found
+	wNotFound := request(s, "GET", "/api/tasks/task-not-found/result?offset=0&limit=10", "", origin, c)
+	if wNotFound.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for missing task, got %d", wNotFound.Code)
+	}
+
+	// 5. 正常分頁讀取：第一頁 (offset=0, limit=6)
+	wPage1 := request(s, "GET", "/api/tasks/task-long/result?offset=0&limit=6", "", origin, c)
+	if wPage1.Code != http.StatusOK {
+		t.Fatalf("expected 200 for page 1, got %d (body: %s)", wPage1.Code, wPage1.Body.String())
+	}
+	var p1 struct {
+		TaskID  string `json:"task_id"`
+		Offset  int    `json:"offset"`
+		Limit   int    `json:"limit"`
+		Total   int    `json:"total"`
+		Data    string `json:"data"`
+		HasMore bool   `json:"has_more"`
+	}
+	if err := json.Unmarshal(wPage1.Body.Bytes(), &p1); err != nil {
+		t.Fatalf("unmarshal page 1: %v", err)
+	}
+	if p1.TaskID != "task-long" || p1.Offset != 0 || p1.Limit != 6 || p1.Total != 20 || p1.Data != "【測試】01" || !p1.HasMore {
+		t.Errorf("unexpected page 1: %+v", p1)
+	}
+
+	// 6. 正常分頁讀取：最後一頁 (offset=16, limit=10)
+	wPageLast := request(s, "GET", "/api/tasks/task-long/result?offset=16&limit=10", "", origin, c)
+	if wPageLast.Code != http.StatusOK {
+		t.Fatalf("expected 200 for last page, got %d", wPageLast.Code)
+	}
+	var pLast struct {
+		Offset  int    `json:"offset"`
+		Total   int    `json:"total"`
+		Data    string `json:"data"`
+		HasMore bool   `json:"has_more"`
+	}
+	_ = json.Unmarshal(wPageLast.Body.Bytes(), &pLast)
+	if pLast.Offset != 16 || pLast.Total != 20 || pLast.Data != "CDEF" || pLast.HasMore {
+		t.Errorf("unexpected last page: %+v", pLast)
+	}
+}

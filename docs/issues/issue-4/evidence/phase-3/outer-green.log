@@ -1,0 +1,6 @@
+=== RUN   TestWEB008
+--- PASS: TestWEB008 (0.02s)
+=== RUN   TestWEB008ProjectsAndPage
+--- PASS: TestWEB008ProjectsAndPage (0.01s)
+PASS
+ok  	asura/tests/integration	0.031s

@@ -1,0 +1,9 @@
+=== RUN   TestWEB008
+--- PASS: TestWEB008 (0.02s)
+=== RUN   TestWEB008ProjectsAndPage
+    web_test.go:843: expected 200 for /api/projects, got 404 (body: 404 page not found
+        )
+--- FAIL: TestWEB008ProjectsAndPage (0.01s)
+FAIL
+FAIL	asura/tests/integration	0.034s
+FAIL
