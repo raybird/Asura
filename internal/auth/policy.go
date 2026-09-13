@@ -27,6 +27,16 @@ func NewPolicy(allowedRoots []string) *Policy {
 	return &Policy{allowedRoots: cleaned}
 }
 
+// 2026-09-13：回傳授權根目錄清單副本，供 Web 介面查詢授權專案
+func (p *Policy) AllowedRoots() []string {
+	if p == nil || len(p.allowedRoots) == 0 {
+		return []string{}
+	}
+	res := make([]string, len(p.allowedRoots))
+	copy(res, p.allowedRoots)
+	return res
+}
+
 func (p *Policy) AuthorizeWorkspace(targetPath string) error {
 	absTarget, err := resolveWorkspace(targetPath)
 	if err != nil {

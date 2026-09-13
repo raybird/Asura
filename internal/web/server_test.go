@@ -281,3 +281,89 @@ func TestWEB005Unit(t *testing.T) {
 		t.Errorf("expected cancelled redelivery message in body, got %q", wCancelled.Body.String())
 	}
 }
+
+// 2026-09-13 WEB-008：共同取消錯誤映射、專案列表 API 與操作頁面交付單元測試
+func TestWEB008Unit(t *testing.T) {
+	mockSock := startMockSocket(t, func(req daemon.IPCRequest) daemon.IPCResponse {
+		switch req.Action {
+		case "cancel":
+			if req.TaskID == "missing-task" {
+				return daemon.IPCResponse{Error: "task not found"}
+			}
+			return daemon.IPCResponse{
+				Task: &storage.Task{
+					ID:     req.TaskID,
+					Status: storage.StatusCancelled,
+				},
+			}
+		case "projects":
+			return daemon.IPCResponse{
+				Projects: []string{"/project/alpha", "/project/beta"},
+			}
+		}
+		return daemon.IPCResponse{Error: "unknown action"}
+	})
+
+	s, err := web.NewServer(web.Config{Key: secret, Origin: origin, SocketPath: mockSock})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wLogin := request(s, "POST", "/api/login", `{"key":"`+secret+`"}`, origin, nil)
+	c := wLogin.Result().Cookies()[0]
+
+	// 1. 成功取消映射 200 且狀態為 cancelled
+	wCancel := request(s, "POST", "/api/tasks/task-to-cancel/cancel", `{}`, origin, c)
+	if wCancel.Code != http.StatusOK {
+		t.Fatalf("expected 200 for cancel, got %d (body: %s)", wCancel.Code, wCancel.Body.String())
+	}
+	var cancelledTask storage.Task
+	if err := json.Unmarshal(wCancel.Body.Bytes(), &cancelledTask); err != nil {
+		t.Fatalf("unmarshal cancel resp: %v", err)
+	}
+	if cancelledTask.Status != storage.StatusCancelled {
+		t.Errorf("expected cancelled status, got %s", cancelledTask.Status)
+	}
+
+	// 2. 取消不存在任務映射 404
+	wMissing := request(s, "POST", "/api/tasks/missing-task/cancel", `{}`, origin, c)
+	if wMissing.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for missing task cancel, got %d", wMissing.Code)
+	}
+	if !strings.Contains(wMissing.Body.String(), "task not found") {
+		t.Errorf("expected 'task not found', got %q", wMissing.Body.String())
+	}
+
+	// 3. GET /api/projects 未登入拒絕 401
+	wNoAuthProjects := request(s, "GET", "/api/projects", "", origin, nil)
+	if wNoAuthProjects.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for unauth /api/projects, got %d", wNoAuthProjects.Code)
+	}
+
+	// 4. GET /api/projects 已登入回傳專案清單 200
+	wProjects := request(s, "GET", "/api/projects", "", origin, c)
+	if wProjects.Code != http.StatusOK {
+		t.Fatalf("expected 200 for /api/projects, got %d (body: %s)", wProjects.Code, wProjects.Body.String())
+	}
+	var projs []string
+	if err := json.Unmarshal(wProjects.Body.Bytes(), &projs); err != nil {
+		t.Fatalf("unmarshal projects: %v", err)
+	}
+	if len(projs) != 2 || projs[0] != "/project/alpha" || projs[1] != "/project/beta" {
+		t.Errorf("unexpected projects list: %+v", projs)
+	}
+
+	// 5. GET / 交付 HTML 頁面
+	wPage := request(s, "GET", "/", "", origin, nil)
+	if wPage.Code != http.StatusOK {
+		t.Fatalf("expected 200 for GET /, got %d", wPage.Code)
+	}
+	if ct := wPage.Header().Get("Content-Type"); !strings.Contains(ct, "text/html") {
+		t.Errorf("expected text/html content-type, got %q", ct)
+	}
+	bodyStr := wPage.Body.String()
+	for _, expectedElem := range []string{"project-select", "prompt", "task-id", "cancel", "submit", "login"} {
+		if !strings.Contains(strings.ToLower(bodyStr), strings.ToLower(expectedElem)) {
+			t.Errorf("expected HTML page to contain element %q", expectedElem)
+		}
+	}
+}

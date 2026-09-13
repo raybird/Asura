@@ -61,6 +61,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden origin", http.StatusForbidden)
 		return
 	}
+	if (r.URL.Path == "/" || r.URL.Path == "/index.html") && r.Method == http.MethodGet {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; frame-ancestors 'none'")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(indexHTML))
+		return
+	}
 	if r.URL.Path == "/api/login" && r.Method == http.MethodPost {
 		s.login(w, r)
 		return
@@ -76,6 +83,25 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.mu.Unlock()
 		http.SetCookie(w, &http.Cookie{Name: sessionCookie, Path: "/", MaxAge: -1, HttpOnly: true, Secure: s.secure, SameSite: http.SameSiteStrictMode})
 		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.URL.Path == "/api/projects" && r.Method == http.MethodGet {
+		resp, err := s.exchange(r.Context(), daemon.IPCRequest{Action: "projects"})
+		if err != nil {
+			http.Error(w, "daemon unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		if resp.Error != "" {
+			http.Error(w, resp.Error, http.StatusInternalServerError)
+			return
+		}
+		projs := resp.Projects
+		if projs == nil {
+			projs = []string{}
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(projs)
 		return
 	}
 	var req daemon.IPCRequest

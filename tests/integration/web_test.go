@@ -602,3 +602,276 @@ func TestWEB005(t *testing.T) {
 		t.Fatalf("expected new task to execute exactly once, starts=%d", starts.Load())
 	}
 }
+
+// 2026-09-13 WEB-008：共同取消如實回報（A 回收確認、B 存活不受影響、未知任務取消回報錯誤、前端中斷不取消背景工作）
+func TestWEB008(t *testing.T) {
+	cancelDir := t.TempDir()
+	cancelSock := filepath.Join(cancelDir, "cancel8.sock")
+	cancelStore, err := storage.NewSQLiteStore(filepath.Join(cancelDir, "tasks.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { cancelStore.Close() })
+	cancelPolicy := auth.NewPolicy([]string{cancelDir})
+
+	runnerAStarted := make(chan struct{}, 1)
+	runnerBStarted := make(chan struct{}, 1)
+	runnerACancelled := make(chan struct{}, 1)
+	unblockB := make(chan struct{})
+	var closeBOnce sync.Once
+	defer closeBOnce.Do(func() { close(unblockB) })
+
+	cancelEng := engine.NewEngine(cancelStore, cancelPolicy, engine.WithRunner(func(ctx context.Context, ws, prompt string) (string, error) {
+		if strings.Contains(prompt, "task-A") {
+			runnerAStarted <- struct{}{}
+			<-ctx.Done()
+			runnerACancelled <- struct{}{}
+			return "cancelled A", ctx.Err()
+		}
+		if strings.Contains(prompt, "task-B") {
+			runnerBStarted <- struct{}{}
+			select {
+			case <-ctx.Done():
+				return "unexpected cancel B", ctx.Err()
+			case <-unblockB:
+				return "SUCCESS-B", nil
+			}
+		}
+		return "OTHER", nil
+	}))
+
+	cancelDaemon := daemon.NewDaemon(daemon.Config{
+		SocketPath: cancelSock,
+		MaxWorkers: 2,
+		MaxQueue:   2,
+	}, cancelStore, cancelPolicy, daemon.WithEngine(cancelEng))
+	if err := cancelDaemon.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { cancelDaemon.Close() })
+
+	server := httptest.NewUnstartedServer(nil)
+	webServer, err := web.NewServer(web.Config{
+		Key:        "fixture-secret",
+		Origin:     "http://" + server.Listener.Addr().String(),
+		SocketPath: cancelSock,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.Config.Handler = webServer
+	server.Start()
+	t.Cleanup(server.Close)
+
+	f := &webFixture{
+		root:   cancelDir,
+		store:  cancelStore,
+		server: server,
+		socket: cancelSock,
+	}
+	c := f.login(t)
+
+	// 1. 同時提交任務 A 與任務 B
+	codeA, taskA, _ := f.submitTask(t, engine.SubmitRequest{
+		ID:        "req-task-A",
+		Workspace: f.root,
+		Prompt:    "task-A-work",
+	}, c)
+	if codeA != http.StatusAccepted {
+		t.Fatalf("submit task A failed: %d", codeA)
+	}
+
+	codeB, taskB, _ := f.submitTask(t, engine.SubmitRequest{
+		ID:        "req-task-B",
+		Workspace: f.root,
+		Prompt:    "task-B-work",
+	}, c)
+	if codeB != http.StatusAccepted {
+		t.Fatalf("submit task B failed: %d", codeB)
+	}
+
+	// 2. 等待 A 與 B 均啟動執行中
+	select {
+	case <-runnerAStarted:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for task A runner to start")
+	}
+	select {
+	case <-runnerBStarted:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for task B runner to start")
+	}
+
+	// 3. 透過 Web 取消 A
+	codeCancelA, bodyCancelA, _ := f.call(t, "POST", "/api/tasks/"+taskA.ID+"/cancel", `{}`, f.server.URL, c)
+	if codeCancelA != http.StatusOK {
+		t.Fatalf("cancel task A failed: %d %s", codeCancelA, bodyCancelA)
+	}
+	var cancelledTaskA storage.Task
+	if err := json.Unmarshal([]byte(bodyCancelA), &cancelledTaskA); err != nil {
+		t.Fatalf("unmarshal cancel task A response: %v", err)
+	}
+	if cancelledTaskA.Status != storage.StatusCancelled {
+		t.Errorf("expected cancelled status for A, got %s", cancelledTaskA.Status)
+	}
+
+	// 確認任務 A 的 runner context 確實收到取消訊號並回收
+	select {
+	case <-runnerACancelled:
+	case <-time.After(3 * time.Second):
+		t.Fatal("task A was not confirmed reclaimed by runner")
+	}
+
+	// 4. 驗證 B 完全不受影響且持續運行
+	closeBOnce.Do(func() { close(unblockB) })
+	deadline := time.Now().Add(3 * time.Second)
+	var taskBFinal *storage.Task
+	for time.Now().Before(deadline) {
+		codeQB, bodyQB, _ := f.call(t, "GET", "/api/tasks/"+taskB.ID, "", f.server.URL, c)
+		if codeQB == http.StatusOK {
+			var t storage.Task
+			if err := json.Unmarshal([]byte(bodyQB), &t); err == nil && t.Status == storage.StatusCompleted {
+				taskBFinal = &t
+				break
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if taskBFinal == nil {
+		t.Fatal("task B was affected or failed to complete normally")
+	}
+	if taskBFinal.Result != "SUCCESS-B" {
+		t.Errorf("expected task B result SUCCESS-B, got %q", taskBFinal.Result)
+	}
+
+	// 5. 無法確認回收時顯示錯誤（取消不存在的 Task ID）
+	codeNotFound, bodyNotFound, _ := f.call(t, "POST", "/api/tasks/nonexistent-task-id/cancel", `{}`, f.server.URL, c)
+	if codeNotFound != http.StatusNotFound {
+		t.Errorf("expected 404 for cancelling nonexistent task, got %d (body: %s)", codeNotFound, bodyNotFound)
+	}
+	if !strings.Contains(bodyNotFound, "task not found") {
+		t.Errorf("expected 'task not found' error message, got %q", bodyNotFound)
+	}
+
+	// 6. 前端中斷不取消背景工作：發出任務 C 但中斷 HTTP 請求，確認任務 C 依然在 Daemon 完整執行
+	taskCStarted := make(chan struct{}, 1)
+	unblockC := make(chan struct{})
+	var closeCOnce sync.Once
+	defer closeCOnce.Do(func() { close(unblockC) })
+	var startsC atomic.Int32
+	engC := engine.NewEngine(cancelStore, cancelPolicy, engine.WithRunner(func(ctx context.Context, ws, prompt string) (string, error) {
+		startsC.Add(1)
+		taskCStarted <- struct{}{}
+		<-unblockC
+		return "TASK-C-COMPLETED", nil
+	}))
+	sockC := filepath.Join(cancelDir, "daemonC.sock")
+	daemonC := daemon.NewDaemon(daemon.Config{SocketPath: sockC}, cancelStore, cancelPolicy, daemon.WithEngine(engC))
+	if err := daemonC.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { daemonC.Close() })
+
+	srvC := httptest.NewUnstartedServer(nil)
+	webC, err := web.NewServer(web.Config{Key: "fixture-secret", Origin: "http://" + srvC.Listener.Addr().String(), SocketPath: sockC})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srvC.Config.Handler = webC
+	srvC.Start()
+	t.Cleanup(srvC.Close)
+
+	fC := &webFixture{root: cancelDir, store: cancelStore, server: srvC, socket: sockC}
+	cookieC := fC.login(t)
+
+	// 提交任務 C
+	codeC, taskC, _ := fC.submitTask(t, engine.SubmitRequest{
+		ID:        "req-task-C",
+		Workspace: cancelDir,
+		Prompt:    "task-C-work",
+	}, cookieC)
+	if codeC != http.StatusAccepted {
+		t.Fatalf("submit task C failed: %d", codeC)
+	}
+	select {
+	case <-taskCStarted:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for task C to start")
+	}
+
+	// 模擬前端瀏覽器斷線（直接發出一個 context 已取消的查詢請求）
+	ctxReq, cancelReq := context.WithCancel(context.Background())
+	cancelReq()
+	httpReq, _ := http.NewRequestWithContext(ctxReq, "GET", srvC.URL+"/api/tasks/"+taskC.ID, nil)
+	httpReq.AddCookie(cookieC)
+	_, _ = srvC.Client().Do(httpReq)
+
+	// 釋放任務 C 執行，確認其仍順利完成，不受前端斷線影響
+	closeCOnce.Do(func() { close(unblockC) })
+	deadlineC := time.Now().Add(3 * time.Second)
+	var finalC *storage.Task
+	for time.Now().Before(deadlineC) {
+		qCode, qBody, _ := fC.call(t, "GET", "/api/tasks/"+taskC.ID, "", srvC.URL, cookieC)
+		if qCode == http.StatusOK {
+			var tc storage.Task
+			if err := json.Unmarshal([]byte(qBody), &tc); err == nil && tc.Status == storage.StatusCompleted {
+				finalC = &tc
+				break
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if finalC == nil {
+		t.Fatal("task C was cancelled by client disconnect")
+	}
+}
+
+// 2026-09-13 P3-T1：操作頁面交付 (GET /) 與專案授權清單 API (GET /api/projects)
+func TestWEB008ProjectsAndPage(t *testing.T) {
+	f := startWeb(t)
+	c := f.login(t)
+
+	// 1. 未登入呼叫 GET /api/projects 拒絕 401
+	codeNoAuth, _, _ := f.call(t, "GET", "/api/projects", "", f.server.URL, nil)
+	if codeNoAuth != http.StatusUnauthorized {
+		t.Errorf("expected 401 for unauthenticated /api/projects, got %d", codeNoAuth)
+	}
+
+	// 2. 已登入呼叫 GET /api/projects 回傳授權專案清單
+	codeProjects, bodyProjects, _ := f.call(t, "GET", "/api/projects", "", f.server.URL, c)
+	if codeProjects != http.StatusOK {
+		t.Fatalf("expected 200 for /api/projects, got %d (body: %s)", codeProjects, bodyProjects)
+	}
+	var projects []string
+	if err := json.Unmarshal([]byte(bodyProjects), &projects); err != nil {
+		t.Fatalf("unmarshal projects response failed: %v", err)
+	}
+	if len(projects) == 0 {
+		t.Fatalf("expected at least one project root in allowed list, got %v", projects)
+	}
+	found := false
+	for _, p := range projects {
+		if p == f.root {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected allowed root %s in projects list %v", f.root, projects)
+	}
+
+	// 3. GET / 交付 HTML 操作頁面
+	codeIndex, bodyIndex, _ := f.call(t, "GET", "/", "", f.server.URL, nil)
+	if codeIndex != http.StatusOK {
+		t.Fatalf("expected 200 for GET /, got %d (body: %s)", codeIndex, bodyIndex)
+	}
+	if !strings.Contains(bodyIndex, "<!DOCTYPE html>") {
+		t.Errorf("expected HTML document for GET /, got %q", bodyIndex)
+	}
+	// 驗證關鍵 UI 元素存在
+	for _, keyElem := range []string{"project-select", "prompt", "task-id", "cancel", "submit", "login"} {
+		if !strings.Contains(strings.ToLower(bodyIndex), strings.ToLower(keyElem)) {
+			t.Errorf("expected HTML to contain %q element or id", keyElem)
+		}
+	}
+}

@@ -51,6 +51,8 @@ func RunCLI(args []string, stdout, stderr io.Writer) int {
 		return handleStatus(subargs, stdout, stderr)
 	case "cancel":
 		return handleCancel(subargs, stdout, stderr)
+	case "web":
+		return handleWeb(subargs, stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "error: unknown command %q\n\n", subcmd)
 		printUsage(stderr)
@@ -67,6 +69,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  ask     Submit a natural language AI task via Daemon")
 	fmt.Fprintln(w, "  status  Query the execution status and result of a task")
 	fmt.Fprintln(w, "  cancel  Cancel a pending or running task")
+	fmt.Fprintln(w, "  web     Start the local web remote entry console")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Run 'asura <command> -h' for details on each command.")
 }

@@ -209,8 +209,9 @@ type IPCRequest struct {
 
 // IPCResponse 定義傳回用戶端之結果
 type IPCResponse struct {
-	Task  *storage.Task `json:"task,omitempty"`
-	Error string        `json:"error,omitempty"`
+	Task     *storage.Task `json:"task,omitempty"`
+	Projects []string      `json:"projects,omitempty"`
+	Error    string        `json:"error,omitempty"`
 }
 
 func (d *Daemon) handleConn(conn net.Conn) {
@@ -279,6 +280,13 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			}
 			task, _ := d.store.GetTask(context.Background(), targetID)
 			_ = encoder.Encode(IPCResponse{Task: task})
+
+		case "projects":
+			projects := []string{}
+			if d.policy != nil {
+				projects = d.policy.AllowedRoots()
+			}
+			_ = encoder.Encode(IPCResponse{Projects: projects})
 
 		case "submit":
 			// 遵循 INT-002 與 P3-T2：在進入 WorkerPool 與啟動後端前，Daemon 服務端直接校驗專案授權清單

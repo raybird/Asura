@@ -90,4 +90,17 @@ func TestRunCLI_UsageAndValidation(t *testing.T) {
 			t.Errorf("expected 'task_id is required' in stderr, got: %s", stderr.String())
 		}
 	})
+
+	t.Run("web 指令缺少 access key 返回非 0 狀態碼", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		t.Setenv("ASURA_WEB_KEY", "")
+		code := RunCLI([]string{"web"}, out, stderr)
+		if code == 0 {
+			t.Errorf("expected non-zero exit code, got 0")
+		}
+		if !strings.Contains(stderr.String(), "access key is required") {
+			t.Errorf("expected 'access key is required' in stderr, got: %s", stderr.String())
+		}
+	})
 }

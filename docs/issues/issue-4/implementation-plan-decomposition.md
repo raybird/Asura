@@ -19,9 +19,9 @@
 
 ## Phase 3：R-03 最小操作流程
 
-- [ ] P3-T1：建立登入、專案選擇、自然語言提交、Task ID 查詢與取消頁面；專案來自服務端政策，支援輸入既有 CLI Task ID。
-- [ ] P3-T2：WEB-008 外迴圈及取消錯誤映射單元紅燈後接共同 CancelTask；確認 A 回收、B 存活，未知回收顯示錯誤。前端斷線不取消背景工作。
-- [ ] P3-T3：驗證 HTTP 並行請求不交錯使用同一未同步 IPC 連線；用正式入口串通成功、失敗、滿載、中樞離線，複驗 WEB-002、003。
+- [x] P3-T1：建立登入、專案選擇、自然語言提交、Task ID 查詢與取消頁面；專案來自服務端政策，支援輸入既有 CLI Task ID。
+- [x] P3-T2：WEB-008 外迴圈及取消錯誤映射單元紅燈後接共同 CancelTask；確認 A 回收、B 存活，未知回收顯示錯誤。前端斷線不取消背景工作。
+- [x] P3-T3：驗證 HTTP 並行請求不交錯使用同一未同步 IPC 連線；用正式入口串通成功、失敗、滿載、中樞離線，複驗 WEB-002、003。
 
 ## Phase 4：R-04 結果與恢復
 
@@ -106,3 +106,27 @@ go test -count=1 -race ./...
   - 內迴圈綠燈：[inner-green.log](evidence/phase-2/inner-green.log)
   - 全套 race 回歸（0 FAIL, 0 SKIP）：[final-regression.log](evidence/phase-2/final-regression.log)
 - Phase 2 實作與驗證完成，無破壞既有行為；可依相依順序推進 Phase 3。Phase 3～5 尚未執行；真實瀏覽器驗收、完整 Web 操作頁面及獨立審查仍未完成。
+
+## 2026-09-13 Phase 3 實作紀錄
+
+- 實作 WEB-008 共同取消與最小操作流程（P3-T1～P3-T3）。
+- 前端頁面與授權清單（P3-T1）：
+  - 建立 `internal/web/page.go` 內嵌 HTML 單頁應用程式，交付登入表單、授權專案選擇、自然語言任務提交、Task ID 查詢輸入與取消按鈕。
+  - 在 `internal/auth/policy.go` 擴充 `AllowedRoots()` 提供授權清單副本。
+  - 在 `internal/daemon/daemon.go` 新增 `action: "projects"` IPC 處理。
+  - 在 `internal/web/server.go` 新增 `GET /`（交付 HTML）與 `GET /api/projects`（需登入，回傳授權 roots 清單）。
+  - 在 `cmd/asura/web.go` 與 `cmd/asura/run.go` 實作接線 `asura web` CLI 子命令，支援 `-listen`（預設 loopback 127.0.0.1:8080）、`-origin`、`-key`（或環境變數 `ASURA_WEB_KEY`）及 `-socket`。
+- 共同取消與錯誤映射（P3-T2，WEB-008）：
+  - `TestWEB008`：驗證任務 A 與 B 同時執行時，透過 Web 取消任務 A，確認 A 回收完成後回傳 200 OK（Status: cancelled），任務 B 存活不受影響且最終成功完成；取消不存在的 Task ID 回報 404（`task not found`）並保留追蹤資訊；前端瀏覽器中斷查詢不取消背景任務。
+  - `TestWEB008ProjectsAndPage`：驗證未登入呼叫 `/api/projects` 拒絕 401、已登入回傳授權清單、`GET /` 交付包含完整關鍵控制項之 HTML。
+  - 內迴圈單元測試（`internal/web/server_test.go`）：`TestWEB008Unit` 驗證取消成功狀態映射、不存在任務 404 映射、`/api/projects` 登入守門與專案清單回傳、`GET /` 交付與 CSP 設定。
+  - CLI 測試（`cmd/asura/run_test.go`）：驗證 `asura web` 缺少 key 時拒絕並提示。
+- 並行連線與串通（P3-T3）：
+  - 每個 HTTP 請求使用獨立 IPC Unix 連線（10 秒 timeout 與 context 關閉保護），驗證並行請求隔離。
+- 測試證據：
+  - 外迴圈紅燈：[outer-red.log](evidence/phase-3/outer-red.log)
+  - 內迴圈紅燈：[inner-red.log](evidence/phase-3/inner-red.log)
+  - 外迴圈綠燈：[outer-green.log](evidence/phase-3/outer-green.log)
+  - 內迴圈綠燈：[inner-green.log](evidence/phase-3/inner-green.log)
+  - 全套 race 回歸（0 FAIL, 0 SKIP）：[final-regression.log](evidence/phase-3/final-regression.log)
+- Phase 3 實作與驗證完成；可依相依順序推進 Phase 4（R-04 結果與恢復）。Phase 4～5 尚未執行；真實瀏覽器驗收與獨立審查仍未完成。
