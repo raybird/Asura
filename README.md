@@ -85,6 +85,20 @@ go build -o bin/asura ./cmd/asura
 ./bin/asura cancel <task-id>
 ```
 
+#### 啟動單人 Web 遠端入口 (web)
+```bash
+# 啟動 Web 控制台（預設監聽 loopback 127.0.0.1:8080，單人私人網路使用）
+ASURA_WEB_KEY="your-secret-key" ./bin/asura web \
+  --listen 127.0.0.1:8080 \
+  --socket /tmp/asura.sock
+```
+
+2026-09-13：
+- **存取安全**：單一存取密鑰換取 12 小時工作階段，強制 `HttpOnly` 與 `SameSite=Strict` Cookie，嚴格驗證 Host 與 Origin 標頭杜絕跨站偽造。
+- **中樞整合**：共用 Daemon 授權政策與容量限制，網頁端專案下拉選單來自服務端政策，支援輸入既有 CLI Task ID 查詢與共同取消。
+- **純文字分頁與恢復**：長輸出結果以 Unicode Rune 進行安全字元切片分頁（`GET /api/tasks/{id}/result`），以 `textContent` 渲染防止腳本執行；關閉頁面重開後登入仍可恢復查詢同一任務，唯讀輪詢不重跑副作用。
+- **外部 Tunnel 邊界**：若使用 Cloudflare Tunnel、Tailscale 等第三方工具臨時對外曝露，外部流量仍必須通過密鑰驗證與 Origin 防護；Asura 本體不內嵌 Tunnel 供應商 SDK 或自動管理穿透。
+
 ---
 
 ## 架構設計與議題文件
@@ -93,6 +107,7 @@ go build -o bin/asura ./cmd/asura
 - **議題追蹤與驗收劇本**：
   - [Issue 1 本機執行核心](docs/issues/issue-1/README.md) 與 [實作計畫](docs/issues/issue-1/implementation-plan.md)
   - [Issue 2 本機 AI 執行路徑整合 (Phase 1.5)](docs/issues/issue-2/README.md) 與 [實作計畫拆解](docs/issues/issue-2/implementation-plan-decomposition.md)
+  - [Issue 4 單一 Web 遠端入口 (Phase 2A)](docs/issues/issue-4/README.md) 與 [實作計畫拆解](docs/issues/issue-4/implementation-plan-decomposition.md)
 
 ---
 
@@ -120,7 +135,8 @@ Asura/
 │   ├── backend/           # 執行後端整合 (opencode process, parser)
 │   ├── daemon/            # 守護進程服務中樞
 │   ├── engine/            # 任務狀態引擎 (Engine, Worker Pool)
-│   └── storage/           # SQLite 持久化儲存層
+│   ├── storage/           # SQLite 持久化儲存層
+│   └── web/               # 單人 Web 遠端入口 (SPA 控制台與同源 API)
 ├── tests/
 │   └── integration/       # 端到端整合測試 (SCN 驗收與安全覆核)
 └── docs/                  # 專案技術文件與議題紀錄
@@ -141,4 +157,4 @@ new-issue ──► decompose (僅 Large) ──► execute-task (BDD + TDD) ─
 
 ---
 
-*最新更新日期：2026-09-12*
+*最新更新日期：2026-09-13*

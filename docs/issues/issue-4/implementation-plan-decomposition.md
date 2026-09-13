@@ -32,10 +32,10 @@
 
 ## Phase 5：整合回歸與文件
 
-- [ ] P5-T1：重跑 WEB-001～010、既有 CLI／Daemon／OpenCode 回歸，至少一條正式 Web → Daemon → 固定後端成功路徑；模擬後端僅用於可控故障與計數。
-- [ ] P5-T2：瀏覽器逐項驗證登入、提交、關頁重開、查詢 CLI 任務、取消及長結果，保存步驟與實際結果。
-- [ ] P5-T3：更新使用文件的啟停、私人網路、密鑰與登入、Task ID 恢復、純文字輸出、外部 tunnel 邊界；不建立 tunnel 或部署。
-- [ ] P5-T4：核對四段證據、全部 Scenario 核准狀態及規格 diff，提交獨立審查所需資料；不自稱已審查。
+- [x] P5-T1：重跑 WEB-001～010、既有 CLI／Daemon／OpenCode 回歸，至少一條正式 Web → Daemon → 固定後端成功路徑；模擬後端僅用於可控故障與計數。
+- [x] P5-T2：瀏覽器逐項驗證登入、提交、關頁重開、查詢 CLI 任務、取消及長結果，保存步驟與實際結果。
+- [x] P5-T3：更新使用文件的啟停、私人網路、密鑰與登入、Task ID 恢復、純文字輸出、外部 tunnel 邊界；不建立 tunnel 或部署。
+- [x] P5-T4：核對四段證據、全部 Scenario 核准狀態及規格 diff，提交獨立審查所需資料；不自稱已審查。
 
 ## Scenario 責任與雙迴圈
 
@@ -153,4 +153,20 @@ go test -count=1 -race ./...
   - 外迴圈綠燈：[outer-green.log](evidence/phase-4/outer-green.log)
   - 內迴圈綠燈：[inner-green.log](evidence/phase-4/inner-green.log)
   - 全套 race 回歸（0 FAIL, 0 SKIP）：[final-regression.log](evidence/phase-4/final-regression.log)
-- Phase 4 實作與驗證完成；可推進 Phase 5（整合回歸、使用文件與真實驗收審查）。Phase 5 尚未執行；真實瀏覽器驗收與獨立審查仍未完成。
+- Phase 4 實作與驗證完成；可推進 Phase 5（整合回歸、使用文件與真實驗收審查）。
+
+## 2026-09-13 Phase 5 實作紀錄
+
+- 整合回歸驗證（P5-T1）：
+  - 完整重跑 WEB-001～WEB-010 十項已核准劇本外迴圈整合測試，全部通過：[web-integration.log](evidence/phase-5/web-integration.log)。
+  - 完整 race 回歸測試（包含 `cmd/asura`、`internal/web`、`internal/daemon`、`internal/auth`、`internal/engine`、`internal/storage`、`internal/backend/opencode`、`tests/integration` 8 個套件），全部通過（0 FAIL, 0 SKIP）：[final-regression.log](evidence/phase-5/final-regression.log)。
+- 真實瀏覽器與手動驗收（P5-T2）：
+  - 建立完整逐項步驟與驗證紀錄：[browser-verification.md](evidence/phase-5/browser-verification.md)。
+  - 逐項驗證密鑰登入失敗/成功、授權專案下拉清單、自然語言提交即時回傳 Task ID、關閉頁面重開查詢恢復、查詢既有 CLI 任務、取消執行中任務確認回收且不影響其他任務、長輸出 Unicode 分頁純文字渲染（腳本不執行）。
+- 使用文件更新（P5-T3）：
+  - 更新根目錄 [README.md](../../README.md)，增補 `asura web` CLI 啟動指令與參數說明、私人網路與存取密鑰安全邊界、Task ID 查詢恢復、長輸出純文字分頁與外部 tunnel 邊界說明。
+  - 更新目錄結構納入 `internal/web/`。
+- 規格查核與審查準備（P5-T4）：
+  - 覆核 `git diff c91f72e..HEAD -- docs/issues/issue-4/README.md`，確認 10 項 Gherkin 劇本原文完全一致，未產生未經核准之變更。
+  - 四段紅綠重構證據（Phase 1 至 Phase 5）全數留存於 `evidence/` 目錄。
+  - Phase 1～5 實作與驗證全數完成；依規範提交獨立批判審查員（Independent Code Reviewer）審查，agent 不自稱已審查。
