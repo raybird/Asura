@@ -272,10 +272,10 @@
 
 ---
 
-## Phase 5 — 全套整合回歸、邊界驗證與使用文件更新
+## Phase 5 — 全套整合回歸、邊界驗證與使用文件更新 ✅
 
 ### Goal
-完成 CRON-001～CRON-008 全套驗收劇本的端到端整合驗證，進行 `-race` 競爭條件檢測，並更新使用者操作手冊與測試日誌。
+完成 CRON-001～CRON-008 全套驗收劇本的端到端整合驗證，進行 `-race` 競爭條件檢測，並更新使用者操作手冊與測試日誌。（2026-09-13 驗證完成，全套回歸與 Race 檢測 0 FAIL 0 DATA RACE 通過，日誌留存於 `evidence/phase-5/`）
 
 ### Deliverables
 - `tests/integration/cron_test.go`：CRON-001～008 全數通過。
@@ -287,8 +287,8 @@
 
 ### Tasks
 
-#### Task 5.1：端到端整合全套回歸與 Race 檢測
-- **任務說明**：執行全部 8 個套件的完整回歸測試，確認容量互斥、排程觸發、重啟持久化無任何資料競態（0 FAIL, 0 SKIP）。
+#### Task 5.1：端到端整合全套回歸與 Race 檢測 ✅
+- **任務說明**：執行全部 9 個套件的完整回歸測試，確認容量互斥、排程觸發、重啟持久化無任何資料競態（0 FAIL, 0 DATA RACE）。（2026-09-13 完成）
 - **預期輸出**：`docs/issues/issue-6/evidence/phase-5/final-regression.log`
 - **涉及模組或檔案**：`tests/integration/cron_test.go`, 所有 Go 原始碼
 - **完成判準**：`go test -count=1 -race -v ./...` 全部通過，退出碼為 0。
@@ -297,18 +297,18 @@
 - **責任角色**：唯一負責
 - **Scenario ID**：CRON-001, CRON-002, CRON-003, CRON-004, CRON-005, CRON-006, CRON-007, CRON-008
 - **改變可觀察行為**：否
-- **等價證據**：`go test -count=1 -race -v ./...` 全套回歸測試輸出，退出碼 0，零資料競態。
+- **等價證據**：`go test -count=1 -race -v ./...` 全套回歸測試輸出，退出碼 0，零資料競態（見 `evidence/phase-5/final-regression.log`）。
 - **最小實作與回歸**：無 production code 修改，純回歸驗收。
 
-#### Task 5.2：專案操作手冊與使用文件更新
-- **任務說明**：在根目錄 `README.md` 中新增 `asura cron` 子命令的語法格式、5 欄位 Cron 範例、狀態查詢與暫停/恢復說明。
+#### Task 5.2：專案操作手冊與使用文件更新 ✅
+- **任務說明**：在根目錄 `README.md` 中新增 `asura cron` 子命令的語法格式、5 欄位 Cron 範例、狀態查詢與暫停/恢復說明。（2026-09-13 完成）
 - **預期輸出**：`README.md`
 - **涉及模組或檔案**：`README.md`
 - **完成判準**：文件包含清晰的 `asura cron add/list/pause/resume/remove` 範例與排程注意事項。
 - **驗證方式**：人工檢視與 Markdown 語法檢查。
 - **覆蓋項目**：S-04 使用者文件
 - **責任角色**：唯一負責
-- **Scenario ID**：CRON-003
+- **Scenario ID**：CRON-006, CRON-007
 - **改變可觀察行為**：否
 - **等價證據**：文件靜態檢查通過，格式正確無壞連線。
 - **最小實作與回歸**：更新 `README.md`。
