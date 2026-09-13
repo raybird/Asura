@@ -248,6 +248,10 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("task not found: %v", err)})
 				continue
 			}
+			if err := d.authorizeTask(task); err != nil {
+				_ = encoder.Encode(IPCResponse{Error: err.Error()})
+				continue
+			}
 			_ = encoder.Encode(IPCResponse{Task: task})
 
 		case "cancel":
@@ -255,13 +259,20 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				_ = encoder.Encode(IPCResponse{Error: "task_id required for cancel"})
 				continue
 			}
-			targetID := req.TaskID
-			if _, err := d.store.GetTask(context.Background(), targetID); err != nil {
-				if t, rErr := d.store.GetTaskByRequestID(context.Background(), targetID); rErr == nil {
-					targetID = t.ID
-				}
+			target, err := d.store.GetTask(context.Background(), req.TaskID)
+			if err != nil {
+				target, err = d.store.GetTaskByRequestID(context.Background(), req.TaskID)
 			}
-			err := d.engine.CancelTask(targetID)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: "task not found"})
+				continue
+			}
+			if err := d.authorizeTask(target); err != nil {
+				_ = encoder.Encode(IPCResponse{Error: err.Error()})
+				continue
+			}
+			targetID := target.ID
+			err = d.engine.CancelTask(targetID)
 			if err != nil {
 				_ = encoder.Encode(IPCResponse{Error: err.Error()})
 				continue
@@ -288,6 +299,10 @@ func (d *Daemon) handleConn(conn net.Conn) {
 					existing, err = d.store.GetTask(context.Background(), req.RequestID)
 				}
 				if err == nil && existing != nil {
+					if err := d.authorizeTask(existing); err != nil {
+						_ = encoder.Encode(IPCResponse{Error: err.Error()})
+						continue
+					}
 					if existing.Fingerprint != "" && existing.Fingerprint != fp {
 						_ = encoder.Encode(IPCResponse{Error: "request ID reused with different payload"})
 						continue
@@ -321,6 +336,10 @@ func (d *Daemon) handleConn(conn net.Conn) {
 						existing, getErr = d.store.GetTask(context.Background(), req.RequestID)
 					}
 					if getErr == nil && existing != nil {
+						if err := d.authorizeTask(existing); err != nil {
+							_ = encoder.Encode(IPCResponse{Error: err.Error()})
+							continue
+						}
 						if existing.Fingerprint != "" && existing.Fingerprint != fp {
 							_ = encoder.Encode(IPCResponse{Error: "request ID reused with different payload"})
 							continue
@@ -382,6 +401,16 @@ func (d *Daemon) Close() error {
 		}
 	})
 	return err
+}
+
+// 2026-09-13 WEB-002：所有任務回應與取消均沿用服務端政策。
+func (d *Daemon) authorizeTask(task *storage.Task) error {
+	if d.policy != nil {
+		if err := d.policy.AuthorizeWorkspace(task.Workspace); err != nil {
+			return fmt.Errorf("unauthorized workspace: %w", err)
+		}
+	}
+	return nil
 }
 
 // Client 用於與 Daemon 通訊

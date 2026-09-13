@@ -53,6 +53,8 @@ go build -o bin/asura ./cmd/asura
 ./bin/asura daemon --socket /tmp/asura.sock --allowed-roots /path/to/project --workers 2 --queue 10
 ```
 
+2026-09-13：經 Daemon 提交、查詢、取消或重送任務時，都套用服務端 `--allowed-roots`。專案移出清單後，其歷史任務仍保存在資料庫，但不能透過 Daemon 讀取或取消；指向清單外的符號連結亦遭拒絕。此清單是入口授權政策，不是作業系統沙箱。
+
 #### 提交自然語言 AI 任務 (ask)
 ```bash
 # 透過 Daemon 中樞提交 AI 任務（非同步接受立即回傳 Task ID，斷線不中斷）
@@ -140,4 +142,3 @@ new-issue ──► decompose (僅 Large) ──► execute-task (BDD + TDD) ─
 ---
 
 *最新更新日期：2026-09-12*
-

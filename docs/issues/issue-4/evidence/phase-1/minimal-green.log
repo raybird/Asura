@@ -1,0 +1,23 @@
+日期：2026-09-13
+命令：go test -count=1 -race -v ./internal/web ./internal/auth ./tests/integration -run '^TestWEB'
+退出碼：0
+=== RUN   TestWEB001Unit
+--- PASS: TestWEB001Unit (0.00s)
+=== RUN   TestWEB010Unit
+--- PASS: TestWEB010Unit (0.00s)
+PASS
+ok  	asura/internal/web	1.027s
+=== RUN   TestWEB002Unit
+--- PASS: TestWEB002Unit (0.00s)
+PASS
+ok  	asura/internal/auth	1.021s
+=== RUN   TestWEB002Daemon
+--- PASS: TestWEB002Daemon (1.06s)
+=== RUN   TestWEB001
+--- PASS: TestWEB001 (0.06s)
+=== RUN   TestWEB002
+--- PASS: TestWEB002 (0.05s)
+=== RUN   TestWEB010
+--- PASS: TestWEB010 (0.04s)
+PASS
+ok  	asura/tests/integration	2.241s

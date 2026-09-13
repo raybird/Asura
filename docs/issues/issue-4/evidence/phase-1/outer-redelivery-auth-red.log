@@ -1,0 +1,14 @@
+日期：2026-09-13
+命令：go test -count=1 -v ./tests/integration -run '^TestWEB002Daemon$'
+退出碼：1
+=== RUN   TestWEB002Daemon
+    web_policy_test.go:30: unauthorized redelivery: &{revoked revoked-request   /tmp/TestWEB002Daemon2901133320/002 pending PRIVATE-RESULT  0 2026-09-13 14:18:00.618843223 +0800 CST 2026-09-13 14:18:00.618843283 +0800 CST} <nil>
+    web_policy_test.go:32: unauthorized read: &{revoked revoked-request   /tmp/TestWEB002Daemon2901133320/002 pending PRIVATE-RESULT  0 2026-09-13 14:18:00.618843223 +0800 CST 2026-09-13 14:18:00.618843283 +0800 CST} <nil>
+    web_policy_test.go:33: unauthorized cancel: revoked
+    web_policy_test.go:32: unauthorized read: &{revoked revoked-request   /tmp/TestWEB002Daemon2901133320/002 cancelled PRIVATE-RESULT task cancelled by user 0 2026-09-13 14:18:00.618843223 +0800 CST 2026-09-13 06:18:00.622097453 +0000 UTC} <nil>
+    web_policy_test.go:33: unauthorized cancel: revoked-request
+    web_policy_test.go:36: revoked task changed: &{ID:revoked RequestID:revoked-request Fingerprint: Prompt: Workspace:/tmp/TestWEB002Daemon2901133320/002 Status:cancelled Result:PRIVATE-RESULT ErrorMessage:task cancelled by user PGID:0 CreatedAt:2026-09-13 14:18:00.618843223 +0800 CST UpdatedAt:2026-09-13 06:18:00.622097453 +0000 UTC}
+--- FAIL: TestWEB002Daemon (0.94s)
+FAIL
+FAIL	asura/tests/integration	0.948s
+FAIL

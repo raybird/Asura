@@ -3,6 +3,7 @@ package auth
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -18,7 +19,7 @@ type Policy struct {
 func NewPolicy(allowedRoots []string) *Policy {
 	cleaned := make([]string, 0, len(allowedRoots))
 	for _, root := range allowedRoots {
-		abs, err := filepath.Abs(root)
+		abs, err := resolveWorkspace(root)
 		if err == nil {
 			cleaned = append(cleaned, filepath.Clean(abs))
 		}
@@ -27,7 +28,7 @@ func NewPolicy(allowedRoots []string) *Policy {
 }
 
 func (p *Policy) AuthorizeWorkspace(targetPath string) error {
-	absTarget, err := filepath.Abs(targetPath)
+	absTarget, err := resolveWorkspace(targetPath)
 	if err != nil {
 		return fmt.Errorf("%w: invalid target path", ErrDisallowedWorkspace)
 	}
@@ -43,4 +44,43 @@ func (p *Policy) AuthorizeWorkspace(targetPath string) error {
 	}
 
 	return ErrDisallowedWorkspace
+}
+
+// 2026-09-13：解析既有祖先的連結，仍容許尚未建立的專案路徑。
+func resolveWorkspace(path string) (string, error) {
+	abs := path
+	if !filepath.IsAbs(abs) {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", err
+		}
+		abs = cwd + string(filepath.Separator) + path
+	}
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err == nil {
+		return resolved, nil
+	}
+	if !os.IsNotExist(err) {
+		return "", err
+	}
+	if _, statErr := os.Lstat(abs); statErr == nil {
+		return "", err
+	}
+	abs = strings.TrimRight(abs, string(filepath.Separator))
+	last := strings.LastIndex(abs, string(filepath.Separator))
+	if last < 0 {
+		return "", err
+	}
+	parent := abs[:last]
+	if parent == "" {
+		parent = string(filepath.Separator)
+	}
+	if parent == abs {
+		return "", err
+	}
+	resolved, err = resolveWorkspace(parent)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(resolved, abs[last+1:]), nil
 }

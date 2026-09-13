@@ -6,10 +6,10 @@
 
 ## Phase 1：R-01 登入與授權
 
-- [ ] P1-T1：核准後保存核准 commit，查核 `git diff <核准commit>..HEAD -- docs/issues/issue-4/README.md` 與工作目錄差異；固定 Web 啟動、監聽、密鑰來源、session 失效及代理設定契約。
-- [ ] P1-T2：先建立 WEB-001、002、010 外迴圈失敗證據。以已知受控任務證明副作用觀測器有效，再測未登入、錯誤密鑰、清單外路徑、符號連結越界、已撤除專案的歷史任務及跨站變更請求。
-- [ ] P1-T3：寫登入／session／專案授權單元紅燈，再實作最小 HTTP 守門與 Daemon 查詢／取消授權。所有拒絕須在副作用或回傳輸出前；不複製可獨立擴權的 root 清單。
-- [ ] P1-T4：取得正向允許與反向零副作用證據；保留 CLI 相容性。授權仍有缺口時不放行一般頁面功能。
+- [x] P1-T1：核准後保存核准 commit，查核 `git diff <核准commit>..HEAD -- docs/issues/issue-4/README.md` 與工作目錄差異；固定 Web 啟動、監聽、密鑰來源、session 失效及代理設定契約。
+- [x] P1-T2：先建立 WEB-001、002、010 外迴圈失敗證據。以已知受控任務證明副作用觀測器有效，再測未登入、錯誤密鑰、清單外路徑、符號連結越界、已撤除專案的歷史任務及跨站變更請求。
+- [x] P1-T3：寫登入／session／專案授權單元紅燈，再實作最小 HTTP 守門與 Daemon 查詢／取消授權。所有拒絕須在副作用或回傳輸出前；不複製可獨立擴權的 root 清單。
+- [x] P1-T4：取得正向允許與反向零副作用證據；保留 CLI 相容性。授權仍有缺口時不放行一般頁面功能。
 
 ## Phase 2：R-02 接受與重送
 
@@ -68,3 +68,23 @@ go test -count=1 -race ./...
 實作時保存於 `evidence/phase-N/`，每筆包含系統日期、Task／Scenario、程式 commit、精確命令、環境、stdout／stderr、退出碼與預期／實際值。每項保留外紅、內紅、最小實作全綠、重構後全綠，不能覆蓋失敗紀錄。
 
 2026-09-13 本次僅規劃文件，不適用功能紅燈；文件檢查包含相對連結、圍欄、10 個 Scenario 的核准與責任對應、5 Phase 相依及空白格式。實際結果記於交付回報，未執行 Go 或瀏覽器功能測試。
+
+## 2026-09-13 Phase 1 實作紀錄
+
+- 核准規格以 `c91f72e` 比對，Gherkin 原文未改動。使用者於 2026-09-13 回覆「繼續」，授權推進實作。
+- 新增 `internal/web.NewServer(Config)`，包含密鑰登入、登出、工作階段與 Host／Origin 守門，以及為驗證授權必要的提交／查詢／取消 API；一般操作頁面與正式 CLI 啟動仍在 Phase 3。
+- 服務端設定契約：`Key`、`Origin`、`SocketPath` 均必填；Origin 僅接受完整 HTTP(S) origin，不從代理標頭推導。私人 HTTP 由明確 origin 驗證；HTTPS origin 的 cookie 設 Secure。工作階段使用隨機識別、HttpOnly、SameSite=Strict，服務端以 12 小時絕對期限失效，登出撤銷；Web 服務重啟需重新登入，任務資料由 Daemon 保留。密鑰變更透過重啟服務生效。正式啟動命令的預設 loopback 與密鑰環境來源於 Phase 3 接線。
+- 查詢、取消與重送回應新增 Daemon 專案授權；Policy 解析既有祖先符號連結，阻擋連結越界。這不消除本機檔案系統並行修改的 TOCTOU，也不構成作業系統沙箱。
+- 每個 HTTP 操作使用獨立 IPC 連線，設定 10 秒上限並隨請求取消關閉連線；已接受任務沿用中樞背景生命週期。
+- 第一次 Go 測試受編譯快取唯讀限制阻擋，取得執行權限後重跑；環境錯誤未列為行為紅燈。
+- 真實 Daemon 首次紅燈證明清單外任務可讀、可取消且可經重送回傳；Policy 紅燈證明連結越界。新增 HTTP 介面先以只回 404 的可編譯空殼取得缺少登入行為的外／內迴圈紅燈，再加入最小實作；空殼不列為已完成行為。
+- WEB-001／002／010 的 HTTP 與單元測試已取得最小實作綠燈，含受控後端正向一次啟動、拒絕後零新增啟動與零取消變更。HTTP 測試不能替代 Phase 5 真實瀏覽器驗收；本階段未開放對外入口。
+
+證據：[Daemon 紅燈](evidence/phase-1/outer-daemon-red.log)、[重送授權紅燈](evidence/phase-1/outer-redelivery-auth-red.log)、[Policy 單元紅燈](evidence/phase-1/inner-policy-red.log)、[HTTP 外迴圈紅燈](evidence/phase-1/outer-http-red.log)、[HTTP 單元紅燈](evidence/phase-1/inner-http-red.log)、[最小實作綠燈](evidence/phase-1/minimal-green.log)。完整回歸與最終重跑仍須以實際輸出回填後才放行 Phase 2。
+
+2026-09-13 最終驗證補充：
+
+- 首次完整 `go test -count=1 -race -v ./...` 通過，證據為 [完整回歸](evidence/phase-1/regression.log)。隨後檢查發現連結後接父目錄會被預先正規化掩蓋；新增[真實紅燈](evidence/phase-1/inner-symlink-parent-red.log)，保留原始路徑次序解析後取得[最終綠燈](evidence/phase-1/final-green.log)。
+- 最終版本再次完整 race 回歸通過，退出碼 0、零 FAIL、零 SKIP，含既有 OpenCode 整合；見[最終完整回歸](evidence/phase-1/final-regression.log)。外紅、內紅、最小實作綠燈與最終全綠均保留，沒有以只選取部分測試代替完整回歸。
+- 靜態檢查輸出 `PASS: approved Gherkin unchanged; document links and fences; new Go files formatted`，`git diff --check` 退出碼 0。
+- Phase 1 實作與驗證完成，可依既定相依進入 Phase 2。Phase 2～5 尚未執行；真實瀏覽器驗收、完整 Web 操作頁面及獨立審查仍未完成，不能將本紀錄視為整個 Phase 2A 交付。
