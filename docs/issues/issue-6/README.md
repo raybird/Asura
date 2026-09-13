@@ -141,7 +141,7 @@ Feature: 常駐中樞容量政策與動態 Cron 排程管理
 
 ## 實作步驟概要
 
-1. ⏳ **步驟 1**：儲存層 Schema 擴充（新增 `cron_schedules` 與 `cron_runs`）與 SQLite 遷移
+1. ✅ **步驟 1**：儲存層 Schema 擴充（新增 `cron_schedules` 與 `cron_runs`）與 SQLite 遷移
 2. ⏳ **步驟 2**：容量調度器升級（同專案排隊互斥鎖與保留互動通道）
 3. ⏳ **步驟 3**：內嵌 Cron 排程引擎實作（標準 5 欄位、時鐘計算、重疊略過與漏跑不補）
 4. ⏳ **步驟 4**：CLI 子命令 `asura cron` 接線與 Daemon IPC 擴充

@@ -27,8 +27,8 @@
 
 ### Tasks
 
-#### Task 1.1：SQLite 排程資料表遷移與結構體定義
-- **任務說明**：在 SQLiteStore 建立 `cron_schedules` 與 `cron_runs` 資料表，並定義 Go 結構體（`CronSchedule`, `CronRun`）。
+#### Task 1.1：SQLite 排程資料表遷移與結構體定義 ✅
+- **任務說明**：在 SQLiteStore 建立 `cron_schedules` 與 `cron_runs` 資料表，並定義 Go 結構體（`CronSchedule`, `CronRun`）。（2026-09-13 實作完成，內迴圈綠燈見 `evidence/phase-1/inner-cron-green.log`）
 - **預期輸出**：`internal/storage/sqlite.go` 擴充 DDL 遷移與資料型別。
 - **涉及模組或檔案**：`internal/storage/sqlite.go`
 - **完成判準**：
@@ -42,15 +42,15 @@
 - **BDD 外迴圈**：
   - 測試檔案：`tests/integration/cron_test.go:TestCRON008_PersistenceAcrossRestart`
   - 命令：`go test -count=1 -v ./tests/integration -run '^TestCRON008_PersistenceAcrossRestart$'`
-  - 預期失敗原因：找不到排程相關儲存介面或資料表不存在。
+  - 預期失敗原因：找不到排程相關儲存介面或資料表不存在（紅燈見 `evidence/phase-1/outer-cron-red.log`）。
 - **TDD 內迴圈**：
   - 測試檔案：`internal/storage/sqlite_cron_test.go:TestSQLiteStore_CronSchemaMigration`
   - 命令：`go test -count=1 -v ./internal/storage -run '^TestSQLiteStore_CronSchemaMigration$'`
-  - 預期失敗原因：`cron_schedules` table not found。
-- **最小實作與回歸**：在 `internal/storage/sqlite.go` 加入 DDL 執行；回歸全套儲存測試 `go test -count=1 -race ./internal/storage`。
+  - 預期失敗原因：`cron_schedules` table not found（紅燈見 `evidence/phase-1/inner-cron-red.log`）。
+- **最小實作與回歸**：在 `internal/storage/sqlite.go` 加入 DDL 執行；回歸全套儲存測試 `go test -count=1 -race ./internal/storage`（綠燈見 `evidence/phase-1/final-regression.log`）。
 
-#### Task 1.2：排程與觸發歷史 CRUD 方法實作與重啟持久化
-- **任務說明**：實作排程的新增、查詢清單、單筆查詢、更新狀態（active/paused）、記錄觸發結果與刪除排程的方法。
+#### Task 1.2：排程與觸發歷史 CRUD 方法實作與重啟持久化 ✅
+- **任務說明**：實作排程的新增、查詢清單、單筆查詢、更新狀態（active/paused）、記錄觸發結果與刪除排程的方法。（2026-09-13 實作完成，外迴圈綠燈見 `evidence/phase-1/outer-cron-green.log`）
 - **預期輸出**：`internal/storage/sqlite.go` 新增排程資料庫 API。
 - **涉及模組或檔案**：`internal/storage/sqlite.go`, `internal/storage/sqlite_cron_test.go`
 - **完成判準**：
@@ -70,7 +70,7 @@
   - 測試檔案：`internal/storage/sqlite_cron_test.go:TestSQLiteStore_CronCRUD`
   - 命令：`go test -count=1 -v ./internal/storage -run '^TestSQLiteStore_CronCRUD$'`
   - 預期失敗原因：Store 未實作 `CreateCronSchedule`、`ListCronSchedules` 等方法。
-- **最小實作與回歸**：在 `internal/storage/sqlite.go` 實作相關 SQL 查詢；執行 `go test -count=1 -race ./internal/storage` 全綠。
+- **最小實作與回歸**：在 `internal/storage/sqlite.go` 實作相關 SQL 查詢；執行 `go test -count=1 -race ./internal/storage` 全綠（日誌見 `evidence/phase-1/final-regression.log`）。
 
 ---
 
