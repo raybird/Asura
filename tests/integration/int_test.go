@@ -194,7 +194,7 @@ func TestINT003(t *testing.T) {
 	policy := auth.NewPolicy([]string{tmpDir})
 	sockPath := filepath.Join(tmpDir, "asura.sock")
 
-	blockCh := make(chan struct{})
+	blockCh := make(chan struct{}, 1)
 	unblockCh := make(chan struct{})
 
 	blockingRunner := func(ctx context.Context, workspace string, prompt string) (string, error) {
@@ -293,7 +293,7 @@ func TestINT004(t *testing.T) {
 	policy := auth.NewPolicy([]string{tmpDir})
 	sockPath := filepath.Join(tmpDir, "asura.sock")
 
-	startedCh := make(chan struct{})
+	startedCh := make(chan struct{}, 1)
 	unblockCh := make(chan struct{})
 
 	blockingRunner := func(ctx context.Context, workspace string, prompt string) (string, error) {

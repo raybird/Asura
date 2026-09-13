@@ -1667,6 +1667,23 @@ func TestCLI_DaemonLifecycle(t *testing.T) {
 	}
 
 	// 1. 啟動 asura daemon 子進程
+	// 建立隔離的 fake opencode 二進位檔，防止 CLI Daemon 嘗試連接真實模型造成 Drain 等待逾時
+	fakeDir := t.TempDir()
+	fakeBin := filepath.Join(fakeDir, "opencode")
+	fakeScript := `#!/bin/sh
+if [ "$1" = "--version" ]; then
+    echo "1.18.23"
+    exit 0
+fi
+echo '{"type":"step_start","part":{"type":"step-start"}}'
+echo '{"type":"text","part":{"type":"text","text":"cli daemon task done"}}'
+echo '{"type":"step_finish","part":{"reason":"stop"}}'
+exit 0
+`
+	if err := os.WriteFile(fakeBin, []byte(fakeScript), 0755); err != nil {
+		t.Fatalf("failed to write fake opencode: %v", err)
+	}
+
 	daemonCmd := exec.Command(asuraBin, "daemon",
 		"--socket", sockPath,
 		"--db", dbPath,
@@ -1674,6 +1691,7 @@ func TestCLI_DaemonLifecycle(t *testing.T) {
 		"--workers", "2",
 		"--queue", "5",
 	)
+	daemonCmd.Env = append(os.Environ(), "PATH="+fakeDir+":"+os.Getenv("PATH"))
 	var daemonOut, daemonErr bytes.Buffer
 	daemonCmd.Stdout = &daemonOut
 	daemonCmd.Stderr = &daemonErr
