@@ -116,3 +116,39 @@ func TestRunCLI_UsageAndValidation(t *testing.T) {
 		}
 	})
 }
+
+func TestRunCLI_CronValidation(t *testing.T) {
+	t.Run("cron 指令無子操作輸出 Usage 並返回非 0", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		code := RunCLI([]string{"cron"}, out, stderr)
+		if code == 0 {
+			t.Errorf("expected non-zero exit code, got 0")
+		}
+		if !strings.Contains(stderr.String(), "cron subcommands:") {
+			t.Errorf("expected cron subcommands usage, got: %s", stderr.String())
+		}
+	})
+
+	t.Run("cron add 缺少必要參數返回非 0", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		code := RunCLI([]string{"cron", "add", "--name", "test"}, out, stderr)
+		if code == 0 {
+			t.Errorf("expected non-zero exit code, got 0")
+		}
+	})
+
+	t.Run("cron pause 缺少 id 返回非 0", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		code := RunCLI([]string{"cron", "pause"}, out, stderr)
+		if code == 0 {
+			t.Errorf("expected non-zero exit code, got 0")
+		}
+		if !strings.Contains(stderr.String(), "schedule id is required") {
+			t.Errorf("expected 'schedule id is required', got: %s", stderr.String())
+		}
+	})
+}
+

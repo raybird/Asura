@@ -983,3 +983,92 @@ func TestDaemon_RequestID_FingerprintSafety(t *testing.T) {
 	}
 }
 
+func TestDaemon_CronIPC(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	sockPath := filepath.Join(tmpDir, "asura-cron-ipc.sock")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	d := NewDaemon(Config{SocketPath: sockPath}, store, policy)
+	if err := d.Start(); err != nil {
+		t.Fatalf("daemon start failed: %v", err)
+	}
+	defer d.Close()
+
+	client, err := NewClient(sockPath)
+	if err != nil {
+		t.Fatalf("client connect failed: %v", err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+
+	// 1. 新增排程
+	addReq := CronAddRequest{
+		Name:      "backup-job",
+		Workspace: tmpDir,
+		Schedule:  "*/10 * * * *",
+		Prompt:    "run backup",
+	}
+	sched, err := client.AddCronSchedule(ctx, addReq)
+	if err != nil {
+		t.Fatalf("AddCronSchedule failed: %v", err)
+	}
+	if sched.Name != "backup-job" || sched.Status != storage.CronStatusActive {
+		t.Fatalf("unexpected added schedule: %+v", sched)
+	}
+
+	// 2. 非法表達式新增應回報錯誤
+	badReq := CronAddRequest{
+		Name:      "bad-job",
+		Workspace: tmpDir,
+		Schedule:  "bad-expression",
+		Prompt:    "run bad",
+	}
+	_, err = client.AddCronSchedule(ctx, badReq)
+	if err == nil {
+		t.Fatalf("expected error adding invalid cron expression, got nil")
+	}
+
+	// 3. 查詢清單
+	list, err := client.ListCronSchedules(ctx)
+	if err != nil {
+		t.Fatalf("ListCronSchedules failed: %v", err)
+	}
+	if len(list) != 1 || list[0].ID != sched.ID {
+		t.Fatalf("expected 1 schedule in list, got %+v", list)
+	}
+
+	// 4. 暫停與恢復
+	paused, err := client.PauseCronSchedule(ctx, sched.ID)
+	if err != nil {
+		t.Fatalf("PauseCronSchedule failed: %v", err)
+	}
+	if paused.Status != storage.CronStatusPaused {
+		t.Fatalf("expected paused status, got %s", paused.Status)
+	}
+
+	resumed, err := client.ResumeCronSchedule(ctx, sched.ID)
+	if err != nil {
+		t.Fatalf("ResumeCronSchedule failed: %v", err)
+	}
+	if resumed.Status != storage.CronStatusActive {
+		t.Fatalf("expected active status, got %s", resumed.Status)
+	}
+
+	// 5. 刪除排程
+	if err := client.RemoveCronSchedule(ctx, sched.ID); err != nil {
+		t.Fatalf("RemoveCronSchedule failed: %v", err)
+	}
+	afterRemove, _ := client.ListCronSchedules(ctx)
+	if len(afterRemove) != 0 {
+		t.Fatalf("expected 0 schedules after remove, got %d", len(afterRemove))
+	}
+}
+
+

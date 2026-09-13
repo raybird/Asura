@@ -570,4 +570,184 @@ func TestCRON005_UnauthorizedWorkspaceAutoPause(t *testing.T) {
 	}
 }
 
+// TestCRON006_CLICronManagement 驗證 CRON-006: 透過 CLI 管理定時排程（新增、列表、暫停、恢復與刪除）
+func TestCRON006_CLICronManagement(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-cron006-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	socketPath := filepath.Join(tmpDir, "daemon.sock")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	eng := engine.NewEngine(store, policy)
+	d := daemon.NewDaemon(daemon.Config{
+		SocketPath: socketPath,
+	}, store, policy, daemon.WithEngine(eng))
+
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- d.Start()
+	}()
+	defer d.Close()
+
+	waitForSocket(t, socketPath)
+	client, err := daemon.NewClient(socketPath)
+	if err != nil {
+		t.Fatalf("NewClient failed: %v", err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+
+	// 1. 新增排程
+	sched, err := client.AddCronSchedule(ctx, daemon.CronAddRequest{
+		Name:      "test-daily-audit",
+		Workspace: tmpDir,
+		Schedule:  "0 3 * * *",
+		Prompt:    "echo audit",
+	})
+	if err != nil {
+		t.Fatalf("AddCronSchedule failed: %v", err)
+	}
+	if sched.ID == "" || sched.Name != "test-daily-audit" || sched.Status != storage.CronStatusActive {
+		t.Fatalf("unexpected added schedule: %+v", sched)
+	}
+
+	// 2. 列出排程
+	list, err := client.ListCronSchedules(ctx)
+	if err != nil {
+		t.Fatalf("ListCronSchedules failed: %v", err)
+	}
+	if len(list) != 1 || list[0].ID != sched.ID {
+		t.Fatalf("expected 1 schedule in list, got %+v", list)
+	}
+
+	// 3. 暫停排程
+	paused, err := client.PauseCronSchedule(ctx, sched.ID)
+	if err != nil {
+		t.Fatalf("PauseCronSchedule failed: %v", err)
+	}
+	if paused.Status != storage.CronStatusPaused {
+		t.Fatalf("expected status paused, got %s", paused.Status)
+	}
+
+	// 4. 恢復排程
+	resumed, err := client.ResumeCronSchedule(ctx, sched.ID)
+	if err != nil {
+		t.Fatalf("ResumeCronSchedule failed: %v", err)
+	}
+	if resumed.Status != storage.CronStatusActive {
+		t.Fatalf("expected status active, got %s", resumed.Status)
+	}
+
+	// 5. 刪除排程
+	if err := client.RemoveCronSchedule(ctx, sched.ID); err != nil {
+		t.Fatalf("RemoveCronSchedule failed: %v", err)
+	}
+
+	afterRemove, err := client.ListCronSchedules(ctx)
+	if err != nil {
+		t.Fatalf("ListCronSchedules after remove failed: %v", err)
+	}
+	if len(afterRemove) != 0 {
+		t.Fatalf("expected 0 schedules after remove, got %d", len(afterRemove))
+	}
+}
+
+// TestCRON007_CLICronHistoryQuery 驗證 CRON-007: 透過 CLI/Client 查詢排程歷史觸發紀錄與狀態
+func TestCRON007_CLICronHistoryQuery(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-cron007-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	socketPath := filepath.Join(tmpDir, "daemon.sock")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	now := time.Now().Truncate(time.Second)
+
+	// 預置一筆排程
+	sched := storage.CronSchedule{
+		ID:        "sched-history-1",
+		Name:      "history-test",
+		Workspace: tmpDir,
+		Schedule:  "*/15 * * * *",
+		Prompt:    "echo test",
+		Status:    storage.CronStatusActive,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.CreateCronSchedule(ctx, sched); err != nil {
+		t.Fatal(err)
+	}
+
+	// 預置兩筆歷史觸發記錄 (一筆 triggered, 一筆 skipped)
+	run1 := storage.CronRun{
+		ID:            "run-hist-1",
+		CronID:        "sched-history-1",
+		ScheduledTime: now.Add(-30 * time.Minute),
+		TriggeredTime: now.Add(-30 * time.Minute),
+		TaskID:        "task-111",
+		Status:        storage.CronRunTriggered,
+		CreatedAt:     now.Add(-30 * time.Minute),
+	}
+	run2 := storage.CronRun{
+		ID:            "run-hist-2",
+		CronID:        "sched-history-1",
+		ScheduledTime: now.Add(-15 * time.Minute),
+		TriggeredTime: now.Add(-15 * time.Minute),
+		TaskID:        "task-111",
+		Status:        storage.CronRunSkipped,
+		CreatedAt:     now.Add(-15 * time.Minute),
+	}
+	_ = store.RecordCronRun(ctx, run1)
+	_ = store.RecordCronRun(ctx, run2)
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	d := daemon.NewDaemon(daemon.Config{
+		SocketPath: socketPath,
+	}, store, policy)
+
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- d.Start()
+	}()
+	defer d.Close()
+
+	waitForSocket(t, socketPath)
+	client, err := daemon.NewClient(socketPath)
+	if err != nil {
+		t.Fatalf("NewClient failed: %v", err)
+	}
+	defer client.Close()
+
+	// 查詢觸發紀錄
+	runs, err := client.ListCronRuns(ctx, "sched-history-1", 10)
+	if err != nil {
+		t.Fatalf("ListCronRuns failed: %v", err)
+	}
+	if len(runs) != 2 {
+		t.Fatalf("expected 2 runs, got %d", len(runs))
+	}
+	if runs[0].Status != storage.CronRunSkipped || runs[1].Status != storage.CronRunTriggered {
+		t.Fatalf("unexpected runs order or status: %+v", runs)
+	}
+}
+
+
 

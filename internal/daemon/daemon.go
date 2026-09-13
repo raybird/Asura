@@ -15,6 +15,7 @@ import (
 
 	"asura/internal/auth"
 	"asura/internal/backend/opencode"
+	"asura/internal/cron"
 	"asura/internal/engine"
 	"asura/internal/storage"
 )
@@ -54,6 +55,7 @@ type Daemon struct {
 	engine    *engine.Engine
 	pool      *WorkerPool
 	wsQueue    *WorkspaceQueue
+	scheduler  *cron.Scheduler
 	inFlight   int
 	inFlightMu sync.Mutex
 	listener   net.Listener
@@ -160,6 +162,8 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 		d.engine = engine.NewEngine(store, policy, engine.WithRunner(adapter.Run))
 	}
 
+	d.scheduler = cron.NewScheduler(store, policy, d.engine)
+
 	return d
 }
 
@@ -206,10 +210,45 @@ func (d *Daemon) Start() error {
 		_, _ = d.store.RecoverInterruptedTasks(context.Background())
 	}
 
+	// 6. 對齊排程時鐘：過期者重算未來觸發時間，絕不補跑歷史（CRON-004）
+	if d.scheduler != nil {
+		_ = d.scheduler.AlignSchedules(context.Background(), time.Now())
+	}
+
+	d.wg.Add(1)
+	go d.cronLoop()
+
 	d.wg.Add(1)
 	go d.acceptLoop()
 
 	return nil
+}
+
+func (d *Daemon) cronLoop() {
+	defer d.wg.Done()
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-d.closed:
+			return
+		case now := <-ticker.C:
+			if d.scheduler == nil || d.store == nil {
+				continue
+			}
+			ctx := context.Background()
+			schedules, err := d.store.ListCronSchedules(ctx)
+			if err != nil {
+				continue
+			}
+			for _, sched := range schedules {
+				if sched.Status == storage.CronStatusActive && sched.NextRunAt != nil && !sched.NextRunAt.After(now) {
+					_ = d.scheduler.Trigger(ctx, sched.ID, now)
+				}
+			}
+		}
+	}
 }
 
 func (d *Daemon) acceptLoop() {
@@ -229,21 +268,35 @@ func (d *Daemon) acceptLoop() {
 	}
 }
 
+// CronAddRequest 定義新增排程之請求參數
+type CronAddRequest struct {
+	Name      string `json:"name"`
+	Workspace string `json:"workspace"`
+	Schedule  string `json:"schedule"`
+	Prompt    string `json:"prompt"`
+}
+
 // IPCRequest 定義用戶端提交之請求
 type IPCRequest struct {
-	Action    string    `json:"action,omitempty"`
-	RequestID string    `json:"request_id,omitempty"`
-	TaskID    string    `json:"task_id,omitempty"`
-	Workspace string    `json:"workspace,omitempty"`
-	Prompt    string    `json:"prompt,omitempty"`
-	Class     TaskClass `json:"class,omitempty"`
+	Action     string          `json:"action,omitempty"`
+	RequestID  string          `json:"request_id,omitempty"`
+	TaskID     string          `json:"task_id,omitempty"`
+	Workspace  string          `json:"workspace,omitempty"`
+	Prompt     string          `json:"prompt,omitempty"`
+	Class      TaskClass       `json:"class,omitempty"`
+	CronID     string          `json:"cron_id,omitempty"`
+	CronAddReq *CronAddRequest `json:"cron_add_req,omitempty"`
+	Limit      int             `json:"limit,omitempty"`
 }
 
 // IPCResponse 定義傳回用戶端之結果
 type IPCResponse struct {
-	Task     *storage.Task `json:"task,omitempty"`
-	Projects []string      `json:"projects,omitempty"`
-	Error    string        `json:"error,omitempty"`
+	Task          *storage.Task          `json:"task,omitempty"`
+	Projects      []string               `json:"projects,omitempty"`
+	CronSchedule  *storage.CronSchedule  `json:"cron_schedule,omitempty"`
+	CronSchedules []storage.CronSchedule `json:"cron_schedules,omitempty"`
+	CronRuns      []storage.CronRun      `json:"cron_runs,omitempty"`
+	Error         string                 `json:"error,omitempty"`
 }
 
 func (d *Daemon) handleConn(conn net.Conn) {
@@ -433,6 +486,128 @@ func (d *Daemon) handleConn(conn net.Conn) {
 
 			// 遵循 P4-T2：容量及持久化成功後、後端完成前回傳 Task ID
 			_ = encoder.Encode(IPCResponse{Task: initialTask})
+
+		case "cron_add":
+			if req.CronAddReq == nil {
+				_ = encoder.Encode(IPCResponse{Error: "cron_add_req required"})
+				continue
+			}
+			addReq := req.CronAddReq
+			if addReq.Name == "" || addReq.Workspace == "" || addReq.Schedule == "" || addReq.Prompt == "" {
+				_ = encoder.Encode(IPCResponse{Error: "name, workspace, schedule, and prompt are required"})
+				continue
+			}
+			parsed, err := cron.Parse(addReq.Schedule)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("invalid cron schedule: %v", err)})
+				continue
+			}
+			if d.policy != nil {
+				if err := d.policy.AuthorizeWorkspace(addReq.Workspace); err != nil {
+					_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unauthorized workspace: %v", err)})
+					continue
+				}
+			}
+			now := time.Now().Truncate(time.Second)
+			nextRun := parsed.Next(now)
+			cronID := fmt.Sprintf("cron-%d", time.Now().UnixNano())
+			sched := storage.CronSchedule{
+				ID:        cronID,
+				Name:      addReq.Name,
+				Workspace: addReq.Workspace,
+				Schedule:  addReq.Schedule,
+				Prompt:    addReq.Prompt,
+				Status:    storage.CronStatusActive,
+				NextRunAt: &nextRun,
+				CreatedAt: now,
+				UpdatedAt: now,
+			}
+			if err := d.store.CreateCronSchedule(context.Background(), sched); err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("create cron schedule: %v", err)})
+				continue
+			}
+			created, err := d.store.GetCronSchedule(context.Background(), cronID)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("get created schedule: %v", err)})
+				continue
+			}
+			_ = encoder.Encode(IPCResponse{CronSchedule: created})
+
+		case "cron_list":
+			schedules, err := d.store.ListCronSchedules(context.Background())
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("list cron schedules: %v", err)})
+				continue
+			}
+			_ = encoder.Encode(IPCResponse{CronSchedules: schedules})
+
+		case "cron_pause":
+			if req.CronID == "" {
+				_ = encoder.Encode(IPCResponse{Error: "cron_id is required"})
+				continue
+			}
+			if err := d.store.UpdateCronScheduleStatus(context.Background(), req.CronID, storage.CronStatusPaused, "paused by user"); err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("pause cron schedule: %v", err)})
+				continue
+			}
+			sched, err := d.store.GetCronSchedule(context.Background(), req.CronID)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("get schedule: %v", err)})
+				continue
+			}
+			_ = encoder.Encode(IPCResponse{CronSchedule: sched})
+
+		case "cron_resume":
+			if req.CronID == "" {
+				_ = encoder.Encode(IPCResponse{Error: "cron_id is required"})
+				continue
+			}
+			sched, err := d.store.GetCronSchedule(context.Background(), req.CronID)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("schedule not found: %v", err)})
+				continue
+			}
+			parsed, err := cron.Parse(sched.Schedule)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("parse schedule: %v", err)})
+				continue
+			}
+			now := time.Now()
+			next := parsed.Next(now)
+			_ = d.store.UpdateCronScheduleNextRun(context.Background(), req.CronID, next, sched.LastRunAt)
+			if err := d.store.UpdateCronScheduleStatus(context.Background(), req.CronID, storage.CronStatusActive, ""); err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("resume cron schedule: %v", err)})
+				continue
+			}
+			sched, _ = d.store.GetCronSchedule(context.Background(), req.CronID)
+			_ = encoder.Encode(IPCResponse{CronSchedule: sched})
+
+		case "cron_remove":
+			if req.CronID == "" {
+				_ = encoder.Encode(IPCResponse{Error: "cron_id is required"})
+				continue
+			}
+			if err := d.store.DeleteCronSchedule(context.Background(), req.CronID); err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("delete cron schedule: %v", err)})
+				continue
+			}
+			_ = encoder.Encode(IPCResponse{})
+
+		case "cron_runs":
+			if req.CronID == "" {
+				_ = encoder.Encode(IPCResponse{Error: "cron_id is required"})
+				continue
+			}
+			limit := req.Limit
+			if limit <= 0 {
+				limit = 20
+			}
+			runs, err := d.store.ListCronRuns(context.Background(), req.CronID, limit)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("list cron runs: %v", err)})
+				continue
+			}
+			_ = encoder.Encode(IPCResponse{CronRuns: runs})
 
 		default:
 			_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unknown action: %s", action)})
@@ -625,6 +800,162 @@ func (c *Client) CancelTask(ctx context.Context, taskID string) (*storage.Task, 
 	}
 
 	return resp.Task, nil
+}
+
+// AddCronSchedule 透過 Daemon IPC 新增定時排程 (CRON-006)
+func (c *Client) AddCronSchedule(ctx context.Context, req CronAddRequest) (*storage.CronSchedule, error) {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action:     "cron_add",
+		CronAddReq: &req,
+	}); err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if resp.Error != "" {
+		return nil, errors.New(resp.Error)
+	}
+
+	if resp.CronSchedule == nil {
+		return nil, errors.New("empty cron schedule in response")
+	}
+
+	return resp.CronSchedule, nil
+}
+
+// ListCronSchedules 透過 Daemon IPC 查詢所有排程 (CRON-006)
+func (c *Client) ListCronSchedules(ctx context.Context) ([]storage.CronSchedule, error) {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action: "cron_list",
+	}); err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if resp.Error != "" {
+		return nil, errors.New(resp.Error)
+	}
+
+	return resp.CronSchedules, nil
+}
+
+// PauseCronSchedule 透過 Daemon IPC 暫停排程 (CRON-006)
+func (c *Client) PauseCronSchedule(ctx context.Context, cronID string) (*storage.CronSchedule, error) {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action: "cron_pause",
+		CronID: cronID,
+	}); err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if resp.Error != "" {
+		return nil, errors.New(resp.Error)
+	}
+
+	if resp.CronSchedule == nil {
+		return nil, errors.New("empty cron schedule in response")
+	}
+
+	return resp.CronSchedule, nil
+}
+
+// ResumeCronSchedule 透過 Daemon IPC 恢復排程 (CRON-006)
+func (c *Client) ResumeCronSchedule(ctx context.Context, cronID string) (*storage.CronSchedule, error) {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action: "cron_resume",
+		CronID: cronID,
+	}); err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if resp.Error != "" {
+		return nil, errors.New(resp.Error)
+	}
+
+	if resp.CronSchedule == nil {
+		return nil, errors.New("empty cron schedule in response")
+	}
+
+	return resp.CronSchedule, nil
+}
+
+// RemoveCronSchedule 透過 Daemon IPC 刪除排程 (CRON-006)
+func (c *Client) RemoveCronSchedule(ctx context.Context, cronID string) error {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action: "cron_remove",
+		CronID: cronID,
+	}); err != nil {
+		return fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return fmt.Errorf("decode response: %w", err)
+	}
+
+	if resp.Error != "" {
+		return errors.New(resp.Error)
+	}
+
+	return nil
+}
+
+// ListCronRuns 透過 Daemon IPC 查詢排程歷史觸發紀錄 (CRON-007)
+func (c *Client) ListCronRuns(ctx context.Context, cronID string, limit int) ([]storage.CronRun, error) {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action: "cron_runs",
+		CronID: cronID,
+		Limit:  limit,
+	}); err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if resp.Error != "" {
+		return nil, errors.New(resp.Error)
+	}
+
+	return resp.CronRuns, nil
 }
 
 // Close 關閉用戶端連線

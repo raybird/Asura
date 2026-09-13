@@ -211,13 +211,13 @@
 
 ---
 
-## Phase 4 — CLI 子命令 `asura cron` 與 IPC 接線
+## Phase 4 — CLI 子命令 `asura cron` 與 IPC 接線 ✅
 
 ### Goal
-實作 `asura cron` 系列子命令（add, list, pause, resume, remove），透過 Daemon IPC 進行排程的動態管理與狀態查詢。
+實作 `asura cron` 系列子命令（add, list, pause, resume, remove, runs），透過 Daemon IPC 進行排程的動態管理與狀態查詢。（2026-09-13 實作完成，內外迴圈全綠，日誌留存於 `evidence/phase-4/`）
 
 ### Deliverables
-- `internal/daemon/daemon.go`：新增 cron 相關 IPC 操作（`cron_add`, `cron_list`, `cron_pause`, `cron_resume`, `cron_remove`）。
+- `internal/daemon/daemon.go`：新增 cron 相關 IPC 操作（`cron_add`, `cron_list`, `cron_pause`, `cron_resume`, `cron_remove`, `cron_runs`）。
 - `cmd/asura/cron.go`：新增 `handleCron` 子命令分派與終端表格化輸出。
 - `cmd/asura/run_test.go`：CLI 參數校驗單元測試。
 
@@ -226,49 +226,49 @@
 
 ### Tasks
 
-#### Task 4.1：Daemon IPC 擴充（Cron 管理通訊協定）
-- **任務說明**：在 Daemon 的 IPC 處理器加入排程管理的請求路由，提供新增、清單查詢、暫停、恢復與刪除的 IPC 介面。
+#### Task 4.1：Daemon IPC 擴充（Cron 管理通訊協定）✅
+- **任務說明**：在 Daemon 的 IPC 處理器加入排程管理的請求路由，提供新增、清單查詢、暫停、恢復與刪除的 IPC 介面。（2026-09-13 完成）
 - **預期輸出**：`internal/daemon/daemon.go` 支援 cron IPC 操作。
 - **涉及模組或檔案**：`internal/daemon/daemon.go`, `internal/daemon/daemon_test.go`
 - **完成判準**：
   1. 客戶端透過 IPC 可成功新增排程並取得指派的 Cron ID。
   2. 支援查詢排程清單、暫停指定排程、恢復指定排程與刪除排程。
 - **驗證方式**：`go test -count=1 -v ./internal/daemon -run '^TestDaemon_CronIPC$'`
-- **覆蓋項目**：S-04 操作介面、CRON-003
+- **覆蓋項目**：S-04 操作介面、CRON-006, CRON-007
 - **責任角色**：唯一負責
-- **Scenario ID**：CRON-003
+- **Scenario ID**：CRON-006, CRON-007
 - **改變可觀察行為**：是
 - **BDD 外迴圈**：
-  - 測試檔案：`tests/integration/cron_test.go:TestCRON003_CLICronManagement`
-  - 命令：`go test -count=1 -v ./tests/integration -run '^TestCRON003_CLICronManagement$'`
-  - 預期失敗原因：IPC 回報 unknown operation `cron_add`。
+  - 測試檔案：`tests/integration/cron_test.go:TestCRON006_CLICronManagement`, `TestCRON007_CLICronHistoryQuery`
+  - 命令：`go test -count=1 -v ./tests/integration -run '^TestCRON00[67]'`
+  - 紅綠日誌：`evidence/phase-4/outer-red.log`, `evidence/phase-4/outer-green.log`
 - **TDD 內迴圈**：
   - 測試檔案：`internal/daemon/daemon_test.go:TestDaemon_CronIPC`
   - 命令：`go test -count=1 -v ./internal/daemon -run '^TestDaemon_CronIPC$'`
-  - 預期失敗原因：Daemon 缺少 cron IPC 處理方法。
-- **最小實作與回歸**：在 `internal/daemon/daemon.go` 實作 IPC 分發；執行 `go test -count=1 -race ./internal/daemon`。
+  - 紅綠日誌：`evidence/phase-4/inner-red.log`, `evidence/phase-4/inner-green.log`
+- **最小實作與回歸**：在 `internal/daemon/daemon.go` 實作 IPC 分發；全套回歸見 `evidence/phase-4/final-regression.log`。
 
-#### Task 4.2：CLI `asura cron` 系列子命令與輸入校驗
-- **任務說明**：實作 `asura cron` 進入點，解析 `add`, `list`, `pause`, `resume`, `remove` 參數。`add` 檢查必填欄位與 5 欄位表達式合法性；`list` 以對齊表格輸出排程名稱、目錄、表達式、狀態、下次觸發時間等。
+#### Task 4.2：CLI `asura cron` 系列子命令與輸入校驗 ✅
+- **任務說明**：實作 `asura cron` 進入點，解析 `add`, `list`, `pause`, `resume`, `remove`, `runs` 參數。`add` 檢查必填欄位與 5 欄位表達式合法性；`list` 以對齊表格輸出排程名稱、目錄、表達式、狀態、下次觸發時間等。（2026-09-13 完成）
 - **預期輸出**：`cmd/asura/cron.go`, `cmd/asura/run.go`
 - **涉及模組或檔案**：`cmd/asura/cron.go`, `cmd/asura/run.go`, `cmd/asura/run_test.go`
 - **完成判準**：
   1. 參數缺少或表達式格式錯誤時，返回非 0 狀態碼並輸出清楚的錯誤提示。
   2. 格式正確時透過 IPC 呼叫 Daemon 成功執行，並印出友善的成功訊息或表格。
 - **驗證方式**：`go test -count=1 -v ./cmd/asura -run '^TestRunCLI_CronValidation$'`
-- **覆蓋項目**：CRON-003
+- **覆蓋項目**：CRON-006, CRON-007
 - **責任角色**：唯一負責
-- **Scenario ID**：CRON-003
+- **Scenario ID**：CRON-006, CRON-007
 - **改變可觀察行為**：是
 - **BDD 外迴圈**：
-  - 測試檔案：`tests/integration/cron_test.go:TestCRON003_CLICronManagement`
-  - 命令：`go test -count=1 -v ./tests/integration -run '^TestCRON003_CLICronManagement$'`
-  - 預期失敗原因：CLI 未實作 `cron` 子命令。
+  - 測試檔案：`tests/integration/cron_test.go:TestCRON006_CLICronManagement`
+  - 命令：`go test -count=1 -v ./tests/integration -run '^TestCRON006_CLICronManagement$'`
+  - 紅綠日誌：`evidence/phase-4/outer-red.log`, `evidence/phase-4/outer-green.log`
 - **TDD 內迴圈**：
   - 測試檔案：`cmd/asura/run_test.go:TestRunCLI_CronValidation`
   - 命令：`go test -count=1 -v ./cmd/asura -run '^TestRunCLI_CronValidation$'`
-  - 預期失敗原因：`cron` 未知子命令錯誤。
-- **最小實作與回歸**：在 `cmd/asura/` 接線；執行 `go test -count=1 -race ./cmd/asura`。
+  - 紅綠日誌：`evidence/phase-4/inner-red.log`, `evidence/phase-4/inner-green.log`
+- **最小實作與回歸**：在 `cmd/asura/` 接線；全套回歸見 `evidence/phase-4/final-regression.log`。
 
 ---
 

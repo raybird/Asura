@@ -1,0 +1,11 @@
+# asura/tests/integration [asura/tests/integration.test]
+tests/integration/cron_test.go:611:23: client.AddCronSchedule undefined (type *daemon.Client has no field or method AddCronSchedule)
+tests/integration/cron_test.go:611:51: undefined: daemon.CronAddRequest
+tests/integration/cron_test.go:625:22: client.ListCronSchedules undefined (type *daemon.Client has no field or method ListCronSchedules)
+tests/integration/cron_test.go:634:24: client.PauseCronSchedule undefined (type *daemon.Client has no field or method PauseCronSchedule)
+tests/integration/cron_test.go:643:25: client.ResumeCronSchedule undefined (type *daemon.Client has no field or method ResumeCronSchedule)
+tests/integration/cron_test.go:652:19: client.RemoveCronSchedule undefined (type *daemon.Client has no field or method RemoveCronSchedule)
+tests/integration/cron_test.go:656:29: client.ListCronSchedules undefined (type *daemon.Client has no field or method ListCronSchedules)
+tests/integration/cron_test.go:740:22: client.ListCronRuns undefined (type *daemon.Client has no field or method ListCronRuns)
+FAIL	asura/tests/integration [build failed]
+FAIL

@@ -144,7 +144,7 @@ Feature: 常駐中樞容量政策與動態 Cron 排程管理
 1. ✅ **步驟 1**：儲存層 Schema 擴充（新增 `cron_schedules` 與 `cron_runs`）與 SQLite 遷移
 2. ✅ **步驟 2**：容量調度器升級（同專案排隊互斥鎖與保留互動通道，CRON-001, CRON-002）
 3. ✅ **步驟 3**：內嵌 Cron 排程引擎實作（標準 5 欄位、時鐘計算、重疊略過與漏跑不補，CRON-003, CRON-004, CRON-005）
-4. ⏳ **步驟 4**：CLI 子命令 `asura cron` 接線與 Daemon IPC 擴充
+4. ✅ **步驟 4**：CLI 子命令 `asura cron` 接線與 Daemon IPC 擴充（CRON-006, CRON-007）
 5. ⏳ **步驟 5**：雙迴圈整合測試、服務重啟驗收與文件更新
 
 ## 風險與首要驗證
@@ -162,7 +162,8 @@ Feature: 常駐中樞容量政策與動態 Cron 排程管理
 | 2026-09-13 | 建立 Issue #6 規格說明與 BDD 驗收條件，使用者核准（commit `df5b48a`） |
 | 2026-09-13 | 完成 Phase 1 儲存層擴充與 CRON-008 持久化驗證（commit `1ec1a48`） |
 | 2026-09-13 | 完成 Phase 2 容量調度器升級（CRON-001 同專案互斥排隊、CRON-002 保留互動通道，commit `2c8855d`） |
-| 2026-09-13 | 完成 Phase 3 內嵌 Cron 排程引擎核心（CRON-003 5 欄位解析、CRON-004 重疊略過與漏跑不補、CRON-005 未授權自動暫停） |
+| 2026-09-13 | 完成 Phase 3 內嵌 Cron 排程引擎核心（CRON-003 5 欄位解析、CRON-004 重疊略過與漏跑不補、CRON-005 未授權自動暫停，commit `f05dd94`） |
+| 2026-09-13 | 完成 Phase 4 CLI 子命令 `asura cron` 接線與 Daemon IPC 擴充（CRON-006, CRON-007） |
 
 ---
 
