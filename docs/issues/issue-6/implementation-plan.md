@@ -1,4 +1,4 @@
-# Issue 5 實作計畫 (Implementation Plan)
+# Issue 6 實作計畫 (Implementation Plan)
 
 建立日期：2026-09-13。
 
@@ -65,7 +65,7 @@
   - 更新 `README.md` 說明 `asura cron` 的使用方法與範例。
 - **產出檔案**：
   - `README.md`
-  - 留存測試證據於 `docs/issues/issue-5/evidence/`
+  - 留存測試證據於 `docs/issues/issue-6/evidence/`
 
 ---
 

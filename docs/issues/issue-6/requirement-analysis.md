@@ -1,4 +1,4 @@
-# Issue 5 現況與需求分析 (Requirement Analysis)
+# Issue 6 現況與需求分析 (Requirement Analysis)
 
 建立日期：2026-09-13。
 

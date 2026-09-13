@@ -1,6 +1,6 @@
-# Issue 5 - Phase 2B 容量政策與動態 Cron 排程管理
+# Issue 6 - Phase 2B 容量政策與動態 Cron 排程管理
 
-建立日期：2026-09-13。承接 [Phase 2A](../issue-4/README.md) 與 [階段規劃](../../plans/post-core-roadmap.md)。
+建立日期：2026-09-13。追蹤：[GitHub Issue #6](https://github.com/raybird/Asura/issues/6)。承接 [Phase 2A](../issue-4/README.md) 與 [階段規劃](../../plans/post-core-roadmap.md)。
 
 ## 概述
 

@@ -1,4 +1,4 @@
-# Issue 5 技術方案取捨 (Technical Analysis)
+# Issue 6 技術方案取捨 (Technical Analysis)
 
 建立日期：2026-09-13。
 
