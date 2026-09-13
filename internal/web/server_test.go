@@ -1,11 +1,17 @@
 package web_test
 
 import (
+	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"asura/internal/daemon"
+	"asura/internal/storage"
 	"asura/internal/web"
 )
 
@@ -102,5 +108,176 @@ func TestWEB010Unit(t *testing.T) {
 	w = request(s, "GET", "/api/tasks/private", "", origin, c)
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("revoked cookie: %d", w.Code)
+	}
+}
+
+func startMockSocket(t *testing.T, handler func(req daemon.IPCRequest) daemon.IPCResponse) string {
+	t.Helper()
+	sockPath := filepath.Join(t.TempDir(), "mock.sock")
+	l, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { l.Close() })
+	go func() {
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer c.Close()
+				var req daemon.IPCRequest
+				if err := json.NewDecoder(c).Decode(&req); err == nil {
+					resp := handler(req)
+					_ = json.NewEncoder(c).Encode(resp)
+				}
+			}(conn)
+		}
+	}()
+	return sockPath
+}
+
+// 2026-09-13 WEB-003：提交參數校驗、中樞錯誤映射與接受回應格式化
+func TestWEB003Unit(t *testing.T) {
+	mockSock := startMockSocket(t, func(req daemon.IPCRequest) daemon.IPCResponse {
+		if req.Action == "submit" {
+			if req.Workspace == "/capped" {
+				return daemon.IPCResponse{Error: daemon.ErrCapacityExceeded.Error()}
+			}
+			return daemon.IPCResponse{
+				Task: &storage.Task{
+					ID:        "task-accepted-1",
+					RequestID: req.RequestID,
+					Workspace: req.Workspace,
+					Prompt:    req.Prompt,
+					Status:    storage.StatusPending,
+					CreatedAt: time.Now(),
+					UpdatedAt: time.Now(),
+				},
+			}
+		}
+		return daemon.IPCResponse{Error: "unknown action"}
+	})
+
+	s, err := web.NewServer(web.Config{Key: secret, Origin: origin, SocketPath: mockSock})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wLogin := request(s, "POST", "/api/login", `{"key":"`+secret+`"}`, origin, nil)
+	c := wLogin.Result().Cookies()[0]
+
+	// 1. 缺少必要欄位或畸形 JSON 拒絕 400
+	for _, badBody := range []string{
+		`{}`,
+		`{"id":""}`,
+		`{"id":"test","workspace":"/tmp"}`,
+		`{"id":"test","prompt":"prompt"}`,
+		`{"id":"test","workspace":"/tmp","prompt":"   "}`,
+		`{"id":"test","workspace":"/tmp","prompt":"p","unknown_field":1}`,
+		`not-json`,
+	} {
+		w := request(s, "POST", "/api/tasks", badBody, origin, c)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for body %q, got %d", badBody, w.Code)
+		}
+	}
+
+	// 2. 正常提交回傳 202 與 Task JSON
+	validBody := `{"id":"valid-req","workspace":"/tmp","prompt":"run task"}`
+	wValid := request(s, "POST", "/api/tasks", validBody, origin, c)
+	if wValid.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d", wValid.Code)
+	}
+	if ct := wValid.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+		t.Errorf("expected application/json, got %q", ct)
+	}
+	var task storage.Task
+	if err := json.Unmarshal(wValid.Body.Bytes(), &task); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if task.ID != "task-accepted-1" || task.RequestID != "valid-req" {
+		t.Errorf("unexpected task: %+v", task)
+	}
+
+	// 3. 容量超出回傳 503 capacity exceeded
+	cappedBody := `{"id":"capped-req","workspace":"/capped","prompt":"run task"}`
+	wCapped := request(s, "POST", "/api/tasks", cappedBody, origin, c)
+	if wCapped.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 for capacity exceeded, got %d", wCapped.Code)
+	}
+	if !strings.Contains(wCapped.Body.String(), "capacity exceeded") {
+		t.Errorf("expected 'capacity exceeded' in body, got %q", wCapped.Body.String())
+	}
+}
+
+// 2026-09-13 WEB-004：同識別重送時回傳原任務並保持 202
+func TestWEB004Unit(t *testing.T) {
+	mockSock := startMockSocket(t, func(req daemon.IPCRequest) daemon.IPCResponse {
+		return daemon.IPCResponse{
+			Task: &storage.Task{
+				ID:        "original-task-id",
+				RequestID: req.RequestID,
+				Workspace: req.Workspace,
+				Prompt:    req.Prompt,
+				Status:    storage.StatusRunning,
+			},
+		}
+	})
+	s, err := web.NewServer(web.Config{Key: secret, Origin: origin, SocketPath: mockSock})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wLogin := request(s, "POST", "/api/login", `{"key":"`+secret+`"}`, origin, nil)
+	c := wLogin.Result().Cookies()[0]
+
+	body := `{"id":"idempotent-key","workspace":"/tmp","prompt":"prompt"}`
+	w1 := request(s, "POST", "/api/tasks", body, origin, c)
+	w2 := request(s, "POST", "/api/tasks", body, origin, c)
+	if w1.Code != http.StatusAccepted || w2.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 for both submissions, got %d and %d", w1.Code, w2.Code)
+	}
+	var t1, t2 storage.Task
+	_ = json.Unmarshal(w1.Body.Bytes(), &t1)
+	_ = json.Unmarshal(w2.Body.Bytes(), &t2)
+	if t1.ID != "original-task-id" || t2.ID != "original-task-id" {
+		t.Errorf("expected original-task-id, got %s and %s", t1.ID, t2.ID)
+	}
+}
+
+// 2026-09-13 WEB-005：重送衝突（異內容、已取消）之 HTTP 錯誤映射為 400
+func TestWEB005Unit(t *testing.T) {
+	mockSock := startMockSocket(t, func(req daemon.IPCRequest) daemon.IPCResponse {
+		if req.Prompt == "different" {
+			return daemon.IPCResponse{Error: "request ID reused with different payload"}
+		}
+		if req.Prompt == "cancelled" {
+			return daemon.IPCResponse{Error: "cannot redeliver cancelled request"}
+		}
+		return daemon.IPCResponse{Task: &storage.Task{ID: "new-task-id"}}
+	})
+	s, err := web.NewServer(web.Config{Key: secret, Origin: origin, SocketPath: mockSock})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wLogin := request(s, "POST", "/api/login", `{"key":"`+secret+`"}`, origin, nil)
+	c := wLogin.Result().Cookies()[0]
+
+	// 1. 同識別異內容拒絕 400
+	wDiff := request(s, "POST", "/api/tasks", `{"id":"dup-key","workspace":"/tmp","prompt":"different"}`, origin, c)
+	if wDiff.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for different payload, got %d", wDiff.Code)
+	}
+	if !strings.Contains(wDiff.Body.String(), "request ID reused with different payload") {
+		t.Errorf("expected conflict message in body, got %q", wDiff.Body.String())
+	}
+
+	// 2. 已取消任務重送拒絕 400
+	wCancelled := request(s, "POST", "/api/tasks", `{"id":"dup-key","workspace":"/tmp","prompt":"cancelled"}`, origin, c)
+	if wCancelled.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for cancelled redelivery, got %d", wCancelled.Code)
+	}
+	if !strings.Contains(wCancelled.Body.String(), "cannot redeliver cancelled request") {
+		t.Errorf("expected cancelled redelivery message in body, got %q", wCancelled.Body.String())
 	}
 }

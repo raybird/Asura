@@ -1,0 +1,8 @@
+=== RUN   TestWEB003
+--- PASS: TestWEB003 (0.04s)
+=== RUN   TestWEB004
+--- PASS: TestWEB004 (0.01s)
+=== RUN   TestWEB005
+--- PASS: TestWEB005 (0.01s)
+PASS
+ok  	asura/tests/integration	0.068s

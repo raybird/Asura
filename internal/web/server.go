@@ -130,6 +130,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case strings.HasPrefix(resp.Error, "task not found"):
 			code = http.StatusNotFound
 			message = "task not found"
+		case strings.Contains(resp.Error, "different payload"):
+			code = http.StatusBadRequest
+			message = "request ID reused with different payload"
+		case strings.Contains(resp.Error, "cancelled request"):
+			code = http.StatusBadRequest
+			message = "cannot redeliver cancelled request"
 		}
 		http.Error(w, message, code)
 		return

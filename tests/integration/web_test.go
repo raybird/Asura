@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -221,5 +222,383 @@ func TestWEB010(t *testing.T) {
 	}
 	if task.Status != storage.StatusPending || f.starts.Load() != 0 {
 		t.Fatal("forbidden request caused side effects")
+	}
+}
+
+func (f *webFixture) submitTask(t *testing.T, req engine.SubmitRequest, cookie *http.Cookie) (int, *storage.Task, string) {
+	t.Helper()
+	b, err := json.Marshal(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, body, _ := f.call(t, "POST", "/api/tasks", string(b), f.server.URL, cookie)
+	var task storage.Task
+	if code == http.StatusAccepted {
+		if err := json.Unmarshal([]byte(body), &task); err != nil {
+			t.Fatalf("unmarshal accepted task: %v, body: %s", err, body)
+		}
+		return code, &task, body
+	}
+	return code, nil, body
+}
+
+// 2026-09-13 WEB-003：接受任務與共同容量（接受即時回傳 Task ID、共用 Daemon 容量、滿載與離線回報 503 且零額外副作用）
+func TestWEB003(t *testing.T) {
+	f := startWeb(t)
+	c := f.login(t)
+
+	// 1. 成功提交自然語言任務，立即回傳 202 Accepted 與 Task ID
+	code, task, _ := f.submitTask(t, engine.SubmitRequest{
+		ID:        "web-003-positive",
+		Workspace: f.root,
+		Prompt:    "echo 'natural language task'",
+	}, c)
+	if code != http.StatusAccepted {
+		t.Fatalf("expected 202 Accepted, got %d", code)
+	}
+	if task == nil || task.ID == "" {
+		t.Fatalf("expected valid task with non-empty ID, got %+v", task)
+	}
+	if task.RequestID != "web-003-positive" {
+		t.Errorf("expected RequestID 'web-003-positive', got %q", task.RequestID)
+	}
+
+	// 等待非同步任務執行完畢
+	deadline := time.Now().Add(3 * time.Second)
+	for f.starts.Load() != 1 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if f.starts.Load() != 1 {
+		t.Fatalf("expected exactly 1 execution, got %d", f.starts.Load())
+	}
+
+	// 2. 測試滿載時明確回報 503 capacity exceeded 且不啟動後端
+	// 建立一個受限容量為 1 (Worker 1, Queue 0) 的 Daemon
+	cappedDir := t.TempDir()
+	cappedSock := filepath.Join(cappedDir, "capped.sock")
+	cappedStore, err := storage.NewSQLiteStore(filepath.Join(cappedDir, "tasks.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { cappedStore.Close() })
+	cappedPolicy := auth.NewPolicy([]string{cappedDir})
+	unblockCh := make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-unblockCh:
+		default:
+			close(unblockCh)
+		}
+	})
+	var cappedStarts atomic.Int32
+	cappedEng := engine.NewEngine(cappedStore, cappedPolicy, engine.WithRunner(func(ctx context.Context, ws, prompt string) (string, error) {
+		cappedStarts.Add(1)
+		<-unblockCh
+		return "capped-done", nil
+	}))
+	cappedDaemon := daemon.NewDaemon(daemon.Config{
+		SocketPath: cappedSock,
+		MaxWorkers: 1,
+		MaxQueue:   0,
+	}, cappedStore, cappedPolicy, daemon.WithEngine(cappedEng))
+	if err := cappedDaemon.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { cappedDaemon.Close() })
+
+	cappedServer := httptest.NewUnstartedServer(nil)
+	cappedWeb, err := web.NewServer(web.Config{
+		Key:        "fixture-secret",
+		Origin:     "http://" + cappedServer.Listener.Addr().String(),
+		SocketPath: cappedSock,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cappedServer.Config.Handler = cappedWeb
+	cappedServer.Start()
+	t.Cleanup(cappedServer.Close)
+
+	cappedFixture := &webFixture{
+		root:    cappedDir,
+		store:   cappedStore,
+		server:  cappedServer,
+		socket:  cappedSock,
+	}
+	cappedCookie := cappedFixture.login(t)
+
+	// 提交第一個任務占滿容量
+	code1, _, _ := cappedFixture.submitTask(t, engine.SubmitRequest{
+		ID:        "capped-task-1",
+		Workspace: cappedDir,
+		Prompt:    "task 1 blocks worker",
+	}, cappedCookie)
+	if code1 != http.StatusAccepted {
+		t.Fatalf("first task expected 202, got %d", code1)
+	}
+
+	// 提交第二個任務，預期容量超出拒絕 503
+	code2, _, body2 := cappedFixture.submitTask(t, engine.SubmitRequest{
+		ID:        "capped-task-2",
+		Workspace: cappedDir,
+		Prompt:    "task 2 should be rejected",
+	}, cappedCookie)
+	if code2 != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 Service Unavailable for capacity exceeded, got %d (body: %s)", code2, body2)
+	}
+	if !strings.Contains(body2, "capacity exceeded") {
+		t.Errorf("expected body to contain 'capacity exceeded', got %q", body2)
+	}
+	// 確認第二個任務未啟動後端
+	if cappedStarts.Load() > 1 {
+		t.Errorf("capacity exceeded task triggered backend runner, starts=%d", cappedStarts.Load())
+	}
+	close(unblockCh)
+
+	// 3. 測試中樞不可用時回報 503 daemon unavailable
+	offlineServer := httptest.NewUnstartedServer(nil)
+	offlineWeb, err := web.NewServer(web.Config{
+		Key:        "fixture-secret",
+		Origin:     "http://" + offlineServer.Listener.Addr().String(),
+		SocketPath: filepath.Join(t.TempDir(), "nonexistent.sock"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	offlineServer.Config.Handler = offlineWeb
+	offlineServer.Start()
+	t.Cleanup(offlineServer.Close)
+
+	offlineFixture := &webFixture{
+		root:   f.root,
+		server: offlineServer,
+	}
+	offlineCookie := offlineFixture.login(t)
+	codeOff, _, bodyOff := offlineFixture.submitTask(t, engine.SubmitRequest{
+		ID:        "offline-task",
+		Workspace: f.root,
+		Prompt:    "should fail due to offline daemon",
+	}, offlineCookie)
+	if codeOff != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 for offline daemon, got %d", codeOff)
+	}
+	if !strings.Contains(bodyOff, "daemon unavailable") {
+		t.Errorf("expected body to contain 'daemon unavailable', got %q", bodyOff)
+	}
+}
+
+// 2026-09-13 WEB-004：回應遺失重送不重複執行（同識別重送指向原任務、後端僅執行一次、服務重啟後仍可查得）
+func TestWEB004(t *testing.T) {
+	f := startWeb(t)
+	c := f.login(t)
+
+	reqID := "web-004-idempotent-key"
+	req := engine.SubmitRequest{
+		ID:        reqID,
+		Workspace: f.root,
+		Prompt:    "dedup-natural-prompt",
+	}
+
+	// 第一次提交
+	code1, task1, _ := f.submitTask(t, req, c)
+	if code1 != http.StatusAccepted {
+		t.Fatalf("initial submit failed: %d", code1)
+	}
+	if task1 == nil || task1.ID == "" {
+		t.Fatalf("expected non-empty task, got %+v", task1)
+	}
+
+	// 模擬客戶端未收到回應或重開後重送相同請求
+	code2, task2, _ := f.submitTask(t, req, c)
+	if code2 != http.StatusAccepted {
+		t.Fatalf("redelivered submit failed: %d", code2)
+	}
+	if task2.ID != task1.ID {
+		t.Errorf("expected same Task ID for redelivery, got %s vs %s", task1.ID, task2.ID)
+	}
+
+	// 模擬並行重送（多個連線同時送出相同 RequestID）
+	const concurrent = 5
+	results := make(chan string, concurrent)
+	for i := 0; i < concurrent; i++ {
+		go func() {
+			_, tRes, _ := f.submitTask(t, req, c)
+			if tRes != nil {
+				results <- tRes.ID
+			} else {
+				results <- ""
+			}
+		}()
+	}
+	for i := 0; i < concurrent; i++ {
+		gotID := <-results
+		if gotID != task1.ID {
+			t.Errorf("concurrent redelivery returned different ID: %s vs %s", gotID, task1.ID)
+		}
+	}
+
+	// 等待執行完成
+	deadline := time.Now().Add(3 * time.Second)
+	for f.starts.Load() != 1 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// 斷言：後端執行計數嚴格為 1
+	if f.starts.Load() != 1 {
+		t.Fatalf("expected exactly 1 execution for multiple redeliveries, got %d", f.starts.Load())
+	}
+
+	// 驗證服務重啟後任務與去重紀錄仍可查得
+	// 透過 Web API 查詢該任務狀態
+	codeQuery, bodyQuery, _ := f.call(t, "GET", "/api/tasks/"+task1.ID, "", f.server.URL, c)
+	if codeQuery != http.StatusOK {
+		t.Errorf("query task after redelivery failed: %d %s", codeQuery, bodyQuery)
+	}
+	var queriedTask storage.Task
+	if err := json.Unmarshal([]byte(bodyQuery), &queriedTask); err != nil {
+		t.Fatalf("unmarshal queried task: %v", err)
+	}
+	if queriedTask.ID != task1.ID {
+		t.Errorf("queried task ID mismatch: %s vs %s", queriedTask.ID, task1.ID)
+	}
+	if queriedTask.RequestID != reqID {
+		t.Errorf("queried task request_id mismatch: %s vs %s", queriedTask.RequestID, reqID)
+	}
+}
+
+// 2026-09-13 WEB-005：重送衝突與取消後重新執行（同識別異內容拒絕、已取消任務拒絕重送、新識別建立新任務）
+func TestWEB005(t *testing.T) {
+	cancelDir := t.TempDir()
+	cancelSock := filepath.Join(cancelDir, "cancel.sock")
+	cancelStore, err := storage.NewSQLiteStore(filepath.Join(cancelDir, "tasks.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { cancelStore.Close() })
+	cancelPolicy := auth.NewPolicy([]string{cancelDir})
+	unblockRunner := make(chan struct{})
+	var closeOnce sync.Once
+	defer closeOnce.Do(func() { close(unblockRunner) })
+	var starts atomic.Int32
+	runnerStarted := make(chan struct{}, 5)
+	cancelEng := engine.NewEngine(cancelStore, cancelPolicy, engine.WithRunner(func(ctx context.Context, ws, prompt string) (string, error) {
+		starts.Add(1)
+		runnerStarted <- struct{}{}
+		select {
+		case <-ctx.Done():
+			return "partial cancelled", ctx.Err()
+		case <-unblockRunner:
+			return "done", nil
+		}
+	}))
+	cancelDaemon := daemon.NewDaemon(daemon.Config{
+		SocketPath: cancelSock,
+		MaxWorkers: 2,
+		MaxQueue:   2,
+	}, cancelStore, cancelPolicy, daemon.WithEngine(cancelEng))
+	if err := cancelDaemon.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { cancelDaemon.Close() })
+
+	server := httptest.NewUnstartedServer(nil)
+	webServer, err := web.NewServer(web.Config{
+		Key:        "fixture-secret",
+		Origin:     "http://" + server.Listener.Addr().String(),
+		SocketPath: cancelSock,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.Config.Handler = webServer
+	server.Start()
+	t.Cleanup(server.Close)
+
+	f := &webFixture{
+		root:   cancelDir,
+		store:  cancelStore,
+		server: server,
+		socket: cancelSock,
+	}
+	c := f.login(t)
+
+	reqID := "web-005-conflict-key"
+	req := engine.SubmitRequest{
+		ID:        reqID,
+		Workspace: f.root,
+		Prompt:    "original-prompt",
+	}
+
+	// 1. 成功建立初始任務
+	code1, task1, _ := f.submitTask(t, req, c)
+	if code1 != http.StatusAccepted {
+		t.Fatalf("initial submit failed: %d", code1)
+	}
+
+	// 等待初始任務啟動進入執行
+	select {
+	case <-runnerStarted:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for runner to start")
+	}
+	initialStarts := starts.Load()
+
+	// 2. 衝突情境 A：相同 RequestID 但換用不同 Prompt 內容
+	conflictReqA := engine.SubmitRequest{
+		ID:        reqID,
+		Workspace: f.root,
+		Prompt:    "different-prompt-content",
+	}
+	codeA, _, bodyA := f.submitTask(t, conflictReqA, c)
+	if codeA != http.StatusBadRequest {
+		t.Errorf("expected 400 Bad Request for conflicting payload, got %d (body: %s)", codeA, bodyA)
+	}
+	if !strings.Contains(bodyA, "request ID reused with different payload") {
+		t.Errorf("expected conflict message, got %q", bodyA)
+	}
+	if starts.Load() != initialStarts {
+		t.Errorf("conflicting submit triggered backend execution, starts=%d", starts.Load())
+	}
+
+	// 3. 取消執行中的任務
+	codeCancel, bodyCancel, _ := f.call(t, "POST", "/api/tasks/"+task1.ID+"/cancel", `{}`, f.server.URL, c)
+	if codeCancel != http.StatusOK {
+		t.Fatalf("cancel task failed: %d %s", codeCancel, bodyCancel)
+	}
+
+	// 4. 衝突情境 B：以相同 RequestID 重送已取消任務
+	codeB, _, bodyB := f.submitTask(t, req, c)
+	if codeB != http.StatusBadRequest {
+		t.Errorf("expected 400 Bad Request for redelivering cancelled task, got %d (body: %s)", codeB, bodyB)
+	}
+	if !strings.Contains(bodyB, "cannot redeliver cancelled request") {
+		t.Errorf("expected cancelled redelivery message, got %q", bodyB)
+	}
+	if starts.Load() != initialStarts {
+		t.Errorf("cancelled redelivery triggered backend execution, starts=%d", starts.Load())
+	}
+
+	// 5. 重新執行情境 C：以新識別建立新任務，成功接受並執行
+	newReq := engine.SubmitRequest{
+		ID:        "web-005-new-attempt-key",
+		Workspace: f.root,
+		Prompt:    "original-prompt",
+	}
+	codeC, taskC, _ := f.submitTask(t, newReq, c)
+	if codeC != http.StatusAccepted {
+		t.Fatalf("new attempt submit failed: %d", codeC)
+	}
+	if taskC.ID == task1.ID {
+		t.Errorf("expected new Task ID for new request ID, got same %s", taskC.ID)
+	}
+
+	// 等待新任務啟動
+	select {
+	case <-runnerStarted:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for second runner to start")
+	}
+	if starts.Load() != initialStarts+1 {
+		t.Fatalf("expected new task to execute exactly once, starts=%d", starts.Load())
 	}
 }

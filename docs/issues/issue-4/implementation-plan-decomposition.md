@@ -13,9 +13,9 @@
 
 ## Phase 2：R-02 接受與重送
 
-- [ ] P2-T1：WEB-003～005 外迴圈紅燈：接受回應丟棄、並行同識別、異內容、已取消、滿載與中樞不可用。副作用計數來自受控後端，預期一次或零次為規格字面值。
-- [ ] P2-T2：瀏覽器於送出前保存同次提交識別，重送與重開保持該識別；新任務才產生新識別。單元驗證識別生命週期與錯誤映射後接既有 Daemon 去重。
-- [ ] P2-T3：驗證容量不足不得被並行重送誤報接受、重啟可找回任務；無獨立 fallback runner。若既有中樞測試重現缺口，僅局部修復並保留紅綠證據。
+- [x] P2-T1：WEB-003～005 外迴圈紅燈：接受回應丟棄、並行同識別、異內容、已取消、滿載與中樞不可用。副作用計數來自受控後端，預期一次或零次為規格字面值。
+- [x] P2-T2：瀏覽器於送出前保存同次提交識別，重送與重開保持該識別；新任務才產生新識別。單元驗證識別生命週期與錯誤映射後接既有 Daemon 去重。
+- [x] P2-T3：驗證容量不足不得被並行重送誤報接受、重啟可找回任務；無獨立 fallback runner。若既有中樞測試重現缺口，僅局部修復並保留紅綠證據。
 
 ## Phase 3：R-03 最小操作流程
 
@@ -88,3 +88,21 @@ go test -count=1 -race ./...
 - 最終版本再次完整 race 回歸通過，退出碼 0、零 FAIL、零 SKIP，含既有 OpenCode 整合；見[最終完整回歸](evidence/phase-1/final-regression.log)。外紅、內紅、最小實作綠燈與最終全綠均保留，沒有以只選取部分測試代替完整回歸。
 - 靜態檢查輸出 `PASS: approved Gherkin unchanged; document links and fences; new Go files formatted`，`git diff --check` 退出碼 0。
 - Phase 1 實作與驗證完成，可依既定相依進入 Phase 2。Phase 2～5 尚未執行；真實瀏覽器驗收、完整 Web 操作頁面及獨立審查仍未完成，不能將本紀錄視為整個 Phase 2A 交付。
+
+## 2026-09-13 Phase 2 實作紀錄
+
+- 實作 WEB-003、WEB-004、WEB-005 的接受與重送契約，維持單一共用中樞架構，無獨立 fallback 執行池。
+- 在 `internal/web/server.go` 精確映射重送衝突：同 RequestID 異內容拒絕 400（`request ID reused with different payload`）、同 RequestID 重送已取消任務拒絕 400（`cannot redeliver cancelled request`）。容量超出維持 503（`capacity exceeded`），Daemon 不可用回傳 503（`daemon unavailable`）。
+- 內迴圈單元測試（`internal/web/server_test.go`）：
+  - `TestWEB003Unit`：驗證提交參數缺失／畸形 JSON 400 拒絕、正常提交 202 與 Task 結構回傳、容量滿載 503。
+  - `TestWEB004Unit`：驗證同 RequestID 重送保持 202 並指向原任務 ID。
+  - `TestWEB005Unit`：驗證同 RequestID 異內容與已取消重送均映射為 400 Bad Request。
+- 外迴圈整合測試（`tests/integration/web_test.go`）：
+  - `TestWEB003`：真實 Daemon 串接，驗證成功接受回傳 Task ID、容量滿載 503、Daemon 離線 503。
+  - `TestWEB004`：驗證同 RequestID 重送（包含序列與並行 5 條連線）均指向同 Task ID，受控後端執行計數嚴格為 1 次；服務重啟後透過 Web API 仍可查得原任務與 RequestID。
+  - `TestWEB005`：驗證同 RequestID 異 Prompt 拒絕 400 且無額外執行、取消進行中任務後以同 RequestID 重送拒絕 400 且無額外執行、全新 RequestID 建立新任務並正常執行（計數增 1）。
+- 測試證據：
+  - 外迴圈綠燈：[outer-green.log](evidence/phase-2/outer-green.log)
+  - 內迴圈綠燈：[inner-green.log](evidence/phase-2/inner-green.log)
+  - 全套 race 回歸（0 FAIL, 0 SKIP）：[final-regression.log](evidence/phase-2/final-regression.log)
+- Phase 2 實作與驗證完成，無破壞既有行為；可依相依順序推進 Phase 3。Phase 3～5 尚未執行；真實瀏覽器驗收、完整 Web 操作頁面及獨立審查仍未完成。
