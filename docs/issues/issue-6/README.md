@@ -12,6 +12,7 @@
 - [現況與需求分析](./requirement-analysis.md)
 - [技術方案取捨](./technical-analysis.md)
 - [實作計畫](./implementation-plan.md)
+- [任務拆解細化](./implementation-plan-decomposition.md)
 
 ## 快速導覽
 
