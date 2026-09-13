@@ -1,0 +1,8 @@
+=== RUN   TestCRON003_StandardFieldParsingAndNextRun
+--- PASS: TestCRON003_StandardFieldParsingAndNextRun (0.00s)
+=== RUN   TestCRON004_OverlapSkipAndNoCatchup
+--- PASS: TestCRON004_OverlapSkipAndNoCatchup (0.01s)
+=== RUN   TestCRON005_UnauthorizedWorkspaceAutoPause
+--- PASS: TestCRON005_UnauthorizedWorkspaceAutoPause (0.01s)
+PASS
+ok  	asura/tests/integration	0.024s

@@ -1,0 +1,4 @@
+# asura/tests/integration
+tests/integration/cron_test.go:12:2: package asura/internal/cron is not in std (/home/raybird/.go/src/asura/internal/cron)
+FAIL	asura/tests/integration [setup failed]
+FAIL

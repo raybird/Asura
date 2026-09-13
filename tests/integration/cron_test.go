@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"asura/internal/auth"
+	"asura/internal/cron"
 	"asura/internal/daemon"
 	"asura/internal/engine"
 	"asura/internal/storage"
@@ -336,4 +337,237 @@ func waitForSocket(t *testing.T, socketPath string) {
 	}
 	t.Fatalf("timed out waiting for socket: %s", socketPath)
 }
+
+// TestCRON003_StandardFieldParsingAndNextRun 驗證 CRON-003: 標準 5 欄位 Cron 表示式解析與本地時區下次執行時間計算
+func TestCRON003_StandardFieldParsingAndNextRun(t *testing.T) {
+	// 1. 成功解析標準 5 欄位表達式
+	sched, err := cron.Parse("0 15 * * *")
+	if err != nil {
+		t.Fatalf("Parse('0 15 * * *') failed: %v", err)
+	}
+
+	loc := time.Local
+	base := time.Date(2026, 9, 13, 14, 0, 0, 0, loc)
+	expected := time.Date(2026, 9, 13, 15, 0, 0, 0, loc)
+
+	next := sched.Next(base)
+	if !next.Equal(expected) {
+		t.Fatalf("expected next run at %v, got %v", expected, next)
+	}
+
+	// 2. 跨日計算
+	base2 := time.Date(2026, 9, 13, 16, 0, 0, 0, loc)
+	expected2 := time.Date(2026, 9, 14, 15, 0, 0, 0, loc)
+	next2 := sched.Next(base2)
+	if !next2.Equal(expected2) {
+		t.Fatalf("expected next run at %v, got %v", expected2, next2)
+	}
+
+	// 3. 非法表達式校驗
+	invalidExprs := []string{
+		"0 15 * *",       // 4 欄位
+		"0 15 * * * *",   // 6 欄位
+		"60 15 * * *",    // 分鐘超出 59
+		"0 24 * * *",     // 小時超出 23
+		"0 15 32 * *",    // 日超出 31
+		"0 15 * 13 *",    // 月超出 12
+		"0 15 * * 8",     // 週超出 7
+		"invalid syntax", // 非法文字
+	}
+	for _, expr := range invalidExprs {
+		if _, err := cron.Parse(expr); err == nil {
+			t.Errorf("expected error parsing invalid expression %q, got nil", expr)
+		}
+	}
+}
+
+// TestCRON004_OverlapSkipAndNoCatchup 驗證 CRON-004: 前次執行未完成時略過觸發 (Skip) 且重啟漏跑不補 (No Catchup)
+func TestCRON004_OverlapSkipAndNoCatchup(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-cron004-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	now := time.Now().Truncate(time.Second)
+
+	// 1. 驗證漏跑不補（No Catchup）：排程下次時間為 2 小時前（過期漏跑）
+	pastTime := now.Add(-2 * time.Hour)
+	cronSched := storage.CronSchedule{
+		ID:        "cron-catchup-test",
+		Name:      "catchup-test",
+		Workspace: tmpDir,
+		Schedule:  "0 2 * * *",
+		Prompt:    "echo catchup",
+		Status:    storage.CronStatusActive,
+		CreatedAt: pastTime,
+		UpdatedAt: pastTime,
+		NextRunAt: &pastTime,
+	}
+	if err := store.CreateCronSchedule(ctx, cronSched); err != nil {
+		t.Fatal(err)
+	}
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	var runnerCalls atomic.Int32
+	eng := engine.NewEngine(store, policy, engine.WithRunner(func(ctx context.Context, ws, p string) (string, error) {
+		runnerCalls.Add(1)
+		return "ok", nil
+	}))
+
+	scheduler := cron.NewScheduler(store, policy, eng)
+
+	// 重啟啟動時處理過期排程：不補跑，重新計算未來時間
+	if err := scheduler.AlignSchedules(ctx, now); err != nil {
+		t.Fatalf("AlignSchedules failed: %v", err)
+	}
+
+	// 驗證 runner 呼叫次數為 0（不補跑）
+	if calls := runnerCalls.Load(); calls != 0 {
+		t.Fatalf("expected 0 calls during no-catchup alignment, got %d", calls)
+	}
+
+	// 驗證 NextRunAt 已被重算到未來
+	updatedSched, err := store.GetCronSchedule(ctx, "cron-catchup-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updatedSched.NextRunAt == nil || !updatedSched.NextRunAt.After(now) {
+		t.Fatalf("expected next run at after now, got %v", updatedSched.NextRunAt)
+	}
+
+	// 2. 驗證重疊略過（Overlap Skip）：前次任務尚未完成時，觸發時直接 Skip
+	taskBlocker := make(chan struct{})
+	taskStarted := make(chan struct{})
+	blockingRunner := func(ctx context.Context, ws, p string) (string, error) {
+		close(taskStarted)
+		<-taskBlocker
+		return "done", nil
+	}
+	blockingEng := engine.NewEngine(store, policy, engine.WithRunner(blockingRunner))
+	schedWithBlocker := cron.NewScheduler(store, policy, blockingEng)
+
+	// 第一次觸發：啟動任務
+	err = schedWithBlocker.Trigger(ctx, "cron-catchup-test", now)
+	if err != nil {
+		t.Fatalf("first trigger failed: %v", err)
+	}
+	<-taskStarted // 確認任務 1 正在執行中
+
+	// 第二次觸發：前任務仍在執行，應被自動 Skip
+	err = schedWithBlocker.Trigger(ctx, "cron-catchup-test", now.Add(time.Minute))
+	if err != nil {
+		t.Fatalf("second trigger returned error: %v", err)
+	}
+
+	// 檢查 cron_runs 歷史：應有一筆 skipped 紀錄
+	runs, err := store.ListCronRuns(ctx, "cron-catchup-test", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hasSkipped := false
+	for _, r := range runs {
+		if r.Status == storage.CronRunSkipped {
+			hasSkipped = true
+			break
+		}
+	}
+	if !hasSkipped {
+		t.Fatalf("expected a cron run with status 'skipped', got runs: %+v", runs)
+	}
+
+	close(taskBlocker)
+}
+
+// TestCRON005_UnauthorizedWorkspaceAutoPause 驗證 CRON-005: 專案目錄未授權時回絕啟動後端，紀錄 unauthorized 失敗並自動暫停排程
+func TestCRON005_UnauthorizedWorkspaceAutoPause(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-cron005-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	now := time.Now().Truncate(time.Second)
+
+	// 建立未授權目錄
+	unauthorizedDir := filepath.Join(tmpDir, "unauthorized-project")
+	_ = os.MkdirAll(unauthorizedDir, 0755)
+
+	// Policy 僅允許 /allowed/path
+	allowedDir := filepath.Join(tmpDir, "allowed-project")
+	_ = os.MkdirAll(allowedDir, 0755)
+	policy := auth.NewPolicy([]string{allowedDir})
+
+	cronSched := storage.CronSchedule{
+		ID:        "cron-unauth-test",
+		Name:      "unauth-task",
+		Workspace: unauthorizedDir,
+		Schedule:  "*/5 * * * *",
+		Prompt:    "malicious task",
+		Status:    storage.CronStatusActive,
+		CreatedAt: now,
+		UpdatedAt: now,
+		NextRunAt: &now,
+	}
+	if err := store.CreateCronSchedule(ctx, cronSched); err != nil {
+		t.Fatal(err)
+	}
+
+	var runnerInvoked atomic.Bool
+	eng := engine.NewEngine(store, policy, engine.WithRunner(func(ctx context.Context, ws, p string) (string, error) {
+		runnerInvoked.Store(true)
+		return "should not run", nil
+	}))
+
+	scheduler := cron.NewScheduler(store, policy, eng)
+
+	// 觸發排程
+	err = scheduler.Trigger(ctx, "cron-unauth-test", now)
+	if err == nil {
+		t.Fatalf("expected error triggering unauthorized workspace, got nil")
+	}
+
+	// 1. 斷言後端執行器零啟動
+	if runnerInvoked.Load() {
+		t.Fatalf("backend runner was invoked for unauthorized workspace!")
+	}
+
+	// 2. 斷言 cron_runs 歷史記錄狀態為 unauthorized
+	runs, err := store.ListCronRuns(ctx, "cron-unauth-test", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) == 0 {
+		t.Fatalf("expected at least 1 cron run recorded")
+	}
+	if runs[0].Status != storage.CronRunUnauthorized {
+		t.Fatalf("expected run status 'unauthorized', got %q", runs[0].Status)
+	}
+
+	// 3. 斷言排程已自動被暫停 (paused)
+	updatedSched, err := store.GetCronSchedule(ctx, "cron-unauth-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updatedSched.Status != storage.CronStatusPaused {
+		t.Fatalf("expected schedule status to be auto-paused (%q), got %q", storage.CronStatusPaused, updatedSched.Status)
+	}
+}
+
 

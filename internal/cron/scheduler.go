@@ -1,0 +1,169 @@
+package cron
+
+import (
+	"context"
+	"fmt"
+	"sync"
+	"time"
+
+	"asura/internal/auth"
+	"asura/internal/engine"
+	"asura/internal/storage"
+)
+
+// Scheduler 管理定時排程生命週期、時鐘輪詢、重疊略過與授權防護
+type Scheduler struct {
+	store       *storage.SQLiteStore
+	policy      *auth.Policy
+	engine      *engine.Engine
+	mu          sync.Mutex
+	runningRuns map[string]string // cronID -> active taskID
+}
+
+// NewScheduler 建立新的排程調度器實例
+func NewScheduler(store *storage.SQLiteStore, policy *auth.Policy, eng *engine.Engine) *Scheduler {
+	return &Scheduler{
+		store:       store,
+		policy:      policy,
+		engine:      eng,
+		runningRuns: make(map[string]string),
+	}
+}
+
+// AlignSchedules 在服務啟動或重啟時對齊排程，過期者重算未來時刻，絕不補跑歷史
+// 遵循 CRON-004: 漏跑不補 (No Catchup)
+func (s *Scheduler) AlignSchedules(ctx context.Context, now time.Time) error {
+	schedules, err := s.store.ListCronSchedules(ctx)
+	if err != nil {
+		return fmt.Errorf("list schedules during alignment: %w", err)
+	}
+
+	for _, sched := range schedules {
+		if sched.Status != storage.CronStatusActive {
+			continue
+		}
+
+		// 若未指定下次執行時間或已過期，重算下次時間自 now 起算
+		if sched.NextRunAt == nil || sched.NextRunAt.Before(now) {
+			parsed, err := Parse(sched.Schedule)
+			if err != nil {
+				continue
+			}
+			next := parsed.Next(now)
+			if err := s.store.UpdateCronScheduleNextRun(ctx, sched.ID, next, sched.LastRunAt); err != nil {
+				return fmt.Errorf("update schedule %s next run at: %w", sched.ID, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// Trigger 依排程 ID 觸發一次執行
+// 遵循 CRON-004: 重疊略過 (Skip)
+// 遵循 CRON-005: 未授權目錄自動拒絕並設為 paused
+func (s *Scheduler) Trigger(ctx context.Context, cronID string, now time.Time) error {
+	sched, err := s.store.GetCronSchedule(ctx, cronID)
+	if err != nil {
+		return fmt.Errorf("get schedule: %w", err)
+	}
+
+	runID := fmt.Sprintf("run-%s-%d", cronID, now.Unix())
+
+	// 1. 授權邊界檢查 (CRON-005)
+	if s.policy != nil {
+		if err := s.policy.AuthorizeWorkspace(sched.Workspace); err != nil {
+			// 記錄 unauthorized 失敗歷史
+			unauthRun := storage.CronRun{
+				ID:            runID,
+				CronID:        cronID,
+				ScheduledTime: now,
+				TriggeredTime: now,
+				Status:        storage.CronRunUnauthorized,
+				CreatedAt:     now,
+			}
+			_ = s.store.RecordCronRun(ctx, unauthRun)
+
+			// 自動將排程標記為 paused (CRON-005)
+			_ = s.store.UpdateCronScheduleStatus(ctx, cronID, storage.CronStatusPaused, "unauthorized workspace")
+
+			return fmt.Errorf("unauthorized workspace: %w", err)
+		}
+	}
+
+	// 2. 檢查重疊執行 (CRON-004)
+	s.mu.Lock()
+	activeTaskID, isRunning := s.runningRuns[cronID]
+	s.mu.Unlock()
+
+	if isRunning && activeTaskID != "" {
+		// 檢查前次任務在儲存層之最新狀態
+		task, err := s.store.GetTask(ctx, activeTaskID)
+		if err == nil && task != nil && (task.Status == storage.StatusRunning || task.Status == storage.StatusPending || task.Status == storage.StatusQueued) {
+			// 前次任務尚未結束，依 CRON-004 直接略過 (Skip)
+			skippedRun := storage.CronRun{
+				ID:            runID,
+				CronID:        cronID,
+				ScheduledTime: now,
+				TriggeredTime: now,
+				TaskID:        activeTaskID,
+				Status:        storage.CronRunSkipped,
+				CreatedAt:     now,
+			}
+			_ = s.store.RecordCronRun(ctx, skippedRun)
+
+			// 重算下次執行時間
+			if parsed, err := Parse(sched.Schedule); err == nil {
+				next := parsed.Next(now)
+				_ = s.store.UpdateCronScheduleNextRun(ctx, cronID, next, sched.LastRunAt)
+			}
+			return nil
+		}
+	}
+
+	// 3. 正常觸發執行
+	taskID := engine.GenerateTaskID()
+
+	s.mu.Lock()
+	s.runningRuns[cronID] = taskID
+	s.mu.Unlock()
+
+	triggeredRun := storage.CronRun{
+		ID:            runID,
+		CronID:        cronID,
+		ScheduledTime: now,
+		TriggeredTime: now,
+		TaskID:        taskID,
+		Status:        storage.CronRunTriggered,
+		CreatedAt:     now,
+	}
+	if err := s.store.RecordCronRun(ctx, triggeredRun); err != nil {
+		s.mu.Lock()
+		delete(s.runningRuns, cronID)
+		s.mu.Unlock()
+		return fmt.Errorf("record triggered run: %w", err)
+	}
+
+	// 重算並更新下次執行時間（記錄 last_run 為 now）
+	if parsed, err := Parse(sched.Schedule); err == nil {
+		next := parsed.Next(now)
+		_ = s.store.UpdateCronScheduleNextRun(ctx, cronID, next, &now)
+	}
+
+	// 啟動任務執行
+	go func() {
+		defer func() {
+			s.mu.Lock()
+			delete(s.runningRuns, cronID)
+			s.mu.Unlock()
+		}()
+
+		_, _ = s.engine.SubmitTask(context.Background(), engine.SubmitRequest{
+			ID:        taskID,
+			Workspace: sched.Workspace,
+			Prompt:    sched.Prompt,
+		})
+	}()
+
+	return nil
+}

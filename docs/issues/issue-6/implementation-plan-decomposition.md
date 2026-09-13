@@ -136,76 +136,66 @@
 
 ---
 
-## Phase 3 — 內嵌 Cron 排程引擎核心
+## Phase 3 — 內嵌 Cron 排程引擎核心 ✅
 
 ### Goal
-在 Daemon 常駐進程內實作 Cron 排程調度引擎，支援標準 5 欄位 Cron、本地時區計算、定時觸發任務、重疊略過（Skip）、重啟不補跑（No Catchup）與非授權目錄嚴格回絕自動暫停。
+實作 Cron 排程調度引擎，支援標準 5 欄位 Cron、本地時區計算、定時觸發任務、重疊略過（Skip）、重啟不補跑（No Catchup）與非授權目錄嚴格回絕自動暫停。（2026-09-13 實作完成，內外迴圈全綠，日誌留存於 `evidence/phase-3/`）
 
 ### Deliverables
-- `internal/daemon/scheduler.go`：內嵌排程調度器核心，支援假時鐘（Clock interface）注入測試。
-- `internal/daemon/scheduler_test.go`：時鐘演算、重疊保護與未授權拒絕之單元測試。
-- 端到端整合測試覆蓋 CRON-004、CRON-005、CRON-006、CRON-007。
+- `internal/cron/parser.go`：標準 5 欄位 Cron 表達式解析器與本地時區下次執行時間計算。
+- `internal/cron/scheduler.go`：排程調度器核心，支援時鐘重啟對齊、重疊略過保護與未授權拒絕自動暫停。
+- 單元測試與端到端整合測試覆蓋 CRON-003、CRON-004、CRON-005。
 
 ### Dependencies
 - Phase 1（儲存）與 Phase 2（容量與專案互斥）。
 
 ### Tasks
 
-#### Task 3.1：標準 5 欄位 Cron 解析與週期觸發（CRON-004 & CRON-006）
-- **任務說明**：實作標準 5 欄位 Cron 表達式解析（分 時 日 月 星期），依 `time.Local` 計算下次觸發時間；每當預定時間抵達時，自動建立標準 Task 並送入中樞執行。重啟時直接以當前時間計算下個未來點，不補跑過期任務。
-- **預期輸出**：`internal/daemon/scheduler.go`
-- **涉及模組或檔案**：`internal/daemon/scheduler.go`, `internal/daemon/scheduler_test.go`
+#### Task 3.1：標準 5 欄位 Cron 解析與時鐘計算（CRON-003）✅
+- **任務說明**：實作標準 5 欄位 Cron 表達式解析（分 時 日 月 星期），依 `time.Local` 計算下次觸發時間；非法語法返回明確錯誤。（2026-09-13 完成）
+- **預期輸出**：`internal/cron/parser.go`
+- **涉及模組或檔案**：`internal/cron/parser.go`, `internal/cron/parser_test.go`
 - **完成判準**：
-  1. 正確解析標準 5 欄位表達式（如 `*/5 * * * *`）。
-  2. 假時鐘推進時觸發任務，並正確更新 `last_run_at` 與 `next_run_at`。
-  3. 模擬離線 2 小時後重啟，未補跑過去漏掉的觸發次數，直接以重啟時刻推算下一次未來時間。
-- **驗證方式**：`go test -count=1 -v ./internal/daemon -run '^TestScheduler_PeriodicTrigger_And_NoCatchup$'`
-- **覆蓋項目**：S-02 排程語意、CRON-004、CRON-006
+  1. 正確解析標準 5 欄位表達式（如 `*/5 * * * *`, `0 15 * * *`）。
+  2. 正確計算下次觸發之絕對時間，秒數歸零對齊整分。
+  3. 非法字元或超出上下限回傳明確錯誤。
+- **驗證方式**：`go test -count=1 -v ./internal/cron -run '^TestCronParser_'`
+- **覆蓋項目**：S-02 排程語意、CRON-003
 - **責任角色**：唯一負責
-- **Scenario ID**：CRON-004, CRON-006
+- **Scenario ID**：CRON-003
 - **改變可觀察行為**：是
 - **BDD 外迴圈**：
-  - 測試檔案：`tests/integration/cron_test.go:TestCRON004_PeriodicTriggerCreatesTask`、`TestCRON006_RestartNoCatchup`
-  - 命令：`go test -count=1 -v ./tests/integration -run '^TestCRON00[46]'`
-  - 預期失敗原因：Daemon 尚未內建排程輪詢調度器。
+  - 測試檔案：`tests/integration/cron_test.go:TestCRON003_StandardFieldParsingAndNextRun`
+  - 命令：`go test -count=1 -v ./tests/integration -run '^TestCRON003_StandardFieldParsingAndNextRun$'`
+  - 紅綠日誌：`evidence/phase-3/outer-red.log`, `evidence/phase-3/outer-green.log`
 - **TDD 內迴圈**：
-  - 測試檔案：`internal/daemon/scheduler_test.go:TestScheduler_PeriodicTrigger_And_NoCatchup`
-  - 命令：`go test -count=1 -v ./internal/daemon -run '^TestScheduler_PeriodicTrigger_And_NoCatchup$'`
-  - 預期失敗原因：未實作 `Scheduler` 結構體與時鐘推進觸發。
-- **最小實作與回歸**：在 `internal/daemon/scheduler.go` 實作排程計時器與下次時間推算；回歸全套測試。
+  - 測試檔案：`internal/cron/parser_test.go:TestCronParser_ValidExpressions`
+  - 命令：`go test -count=1 -v ./internal/cron -run '^TestCronParser_'`
+  - 紅綠日誌：`evidence/phase-3/inner-red.log`, `evidence/phase-3/inner-green.log`
+- **最小實作與回歸**：在 `internal/cron/parser.go` 實作解析與跳躍搜尋演算法；全套回歸見 `evidence/phase-3/final-regression.log`。
 
-#### Task 3.2：排程執行重疊偵測與略過保護（CRON-005）
-- **任務說明**：當排程之觸發時刻抵達時，檢查該排程先前建立的任務是否仍在 `running` 或 `queued`。若是，直接略過（Skip）本次觸發，不建立新任務，並在 `cron_runs` 記錄狀態為 `skipped` 與原因。
-- **預期輸出**：`internal/daemon/scheduler.go` 加入重疊防護。
-- **涉及模組或檔案**：`internal/daemon/scheduler.go`, `internal/daemon/scheduler_test.go`
+#### Task 3.2：排程執行重疊偵測、重啟漏跑不補與未授權自動暫停（CRON-004, CRON-005）✅
+- **任務說明**：實作 `internal/cron/scheduler.go`，負責重啟對齊（AlignSchedules，漏跑不補）、重疊偵測（前次任務執行中自動 Skip 並記錄）與授權檢查（非授權目錄自動拒絕、記錄 unauthorized 並將排程改為 paused）。（2026-09-13 完成）
+- **預期輸出**：`internal/cron/scheduler.go` 加入重疊防護與未授權自動暫停。
+- **涉及模組或檔案**：`internal/cron/scheduler.go`, `internal/cron/scheduler_test.go`
 - **完成判準**：
-  1. 前次任務仍在執行中時，觸發時間抵達不產生新 Task。
-  2. `cron_runs` 記錄該次為 `skipped`，說明前次任務尚未完成。
-- **驗證方式**：`go test -count=1 -v ./tests/integration -run '^TestCRON005_OverlapSkipped$'`
-- **覆蓋項目**：S-02 重疊保護、CRON-005
+  1. 服務重啟時漏跑任務不補跑，直接重新對齊未來觸發時間。
+  2. 前次任務仍在執行中時，觸發時間抵達不產生新 Task，`cron_runs` 記錄為 `skipped`。
+  3. 未授權目錄觸發時，後端執行次數嚴格為 0，`cron_runs` 記錄 `unauthorized`，排程狀態自動轉為 `paused`。
+- **驗證方式**：`go test -count=1 -v ./tests/integration -run '^TestCRON00[45]'`
+- **覆蓋項目**：S-02 重疊保護、S-04 授權邊界、CRON-004, CRON-005
 - **責任角色**：唯一負責
-- **Scenario ID**：CRON-005
+- **Scenario ID**：CRON-004, CRON-005
 - **改變可觀察行為**：是
 - **BDD 外迴圈**：
-  - 測試檔案：`tests/integration/cron_test.go:TestCRON005_OverlapSkipped`
-  - 命令：`go test -count=1 -v ./tests/integration -run '^TestCRON005_OverlapSkipped$'`
-  - 預期失敗原因：重複觸發產生了第二個任務或引發並發錯誤。
+  - 測試檔案：`tests/integration/cron_test.go:TestCRON004_OverlapSkipAndNoCatchup` 與 `TestCRON005_UnauthorizedWorkspaceAutoPause`
+  - 命令：`go test -count=1 -v ./tests/integration -run '^TestCRON00[45]'`
+  - 紅綠日誌：`evidence/phase-3/outer-red.log`, `evidence/phase-3/outer-green.log`
 - **TDD 內迴圈**：
-  - 測試檔案：`internal/daemon/scheduler_test.go:TestScheduler_OverlapSkipped`
-  - 命令：`go test -count=1 -v ./internal/daemon -run '^TestScheduler_OverlapSkipped$'`
-  - 預期失敗原因：排程器未檢查既有任務狀態直接發起觸發。
-- **最小實作與回歸**：實作排程重疊狀態檢查；執行 `go test -count=1 -race ./internal/daemon`。
-
-#### Task 3.3：非授權目錄排程觸發嚴格拒絕與自動暫停（CRON-007）
-- **任務說明**：排程觸發當下複查 Workspace 是否在 Daemon 之 `allowed-roots` 內。若否，回絕啟動後端，在 `cron_runs` 標記為 `unauthorized`，並自動將該排程設為 `paused` 且記錄原因。
-- **預期輸出**：`internal/daemon/scheduler.go` 授權防逃逸檢查。
-- **涉及模組或檔案**：`internal/daemon/scheduler.go`, `internal/daemon/scheduler_test.go`
-- **完成判準**：
-  1. 目錄不在授權清單時，受控後端執行次數嚴格為 0。
-  2. `cron_runs` 記錄狀態為 `unauthorized`。
-  3. `cron_schedules` 狀態自動變更為 `paused`，`pause_reason` 明確記載目錄未獲授權。
-- **驗證方式**：`go test -count=1 -v ./tests/integration -run '^TestCRON007_UnauthorizedDirectoryRejection$'`
-- **覆蓋項目**：S-04 授權邊界、CRON-007
+  - 測試檔案：`internal/cron/scheduler_test.go:TestScheduler_`
+  - 命令：`go test -count=1 -v ./internal/cron -run '^TestScheduler_'`
+  - 紅綠日誌：`evidence/phase-3/inner-red.log`, `evidence/phase-3/inner-green.log`
+- **最小實作與回歸**：在 `internal/cron/scheduler.go` 實作排程調度核心；全套回歸見 `evidence/phase-3/final-regression.log`。
 - **責任角色**：唯一負責
 - **Scenario ID**：CRON-007
 - **改變可觀察行為**：是

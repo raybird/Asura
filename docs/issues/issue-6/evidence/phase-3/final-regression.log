@@ -1,0 +1,9 @@
+ok  	asura/cmd/asura	0.008s
+ok  	asura/internal/auth	0.005s
+ok  	asura/internal/backend/opencode	14.903s
+ok  	asura/internal/cron	0.110s
+ok  	asura/internal/daemon	7.459s
+ok  	asura/internal/engine	0.575s
+ok  	asura/internal/storage	0.308s
+ok  	asura/internal/web	0.038s
+ok  	asura/tests/integration	80.635s
