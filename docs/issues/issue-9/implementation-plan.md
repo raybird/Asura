@@ -1,22 +1,22 @@
 # 實作計畫與任務清單
 
-建立日期：2026-09-14。規格及風險見 [README](README.md)。本檔是唯一任務來源；以下已細化 Phase／Task，但相依核准尚未完成，不可直接開始 production code。
+建立日期：2026-09-14。規格及風險見 [README](README.md)。本檔是唯一任務來源；2026-09-14 七項驗收已核准，以下 Phase／Task 依相依順序執行；功能實作與測試尚未開始。
 
 ## 設計提案與使用方式
 
 建議命令 `asura memory add/list/get/remove --workspace <path>`，add 收純文字、get/remove 收 ID。CLI → Daemon 授權與固定 scope → SQLite；不經 WorkerPool。既有命令與 prompt 維持原樣。
 
-擬增 store 操作 `CreateMemory`、`ListMemories`、`GetMemory`、`DeleteMemory`，每個操作都要求 workspace；IPC 使用專屬 action 與具型別參數。實際簽名待核准的查詢與輸入界限決定，不增加泛用 repository 抽象。
+擬增 store 操作 `CreateMemory`、`ListMemories`、`GetMemory`、`DeleteMemory`，每個操作都要求 workspace；IPC 使用專屬 action 與具型別參數。實際簽名依已核准查詢契約與既有 IPC 限制決定，不增加泛用 repository 抽象。
 
 ## Phase / Task
 
 | Task | 狀態 | 相依 | 產出與完成判準 |
 |---|---|---|---|
-| P1-T1 | 📝 待政策確認 | 無 | 解決 TBD-1～3，固定輸入界限、來源與錯誤契約，取得對應 Scenario 核准與承載提交 |
+| P1-T1 | ⏳ 規格核准完成，待介面檢核 | 無 | 2026-09-14 TBD-1～4 與全部 Scenario 已核准（來源及提交見 README）；實作前核對既有 IPC 輸入界限與錯誤映射，若需新增使用者限制則記錄具體影響，不把未決技術參數當作功能已完成 |
 | P1-T2 | 📝 待實作 | P1-T1 | MEM-002～004、007 的 Daemon 外迴圈及 scope／授權單元紅燈；A 正向有效，B 固定資料無洩漏／變更的反向斷言確實可失敗 |
 | P2-T1 | 📝 待實作 | P1-T2 | MEM-001、005 儲存紅燈後新增 schema 與 scope CRUD；舊 Task／Cron 資料升級前後一致，重啟及指定刪除通過 |
 | P2-T2 | 📝 待實作 | P2-T1 | 接 Daemon 記憶處理器，全部操作使用同一經授權 scope；MEM-002～004、007 外／內迴圈由紅轉綠 |
-| P3-T1 | 📝 待實作 | P2-T2 | CLI 參數及正式 IPC 接線，MEM-001、005、006 外紅與 CLI 單元紅後綠燈；失聯／儲存錯誤非零退出，管理零後端啟動 |
+| P3-T1 | 📝 待實作 | P2-T2 | CLI 參數及正式 IPC 接線，MEM-001、005、006 外紅與 CLI 單元紅後綠燈；失聯／儲存錯誤非零退出，無替代儲存寫入，管理零後端啟動 |
 | P3-T2 | 📝 待實作 | P3-T1 | 完整記憶及既有 race 回歸，固定 prompt 對照證明無自動注入；更新 README 使用方式，提交可追溯審查資料 |
 
 ## 測試策略
@@ -29,7 +29,7 @@
 | MEM-004 | 別名可取、子目錄不可繼承 | 固定 canonical scope 與符號連結變更 |
 | MEM-005 | 刪除 → 重啟 → 指定 ID 不存在、另一筆保留 | scope 限定刪除及錯誤 |
 | MEM-007 | 撤權拒絕且資料不變 → 重新授權 → 原內容可讀並可寫入及刪除 | 授權檢查與保留資料，不因撤權清除記憶 |
-| MEM-006 | 失聯／儲存失敗非零退出；受控 runner 零啟動及原 prompt 對照 | CLI 錯誤映射與 handler 失敗 |
+| MEM-006 | 失聯／儲存失敗非零退出且無替代儲存寫入；受控 runner 零啟動及原 prompt 對照 | CLI 錯誤映射與 handler 失敗 |
 
 不同層級分別有傳輸／授權／SQL 失敗面，保留雙迴圈。重構若 no-op，記理由並沿用同版最小實作綠燈。證據於原 Task 連結，保存日期、版本、命令、退出碼與固定期望／實際值；不把環境或編譯失敗當行為紅燈。
 
