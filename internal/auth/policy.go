@@ -66,6 +66,12 @@ func (p *Policy) CanonicalWorkspace(targetPath string) string {
 	return filepath.Clean(absTarget)
 }
 
+// AuthorizeCanonicalWorkspace 同次驗證授權並解析出標準工作區路徑 (MEM-003, MEM-004)
+// 若未授權或解析失敗則回傳錯誤；此處為最小可編譯空殼，由 P2-T2 完成正式實作
+func (p *Policy) AuthorizeCanonicalWorkspace(targetPath string) (string, error) {
+	return "", errors.New("AuthorizeCanonicalWorkspace: not implemented")
+}
+
 // 2026-09-13：解析既有祖先的連結，仍容許尚未建立的專案路徑。
 func resolveWorkspace(path string) (string, error) {
 	abs := path

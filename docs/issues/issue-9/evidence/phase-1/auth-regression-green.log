@@ -1,0 +1,20 @@
+日期：2026-09-14
+命令：go test -count=1 -v ./internal/auth -run '^TestAuthorizeWorkspace'
+退出碼：0
+輸出：
+=== RUN   TestAuthorizeWorkspace_Denied
+=== RUN   TestAuthorizeWorkspace_Denied/sensitive_root_directory
+=== RUN   TestAuthorizeWorkspace_Denied/outside_allowed_roots
+=== RUN   TestAuthorizeWorkspace_Denied/parent_traversal_attempt
+--- PASS: TestAuthorizeWorkspace_Denied (0.00s)
+    --- PASS: TestAuthorizeWorkspace_Denied/sensitive_root_directory (0.00s)
+    --- PASS: TestAuthorizeWorkspace_Denied/outside_allowed_roots (0.00s)
+    --- PASS: TestAuthorizeWorkspace_Denied/parent_traversal_attempt (0.00s)
+=== RUN   TestAuthorizeWorkspace_Allowed
+=== RUN   TestAuthorizeWorkspace_Allowed/exact_allowed_root
+=== RUN   TestAuthorizeWorkspace_Allowed/subproject_directory
+--- PASS: TestAuthorizeWorkspace_Allowed (0.00s)
+    --- PASS: TestAuthorizeWorkspace_Allowed/exact_allowed_root (0.00s)
+    --- PASS: TestAuthorizeWorkspace_Allowed/subproject_directory (0.00s)
+PASS
+ok  	asura/internal/auth	0.015s

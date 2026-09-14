@@ -59,12 +59,12 @@ SQL 的列出必須帶 workspace，取得／刪除必須同時匹配 workspace �
 
 ### P1-T2 — 先建立風險可被測出的證據
 
-- **狀態**：📝 待實作；**相依**：P1-T1；**對應**：MEM-002、003、004、007。
-- **P1-T2.a 產出**：`tests/integration/memory_test.go` 真實 IPC 測試 fixture，建立同一 root 下 A/B、A 子目錄 C、有效別名與越界連結，A/B 使用不同固定多語文字。既有任務成功路徑驗證 runner 計數器可由 0 變 1。
-- **P1-T2.b 產出**：外迴圈先測授權 A 寫入／查詢成功及 A scope 加 B ID 的拒絕。未知 action 只算「功能尚缺」紅燈，不能宣稱已證明跨專案防護有效。
-- **P1-T2.c 產出**：auth／Daemon 單元紅燈驗證同一次 canonical scope、別名與子目錄、解析失敗及符號連結變更。需要新介面時先用可編譯的最小空殼取得行為紅燈，不把編譯錯誤當證據。
-- **完成判準**：固定字面期望與實際 assertion 失敗原因可讀；記錄缺少操作與隔離缺口的差別。授權既有案例已綠者保留刻畫證據，不故意破壞既有程式製造紅燈。
-- **證據位置**：預定 `evidence/phase-1/`；尚未建立。安全正反向全綠仍由 P2-T2 負責，不要求尚無儲存功能時冒充已完成。
+- **狀態**：✅ 2026-09-14 完成測試 fixture、外迴圈紅燈與單元行為紅燈建立；無功能變更。**相依**：P1-T1；**對應**：MEM-002、003、004、007。
+- **P1-T2.a 產出**：已於 `tests/integration/memory_test.go` 建立真實 IPC 測試 fixture（A/B/C/別名/越界，固定多語文字）；`TestP1T2a_FixtureAndRunnerBaseline` 驗證 runner 計數器由 0 變 1（證據：[fixture-baseline-green.log](evidence/phase-1/fixture-baseline-green.log)）。
+- **P1-T2.b 產出**：已建立外迴圈測試（`TestMEM002`, `TestMEM003`, `TestMEM004`, `TestMEM007` 及預留骨架）；執行均取得清晰的「功能尚缺」紅燈（`unknown action: memory_add`），並防範假綠燈（證據：[outer-memory-red.log](evidence/phase-1/outer-memory-red.log)）。
+- **P1-T2.c 產出**：在 `internal/auth/policy.go` 建立 `AuthorizeCanonicalWorkspace` 空殼，於 `internal/auth/policy_test.go` 取得 5 個 subtest 單元行為紅燈（證據：[inner-auth-red.log](evidence/phase-1/inner-auth-red.log)）；在 `internal/daemon/memory_test.go` 取得缺少 action 處理器之行為紅燈（證據：[inner-daemon-red.log](evidence/phase-1/inner-daemon-red.log)）；既有授權案例全綠保留刻畫（證據：[auth-regression-green.log](evidence/phase-1/auth-regression-green.log)）。
+- **完成判準**：固定字面期望與實際 assertion 失敗原因清晰可讀；區分缺少操作與隔離缺口；既有案例全綠。
+- **證據位置**：[evidence/phase-1/](evidence/phase-1/)。安全正反向全綠由 P2-T2 負責。
 
 ## Phase 2：儲存與服務端授權
 

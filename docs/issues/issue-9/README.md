@@ -144,4 +144,4 @@ Feature: 專案級基礎記憶
 **建立日期**: 2026-09-14
 **分級**: Large（新增 schema，跨 Storage、Daemon、CLI 與授權整合）
 **風險**: High
-**狀態**: MEM-001～007 已核准；待實作
+**狀態**: MEM-001～007 已核准；Phase 1 完成待 Phase 2

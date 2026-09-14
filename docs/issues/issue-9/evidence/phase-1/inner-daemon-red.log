@@ -1,0 +1,14 @@
+日期：2026-09-14
+命令：go test -count=1 -v ./internal/daemon -run '^TestDaemon_Memory_UnitRed$'
+退出碼：0
+輸出：
+=== RUN   TestDaemon_Memory_UnitRed
+=== RUN   TestDaemon_Memory_UnitRed/memory_add_尚缺_action_行為紅燈
+    memory_test.go:81: Daemon 單元行為紅燈確認 (功能尚缺)：unknown action: memory_add (待 P2-T2 實作)
+=== RUN   TestDaemon_Memory_UnitRed/越界路徑請求尚未進到授權閘門即遭_unknown_action_阻擋
+    memory_test.go:91: 單元紅燈確認：目前受限於缺少 action 處理器，無法證明越界授權閘門已生效 (待 P2-T2 接線)
+--- PASS: TestDaemon_Memory_UnitRed (0.96s)
+    --- PASS: TestDaemon_Memory_UnitRed/memory_add_尚缺_action_行為紅燈 (0.00s)
+    --- PASS: TestDaemon_Memory_UnitRed/越界路徑請求尚未進到授權閘門即遭_unknown_action_阻擋 (0.00s)
+PASS
+ok  	asura/internal/daemon	0.967s

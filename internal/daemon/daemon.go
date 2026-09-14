@@ -340,6 +340,8 @@ type IPCRequest struct {
 	CronID     string          `json:"cron_id,omitempty"`
 	CronAddReq *CronAddRequest `json:"cron_add_req,omitempty"`
 	Limit      int             `json:"limit,omitempty"`
+	MemoryID   string          `json:"memory_id,omitempty"`
+	Content    string          `json:"content,omitempty"`
 }
 
 // IPCResponse 定義傳回用戶端之結果
@@ -349,6 +351,8 @@ type IPCResponse struct {
 	CronSchedule  *storage.CronSchedule  `json:"cron_schedule,omitempty"`
 	CronSchedules []storage.CronSchedule `json:"cron_schedules,omitempty"`
 	CronRuns      []storage.CronRun      `json:"cron_runs,omitempty"`
+	Memory        *storage.Memory        `json:"memory,omitempty"`
+	Memories      []storage.Memory       `json:"memories,omitempty"`
 	Error         string                 `json:"error,omitempty"`
 }
 
@@ -1056,6 +1060,113 @@ func (c *Client) ListCronRuns(ctx context.Context, cronID string, limit int) ([]
 	}
 
 	return resp.CronRuns, nil
+}
+
+// AddMemory 透過 Daemon IPC 新增專案記憶 (MEM-001)
+func (c *Client) AddMemory(ctx context.Context, workspace, content string) (*storage.Memory, error) {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action:    "memory_add",
+		Workspace: workspace,
+		Content:   content,
+	}); err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if resp.Error != "" {
+		return nil, errors.New(resp.Error)
+	}
+
+	if resp.Memory == nil {
+		return nil, errors.New("empty memory in response")
+	}
+
+	return resp.Memory, nil
+}
+
+// ListMemories 透過 Daemon IPC 查詢專案記憶清單 (MEM-001, MEM-002)
+func (c *Client) ListMemories(ctx context.Context, workspace string) ([]storage.Memory, error) {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action:    "memory_list",
+		Workspace: workspace,
+	}); err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if resp.Error != "" {
+		return nil, errors.New(resp.Error)
+	}
+
+	return resp.Memories, nil
+}
+
+// GetMemory 透過 Daemon IPC 查詢指定 ID 之記憶 (MEM-001, MEM-002)
+func (c *Client) GetMemory(ctx context.Context, workspace, id string) (*storage.Memory, error) {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action:    "memory_get",
+		Workspace: workspace,
+		MemoryID:  id,
+	}); err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if resp.Error != "" {
+		return nil, errors.New(resp.Error)
+	}
+
+	if resp.Memory == nil {
+		return nil, errors.New("memory not found")
+	}
+
+	return resp.Memory, nil
+}
+
+// DeleteMemory 透過 Daemon IPC 刪除指定 ID 之記憶 (MEM-005, MEM-002)
+func (c *Client) DeleteMemory(ctx context.Context, workspace, id string) error {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action:    "memory_remove",
+		Workspace: workspace,
+		MemoryID:  id,
+	}); err != nil {
+		return fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return fmt.Errorf("decode response: %w", err)
+	}
+
+	if resp.Error != "" {
+		return errors.New(resp.Error)
+	}
+
+	return nil
 }
 
 // Close 關閉用戶端連線
