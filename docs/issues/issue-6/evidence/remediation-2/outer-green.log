@@ -1,0 +1,62 @@
+=== RUN   TestCRON001_WorkspaceMutexQueue
+--- PASS: TestCRON001_WorkspaceMutexQueue (0.09s)
+=== RUN   TestCRON002_InteractiveChannelReserved
+--- PASS: TestCRON002_InteractiveChannelReserved (0.07s)
+=== RUN   TestCRON003_CLICronManagement
+--- PASS: TestCRON003_CLICronManagement (0.46s)
+=== RUN   TestCRON004_PeriodicTriggerCreatesTask
+--- PASS: TestCRON004_PeriodicTriggerCreatesTask (1.03s)
+=== RUN   TestCRON005_OverlapSkip
+--- PASS: TestCRON005_OverlapSkip (0.03s)
+=== RUN   TestCRON006_RestartNoCatchup
+--- PASS: TestCRON006_RestartNoCatchup (0.03s)
+=== RUN   TestCRON007_UnauthorizedWorkspaceAutoPause
+--- PASS: TestCRON007_UnauthorizedWorkspaceAutoPause (0.02s)
+=== RUN   TestCRON008_PersistenceAcrossRestart
+--- PASS: TestCRON008_PersistenceAcrossRestart (0.94s)
+=== RUN   TestWEB008
+--- PASS: TestWEB008 (0.09s)
+=== RUN   TestWEB008ProjectsAndPage
+--- PASS: TestWEB008ProjectsAndPage (0.03s)
+=== RUN   TestCRON001_WorkspaceMutexQueue
+--- PASS: TestCRON001_WorkspaceMutexQueue (0.09s)
+=== RUN   TestCRON002_InteractiveChannelReserved
+--- PASS: TestCRON002_InteractiveChannelReserved (0.07s)
+=== RUN   TestCRON003_CLICronManagement
+--- PASS: TestCRON003_CLICronManagement (0.46s)
+=== RUN   TestCRON004_PeriodicTriggerCreatesTask
+--- PASS: TestCRON004_PeriodicTriggerCreatesTask (1.03s)
+=== RUN   TestCRON005_OverlapSkip
+--- PASS: TestCRON005_OverlapSkip (0.03s)
+=== RUN   TestCRON006_RestartNoCatchup
+--- PASS: TestCRON006_RestartNoCatchup (0.03s)
+=== RUN   TestCRON007_UnauthorizedWorkspaceAutoPause
+--- PASS: TestCRON007_UnauthorizedWorkspaceAutoPause (0.03s)
+=== RUN   TestCRON008_PersistenceAcrossRestart
+--- PASS: TestCRON008_PersistenceAcrossRestart (1.02s)
+=== RUN   TestWEB008
+--- PASS: TestWEB008 (0.09s)
+=== RUN   TestWEB008ProjectsAndPage
+--- PASS: TestWEB008ProjectsAndPage (0.03s)
+=== RUN   TestCRON001_WorkspaceMutexQueue
+--- PASS: TestCRON001_WorkspaceMutexQueue (0.09s)
+=== RUN   TestCRON002_InteractiveChannelReserved
+--- PASS: TestCRON002_InteractiveChannelReserved (0.07s)
+=== RUN   TestCRON003_CLICronManagement
+--- PASS: TestCRON003_CLICronManagement (0.46s)
+=== RUN   TestCRON004_PeriodicTriggerCreatesTask
+--- PASS: TestCRON004_PeriodicTriggerCreatesTask (1.03s)
+=== RUN   TestCRON005_OverlapSkip
+--- PASS: TestCRON005_OverlapSkip (0.03s)
+=== RUN   TestCRON006_RestartNoCatchup
+--- PASS: TestCRON006_RestartNoCatchup (0.02s)
+=== RUN   TestCRON007_UnauthorizedWorkspaceAutoPause
+--- PASS: TestCRON007_UnauthorizedWorkspaceAutoPause (0.02s)
+=== RUN   TestCRON008_PersistenceAcrossRestart
+--- PASS: TestCRON008_PersistenceAcrossRestart (1.03s)
+=== RUN   TestWEB008
+--- PASS: TestWEB008 (0.10s)
+=== RUN   TestWEB008ProjectsAndPage
+--- PASS: TestWEB008ProjectsAndPage (0.03s)
+PASS
+ok  	asura/tests/integration	9.562s

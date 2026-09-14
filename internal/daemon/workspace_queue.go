@@ -67,20 +67,23 @@ func (q *WorkspaceQueue) Release(workspace string, completedTaskID string) (stri
 	return nextTaskID, true
 }
 
-// Remove 若任務在排隊期間被取消，將其自佇列中移除
-func (q *WorkspaceQueue) Remove(workspace string, taskID string) {
+// Remove 若任務在排隊期間被取消，將其自佇列中移除。若確實有移除排隊任務則回傳 true (修復 SHOULD FIX 4)
+func (q *WorkspaceQueue) Remove(workspace string, taskID string) bool {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	queue, exists := q.queues[workspace]
 	if !exists {
-		return
+		return false
 	}
 
+	found := false
 	filtered := make([]string, 0, len(queue))
 	for _, id := range queue {
 		if id != taskID {
 			filtered = append(filtered, id)
+		} else {
+			found = true
 		}
 	}
 	if len(filtered) == 0 {
@@ -88,4 +91,5 @@ func (q *WorkspaceQueue) Remove(workspace string, taskID string) {
 	} else {
 		q.queues[workspace] = filtered
 	}
+	return found
 }

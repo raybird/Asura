@@ -110,7 +110,7 @@ func handleCron(args []string, stdout, stderr io.Writer) int {
 		for _, s := range schedules {
 			nextRunStr := "-"
 			if s.NextRunAt != nil {
-				nextRunStr = s.NextRunAt.Format("2006-01-02 15:04:05")
+				nextRunStr = s.NextRunAt.Local().Format("2006-01-02 15:04:05")
 			}
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", s.ID, s.Name, s.Schedule, s.Status, nextRunStr, s.Workspace)
 		}
@@ -256,8 +256,8 @@ func handleCron(args []string, stdout, stderr io.Writer) int {
 			}
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
 				r.ID,
-				r.ScheduledTime.Format("2006-01-02 15:04:05"),
-				r.TriggeredTime.Format("2006-01-02 15:04:05"),
+				r.ScheduledTime.Local().Format("2006-01-02 15:04:05"),
+				r.TriggeredTime.Local().Format("2006-01-02 15:04:05"),
 				r.Status,
 				taskID,
 			)

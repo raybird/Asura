@@ -48,6 +48,7 @@ type taskItem struct {
 	ctx    context.Context
 	class  TaskClass
 	fn     func() error
+	onDone func()
 	result chan error
 }
 
@@ -111,6 +112,11 @@ func (p *WorkerPool) SubmitAsync(ctx context.Context, fn func() error) (<-chan e
 
 // SubmitAsyncClassified 異步提交指定類別之任務至 WorkerPool
 func (p *WorkerPool) SubmitAsyncClassified(ctx context.Context, class TaskClass, fn func() error) (<-chan error, error) {
+	return p.SubmitAsyncClassifiedWithDone(ctx, class, fn, nil)
+}
+
+// SubmitAsyncClassifiedWithDone 異步提交指定類別任務至 WorkerPool，並在槽位釋放後立即回呼 onDone（解決 MUST FIX 3）
+func (p *WorkerPool) SubmitAsyncClassifiedWithDone(ctx context.Context, class TaskClass, fn func() error, onDone func()) (<-chan error, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -125,6 +131,7 @@ func (p *WorkerPool) SubmitAsyncClassified(ctx context.Context, class TaskClass,
 		ctx:    ctx,
 		class:  class,
 		fn:     fn,
+		onDone: onDone,
 		result: make(chan error, 1),
 	}
 
@@ -196,12 +203,20 @@ func (p *WorkerPool) workerLoop(initialItem taskItem) {
 	for {
 		p.executeItem(curItem)
 
+		// 優先釋放本 Worker 佔用之 running 與 runningCron 槽位 (修復 MUST FIX 3)
 		p.mu.Lock()
 		if curItem.class == TaskClassCron {
 			p.runningCron--
 		}
 		p.running--
+		p.mu.Unlock()
 
+		// 槽位已完全空出後再觸發完成回呼（喚醒專案佇列之任務可安全派工）
+		if curItem.onDone != nil {
+			curItem.onDone()
+		}
+
+		p.mu.Lock()
 		nextItem, found := p.popNextRunnableLocked()
 		if !found {
 			p.mu.Unlock()

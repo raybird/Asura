@@ -323,7 +323,7 @@
 | **CRON-002** | 已核准 | Task 2.1 | `tests/integration/cron_test.go:TestCRON002_InteractiveChannelReserved` | `internal/daemon/pool_test.go` |
 | **CRON-003** | 已核准 | Task 4.2 (支援 Task 4.1, 5.2) | `tests/integration/cron_test.go:TestCRON003_CLICronManagement` | `cmd/asura/run_test.go` |
 | **CRON-004** | 已核准 | Task 3.1 | `tests/integration/cron_test.go:TestCRON004_PeriodicTriggerCreatesTask` | `internal/daemon/scheduler_test.go` |
-| **CRON-005** | 已核准 | Task 3.2 | `tests/integration/cron_test.go:TestCRON005_OverlapSkipped` | `internal/daemon/scheduler_test.go` |
-| **CRON-006** | 已核准 | Task 3.1 | `tests/integration/cron_test.go:TestCRON006_RestartNoCatchup` | `internal/daemon/scheduler_test.go` |
-| **CRON-007** | 已核准 | Task 3.3 | `tests/integration/cron_test.go:TestCRON007_UnauthorizedDirectoryRejection` | `internal/daemon/scheduler_test.go` |
-| **CRON-008** | 已核准 | Task 1.2 (支援 Task 1.1) | `tests/integration/cron_test.go:TestCRON008_PersistenceAcrossRestart` | `internal/storage/sqlite_cron_test.go` |
+| **CRON-005** | 已核准 | Task 3.2 | `tests/integration/cron_test.go:TestCRON005_OverlapSkip` | `internal/cron/scheduler_test.go` |
+| **CRON-006** | 已核准 | Task 3.1 | `tests/integration/cron_test.go:TestCRON006_RestartNoCatchup` | `internal/cron/scheduler_test.go` |
+| **CRON-007** | 已核准 | Task 3.3 | `tests/integration/cron_test.go:TestCRON007_UnauthorizedWorkspaceAutoPause` | `internal/cron/scheduler_test.go` |
+| **CRON-008** | 已核准 | Task 1.2 (支援 Task 1.1) | `tests/integration/cron_test.go:TestCRON008_PersistenceAcrossRestart` | `internal/storage/sqlite_test.go` |

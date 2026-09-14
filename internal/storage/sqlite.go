@@ -88,6 +88,7 @@ type Task struct {
 	Result       string     `json:"result"`
 	ErrorMessage string     `json:"error_message"`
 	PGID         int        `json:"pgid"`
+	Class        string     `json:"class,omitempty"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 }
@@ -149,6 +150,7 @@ func (s *SQLiteStore) initSchema() error {
 		result TEXT NOT NULL DEFAULT '',
 		error_message TEXT NOT NULL DEFAULT '',
 		pgid INTEGER NOT NULL DEFAULT 0,
+		class TEXT NOT NULL DEFAULT 'interactive',
 		created_at DATETIME NOT NULL,
 		updated_at DATETIME NOT NULL
 	);
@@ -157,7 +159,7 @@ func (s *SQLiteStore) initSchema() error {
 		return fmt.Errorf("create table: %w", err)
 	}
 
-	// 容錯升級既有表：先確保 request_id 與 fingerprint 欄位存在再建立索引
+	// 容錯升級既有表：先確保 request_id、fingerprint 與 class 欄位存在再建立索引
 	cols, err := s.getTableColumns("tasks")
 	if err != nil {
 		return fmt.Errorf("get table columns: %w", err)
@@ -170,6 +172,11 @@ func (s *SQLiteStore) initSchema() error {
 	if !cols["fingerprint"] {
 		if _, err := s.db.Exec("ALTER TABLE tasks ADD COLUMN fingerprint TEXT NOT NULL DEFAULT ''"); err != nil {
 			return fmt.Errorf("add column fingerprint: %w", err)
+		}
+	}
+	if !cols["class"] {
+		if _, err := s.db.Exec("ALTER TABLE tasks ADD COLUMN class TEXT NOT NULL DEFAULT 'interactive'"); err != nil {
+			return fmt.Errorf("add column class: %w", err)
 		}
 	}
 
@@ -262,8 +269,8 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 		return errors.New("task cannot be nil")
 	}
 	query := `
-	INSERT INTO tasks (id, request_id, fingerprint, prompt, workspace, status, result, error_message, pgid, created_at, updated_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO tasks (id, request_id, fingerprint, prompt, workspace, status, result, error_message, pgid, class, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	now := time.Now().UTC()
 	if task.CreatedAt.IsZero() {
@@ -271,6 +278,10 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 	}
 	if task.UpdatedAt.IsZero() {
 		task.UpdatedAt = now
+	}
+	taskClass := task.Class
+	if taskClass == "" {
+		taskClass = "interactive"
 	}
 
 	_, err := s.db.ExecContext(ctx, query,
@@ -283,6 +294,7 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 		task.Result,
 		task.ErrorMessage,
 		task.PGID,
+		taskClass,
 		task.CreatedAt,
 		task.UpdatedAt,
 	)
@@ -298,7 +310,7 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 // GetTask 依任務 ID 查詢任務狀態與結果
 func (s *SQLiteStore) GetTask(ctx context.Context, id string) (*Task, error) {
 	query := `
-	SELECT id, request_id, fingerprint, prompt, workspace, status, result, error_message, pgid, created_at, updated_at
+	SELECT id, request_id, fingerprint, prompt, workspace, status, result, error_message, pgid, class, created_at, updated_at
 	FROM tasks
 	WHERE id = ?
 	`
@@ -316,6 +328,7 @@ func (s *SQLiteStore) GetTask(ctx context.Context, id string) (*Task, error) {
 		&task.Result,
 		&task.ErrorMessage,
 		&task.PGID,
+		&task.Class,
 		&task.CreatedAt,
 		&task.UpdatedAt,
 	)
@@ -336,7 +349,7 @@ func (s *SQLiteStore) GetTaskByRequestID(ctx context.Context, requestID string) 
 		return nil, ErrTaskNotFound
 	}
 	query := `
-	SELECT id, request_id, fingerprint, prompt, workspace, status, result, error_message, pgid, created_at, updated_at
+	SELECT id, request_id, fingerprint, prompt, workspace, status, result, error_message, pgid, class, created_at, updated_at
 	FROM tasks
 	WHERE request_id = ?
 	ORDER BY created_at DESC
@@ -356,6 +369,7 @@ func (s *SQLiteStore) GetTaskByRequestID(ctx context.Context, requestID string) 
 		&task.Result,
 		&task.ErrorMessage,
 		&task.PGID,
+		&task.Class,
 		&task.CreatedAt,
 		&task.UpdatedAt,
 	)
@@ -493,17 +507,17 @@ func (s *SQLiteStore) UpdateTaskPGID(ctx context.Context, id string, pgid int) e
 	return nil
 }
 
-// RecoverInterruptedTasks 掃描並將所有處於 running 或 pending 狀態的孤兒任務標記為 failed
-// 遵循 SCN-006：守護程序重啟時保留已完成結果，揭露中斷工作，杜絕假成功或自動重新執行
+// RecoverInterruptedTasks 掃描並將所有處於 running, pending 或 queued 狀態的孤兒任務標記為 failed
+// 遵循 SCN-006 與 MUST FIX 5：守護程序重啟時保留已完成結果，揭露中斷工作，杜絕假成功、自動重新執行或排隊殘留
 func (s *SQLiteStore) RecoverInterruptedTasks(ctx context.Context) (int64, error) {
 	query := `
 	UPDATE tasks
 	SET status = ?, error_message = ?, updated_at = ?
-	WHERE status IN (?, ?)
+	WHERE status IN (?, ?, ?)
 	`
 	now := time.Now().UTC()
 	msg := "task interrupted: system restarted or terminated unexpectedly"
-	res, err := s.db.ExecContext(ctx, query, StatusFailed, msg, now, StatusRunning, StatusPending)
+	res, err := s.db.ExecContext(ctx, query, StatusFailed, msg, now, StatusRunning, StatusPending, StatusQueued)
 	if err != nil {
 		return 0, fmt.Errorf("recover interrupted tasks: %w", err)
 	}

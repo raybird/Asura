@@ -119,3 +119,100 @@ func TestCronParser_UnreachableDate(t *testing.T) {
 		t.Errorf("expected IsReachable to return false for Feb 31")
 	}
 }
+
+func TestCronParser_DaylightSavingTime(t *testing.T) {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skipf("skipping DST test: America/New_York not available: %v", err)
+	}
+
+	t.Run("2027-03-14 DST transition 0 9 * * *", func(t *testing.T) {
+		sched, err := Parse("0 9 * * *")
+		if err != nil {
+			t.Fatalf("parse failed: %v", err)
+		}
+		base := time.Date(2027, 3, 13, 10, 0, 0, 0, loc)
+		done := make(chan time.Time, 1)
+		go func() {
+			done <- sched.Next(base)
+		}()
+
+		select {
+		case next := <-done:
+			expected := time.Date(2027, 3, 14, 9, 0, 0, 0, loc)
+			if !next.Equal(expected) {
+				t.Errorf("expected %v, got %v", expected, next)
+			}
+		case <-time.After(1 * time.Second):
+			t.Fatalf("timeout: Schedule.Next infinite loop on DST transition")
+		}
+	})
+
+	t.Run("2027-03-14 DST transition 30 2 * * * (missing hour)", func(t *testing.T) {
+		sched, err := Parse("30 2 * * *")
+		if err != nil {
+			t.Fatalf("parse failed: %v", err)
+		}
+		base := time.Date(2027, 3, 14, 1, 0, 0, 0, loc)
+		done := make(chan time.Time, 1)
+		go func() {
+			done <- sched.Next(base)
+		}()
+
+		select {
+		case next := <-done:
+			// 2:30 在 3/14 當天不存在，下次觸發為 3/15 02:30
+			expected := time.Date(2027, 3, 15, 2, 30, 0, 0, loc)
+			if !next.Equal(expected) {
+				t.Errorf("expected %v, got %v", expected, next)
+			}
+		case <-time.After(1 * time.Second):
+			t.Fatalf("timeout: Schedule.Next infinite loop on missing hour")
+		}
+	})
+
+	t.Run("America/Santiago DST transition", func(t *testing.T) {
+		santiagoLoc, err := time.LoadLocation("America/Santiago")
+		if err != nil {
+			t.Skipf("skipping Santiago test: %v", err)
+		}
+		sched, err := Parse("0 3 * * *")
+		if err != nil {
+			t.Fatalf("parse failed: %v", err)
+		}
+		base := time.Date(2026, 9, 5, 22, 0, 0, 0, santiagoLoc)
+		done := make(chan time.Time, 1)
+		go func() {
+			done <- sched.Next(base)
+		}()
+
+		select {
+		case next := <-done:
+			if next.IsZero() {
+				t.Fatalf("expected non-zero next time")
+			}
+		case <-time.After(1 * time.Second):
+			t.Fatalf("timeout on Santiago DST transition")
+		}
+	})
+
+}
+
+func TestCronParser_LeapYearLongWindow(t *testing.T) {
+	sched, err := Parse("0 0 29 2 1")
+	if err != nil {
+		t.Fatalf("parse failed: %v", err)
+	}
+	base := time.Date(2026, 9, 14, 0, 0, 0, 0, time.Local)
+	if !sched.IsReachable(base) {
+		t.Errorf("expected 0 0 29 2 1 to be reachable within extended window")
+	}
+	next := sched.Next(base)
+	if next.IsZero() {
+		t.Fatalf("expected next to be found, got zero")
+	}
+	if next.Year() != 2044 || next.Month() != 2 || next.Day() != 29 || next.Weekday() != time.Monday {
+		t.Errorf("expected 2044-02-29 Monday, got %v", next)
+	}
+}
+

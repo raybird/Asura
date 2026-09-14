@@ -145,14 +145,18 @@ func (s *Schedule) Next(from time.Time) time.Time {
 	// 截斷至整分並前進 1 分鐘，尋找嚴格大於 from 的最近整分
 	t := from.Truncate(time.Minute).Add(time.Minute)
 
-	// 最多搜尋 5 年防止死循環（例如 2 月 31 日）
-	maxTime := t.AddDate(5, 0, 0)
+	// 最多搜尋 50 年防止死循環（例如 2 月 31 日，或最長約 40 年一遇之閏年特定星期）
+	maxTime := t.AddDate(50, 0, 0)
 
 	for t.Before(maxTime) {
 		// 1. 檢查月份
 		if !s.months[int(t.Month())] {
 			// 快進到下個月 1 號 00:00
-			t = time.Date(t.Year(), t.Month()+1, 1, 0, 0, 0, 0, t.Location())
+			newT := time.Date(t.Year(), t.Month()+1, 1, 0, 0, 0, 0, t.Location())
+			if !newT.After(t) {
+				newT = t.AddDate(0, 1, 0)
+			}
+			t = newT
 			continue
 		}
 
@@ -162,14 +166,26 @@ func (s *Schedule) Next(from time.Time) time.Time {
 
 		if !dayMatch || !weekdayMatch {
 			// 快進到隔天 00:00
-			t = time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, 0, t.Location())
+			newT := time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, 0, t.Location())
+			if !newT.After(t) {
+				newT = t.AddDate(0, 0, 1)
+			}
+			t = newT
 			continue
 		}
 
 		// 3. 檢查小時
 		if !s.hours[t.Hour()] {
-			// 快進到下一小時 00 分
-			t = time.Date(t.Year(), t.Month(), t.Day(), t.Hour()+1, 0, 0, 0, t.Location())
+			// 快進到下一小時 00 分，防範 DST 跳躍 gap 造成 time.Date 正規化回較早時刻引發死循環
+			newT := time.Date(t.Year(), t.Month(), t.Day(), t.Hour()+1, 0, 0, 0, t.Location())
+			if !newT.After(t) {
+				newT = t.Add(time.Hour)
+				newT = time.Date(newT.Year(), newT.Month(), newT.Day(), newT.Hour(), 0, 0, 0, newT.Location())
+				if !newT.After(t) {
+					newT = t.Add(time.Minute)
+				}
+			}
+			t = newT
 			continue
 		}
 

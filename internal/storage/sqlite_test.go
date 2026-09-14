@@ -223,16 +223,29 @@ func TestSQLiteStore_RecoverInterruptedTasks(t *testing.T) {
 		t.Fatalf("create pending task: %v", err)
 	}
 
-	// 4. 執行恢復
+	// 4. 寫入中斷前處於 queued 的任務 (MUST FIX 5: queued 任務亦應被恢復)
+	taskQueued := &Task{
+		ID:        "task-queued",
+		Prompt:    "echo queued",
+		Workspace: "/tmp/allowed",
+		Status:    StatusQueued,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.CreateTask(ctx, taskQueued); err != nil {
+		t.Fatalf("create queued task: %v", err)
+	}
+
+	// 5. 執行恢復
 	recoveredCount, err := store.RecoverInterruptedTasks(ctx)
 	if err != nil {
 		t.Fatalf("RecoverInterruptedTasks failed: %v", err)
 	}
-	if recoveredCount != 2 {
-		t.Errorf("expected 2 recovered tasks, got %d", recoveredCount)
+	if recoveredCount != 3 {
+		t.Errorf("expected 3 recovered tasks, got %d", recoveredCount)
 	}
 
-	// 5. 斷言已完成任務不受任何影響
+	// 6. 斷言已完成任務不受任何影響
 	savedCompleted, err := store.GetTask(ctx, "task-completed")
 	if err != nil {
 		t.Fatalf("get completed task: %v", err)
@@ -244,7 +257,7 @@ func TestSQLiteStore_RecoverInterruptedTasks(t *testing.T) {
 		t.Errorf("expected completed result %q, got %q", "completed result", savedCompleted.Result)
 	}
 
-	// 6. 斷言中斷之 running 任務轉為 failed 且具有明確錯誤原因
+	// 7. 斷言中斷之 running 任務轉為 failed 且具有明確錯誤原因
 	savedRunning, err := store.GetTask(ctx, "task-running")
 	if err != nil {
 		t.Fatalf("get running task: %v", err)
@@ -253,10 +266,10 @@ func TestSQLiteStore_RecoverInterruptedTasks(t *testing.T) {
 		t.Errorf("expected running task status %s, got %s", StatusFailed, savedRunning.Status)
 	}
 	if savedRunning.ErrorMessage == "" {
-		t.Errorf("expected non-empty error message for interrupted running task")
+		t.Errorf("expected non-empty error message on recovered running task")
 	}
 
-	// 7. 斷言中斷之 pending 任務轉為 failed 且具有明確錯誤原因
+	// 8. 斷言中斷之 pending 任務轉為 failed
 	savedPending, err := store.GetTask(ctx, "task-pending")
 	if err != nil {
 		t.Fatalf("get pending task: %v", err)
@@ -266,6 +279,77 @@ func TestSQLiteStore_RecoverInterruptedTasks(t *testing.T) {
 	}
 	if savedPending.ErrorMessage == "" {
 		t.Errorf("expected non-empty error message for interrupted pending task")
+	}
+
+	// 9. 斷言中斷之 queued 任務亦轉為 failed (MUST FIX 5)
+	savedQueued, err := store.GetTask(ctx, "task-queued")
+	if err != nil {
+		t.Fatalf("get queued task: %v", err)
+	}
+	if savedQueued.Status != StatusFailed {
+		t.Errorf("expected queued task status %s, got %s", StatusFailed, savedQueued.Status)
+	}
+	if savedQueued.ErrorMessage == "" {
+		t.Errorf("expected non-empty error message on recovered queued task")
+	}
+}
+
+func TestSQLiteStore_TaskClassPersistence(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-storage-class-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// 1. 預設情況下應為 interactive
+	t1 := &Task{
+		ID:        "task-interactive",
+		Prompt:    "echo 1",
+		Workspace: "/tmp/allowed",
+		Status:    StatusPending,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.CreateTask(ctx, t1); err != nil {
+		t.Fatalf("create t1 failed: %v", err)
+	}
+	got1, err := store.GetTask(ctx, t1.ID)
+	if err != nil {
+		t.Fatalf("get t1 failed: %v", err)
+	}
+	if got1.Class != "interactive" {
+		t.Errorf("expected default class 'interactive', got %q", got1.Class)
+	}
+
+	// 2. 指定 class 為 cron
+	t2 := &Task{
+		ID:        "task-cron",
+		Prompt:    "echo 2",
+		Workspace: "/tmp/allowed",
+		Status:    StatusPending,
+		Class:     "cron",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.CreateTask(ctx, t2); err != nil {
+		t.Fatalf("create t2 failed: %v", err)
+	}
+	got2, err := store.GetTask(ctx, t2.ID)
+	if err != nil {
+		t.Fatalf("get t2 failed: %v", err)
+	}
+	if got2.Class != "cron" {
+		t.Errorf("expected class 'cron', got %q", got2.Class)
 	}
 }
 

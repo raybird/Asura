@@ -165,14 +165,22 @@ Feature: 常駐中樞容量政策與動態 Cron 排程管理
 | 2026-09-13 | 完成 Phase 3 內嵌 Cron 排程引擎核心（CRON-003 5 欄位解析、CRON-004 重疊略過與漏跑不補、CRON-005 未授權自動暫停，commit `f05dd94`） |
 | 2026-09-13 | 完成 Phase 4 CLI 子命令 `asura cron` 接線與 Daemon IPC 擴充（CRON-006, CRON-007，commit `02fdb92`） |
 | 2026-09-13 | 完成 Phase 5 全套整合回歸驗證、Race 檢測（0 FAIL, 0 DATA RACE）與使用手冊更新（commit `a42c088`） |
-| 2026-09-13 | 獨立審查員產出審查報告（`review-a42c088.md`），提出 2 項 MUST FIX 漏洞，判定 RETURN TO execute-task |
-| 2026-09-14 | 完成審查修復：Scheduler 接入 TaskDispatcher 遵循專案鎖與容量分類調度、不可達日期防禦、補齊端到端邊界測試並全綠通過 |
-| 2026-09-14 | 獨立審查員產出複審報告（`review-143b03a.md`），確認 2 項 MUST FIX 漏洞已徹底修復，判定 PASS |
-| 2026-09-14 | 發送 GitHub Pull Request #7 供合併審查 |
+| 2026-09-14 | 獨立審查員產出審查報告（`review-f82dd57.md`），指出 10 項 MUST FIX 與 Gherkin 映射問題，判定 RETURN TO execute-task |
+| 2026-09-14 | 完成二次審查修復：DST 前進死循環修復、50 年視窗、Class 喚醒保持、Worker 槽位釋放後喚醒、專案路徑正規化互斥、queued 孤兒恢復、Trigger 雪崩消除與 failed 記錄、本地時區轉換、Gherkin ID 重整 (CRON-001~CRON-008)、全套整合回歸通過 (0 DATA RACE) |
+
+## 待確認事項
+
+1. **DOM / DOW 的 AND 語意（SHOULD FIX 10）**：
+   - 當前 parser 實作嚴格遵循標準 POSIX/Vixie cron 規範（當 Day of Month 與 Day of Week 同時指定特定值而非 `*` 時，兩者採 OR 語意，只要符合其一即觸發）。
+   - 若未來專案業務需求希望強制特定為「AND 語意」（例如必須既是 13 號又必須是星期五），需請使用者或產品負責人拍板後微調解析與計算規則。
+2. **DST 行為政策（SHOULD FIX 2）**：
+   - 當前 parser 面臨夏令時間（DST）轉換丟失時間點（例如 02:00 跳至 03:00）時，會保證步進遞增至當天該時區有效之時間點，消除死循環。
+   - 是否需針對特定跨時區排程進行補償（例如順延或提前特定分鐘），留待後續依生產環境需求確認。
 
 ---
 
 **建立日期**: 2026-09-13  
+**修訂日期**: 2026-09-14  
 **分級**: Large（跨 Daemon 容量與排程、Storage Schema 擴充、CLI 子命令與整合測試）  
 **風險**: High（定時自主觸發與檔案寫入互斥）  
-**狀態**: 已發送 PR（#7），待合併
+**狀態**: 審查修復完成，全套測試 PASS，準備提交與複審

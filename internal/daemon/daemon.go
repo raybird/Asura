@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -188,6 +189,7 @@ func (d *Daemon) dispatchCronTask(ctx context.Context, cronID, workspace, prompt
 		Prompt:      prompt,
 		Workspace:   workspace,
 		Status:      storage.StatusPending,
+		Class:       string(TaskClassCron),
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
@@ -197,8 +199,9 @@ func (d *Daemon) dispatchCronTask(ctx context.Context, cronID, workspace, prompt
 		return "", fmt.Errorf("create initial cron task: %w", err)
 	}
 
+	wsKey := d.canonicalWorkspace(workspace)
 	// 遵循 CRON-001：同專案嚴格互斥依序排隊
-	acquired, _ := d.wsQueue.TryAcquire(workspace, taskID)
+	acquired, _ := d.wsQueue.TryAcquire(wsKey, taskID)
 	if !acquired {
 		// 專案忙碌中，更新狀態為 queued 並排入專案佇列，待前任務完成後依序喚醒
 		_ = d.store.UpdateTaskStatus(ctx, taskID, storage.StatusQueued, "", "")
@@ -209,7 +212,7 @@ func (d *Daemon) dispatchCronTask(ctx context.Context, cronID, workspace, prompt
 	err := d.dispatchTask(taskID, workspace, prompt, TaskClassCron)
 	if err != nil {
 		d.releaseCapacity()
-		d.wsQueue.Release(workspace, taskID)
+		d.releaseWorkspaceAndWakeNext(wsKey, taskID)
 		_ = d.store.UpdateTaskStatus(ctx, taskID, storage.StatusFailed, "", err.Error())
 		return "", err
 	}
@@ -409,8 +412,10 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			}
 			targetID := target.ID
 			if target.Status == storage.StatusQueued {
-				d.wsQueue.Remove(target.Workspace, targetID)
-				d.releaseCapacity()
+				wsKey := d.canonicalWorkspace(target.Workspace)
+				if d.wsQueue.Remove(wsKey, targetID) {
+					d.releaseCapacity()
+				}
 			}
 			err = d.engine.CancelTask(targetID)
 			if err != nil {
@@ -472,6 +477,11 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			taskID := engine.GenerateTaskID()
 			now := time.Now().UTC()
 
+			taskClass := req.Class
+			if taskClass == "" {
+				taskClass = TaskClassInteractive
+			}
+
 			initialTask := &storage.Task{
 				ID:          taskID,
 				RequestID:   req.RequestID,
@@ -479,6 +489,7 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				Prompt:      req.Prompt,
 				Workspace:   req.Workspace,
 				Status:      storage.StatusPending,
+				Class:       string(taskClass),
 				CreatedAt:   now,
 				UpdatedAt:   now,
 			}
@@ -511,8 +522,9 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				continue
 			}
 
+			wsKey := d.canonicalWorkspace(req.Workspace)
 			// 遵循 CRON-001：同專案嚴格互斥依序排隊（僅創建任務之勝者競爭專案鎖）
-			acquired, _ := d.wsQueue.TryAcquire(req.Workspace, taskID)
+			acquired, _ := d.wsQueue.TryAcquire(wsKey, taskID)
 			if !acquired {
 				// 專案忙碌中，更新狀態為 queued 並排入專案佇列，待前任務完成後依序喚醒
 				initialTask.Status = storage.StatusQueued
@@ -521,14 +533,10 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				continue
 			}
 
-			taskClass := req.Class
-			if taskClass == "" {
-				taskClass = TaskClassInteractive
-			}
 			err := d.dispatchTask(taskID, req.Workspace, req.Prompt, taskClass)
 			if err != nil {
 				d.releaseCapacity()
-				d.wsQueue.Release(req.Workspace, taskID)
+				d.releaseWorkspaceAndWakeNext(wsKey, taskID)
 				_ = d.store.DeleteTask(context.Background(), taskID)
 				_ = encoder.Encode(IPCResponse{Error: err.Error()})
 				continue
@@ -673,54 +681,71 @@ func (d *Daemon) handleConn(conn net.Conn) {
 	}
 }
 
-func (d *Daemon) dispatchTask(taskID, workspace, prompt string, class TaskClass) error {
-	_, err := d.pool.SubmitAsyncClassified(context.Background(), class, func() error {
-		defer func() {
-			d.releaseCapacity()
-			nextTaskID, hasNext := d.wsQueue.Release(workspace, taskID)
-			if hasNext && nextTaskID != "" {
-				d.wakeQueuedTask(nextTaskID, workspace, class)
-			}
-		}()
+func (d *Daemon) canonicalWorkspace(ws string) string {
+	if d.policy != nil {
+		return d.policy.CanonicalWorkspace(ws)
+	}
+	abs, err := filepath.Abs(ws)
+	if err == nil {
+		if realPath, err := filepath.EvalSymlinks(abs); err == nil {
+			return filepath.Clean(realPath)
+		}
+		return filepath.Clean(abs)
+	}
+	return filepath.Clean(ws)
+}
 
+func (d *Daemon) releaseWorkspaceAndWakeNext(workspace, completedTaskID string) {
+	wsKey := d.canonicalWorkspace(workspace)
+	nextTaskID, hasNext := d.wsQueue.Release(wsKey, completedTaskID)
+	if hasNext && nextTaskID != "" {
+		d.wakeQueuedTask(nextTaskID, wsKey)
+	}
+}
+
+func (d *Daemon) dispatchTask(taskID, workspace, prompt string, class TaskClass) error {
+	wsKey := d.canonicalWorkspace(workspace)
+	_, err := d.pool.SubmitAsyncClassifiedWithDone(context.Background(), class, func() error {
 		_, runErr := d.engine.SubmitTask(context.Background(), engine.SubmitRequest{
 			ID:        taskID,
 			Workspace: workspace,
 			Prompt:    prompt,
 		})
 		return runErr
+	}, func() {
+		// 在 WorkerPool 槽位完全釋放後執行完成交接 (MUST FIX 3)
+		d.releaseCapacity()
+		d.releaseWorkspaceAndWakeNext(wsKey, taskID)
 	})
 	return err
 }
 
-func (d *Daemon) wakeQueuedTask(taskID, workspace string, defaultClass TaskClass) {
+func (d *Daemon) wakeQueuedTask(taskID, wsKey string) {
 	task, err := d.store.GetTask(context.Background(), taskID)
 	if err != nil || task == nil {
 		d.releaseCapacity()
-		nextTaskID, hasNext := d.wsQueue.Release(workspace, taskID)
-		if hasNext && nextTaskID != "" {
-			d.wakeQueuedTask(nextTaskID, workspace, defaultClass)
-		}
+		d.releaseWorkspaceAndWakeNext(wsKey, taskID)
 		return
 	}
 
 	if task.Status != storage.StatusQueued {
 		d.releaseCapacity()
-		nextTaskID, hasNext := d.wsQueue.Release(workspace, taskID)
-		if hasNext && nextTaskID != "" {
-			d.wakeQueuedTask(nextTaskID, workspace, defaultClass)
-		}
+		d.releaseWorkspaceAndWakeNext(wsKey, taskID)
 		return
 	}
 
-	err = d.dispatchTask(task.ID, task.Workspace, task.Prompt, defaultClass)
+	// 遵循 MUST FIX 2：使用任務本身持久化之 Class，杜絕被剛完成任務之 Class 覆蓋
+	taskClass := TaskClass(task.Class)
+	if taskClass == "" {
+		taskClass = TaskClassInteractive
+	}
+
+	err = d.dispatchTask(task.ID, task.Workspace, task.Prompt, taskClass)
 	if err != nil {
 		d.releaseCapacity()
 		_ = d.store.UpdateTaskStatus(context.Background(), task.ID, storage.StatusFailed, "", err.Error())
-		nextTaskID, hasNext := d.wsQueue.Release(workspace, taskID)
-		if hasNext && nextTaskID != "" {
-			d.wakeQueuedTask(nextTaskID, workspace, defaultClass)
-		}
+		// 派工失敗時繼續交接專案鎖給後續等待任務 (MUST FIX 8)
+		d.releaseWorkspaceAndWakeNext(wsKey, taskID)
 	}
 }
 

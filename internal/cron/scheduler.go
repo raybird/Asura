@@ -86,12 +86,13 @@ func (s *Scheduler) Trigger(ctx context.Context, cronID string, now time.Time) e
 				ScheduledTime: now,
 				TriggeredTime: now,
 				Status:        storage.CronRunUnauthorized,
+				Reason:        err.Error(),
 				CreatedAt:     now,
 			}
 			_ = s.store.RecordCronRun(ctx, unauthRun)
 
 			// 自動將排程標記為 paused (CRON-005)
-			_ = s.store.UpdateCronScheduleStatus(ctx, cronID, storage.CronStatusPaused, "unauthorized workspace")
+			_ = s.store.UpdateCronScheduleStatus(ctx, cronID, storage.CronStatusPaused, "unauthorized workspace: "+err.Error())
 
 			return fmt.Errorf("unauthorized workspace: %w", err)
 		}
@@ -114,6 +115,7 @@ func (s *Scheduler) Trigger(ctx context.Context, cronID string, now time.Time) e
 				TriggeredTime: now,
 				TaskID:        activeTaskID,
 				Status:        storage.CronRunSkipped,
+				Reason:        "previous task still active",
 				CreatedAt:     now,
 			}
 			_ = s.store.RecordCronRun(ctx, skippedRun)
@@ -127,10 +129,33 @@ func (s *Scheduler) Trigger(ctx context.Context, cronID string, now time.Time) e
 		}
 	}
 
+	// 計算下次執行時間（遵循至多一次語意，無論派工是否成功均推進）
+	var nextRun time.Time
+	if parsed, err := Parse(sched.Schedule); err == nil {
+		nextRun = parsed.Next(now)
+	}
+
 	// 3. 正常觸發執行：透過 dispatcher 提交任務（受專案鎖與容量調度管制）
-	taskID, err := s.dispatcher(ctx, cronID, sched.Workspace, sched.Prompt)
-	if err != nil {
-		return fmt.Errorf("dispatch cron task: %w", err)
+	taskID, dispatchErr := s.dispatcher(ctx, cronID, sched.Workspace, sched.Prompt)
+	if dispatchErr != nil {
+		// 派工失敗（例如容量滿等），記錄失敗並推進 NextRunAt，杜絕每秒重試雪崩 (MUST FIX 6)
+		failedRun := storage.CronRun{
+			ID:            runID,
+			CronID:        cronID,
+			ScheduledTime: now,
+			TriggeredTime: now,
+			Status:        storage.CronRunFailed,
+			Reason:        dispatchErr.Error(),
+			CreatedAt:     now,
+		}
+		_ = s.store.RecordCronRun(ctx, failedRun)
+
+		if nextRun.IsZero() {
+			_ = s.store.UpdateCronScheduleStatus(ctx, cronID, storage.CronStatusPaused, "unreachable schedule date")
+		} else {
+			_ = s.store.UpdateCronScheduleNextRun(ctx, cronID, nextRun, &now)
+		}
+		return fmt.Errorf("dispatch cron task: %w", dispatchErr)
 	}
 
 	s.mu.Lock()
@@ -147,20 +172,18 @@ func (s *Scheduler) Trigger(ctx context.Context, cronID string, now time.Time) e
 		CreatedAt:     now,
 	}
 	if err := s.store.RecordCronRun(ctx, triggeredRun); err != nil {
-		s.mu.Lock()
-		delete(s.runningRuns, cronID)
-		s.mu.Unlock()
+		// 即使記錄失敗亦保留 runningRuns 以維護重疊防護 (SHOULD FIX 8)
+		if !nextRun.IsZero() {
+			_ = s.store.UpdateCronScheduleNextRun(ctx, cronID, nextRun, &now)
+		}
 		return fmt.Errorf("record triggered run: %w", err)
 	}
 
-	// 重算並更新下次執行時間（記錄 last_run 為 now）
-	if parsed, err := Parse(sched.Schedule); err == nil {
-		next := parsed.Next(now)
-		if next.IsZero() {
-			_ = s.store.UpdateCronScheduleStatus(ctx, cronID, storage.CronStatusPaused, "unreachable schedule date")
-		} else {
-			_ = s.store.UpdateCronScheduleNextRun(ctx, cronID, next, &now)
-		}
+	// 更新下次執行時間（記錄 last_run 為 now）
+	if nextRun.IsZero() {
+		_ = s.store.UpdateCronScheduleStatus(ctx, cronID, storage.CronStatusPaused, "unreachable schedule date")
+	} else {
+		_ = s.store.UpdateCronScheduleNextRun(ctx, cronID, nextRun, &now)
 	}
 
 	return nil

@@ -56,6 +56,16 @@ func (p *Policy) AuthorizeWorkspace(targetPath string) error {
 	return ErrDisallowedWorkspace
 }
 
+// CanonicalWorkspace 將目標路徑正規化為標準專案鍵值
+// 遵循 MUST FIX 4：解析符號連結與消除尾斜線、多餘斜線，保證同一目錄之不同路徑寫法（如尾斜線或符號連結）對齊至相同專案鎖鍵值
+func (p *Policy) CanonicalWorkspace(targetPath string) string {
+	absTarget, err := resolveWorkspace(targetPath)
+	if err != nil {
+		absTarget = targetPath
+	}
+	return filepath.Clean(absTarget)
+}
+
 // 2026-09-13：解析既有祖先的連結，仍容許尚未建立的專案路徑。
 func resolveWorkspace(path string) (string, error) {
 	abs := path

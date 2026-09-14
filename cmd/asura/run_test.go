@@ -137,6 +137,9 @@ func TestRunCLI_CronValidation(t *testing.T) {
 		if code == 0 {
 			t.Errorf("expected non-zero exit code, got 0")
 		}
+		if !strings.Contains(stderr.String(), "are all required") {
+			t.Errorf("expected 'are all required' in stderr, got: %s", stderr.String())
+		}
 	})
 
 	t.Run("cron pause 缺少 id 返回非 0", func(t *testing.T) {
