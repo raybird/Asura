@@ -1,0 +1,9 @@
+# asura/tests/integration [asura/tests/integration.test]
+tests/integration/cron_test.go:216:29: undefined: storage.StatusQueued
+tests/integration/cron_test.go:249:17: undefined: daemon.NewWorkerPoolWithCapacity
+tests/integration/cron_test.go:249:50: undefined: daemon.CapacityConfig
+tests/integration/cron_test.go:260:78: undefined: daemon.TaskClassCron
+tests/integration/cron_test.go:277:67: undefined: daemon.TaskClassCron
+tests/integration/cron_test.go:295:85: undefined: daemon.TaskClassInteractive
+FAIL	asura/tests/integration [build failed]
+FAIL

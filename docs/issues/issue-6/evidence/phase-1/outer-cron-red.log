@@ -1,0 +1,18 @@
+日期：2026-09-13
+命令：go test -count=1 -v ./tests/integration -run '^TestCRON008_PersistenceAcrossRestart$'
+退出碼：1
+輸出：
+# asura/tests/integration [asura/tests/integration.test]
+tests/integration/cron_test.go:33:23: undefined: storage.CronSchedule
+tests/integration/cron_test.go:39:22: undefined: storage.CronStatusActive
+tests/integration/cron_test.go:45:19: store1.CreateCronSchedule undefined (type *storage.SQLiteStore has no field or method CreateCronSchedule)
+tests/integration/cron_test.go:49:21: undefined: storage.CronRun
+tests/integration/cron_test.go:55:26: undefined: storage.CronRunTriggered
+tests/integration/cron_test.go:59:19: store1.RecordCronRun undefined (type *storage.SQLiteStore has no field or method RecordCronRun)
+tests/integration/cron_test.go:76:27: store2.ListCronSchedules undefined (type *storage.SQLiteStore has no field or method ListCronSchedules)
+tests/integration/cron_test.go:85:108: undefined: storage.CronStatusActive
+tests/integration/cron_test.go:92:22: store2.ListCronRuns undefined (type *storage.SQLiteStore has no field or method ListCronRuns)
+tests/integration/cron_test.go:101:108: undefined: storage.CronRunTriggered
+tests/integration/cron_test.go:101:108: too many errors
+FAIL	asura/tests/integration [build failed]
+FAIL

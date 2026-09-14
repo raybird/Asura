@@ -1,0 +1,6 @@
+=== RUN   TestCRON006_CLICronManagement
+--- PASS: TestCRON006_CLICronManagement (0.06s)
+=== RUN   TestCRON007_CLICronHistoryQuery
+--- PASS: TestCRON007_CLICronHistoryQuery (0.92s)
+PASS
+ok  	asura/tests/integration	0.994s

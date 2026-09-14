@@ -673,10 +673,15 @@ func TestWEB008(t *testing.T) {
 	}
 	c := f.login(t)
 
-	// 1. 同時提交任務 A 與任務 B
+	wsA := filepath.Join(f.root, "proj-a")
+	wsB := filepath.Join(f.root, "proj-b")
+	_ = os.MkdirAll(wsA, 0755)
+	_ = os.MkdirAll(wsB, 0755)
+
+	// 1. 同時提交任務 A 與任務 B（分別屬於不同專案目錄，依 CRON-001 可並行執行）
 	codeA, taskA, _ := f.submitTask(t, engine.SubmitRequest{
 		ID:        "req-task-A",
-		Workspace: f.root,
+		Workspace: wsA,
 		Prompt:    "task-A-work",
 	}, c)
 	if codeA != http.StatusAccepted {
@@ -685,7 +690,7 @@ func TestWEB008(t *testing.T) {
 
 	codeB, taskB, _ := f.submitTask(t, engine.SubmitRequest{
 		ID:        "req-task-B",
-		Workspace: f.root,
+		Workspace: wsB,
 		Prompt:    "task-B-work",
 	}, c)
 	if codeB != http.StatusAccepted {

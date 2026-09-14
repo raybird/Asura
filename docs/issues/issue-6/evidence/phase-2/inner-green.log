@@ -1,0 +1,24 @@
+=== RUN   TestWorkerPool
+=== RUN   TestWorkerPool/並行上限控制與各執行一次
+=== RUN   TestWorkerPool/超出容量上限返回明確錯誤
+=== RUN   TestWorkerPool/R-02:_快速交替任務不發生佇列停滯
+=== RUN   TestWorkerPool/排水關閉_(Drain):_已進入佇列之任務在_Close_時必須完整執行完畢
+--- PASS: TestWorkerPool (0.31s)
+    --- PASS: TestWorkerPool/並行上限控制與各執行一次 (0.18s)
+    --- PASS: TestWorkerPool/超出容量上限返回明確錯誤 (0.00s)
+    --- PASS: TestWorkerPool/R-02:_快速交替任務不發生佇列停滯 (0.06s)
+    --- PASS: TestWorkerPool/排水關閉_(Drain):_已進入佇列之任務在_Close_時必須完整執行完畢 (0.07s)
+=== RUN   TestWorkerPool_CapacityClassification
+--- PASS: TestWorkerPool_CapacityClassification (0.10s)
+=== RUN   TestWorkspaceQueue_ExclusiveAccess
+=== RUN   TestWorkspaceQueue_ExclusiveAccess/同專案單一任務直接取得執行權
+=== RUN   TestWorkspaceQueue_ExclusiveAccess/同專案第二個任務排入佇列並依序喚醒
+=== RUN   TestWorkspaceQueue_ExclusiveAccess/不同專案各自獨立互不阻塞
+=== RUN   TestWorkspaceQueue_ExclusiveAccess/並發競爭安全性_(Race_Condition_Check)
+--- PASS: TestWorkspaceQueue_ExclusiveAccess (0.00s)
+    --- PASS: TestWorkspaceQueue_ExclusiveAccess/同專案單一任務直接取得執行權 (0.00s)
+    --- PASS: TestWorkspaceQueue_ExclusiveAccess/同專案第二個任務排入佇列並依序喚醒 (0.00s)
+    --- PASS: TestWorkspaceQueue_ExclusiveAccess/不同專案各自獨立互不阻塞 (0.00s)
+    --- PASS: TestWorkspaceQueue_ExclusiveAccess/並發競爭安全性_(Race_Condition_Check) (0.00s)
+PASS
+ok  	asura/internal/daemon	0.420s

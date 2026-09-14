@@ -168,7 +168,7 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 			if existing.Status == storage.StatusCancelled {
 				return existing, context.Canceled
 			}
-			if existing.Status != storage.StatusPending {
+			if existing.Status != storage.StatusPending && existing.Status != storage.StatusQueued {
 				return existing, nil
 			}
 			task = existing
@@ -182,8 +182,8 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 		}
 	}
 
-	// 3. 條件式轉移狀態至 running (修復 F-02)
-	updated, err := e.store.UpdateTaskStatusIfPending(ctx, task.ID, storage.StatusRunning)
+	// 3. 條件式轉移狀態至 running (支援 pending 與 queued)
+	updated, err := e.store.UpdateTaskStatusIfPendingOrQueued(ctx, task.ID, storage.StatusRunning)
 	if err != nil {
 		if errors.Is(ctx.Err(), context.Canceled) {
 			task.Status = storage.StatusCancelled

@@ -99,6 +99,39 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web \
 - **純文字分頁與恢復**：長輸出結果以 Unicode Rune 進行安全字元切片分頁（`GET /api/tasks/{id}/result`），以 `textContent` 渲染防止腳本執行；關閉頁面重開後登入仍可恢復查詢同一任務，唯讀輪詢不重跑副作用。
 - **外部 Tunnel 邊界**：若使用 Cloudflare Tunnel、Tailscale 等第三方工具臨時對外曝露，外部流量仍必須通過密鑰驗證與 Origin 防護；Asura 本體不內嵌 Tunnel 供應商 SDK 或自動管理穿透。
 
+#### 定時排程管理 (cron)
+```bash
+# 新增定時排程（標準 5 欄位 Cron：分 時 日 月 週）
+./bin/asura cron add \
+  --name "nightly-audit" \
+  --workspace /path/to/project \
+  --schedule "0 3 * * *" \
+  --prompt "執行靜態檢查與測試"
+
+# 查詢所有排程清單與下次執行時間
+./bin/asura cron list
+
+# 查詢特定排程歷史觸發紀錄
+./bin/asura cron runs <cron-id> --limit 10
+
+# 暫停排程（不再自動觸發）
+./bin/asura cron pause <cron-id>
+
+# 恢復排程（重新計算下次執行時間並啟用）
+./bin/asura cron resume <cron-id>
+
+# 刪除排程（連帶清理歷史觸發紀錄）
+./bin/asura cron remove <cron-id>
+```
+
+2026-09-13：
+- **同專案排他佇列**：排程任務與互動任務共用專案互斥鎖，同一工作目錄絕不並行執行，避免檔案衝突。
+- **保留互動通道**：保留獨立執行槽位供互動任務（`ask`），排程暴增時 CLI 互動請求絕不被餓死。
+- **重疊略過與漏跑不補**：前次任務執行中若再度到期自動略過（`skipped`）；Daemon 重啟時過期任務自動重新對齊未來時刻，不補跑歷史。
+- **未授權目錄自動暫停**：排程工作目錄若未在 Daemon `--allowed-roots` 內，觸發時嚴格拒絕並自動轉為 `paused`。
+- **不可達日期安全防護**：如 2 月 31 日等日曆上不可達之排程在新增時即刻拒絕，防止計時器陷入零值雪崩循環。
+- **日與週匹配語意**：若表達式中同時指定「日（Day of Month）」與「週（Day of Week）」，採用交集（AND）條件匹配（即「當日且當週」同時成立才觸發）。
+
 ---
 
 ## 架構設計與議題文件
@@ -108,6 +141,7 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web \
   - [Issue 1 本機執行核心](docs/issues/issue-1/README.md) 與 [實作計畫](docs/issues/issue-1/implementation-plan.md)
   - [Issue 2 本機 AI 執行路徑整合 (Phase 1.5)](docs/issues/issue-2/README.md) 與 [實作計畫拆解](docs/issues/issue-2/implementation-plan-decomposition.md)
   - [Issue 4 單一 Web 遠端入口 (Phase 2A)](docs/issues/issue-4/README.md) 與 [實作計畫拆解](docs/issues/issue-4/implementation-plan-decomposition.md)
+  - [Issue 6 定時排程與容量調度 (Phase 2B)](docs/issues/issue-6/README.md) 與 [實作計畫拆解](docs/issues/issue-6/implementation-plan-decomposition.md)
 
 ---
 

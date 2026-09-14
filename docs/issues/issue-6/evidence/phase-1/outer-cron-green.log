@@ -1,0 +1,8 @@
+日期：2026-09-13
+命令：go test -count=1 -v ./tests/integration -run '^TestCRON008_PersistenceAcrossRestart$'
+退出碼：0
+輸出：
+=== RUN   TestCRON008_PersistenceAcrossRestart
+--- PASS: TestCRON008_PersistenceAcrossRestart (0.01s)
+PASS
+ok  	asura/tests/integration	0.016s

@@ -9,12 +9,14 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
 
 	"asura/internal/auth"
 	"asura/internal/backend/opencode"
+	"asura/internal/cron"
 	"asura/internal/engine"
 	"asura/internal/storage"
 )
@@ -41,6 +43,7 @@ type OpenCodeRuntimeConfig struct {
 type Config struct {
 	SocketPath     string
 	MaxWorkers     int
+	MaxCronWorkers int
 	MaxQueue       int
 	OpenCodeConfig OpenCodeRuntimeConfig
 }
@@ -52,11 +55,34 @@ type Daemon struct {
 	policy    *auth.Policy
 	engine    *engine.Engine
 	pool      *WorkerPool
-	listener  net.Listener
-	lockFile  *os.File
-	closed    chan struct{}
-	closeOnce sync.Once
-	wg        sync.WaitGroup
+	wsQueue    *WorkspaceQueue
+	scheduler  *cron.Scheduler
+	inFlight   int
+	inFlightMu sync.Mutex
+	listener   net.Listener
+	lockFile   *os.File
+	closed     chan struct{}
+	closeOnce  sync.Once
+	wg         sync.WaitGroup
+}
+
+func (d *Daemon) tryAcquireCapacity() bool {
+	d.inFlightMu.Lock()
+	defer d.inFlightMu.Unlock()
+	maxCapacity := d.cfg.MaxWorkers + d.cfg.MaxQueue
+	if d.inFlight >= maxCapacity {
+		return false
+	}
+	d.inFlight++
+	return true
+}
+
+func (d *Daemon) releaseCapacity() {
+	d.inFlightMu.Lock()
+	if d.inFlight > 0 {
+		d.inFlight--
+	}
+	d.inFlightMu.Unlock()
 }
 
 // DaemonOption 用於自訂 Daemon 設定
@@ -86,6 +112,9 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 	if cfg.MaxWorkers <= 0 {
 		cfg.MaxWorkers = 2
 	}
+	if cfg.MaxCronWorkers <= 0 {
+		cfg.MaxCronWorkers = 1
+	}
 	if cfg.MaxQueue < 0 {
 		cfg.MaxQueue = 10
 	}
@@ -97,11 +126,16 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 	}
 
 	d := &Daemon{
-		cfg:    cfg,
-		store:  store,
-		policy: policy,
-		pool:   NewWorkerPool(cfg.MaxWorkers, cfg.MaxQueue),
-		closed: make(chan struct{}),
+		cfg:     cfg,
+		store:   store,
+		policy:  policy,
+		pool:    NewWorkerPoolWithCapacity(CapacityConfig{
+			MaxWorkers:     cfg.MaxWorkers,
+			MaxCronWorkers: cfg.MaxCronWorkers,
+			MaxQueue:       cfg.MaxQueue,
+		}),
+		wsQueue: NewWorkspaceQueue(),
+		closed:  make(chan struct{}),
 	}
 
 	for _, opt := range opts {
@@ -129,7 +163,61 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 		d.engine = engine.NewEngine(store, policy, engine.WithRunner(adapter.Run))
 	}
 
+	d.scheduler = cron.NewScheduler(store, policy, d.dispatchCronTask)
+
 	return d
+}
+
+// Scheduler 回傳 Daemon 內部的 Cron Scheduler 實例
+func (d *Daemon) Scheduler() *cron.Scheduler {
+	return d.scheduler
+}
+
+// dispatchCronTask 由 Cron Scheduler 觸發時調用，整合專案互斥鎖與保留通道調度 (CRON-001, CRON-002)
+func (d *Daemon) dispatchCronTask(ctx context.Context, cronID, workspace, prompt string) (string, error) {
+	if !d.tryAcquireCapacity() {
+		return "", ErrCapacityExceeded
+	}
+
+	taskID := engine.GenerateTaskID()
+	now := time.Now().UTC()
+	fp := fmt.Sprintf("%x", sha256.Sum256([]byte(workspace+":"+prompt)))
+
+	initialTask := &storage.Task{
+		ID:          taskID,
+		Fingerprint: fp,
+		Prompt:      prompt,
+		Workspace:   workspace,
+		Status:      storage.StatusPending,
+		Class:       string(TaskClassCron),
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+
+	if err := d.store.CreateTask(ctx, initialTask); err != nil {
+		d.releaseCapacity()
+		return "", fmt.Errorf("create initial cron task: %w", err)
+	}
+
+	wsKey := d.canonicalWorkspace(workspace)
+	// 遵循 CRON-001：同專案嚴格互斥依序排隊
+	acquired, _ := d.wsQueue.TryAcquire(wsKey, taskID)
+	if !acquired {
+		// 專案忙碌中，條件式更新狀態為 queued 並排入專案佇列，待前任務完成後依序喚醒（修復 MUST FIX 1）
+		_, _ = d.store.UpdateTaskStatusIfPending(ctx, taskID, storage.StatusQueued)
+		return taskID, nil
+	}
+
+	// 遵循 CRON-002：以 TaskClassCron 類別派工，受 MaxCronWorkers 限制並保留互動通道
+	err := d.dispatchTask(taskID, workspace, prompt, TaskClassCron)
+	if err != nil {
+		d.releaseCapacity()
+		d.releaseWorkspaceAndWakeNext(wsKey, taskID)
+		_ = d.store.UpdateTaskStatus(ctx, taskID, storage.StatusFailed, "", err.Error())
+		return "", err
+	}
+
+	return taskID, nil
 }
 
 // Start 競爭取得 Unix Domain Socket 擁有權並開始監聽
@@ -175,10 +263,45 @@ func (d *Daemon) Start() error {
 		_, _ = d.store.RecoverInterruptedTasks(context.Background())
 	}
 
+	// 6. 對齊排程時鐘：過期者重算未來觸發時間，絕不補跑歷史（CRON-004）
+	if d.scheduler != nil {
+		_ = d.scheduler.AlignSchedules(context.Background(), time.Now())
+	}
+
+	d.wg.Add(1)
+	go d.cronLoop()
+
 	d.wg.Add(1)
 	go d.acceptLoop()
 
 	return nil
+}
+
+func (d *Daemon) cronLoop() {
+	defer d.wg.Done()
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-d.closed:
+			return
+		case now := <-ticker.C:
+			if d.scheduler == nil || d.store == nil {
+				continue
+			}
+			ctx := context.Background()
+			schedules, err := d.store.ListCronSchedules(ctx)
+			if err != nil {
+				continue
+			}
+			for _, sched := range schedules {
+				if sched.Status == storage.CronStatusActive && sched.NextRunAt != nil && !sched.NextRunAt.IsZero() && !sched.NextRunAt.After(now) {
+					_ = d.scheduler.Trigger(ctx, sched.ID, now)
+				}
+			}
+		}
+	}
 }
 
 func (d *Daemon) acceptLoop() {
@@ -198,20 +321,35 @@ func (d *Daemon) acceptLoop() {
 	}
 }
 
+// CronAddRequest 定義新增排程之請求參數
+type CronAddRequest struct {
+	Name      string `json:"name"`
+	Workspace string `json:"workspace"`
+	Schedule  string `json:"schedule"`
+	Prompt    string `json:"prompt"`
+}
+
 // IPCRequest 定義用戶端提交之請求
 type IPCRequest struct {
-	Action    string `json:"action,omitempty"`
-	RequestID string `json:"request_id,omitempty"`
-	TaskID    string `json:"task_id,omitempty"`
-	Workspace string `json:"workspace,omitempty"`
-	Prompt    string `json:"prompt,omitempty"`
+	Action     string          `json:"action,omitempty"`
+	RequestID  string          `json:"request_id,omitempty"`
+	TaskID     string          `json:"task_id,omitempty"`
+	Workspace  string          `json:"workspace,omitempty"`
+	Prompt     string          `json:"prompt,omitempty"`
+	Class      TaskClass       `json:"class,omitempty"`
+	CronID     string          `json:"cron_id,omitempty"`
+	CronAddReq *CronAddRequest `json:"cron_add_req,omitempty"`
+	Limit      int             `json:"limit,omitempty"`
 }
 
 // IPCResponse 定義傳回用戶端之結果
 type IPCResponse struct {
-	Task     *storage.Task `json:"task,omitempty"`
-	Projects []string      `json:"projects,omitempty"`
-	Error    string        `json:"error,omitempty"`
+	Task          *storage.Task          `json:"task,omitempty"`
+	Projects      []string               `json:"projects,omitempty"`
+	CronSchedule  *storage.CronSchedule  `json:"cron_schedule,omitempty"`
+	CronSchedules []storage.CronSchedule `json:"cron_schedules,omitempty"`
+	CronRuns      []storage.CronRun      `json:"cron_runs,omitempty"`
+	Error         string                 `json:"error,omitempty"`
 }
 
 func (d *Daemon) handleConn(conn net.Conn) {
@@ -273,6 +411,12 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				continue
 			}
 			targetID := target.ID
+			if target.Status == storage.StatusQueued {
+				wsKey := d.canonicalWorkspace(target.Workspace)
+				if d.wsQueue.Remove(wsKey, targetID) {
+					d.releaseCapacity()
+				}
+			}
 			err = d.engine.CancelTask(targetID)
 			if err != nil {
 				_ = encoder.Encode(IPCResponse{Error: err.Error()})
@@ -324,8 +468,20 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				}
 			}
 
+			// 遵循 SCN-004 與 INT-003：檢查全域容量上限（Worker 執行槽位 + 佇列排隊槽位）
+			if !d.tryAcquireCapacity() {
+				_ = encoder.Encode(IPCResponse{Error: ErrCapacityExceeded.Error()})
+				continue
+			}
+
 			taskID := engine.GenerateTaskID()
 			now := time.Now().UTC()
+
+			taskClass := req.Class
+			if taskClass == "" {
+				taskClass = TaskClassInteractive
+			}
+
 			initialTask := &storage.Task{
 				ID:          taskID,
 				RequestID:   req.RequestID,
@@ -333,11 +489,13 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				Prompt:      req.Prompt,
 				Workspace:   req.Workspace,
 				Status:      storage.StatusPending,
+				Class:       string(taskClass),
 				CreatedAt:   now,
 				UpdatedAt:   now,
 			}
 
 			if err := d.store.CreateTask(context.Background(), initialTask); err != nil {
+				d.releaseCapacity()
 				if req.RequestID != "" && errors.Is(err, storage.ErrDuplicateRequestID) {
 					existing, getErr := d.store.GetTaskByRequestID(context.Background(), req.RequestID)
 					if getErr != nil {
@@ -364,16 +522,21 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				continue
 			}
 
-			_, err := d.pool.SubmitAsync(context.Background(), func() error {
-				_, runErr := d.engine.SubmitTask(context.Background(), engine.SubmitRequest{
-					ID:        taskID,
-					Workspace: req.Workspace,
-					Prompt:    req.Prompt,
-				})
-				return runErr
-			})
+			wsKey := d.canonicalWorkspace(req.Workspace)
+			// 遵循 CRON-001：同專案嚴格互斥依序排隊（僅創建任務之勝者競爭專案鎖）
+			acquired, _ := d.wsQueue.TryAcquire(wsKey, taskID)
+			if !acquired {
+				// 專案忙碌中，條件式更新狀態為 queued 並排入專案佇列，待前任務完成後依序喚醒（修復 MUST FIX 1）
+				initialTask.Status = storage.StatusQueued
+				_, _ = d.store.UpdateTaskStatusIfPending(context.Background(), taskID, storage.StatusQueued)
+				_ = encoder.Encode(IPCResponse{Task: initialTask})
+				continue
+			}
 
+			err := d.dispatchTask(taskID, req.Workspace, req.Prompt, taskClass)
 			if err != nil {
+				d.releaseCapacity()
+				d.releaseWorkspaceAndWakeNext(wsKey, taskID)
 				_ = d.store.DeleteTask(context.Background(), taskID)
 				_ = encoder.Encode(IPCResponse{Error: err.Error()})
 				continue
@@ -382,9 +545,224 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			// 遵循 P4-T2：容量及持久化成功後、後端完成前回傳 Task ID
 			_ = encoder.Encode(IPCResponse{Task: initialTask})
 
+		case "cron_add":
+			if req.CronAddReq == nil {
+				_ = encoder.Encode(IPCResponse{Error: "cron_add_req required"})
+				continue
+			}
+			addReq := req.CronAddReq
+			if addReq.Name == "" || addReq.Workspace == "" || addReq.Schedule == "" || addReq.Prompt == "" {
+				_ = encoder.Encode(IPCResponse{Error: "name, workspace, schedule, and prompt are required"})
+				continue
+			}
+			parsed, err := cron.Parse(addReq.Schedule)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("invalid cron schedule: %v", err)})
+				continue
+			}
+			if d.policy != nil {
+				if err := d.policy.AuthorizeWorkspace(addReq.Workspace); err != nil {
+					_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unauthorized workspace: %v", err)})
+					continue
+				}
+			}
+			now := time.Now().Truncate(time.Second)
+			nextRun := parsed.Next(now)
+			if nextRun.IsZero() {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("cron schedule %q is unreachable (no upcoming trigger dates)", addReq.Schedule)})
+				continue
+			}
+			cronID := fmt.Sprintf("cron-%d", time.Now().UnixNano())
+			sched := storage.CronSchedule{
+				ID:        cronID,
+				Name:      addReq.Name,
+				Workspace: addReq.Workspace,
+				Schedule:  addReq.Schedule,
+				Prompt:    addReq.Prompt,
+				Status:    storage.CronStatusActive,
+				NextRunAt: &nextRun,
+				CreatedAt: now,
+				UpdatedAt: now,
+			}
+			if err := d.store.CreateCronSchedule(context.Background(), sched); err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("create cron schedule: %v", err)})
+				continue
+			}
+			created, err := d.store.GetCronSchedule(context.Background(), cronID)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("get created schedule: %v", err)})
+				continue
+			}
+			_ = encoder.Encode(IPCResponse{CronSchedule: created})
+
+		case "cron_list":
+			schedules, err := d.store.ListCronSchedules(context.Background())
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("list cron schedules: %v", err)})
+				continue
+			}
+			_ = encoder.Encode(IPCResponse{CronSchedules: schedules})
+
+		case "cron_pause":
+			if req.CronID == "" {
+				_ = encoder.Encode(IPCResponse{Error: "cron_id is required"})
+				continue
+			}
+			if err := d.store.UpdateCronScheduleStatus(context.Background(), req.CronID, storage.CronStatusPaused, "paused by user"); err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("pause cron schedule: %v", err)})
+				continue
+			}
+			sched, err := d.store.GetCronSchedule(context.Background(), req.CronID)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("get schedule: %v", err)})
+				continue
+			}
+			_ = encoder.Encode(IPCResponse{CronSchedule: sched})
+
+		case "cron_resume":
+			if req.CronID == "" {
+				_ = encoder.Encode(IPCResponse{Error: "cron_id is required"})
+				continue
+			}
+			sched, err := d.store.GetCronSchedule(context.Background(), req.CronID)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("schedule not found: %v", err)})
+				continue
+			}
+			parsed, err := cron.Parse(sched.Schedule)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("parse schedule: %v", err)})
+				continue
+			}
+			now := time.Now()
+			next := parsed.Next(now)
+			if next.IsZero() {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("cron schedule %q is unreachable (no upcoming trigger dates)", sched.Schedule)})
+				continue
+			}
+			_ = d.store.UpdateCronScheduleNextRun(context.Background(), req.CronID, next, sched.LastRunAt)
+			if err := d.store.UpdateCronScheduleStatus(context.Background(), req.CronID, storage.CronStatusActive, ""); err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("resume cron schedule: %v", err)})
+				continue
+			}
+			sched, _ = d.store.GetCronSchedule(context.Background(), req.CronID)
+			_ = encoder.Encode(IPCResponse{CronSchedule: sched})
+
+		case "cron_remove":
+			if req.CronID == "" {
+				_ = encoder.Encode(IPCResponse{Error: "cron_id is required"})
+				continue
+			}
+			if err := d.store.DeleteCronSchedule(context.Background(), req.CronID); err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("delete cron schedule: %v", err)})
+				continue
+			}
+			_ = encoder.Encode(IPCResponse{})
+
+		case "cron_runs":
+			if req.CronID == "" {
+				_ = encoder.Encode(IPCResponse{Error: "cron_id is required"})
+				continue
+			}
+			limit := req.Limit
+			if limit <= 0 {
+				limit = 20
+			}
+			runs, err := d.store.ListCronRuns(context.Background(), req.CronID, limit)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("list cron runs: %v", err)})
+				continue
+			}
+			_ = encoder.Encode(IPCResponse{CronRuns: runs})
+
 		default:
 			_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unknown action: %s", action)})
 		}
+	}
+}
+
+func (d *Daemon) canonicalWorkspace(ws string) string {
+	if d.policy != nil {
+		return d.policy.CanonicalWorkspace(ws)
+	}
+	abs, err := filepath.Abs(ws)
+	if err == nil {
+		if realPath, err := filepath.EvalSymlinks(abs); err == nil {
+			return filepath.Clean(realPath)
+		}
+		return filepath.Clean(abs)
+	}
+	return filepath.Clean(ws)
+}
+
+func (d *Daemon) releaseWorkspaceAndWakeNext(wsKey, completedTaskID string) {
+	// 遵循 MUST FIX 3：禁止在釋放鎖時重複解析 canonicalWorkspace，確保取鎖與釋放鎖使用嚴格相同的不可變 wsKey
+	nextTaskID, hasNext := d.wsQueue.Release(wsKey, completedTaskID)
+	if hasNext && nextTaskID != "" {
+		d.wakeQueuedTask(nextTaskID, wsKey)
+	}
+}
+
+func (d *Daemon) dispatchTask(taskID, workspace, prompt string, class TaskClass) error {
+	wsKey := d.canonicalWorkspace(workspace)
+	_, err := d.pool.SubmitAsyncClassifiedWithDone(context.Background(), class, func() error {
+		_, runErr := d.engine.SubmitTask(context.Background(), engine.SubmitRequest{
+			ID:        taskID,
+			Workspace: workspace,
+			Prompt:    prompt,
+		})
+		return runErr
+	}, func() {
+		// 在 WorkerPool 槽位完全釋放後執行完成交接 (MUST FIX 3)
+		d.releaseCapacity()
+		d.releaseWorkspaceAndWakeNext(wsKey, taskID)
+	})
+	return err
+}
+
+func (d *Daemon) dispatchQueuedTask(taskID, workspace, prompt string, class TaskClass, wsKey string) error {
+	_, err := d.pool.SubmitEnqueuedClassifiedWithDone(context.Background(), class, func() error {
+		_, runErr := d.engine.SubmitTask(context.Background(), engine.SubmitRequest{
+			ID:        taskID,
+			Workspace: workspace,
+			Prompt:    prompt,
+		})
+		return runErr
+	}, func() {
+		d.releaseCapacity()
+		d.releaseWorkspaceAndWakeNext(wsKey, taskID)
+	})
+	return err
+}
+
+func (d *Daemon) wakeQueuedTask(taskID, wsKey string) {
+	task, err := d.store.GetTask(context.Background(), taskID)
+	if err != nil || task == nil {
+		d.releaseCapacity()
+		d.releaseWorkspaceAndWakeNext(wsKey, taskID)
+		return
+	}
+
+	// 遵循 MUST FIX 1：接受 StatusQueued 與 StatusPending，防範 SQLite 寫入延遲導致 pending 任務被遺漏丟棄
+	if task.Status != storage.StatusQueued && task.Status != storage.StatusPending {
+		d.releaseCapacity()
+		d.releaseWorkspaceAndWakeNext(wsKey, taskID)
+		return
+	}
+
+	// 遵循 MUST FIX 2：使用任務本身持久化之 Class，杜絕被剛完成任務之 Class 覆蓋
+	taskClass := TaskClass(task.Class)
+	if taskClass == "" {
+		taskClass = TaskClassInteractive
+	}
+
+	// 遵循 MUST FIX 2：被喚醒任務使用 dispatchQueuedTask，不受 pool.maxQueue 二次拋棄
+	err = d.dispatchQueuedTask(task.ID, task.Workspace, task.Prompt, taskClass, wsKey)
+	if err != nil {
+		d.releaseCapacity()
+		_ = d.store.UpdateTaskStatus(context.Background(), task.ID, storage.StatusFailed, "", err.Error())
+		// 派工失敗時繼續交接專案鎖給後續等待任務 (MUST FIX 8)
+		d.releaseWorkspaceAndWakeNext(wsKey, taskID)
 	}
 }
 
@@ -522,6 +900,162 @@ func (c *Client) CancelTask(ctx context.Context, taskID string) (*storage.Task, 
 	}
 
 	return resp.Task, nil
+}
+
+// AddCronSchedule 透過 Daemon IPC 新增定時排程 (CRON-006)
+func (c *Client) AddCronSchedule(ctx context.Context, req CronAddRequest) (*storage.CronSchedule, error) {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action:     "cron_add",
+		CronAddReq: &req,
+	}); err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if resp.Error != "" {
+		return nil, errors.New(resp.Error)
+	}
+
+	if resp.CronSchedule == nil {
+		return nil, errors.New("empty cron schedule in response")
+	}
+
+	return resp.CronSchedule, nil
+}
+
+// ListCronSchedules 透過 Daemon IPC 查詢所有排程 (CRON-006)
+func (c *Client) ListCronSchedules(ctx context.Context) ([]storage.CronSchedule, error) {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action: "cron_list",
+	}); err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if resp.Error != "" {
+		return nil, errors.New(resp.Error)
+	}
+
+	return resp.CronSchedules, nil
+}
+
+// PauseCronSchedule 透過 Daemon IPC 暫停排程 (CRON-006)
+func (c *Client) PauseCronSchedule(ctx context.Context, cronID string) (*storage.CronSchedule, error) {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action: "cron_pause",
+		CronID: cronID,
+	}); err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if resp.Error != "" {
+		return nil, errors.New(resp.Error)
+	}
+
+	if resp.CronSchedule == nil {
+		return nil, errors.New("empty cron schedule in response")
+	}
+
+	return resp.CronSchedule, nil
+}
+
+// ResumeCronSchedule 透過 Daemon IPC 恢復排程 (CRON-006)
+func (c *Client) ResumeCronSchedule(ctx context.Context, cronID string) (*storage.CronSchedule, error) {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action: "cron_resume",
+		CronID: cronID,
+	}); err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if resp.Error != "" {
+		return nil, errors.New(resp.Error)
+	}
+
+	if resp.CronSchedule == nil {
+		return nil, errors.New("empty cron schedule in response")
+	}
+
+	return resp.CronSchedule, nil
+}
+
+// RemoveCronSchedule 透過 Daemon IPC 刪除排程 (CRON-006)
+func (c *Client) RemoveCronSchedule(ctx context.Context, cronID string) error {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action: "cron_remove",
+		CronID: cronID,
+	}); err != nil {
+		return fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return fmt.Errorf("decode response: %w", err)
+	}
+
+	if resp.Error != "" {
+		return errors.New(resp.Error)
+	}
+
+	return nil
+}
+
+// ListCronRuns 透過 Daemon IPC 查詢排程歷史觸發紀錄 (CRON-007)
+func (c *Client) ListCronRuns(ctx context.Context, cronID string, limit int) ([]storage.CronRun, error) {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action: "cron_runs",
+		CronID: cronID,
+		Limit:  limit,
+	}); err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if resp.Error != "" {
+		return nil, errors.New(resp.Error)
+	}
+
+	return resp.CronRuns, nil
 }
 
 // Close 關閉用戶端連線

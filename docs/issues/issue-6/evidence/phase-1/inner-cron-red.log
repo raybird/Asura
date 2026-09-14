@@ -1,0 +1,18 @@
+日期：2026-09-13
+命令：go test -count=1 -v ./internal/storage -run '^TestSQLiteStore_Cron'
+退出碼：1
+輸出：
+# asura/internal/storage [asura/internal/storage.test]
+internal/storage/sqlite_cron_test.go:71:11: undefined: CronSchedule
+internal/storage/sqlite_cron_test.go:77:14: undefined: CronStatusActive
+internal/storage/sqlite_cron_test.go:82:18: store.CreateCronSchedule undefined (type *SQLiteStore has no field or method CreateCronSchedule)
+internal/storage/sqlite_cron_test.go:87:20: store.GetCronSchedule undefined (type *SQLiteStore has no field or method GetCronSchedule)
+internal/storage/sqlite_cron_test.go:91:50: undefined: CronStatusActive
+internal/storage/sqlite_cron_test.go:96:21: store.GetCronSchedule undefined (type *SQLiteStore has no field or method GetCronSchedule)
+internal/storage/sqlite_cron_test.go:96:66: undefined: ErrCronNotFound
+internal/storage/sqlite_cron_test.go:101:18: store.UpdateCronScheduleStatus undefined (type *SQLiteStore has no field or method UpdateCronScheduleStatus)
+internal/storage/sqlite_cron_test.go:101:58: undefined: CronStatusPaused
+internal/storage/sqlite_cron_test.go:104:23: store.GetCronSchedule undefined (type *SQLiteStore has no field or method GetCronSchedule)
+internal/storage/sqlite_cron_test.go:104:23: too many errors
+FAIL	asura/internal/storage [build failed]
+FAIL

@@ -983,3 +983,812 @@ func TestDaemon_RequestID_FingerprintSafety(t *testing.T) {
 	}
 }
 
+func TestDaemon_CronIPC(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	sockPath := filepath.Join(tmpDir, "asura-cron-ipc.sock")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	d := NewDaemon(Config{SocketPath: sockPath}, store, policy)
+	if err := d.Start(); err != nil {
+		t.Fatalf("daemon start failed: %v", err)
+	}
+	defer d.Close()
+
+	client, err := NewClient(sockPath)
+	if err != nil {
+		t.Fatalf("client connect failed: %v", err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+
+	// 1. 新增排程
+	addReq := CronAddRequest{
+		Name:      "backup-job",
+		Workspace: tmpDir,
+		Schedule:  "*/10 * * * *",
+		Prompt:    "run backup",
+	}
+	sched, err := client.AddCronSchedule(ctx, addReq)
+	if err != nil {
+		t.Fatalf("AddCronSchedule failed: %v", err)
+	}
+	if sched.Name != "backup-job" || sched.Status != storage.CronStatusActive {
+		t.Fatalf("unexpected added schedule: %+v", sched)
+	}
+
+	// 2. 非法表達式新增應回報錯誤
+	badReq := CronAddRequest{
+		Name:      "bad-job",
+		Workspace: tmpDir,
+		Schedule:  "bad-expression",
+		Prompt:    "run bad",
+	}
+	_, err = client.AddCronSchedule(ctx, badReq)
+	if err == nil {
+		t.Fatalf("expected error adding invalid cron expression, got nil")
+	}
+
+	// 3. 查詢清單
+	list, err := client.ListCronSchedules(ctx)
+	if err != nil {
+		t.Fatalf("ListCronSchedules failed: %v", err)
+	}
+	if len(list) != 1 || list[0].ID != sched.ID {
+		t.Fatalf("expected 1 schedule in list, got %+v", list)
+	}
+
+	// 4. 暫停與恢復
+	paused, err := client.PauseCronSchedule(ctx, sched.ID)
+	if err != nil {
+		t.Fatalf("PauseCronSchedule failed: %v", err)
+	}
+	if paused.Status != storage.CronStatusPaused {
+		t.Fatalf("expected paused status, got %s", paused.Status)
+	}
+
+	resumed, err := client.ResumeCronSchedule(ctx, sched.ID)
+	if err != nil {
+		t.Fatalf("ResumeCronSchedule failed: %v", err)
+	}
+	if resumed.Status != storage.CronStatusActive {
+		t.Fatalf("expected active status, got %s", resumed.Status)
+	}
+
+	// 5. 刪除排程
+	if err := client.RemoveCronSchedule(ctx, sched.ID); err != nil {
+		t.Fatalf("RemoveCronSchedule failed: %v", err)
+	}
+	afterRemove, err := client.ListCronSchedules(ctx)
+	if err != nil {
+		t.Fatalf("ListCronSchedules failed: %v", err)
+	}
+	if len(afterRemove) != 0 {
+		t.Fatalf("expected 0 schedules after remove, got %d", len(afterRemove))
+	}
+}
+
+// TestDaemon_WorkspaceMutex_NormalizedPaths 驗證 MUST FIX 4: 帶尾斜線或子路徑均被正規化為同專案互斥排隊
+func TestDaemon_WorkspaceMutex_NormalizedPaths(t *testing.T) {
+	tmpDir := t.TempDir()
+	socketPath := filepath.Join(tmpDir, "asura.sock")
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	allowedRoot := filepath.Join(tmpDir, "project-a")
+	_ = os.MkdirAll(allowedRoot, 0755)
+
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{allowedRoot})
+
+	t1Started := make(chan struct{})
+	t1Release := make(chan struct{})
+	runner := func(ctx context.Context, ws string, prompt string) (string, error) {
+		if prompt == "task-1" {
+			close(t1Started)
+			<-t1Release
+		}
+		return "done", nil
+	}
+	eng := engine.NewEngine(store, policy, engine.WithRunner(runner))
+
+	d := NewDaemon(Config{
+		SocketPath: socketPath,
+		MaxWorkers: 2,
+		MaxQueue:   5,
+	}, store, policy, WithEngine(eng))
+	if err := d.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+
+	client, err := NewClient(socketPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+
+	// 1. 提交 /project-a 任務 1
+	resp1, err := client.Submit(ctx, engine.SubmitRequest{
+		Workspace: allowedRoot,
+		Prompt:    "task-1",
+	})
+	if err != nil {
+		t.Fatalf("submit task 1 failed: %v", err)
+	}
+	if resp1 == nil {
+		t.Fatalf("expected resp1")
+	}
+	<-t1Started
+
+	// 2. 提交帶尾斜線的 /project-a/ 任務 2
+	resp2, err := client.Submit(ctx, engine.SubmitRequest{
+		Workspace: allowedRoot + string(filepath.Separator),
+		Prompt:    "task-2",
+	})
+	if err != nil {
+		t.Fatalf("submit task 2 failed: %v", err)
+	}
+
+	// 驗證任務 2 被正確判定為同專案，進入 queued 狀態而不是並行
+	if resp2.Status != storage.StatusQueued {
+		t.Fatalf("expected task 2 to be queued due to normalized workspace lock, got status %s", resp2.Status)
+	}
+
+	close(t1Release)
+}
+
+// TestDaemon_QueuedTaskClassPreservedOnWake 驗證 MUST FIX 2: 排隊任務喚醒時使用本身持久化之 Class
+func TestDaemon_QueuedTaskClassPreservedOnWake(t *testing.T) {
+	tmpDir := t.TempDir()
+	socketPath := filepath.Join(tmpDir, "asura.sock")
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	allowedRoot := filepath.Join(tmpDir, "project-b")
+	_ = os.MkdirAll(allowedRoot, 0755)
+
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{allowedRoot})
+
+	t1Started := make(chan struct{})
+	t1Release := make(chan struct{})
+	var t2Started atomic.Bool
+
+	runner := func(ctx context.Context, ws string, prompt string) (string, error) {
+		if prompt == "cron-1" {
+			close(t1Started)
+			<-t1Release
+		} else if prompt == "interactive-2" {
+			t2Started.Store(true)
+		}
+		return "done", nil
+	}
+	eng := engine.NewEngine(store, policy, engine.WithRunner(runner))
+
+	// 容量配置: workers=2, maxCron=1, queue=2
+	pool := NewWorkerPoolWithCapacity(CapacityConfig{
+		MaxWorkers:     2,
+		MaxCronWorkers: 1,
+		MaxQueue:       2,
+	})
+	d := &Daemon{
+		cfg: Config{
+			SocketPath: socketPath,
+			MaxWorkers: 2,
+			MaxQueue:   2,
+		},
+		pool:     pool,
+		wsQueue:  NewWorkspaceQueue(),
+		store:    store,
+		engine:   eng,
+		policy:   policy,
+		closed:   make(chan struct{}),
+		inFlight: 0,
+	}
+
+	ctx := context.Background()
+
+	// 1. 在專案 B 執行 Cron 任務，且佔滿唯一 cron worker
+	cronTaskID, err := d.dispatchCronTask(ctx, "cron-b", allowedRoot, "cron-1")
+	if err != nil {
+		t.Fatalf("dispatchCronTask failed: %v", err)
+	}
+	<-t1Started
+
+	// 2. 提交同專案的即時互動任務 2（此時 cron 佔滿唯一 cron worker）
+	d.inFlight++
+	interactiveTaskID := engine.GenerateTaskID()
+	now := time.Now().UTC()
+	task2 := &storage.Task{
+		ID:        interactiveTaskID,
+		Prompt:    "interactive-2",
+		Workspace: allowedRoot,
+		Status:    storage.StatusPending,
+		Class:     string(TaskClassInteractive),
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.CreateTask(ctx, task2); err != nil {
+		t.Fatal(err)
+	}
+
+	wsKey := d.canonicalWorkspace(allowedRoot)
+	acquired, _ := d.wsQueue.TryAcquire(wsKey, interactiveTaskID)
+	if acquired {
+		t.Fatalf("expected interactive task to be queued behind cron task")
+	}
+	_ = store.UpdateTaskStatus(ctx, interactiveTaskID, storage.StatusQueued, "", "")
+
+	// 3. 釋放 cron 任務
+	close(t1Release)
+
+	// 等待互動任務被喚醒執行
+	for i := 0; i < 50; i++ {
+		time.Sleep(20 * time.Millisecond)
+		if t2Started.Load() {
+			break
+		}
+	}
+	if !t2Started.Load() {
+		t.Fatalf("interactive task was not executed after cron task completed")
+	}
+
+	// 等待 completed 狀態
+	for i := 0; i < 50; i++ {
+		time.Sleep(20 * time.Millisecond)
+		t2, err := store.GetTask(ctx, interactiveTaskID)
+		if err == nil && t2.Status == storage.StatusCompleted {
+			break
+		}
+	}
+
+	// 驗證互動任務最終狀態為 completed（絕非 failed: capacity exceeded）
+	t2, err := store.GetTask(ctx, interactiveTaskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if t2.Status != storage.StatusCompleted {
+		t.Fatalf("expected interactive task to complete successfully, got %s (err: %s)", t2.Status, t2.ErrorMessage)
+	}
+	_ = cronTaskID
+}
+
+// TestDaemon_WakeQueuedTask_PoolSlotFreed 驗證 MUST FIX 3: 喚醒排隊任務時前一任務已釋放 pool 槽位
+func TestDaemon_WakeQueuedTask_PoolSlotFreed(t *testing.T) {
+	tmpDir := t.TempDir()
+	socketPath := filepath.Join(tmpDir, "asura.sock")
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	wsA := filepath.Join(tmpDir, "ws-a")
+	wsB := filepath.Join(tmpDir, "ws-b")
+	_ = os.MkdirAll(wsA, 0755)
+	_ = os.MkdirAll(wsB, 0755)
+
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{wsA, wsB})
+
+	a1Started := make(chan struct{})
+	a1Release := make(chan struct{})
+	var a2Executed atomic.Bool
+
+	runner := func(ctx context.Context, ws string, prompt string) (string, error) {
+		if prompt == "cron-a1" {
+			close(a1Started)
+			<-a1Release
+		} else if prompt == "cron-a2" {
+			a2Executed.Store(true)
+		}
+		return "done", nil
+	}
+	eng := engine.NewEngine(store, policy, engine.WithRunner(runner))
+
+	// 容量極限: MaxWorkers=2, MaxCronWorkers=1, MaxQueue=1
+	pool := NewWorkerPoolWithCapacity(CapacityConfig{
+		MaxWorkers:     2,
+		MaxCronWorkers: 1,
+		MaxQueue:       1,
+	})
+	d := &Daemon{
+		cfg: Config{
+			SocketPath: socketPath,
+			MaxWorkers: 2,
+			MaxQueue:   1,
+		},
+		pool:     pool,
+		wsQueue:  NewWorkspaceQueue(),
+		store:    store,
+		engine:   eng,
+		policy:   policy,
+		closed:   make(chan struct{}),
+		inFlight: 0,
+	}
+
+	ctx := context.Background()
+
+	// 步驟:
+	// 1. Cron-A1 在 wsA 執行中 (佔滿 1 個 MaxCronWorkers)
+	// 2. Cron-B 在 wsB 提交 (因無 cron 槽位進入 pool 的 cronQueue)
+	// 3. Cron-A2 在 wsA 提交 (因同專案互斥進入 wsQueue 專案佇列)
+	// 4. A1 執行完畢釋放
+	// 5. 驗證 A2 被喚醒後能成功執行完成，絕不因 A1 還佔著 pool 槽位而被標記為 failed
+
+	_, err = d.dispatchCronTask(ctx, "c1", wsA, "cron-a1")
+	if err != nil {
+		t.Fatalf("dispatch a1 failed: %v", err)
+	}
+	<-a1Started
+
+	// 提交 Cron-B (進入 pool 佇列)
+	bStarted := make(chan struct{})
+	go func() {
+		_, _ = d.dispatchCronTask(ctx, "cb", wsB, "cron-b")
+		close(bStarted)
+	}()
+	time.Sleep(50 * time.Millisecond)
+
+	// 提交 Cron-A2 (同專案排隊)
+	a2ID, err := d.dispatchCronTask(ctx, "c2", wsA, "cron-a2")
+	if err != nil {
+		t.Fatalf("dispatch a2 failed: %v", err)
+	}
+
+	// 釋放 A1
+	close(a1Release)
+
+	// 輪詢等待 A2 執行
+	for i := 0; i < 50; i++ {
+		time.Sleep(20 * time.Millisecond)
+		if a2Executed.Load() {
+			break
+		}
+	}
+
+	// 等待 completed 狀態
+	for i := 0; i < 50; i++ {
+		time.Sleep(20 * time.Millisecond)
+		t2, err := store.GetTask(ctx, a2ID)
+		if err == nil && t2.Status == storage.StatusCompleted {
+			break
+		}
+	}
+
+	a2Task, err := store.GetTask(ctx, a2ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a2Task.Status == storage.StatusFailed {
+		t.Fatalf("A2 failed with capacity exceeded! Error: %s", a2Task.ErrorMessage)
+	}
+	if a2Task.Status != storage.StatusCompleted {
+		t.Fatalf("expected A2 to complete, got %s", a2Task.Status)
+	}
+}
+
+// TestDaemon_WakeQueuedTask_WhenTaskStatusIsPending 驗證 MUST FIX 1: 排隊任務在 DB 仍為 pending 時喚醒不被遺漏跳過
+func TestDaemon_WakeQueuedTask_WhenTaskStatusIsPending(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	allowedRoot := filepath.Join(tmpDir, "project-pending")
+	_ = os.MkdirAll(allowedRoot, 0755)
+
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{allowedRoot})
+
+	var t2Started atomic.Bool
+	runner := func(ctx context.Context, ws string, prompt string) (string, error) {
+		if prompt == "task-2" {
+			t2Started.Store(true)
+		}
+		return "done", nil
+	}
+	eng := engine.NewEngine(store, policy, engine.WithRunner(runner))
+
+	pool := NewWorkerPoolWithCapacity(CapacityConfig{
+		MaxWorkers:     2,
+		MaxCronWorkers: 1,
+		MaxQueue:       5,
+	})
+	d := &Daemon{
+		cfg: Config{
+			SocketPath: filepath.Join(tmpDir, "asura.sock"),
+			MaxWorkers: 2,
+			MaxQueue:   5,
+		},
+		pool:     pool,
+		wsQueue:  NewWorkspaceQueue(),
+		store:    store,
+		engine:   eng,
+		policy:   policy,
+		closed:   make(chan struct{}),
+		inFlight: 0,
+	}
+
+	ctx := context.Background()
+
+	// 1. 任務 1 持有專案鎖
+	t1ID := engine.GenerateTaskID()
+	wsKey := d.canonicalWorkspace(allowedRoot)
+	acquired, _ := d.wsQueue.TryAcquire(wsKey, t1ID)
+	if !acquired {
+		t.Fatal("expected t1 to acquire workspace lock")
+	}
+
+	// 2. 任務 2 排入專案佇列，但狀態仍在 pending（模擬 SQLite 寫入延遲）
+	t2ID := engine.GenerateTaskID()
+	now := time.Now().UTC()
+	task2 := &storage.Task{
+		ID:        t2ID,
+		Prompt:    "task-2",
+		Workspace: allowedRoot,
+		Status:    storage.StatusPending, // 故意保持 pending
+		Class:     string(TaskClassInteractive),
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.CreateTask(ctx, task2); err != nil {
+		t.Fatal(err)
+	}
+	d.inFlight++
+	// 加入專案等待佇列
+	acquired2, _ := d.wsQueue.TryAcquire(wsKey, t2ID)
+	if acquired2 {
+		t.Fatal("expected t2 to be queued behind t1")
+	}
+
+	// 3. 任務 1 完成並喚醒下一個任務
+	d.releaseWorkspaceAndWakeNext(wsKey, t1ID)
+
+	// 等待 t2 被喚醒並執行
+	for i := 0; i < 50; i++ {
+		time.Sleep(20 * time.Millisecond)
+		if t2Started.Load() {
+			break
+		}
+	}
+
+	if !t2Started.Load() {
+		t.Fatalf("MUST FIX 1 regression: task 2 remained stuck because its status was pending during wake!")
+	}
+}
+
+// TestDaemon_WakeQueuedTask_BypassesPoolQueueLimit 驗證 MUST FIX 2: 被喚醒的 cron 任務不被 pool 的 MaxQueue 拒絕標為 failed
+func TestDaemon_WakeQueuedTask_BypassesPoolQueueLimit(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	wsA := filepath.Join(tmpDir, "project-a")
+	wsB := filepath.Join(tmpDir, "project-b")
+	wsC := filepath.Join(tmpDir, "project-c")
+	_ = os.MkdirAll(wsA, 0755)
+	_ = os.MkdirAll(wsB, 0755)
+	_ = os.MkdirAll(wsC, 0755)
+
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{wsA, wsB, wsC})
+
+	cronBStarted := make(chan struct{})
+	cronBBlocker := make(chan struct{})
+	i1Started := make(chan struct{})
+	i1Blocker := make(chan struct{})
+	var cronA2Started atomic.Bool
+
+	runner := func(ctx context.Context, ws string, prompt string) (string, error) {
+		switch prompt {
+		case "cron-b":
+			close(cronBStarted)
+			<-cronBBlocker
+		case "i-1":
+			close(i1Started)
+			<-i1Blocker
+		case "cron-a2":
+			cronA2Started.Store(true)
+		}
+		return "done", nil
+	}
+	eng := engine.NewEngine(store, policy, engine.WithRunner(runner))
+
+	// 配置 MaxWorkers=3, MaxCronWorkers=1, MaxQueue=1
+	pool := NewWorkerPoolWithCapacity(CapacityConfig{
+		MaxWorkers:     3,
+		MaxCronWorkers: 1,
+		MaxQueue:       1,
+	})
+	d := &Daemon{
+		cfg: Config{
+			SocketPath: filepath.Join(tmpDir, "asura.sock"),
+			MaxWorkers: 3,
+			MaxQueue:   1,
+		},
+		pool:     pool,
+		wsQueue:  NewWorkspaceQueue(),
+		store:    store,
+		engine:   eng,
+		policy:   policy,
+		closed:   make(chan struct{}),
+		inFlight: 0,
+	}
+
+	ctx := context.Background()
+
+	// 1. 專案 B 執行 cron-B，佔滿唯一的 cron worker (runningCron=1)
+	_, err = d.dispatchCronTask(ctx, "sched-b", wsB, "cron-b")
+	if err != nil {
+		t.Fatalf("dispatch cron-b failed: %v", err)
+	}
+	<-cronBStarted
+
+	// 2. 專案 C 提交 cron-C，進入 pool.cronQueue 排隊（使 pool.cronQueue 達到 maxQueue=1 上限）
+	_, err = d.dispatchCronTask(ctx, "sched-c", wsC, "cron-c")
+	if err != nil {
+		t.Fatalf("dispatch cron-c failed: %v", err)
+	}
+
+	// 3. 專案 A 執行互動任務 i-1
+	wsKeyA := d.canonicalWorkspace(wsA)
+	i1ID := engine.GenerateTaskID()
+	d.inFlight++
+	tI1 := &storage.Task{
+		ID:        i1ID,
+		Prompt:    "i-1",
+		Workspace: wsA,
+		Status:    storage.StatusPending,
+		Class:     string(TaskClassInteractive),
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+	_ = store.CreateTask(ctx, tI1)
+	d.wsQueue.TryAcquire(wsKeyA, i1ID)
+	_ = d.dispatchTask(i1ID, wsA, "i-1", TaskClassInteractive)
+	<-i1Started
+
+	// 4. 專案 A 觸發 cron-A2，進入專案 A 佇列等待
+	cronA2ID, err := d.dispatchCronTask(ctx, "sched-a2", wsA, "cron-a2")
+	if err != nil {
+		t.Fatalf("dispatchCronTask a2 failed: %v", err)
+	}
+
+	// 5. 互動任務 i-1 結束，釋放專案鎖並喚醒 cron-A2
+	close(i1Blocker)
+
+	// 等待一小段時間確認 cron-A2 的狀態
+	time.Sleep(100 * time.Millisecond)
+
+	a2Task, err := store.GetTask(ctx, cronA2ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if a2Task.Status == storage.StatusFailed {
+		t.Fatalf("MUST FIX 2 regression: awakened cron-A2 was rejected by pool with error: %s", a2Task.ErrorMessage)
+	}
+
+	// 釋放 cron-B 讓 cron-A2 執行完畢
+	close(cronBBlocker)
+
+	for i := 0; i < 50; i++ {
+		time.Sleep(20 * time.Millisecond)
+		if cronA2Started.Load() {
+			break
+		}
+	}
+	if !cronA2Started.Load() {
+		t.Fatal("expected cron-A2 to execute after cron-b released")
+	}
+}
+
+// TestDaemon_ReleaseWorkspace_SymlinkTargetChanged_DoesNotLeak 驗證 MUST FIX 3: 專案目錄為 symlink 且 target 改變時，專案鎖不外洩
+func TestDaemon_ReleaseWorkspace_SymlinkTargetChanged_DoesNotLeak(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	target1 := filepath.Join(tmpDir, "target1")
+	target2 := filepath.Join(tmpDir, "target2")
+	linkPath := filepath.Join(tmpDir, "link-project")
+	_ = os.MkdirAll(target1, 0755)
+	_ = os.MkdirAll(target2, 0755)
+
+	// 初始: link 指向 target1
+	if err := os.Symlink(target1, linkPath); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	d := &Daemon{
+		cfg: Config{
+			SocketPath: filepath.Join(tmpDir, "asura.sock"),
+			MaxWorkers: 2,
+			MaxQueue:   2,
+		},
+		pool:     NewWorkerPool(2, 2),
+		wsQueue:  NewWorkspaceQueue(),
+		store:    store,
+		policy:   policy,
+		closed:   make(chan struct{}),
+		inFlight: 0,
+	}
+
+	var t1Completed atomic.Bool
+	runner := func(ctx context.Context, ws string, prompt string) (string, error) {
+		t1Completed.Store(true)
+		return "done", nil
+	}
+	d.engine = engine.NewEngine(store, policy, engine.WithRunner(runner))
+
+	// 1. 任務 1 以 linkPath 取得專案鎖並派發（此時 canonical 為 target1）
+	t1ID := "task-1"
+	wsKey1 := d.canonicalWorkspace(linkPath)
+	acquired, _ := d.wsQueue.TryAcquire(wsKey1, t1ID)
+	if !acquired {
+		t.Fatal("expected task 1 to acquire lock")
+	}
+
+	// 派發任務 1，其內部會捕獲取鎖當下的 wsKey
+	err = d.dispatchTask(t1ID, linkPath, "prompt-1", TaskClassInteractive)
+	if err != nil {
+		t.Fatalf("dispatchTask failed: %v", err)
+	}
+
+	// 2. 任務 1 執行期間，symlink 更改指向 target2
+	_ = os.Remove(linkPath)
+	if err := os.Symlink(target2, linkPath); err != nil {
+		t.Fatal(err)
+	}
+
+	// 等待任務 1 完成
+	for i := 0; i < 50; i++ {
+		time.Sleep(20 * time.Millisecond)
+		if t1Completed.Load() {
+			break
+		}
+	}
+	time.Sleep(50 * time.Millisecond) // 等待 done callback 執行
+
+	// 3. 驗證 target1 的鎖已經被成功釋放（不會因 symlink 更改而洩漏），新任務可以直接取得鎖
+	t2ID := "task-2"
+	acquired2, _ := d.wsQueue.TryAcquire(target1, t2ID)
+	if !acquired2 {
+		t.Fatalf("MUST FIX 3 regression: workspace lock leaked! target1 is permanently locked")
+	}
+}
+
+// TestDaemon_DispatchFailure_HandsOverWorkspaceLock 驗證 MUST FIX 8: 任務在派工失敗時，正確將專案鎖交接給排隊任務
+func TestDaemon_DispatchFailure_HandsOverWorkspaceLock(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	allowedRoot := filepath.Join(tmpDir, "project-handover")
+	_ = os.MkdirAll(allowedRoot, 0755)
+
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{allowedRoot})
+
+	var t2Executed atomic.Bool
+	runner := func(ctx context.Context, ws string, prompt string) (string, error) {
+		if prompt == "task-2" {
+			t2Executed.Store(true)
+		}
+		return "done", nil
+	}
+	eng := engine.NewEngine(store, policy, engine.WithRunner(runner))
+
+	// 特意設定 MaxQueue=0，使任務 1 派工失敗
+	pool := NewWorkerPoolWithCapacity(CapacityConfig{
+		MaxWorkers:     1,
+		MaxCronWorkers: 1,
+		MaxQueue:       0, // 無佇列
+	})
+	d := &Daemon{
+		cfg: Config{
+			SocketPath: filepath.Join(tmpDir, "asura.sock"),
+			MaxWorkers: 1,
+			MaxQueue:   0,
+		},
+		pool:     pool,
+		wsQueue:  NewWorkspaceQueue(),
+		store:    store,
+		engine:   eng,
+		policy:   policy,
+		closed:   make(chan struct{}),
+		inFlight: 0,
+	}
+
+	ctx := context.Background()
+	wsKey := d.canonicalWorkspace(allowedRoot)
+
+	// 先佔滿唯一的 worker
+	blocker := make(chan struct{})
+	_, _ = pool.SubmitAsync(ctx, func() error {
+		<-blocker
+		return nil
+	})
+
+	// 任務 1 取得專案鎖
+	t1ID := engine.GenerateTaskID()
+	acquired, _ := d.wsQueue.TryAcquire(wsKey, t1ID)
+	if !acquired {
+		t.Fatal("expected t1 to acquire workspace lock")
+	}
+
+	// 任務 2 排入專案佇列
+	t2ID := engine.GenerateTaskID()
+	acquired2, _ := d.wsQueue.TryAcquire(wsKey, t2ID)
+	if acquired2 {
+		t.Fatal("expected t2 to queue")
+	}
+	_ = store.CreateTask(ctx, &storage.Task{
+		ID:        t2ID,
+		Prompt:    "task-2",
+		Workspace: allowedRoot,
+		Status:    storage.StatusQueued,
+		Class:     string(TaskClassInteractive),
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	})
+	d.inFlight++
+
+	// 任務 1 嘗試派發，因 pool 滿（running=1, maxQueue=0）而失敗
+	err = d.dispatchTask(t1ID, allowedRoot, "task-1", TaskClassInteractive)
+	if err == nil {
+		t.Fatal("expected dispatchTask to fail due to full pool")
+	}
+
+	// 釋放 pool 中的佔位 blocker，讓任務 2 有 worker 可用
+	close(blocker)
+	time.Sleep(20 * time.Millisecond)
+
+	// 派工失敗後，處理交接
+	d.releaseCapacity()
+	d.releaseWorkspaceAndWakeNext(wsKey, t1ID)
+
+	// 驗證任務 2 被成功喚醒並執行
+	for i := 0; i < 50; i++ {
+		time.Sleep(20 * time.Millisecond)
+		if t2Executed.Load() {
+			break
+		}
+	}
+	if !t2Executed.Load() {
+		t.Fatalf("MUST FIX 8 regression: task 2 was not executed after task 1 dispatch failure!")
+	}
+}
+
+
+

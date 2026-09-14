@@ -1,0 +1,14 @@
+=== RUN   TestDaemon_CronIPC
+--- PASS: TestDaemon_CronIPC (1.02s)
+PASS
+ok  	asura/internal/daemon	1.030s
+=== RUN   TestRunCLI_CronValidation
+=== RUN   TestRunCLI_CronValidation/cron_指令無子操作輸出_Usage_並返回非_0
+=== RUN   TestRunCLI_CronValidation/cron_add_缺少必要參數返回非_0
+=== RUN   TestRunCLI_CronValidation/cron_pause_缺少_id_返回非_0
+--- PASS: TestRunCLI_CronValidation (0.00s)
+    --- PASS: TestRunCLI_CronValidation/cron_指令無子操作輸出_Usage_並返回非_0 (0.00s)
+    --- PASS: TestRunCLI_CronValidation/cron_add_缺少必要參數返回非_0 (0.00s)
+    --- PASS: TestRunCLI_CronValidation/cron_pause_缺少_id_返回非_0 (0.00s)
+PASS
+ok  	asura/cmd/asura	0.005s

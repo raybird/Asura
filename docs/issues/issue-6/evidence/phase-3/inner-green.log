@@ -1,0 +1,48 @@
+=== RUN   TestCronParser_ValidExpressions
+=== RUN   TestCronParser_ValidExpressions/每分鐘表達式_*_*_*_*_*
+=== RUN   TestCronParser_ValidExpressions/間隔表達式_*/5_*_*_*_*
+=== RUN   TestCronParser_ValidExpressions/指定時間與平日_0_2_*_*_1-5
+=== RUN   TestCronParser_ValidExpressions/列表表達式_30_8_1,15_*_*
+=== RUN   TestCronParser_ValidExpressions/跨年計算_0_0_1_1_*
+--- PASS: TestCronParser_ValidExpressions (0.00s)
+    --- PASS: TestCronParser_ValidExpressions/每分鐘表達式_*_*_*_*_* (0.00s)
+    --- PASS: TestCronParser_ValidExpressions/間隔表達式_*/5_*_*_*_* (0.00s)
+    --- PASS: TestCronParser_ValidExpressions/指定時間與平日_0_2_*_*_1-5 (0.00s)
+    --- PASS: TestCronParser_ValidExpressions/列表表達式_30_8_1,15_*_* (0.00s)
+    --- PASS: TestCronParser_ValidExpressions/跨年計算_0_0_1_1_* (0.00s)
+=== RUN   TestCronParser_InvalidExpressions
+=== RUN   TestCronParser_InvalidExpressions/4_欄位不足
+=== RUN   TestCronParser_InvalidExpressions/6_欄位過多
+=== RUN   TestCronParser_InvalidExpressions/空字串
+=== RUN   TestCronParser_InvalidExpressions/分鐘超過_59
+=== RUN   TestCronParser_InvalidExpressions/分鐘小於_0
+=== RUN   TestCronParser_InvalidExpressions/小時超過_23
+=== RUN   TestCronParser_InvalidExpressions/日期超過_31
+=== RUN   TestCronParser_InvalidExpressions/月份超過_12
+=== RUN   TestCronParser_InvalidExpressions/月份為_0
+=== RUN   TestCronParser_InvalidExpressions/星期超過_7
+=== RUN   TestCronParser_InvalidExpressions/非數字無效文字
+=== RUN   TestCronParser_InvalidExpressions/無效步進語法
+=== RUN   TestCronParser_InvalidExpressions/反向範圍
+--- PASS: TestCronParser_InvalidExpressions (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/4_欄位不足 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/6_欄位過多 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/空字串 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/分鐘超過_59 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/分鐘小於_0 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/小時超過_23 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/日期超過_31 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/月份超過_12 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/月份為_0 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/星期超過_7 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/非數字無效文字 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/無效步進語法 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/反向範圍 (0.00s)
+=== RUN   TestScheduler_AlignSchedules_NoCatchup
+--- PASS: TestScheduler_AlignSchedules_NoCatchup (0.01s)
+=== RUN   TestScheduler_Trigger_OverlapSkip
+--- PASS: TestScheduler_Trigger_OverlapSkip (0.01s)
+=== RUN   TestScheduler_Trigger_UnauthorizedAutoPause
+--- PASS: TestScheduler_Trigger_UnauthorizedAutoPause (0.01s)
+PASS
+ok  	asura/internal/cron	0.035s

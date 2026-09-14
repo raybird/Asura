@@ -1,0 +1,78 @@
+=== RUN   TestCLI_EndToEnd
+=== RUN   TestCLI_EndToEnd/SCN-001:_提交任務並重查結果
+=== RUN   TestCLI_EndToEnd/SCN-002:_拒絕超出授權的工作目錄
+--- PASS: TestCLI_EndToEnd (0.25s)
+    --- PASS: TestCLI_EndToEnd/SCN-001:_提交任務並重查結果 (0.17s)
+    --- PASS: TestCLI_EndToEnd/SCN-002:_拒絕超出授權的工作目錄 (0.09s)
+=== RUN   TestCLI_CancelIsolation
+--- PASS: TestCLI_CancelIsolation (0.48s)
+=== RUN   TestCLI_PartialFailureProtection
+--- PASS: TestCLI_PartialFailureProtection (0.40s)
+=== RUN   TestCLI_RestartRecovery
+--- PASS: TestCLI_RestartRecovery (0.40s)
+=== RUN   TestCLI_EmptyOutputDefense
+--- PASS: TestCLI_EmptyOutputDefense (0.37s)
+=== RUN   TestCLI_ReviewFixes_R03_R06_R07
+--- PASS: TestCLI_ReviewFixes_R03_R06_R07 (0.41s)
+=== RUN   TestCLI_ReviewFixes_R04_ConcurrentOutput
+--- PASS: TestCLI_ReviewFixes_R04_ConcurrentOutput (1.56s)
+=== RUN   TestCLI_LatestReview_G01_HandshakeCancelBeforeStart
+--- PASS: TestCLI_LatestReview_G01_HandshakeCancelBeforeStart (1.58s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.74s)
+=== RUN   TestCLI_LatestReview_H01_LockFailureAbort
+--- PASS: TestCLI_LatestReview_H01_LockFailureAbort (0.58s)
+=== RUN   TestCLI_LatestReview_I01_CancelRetryRecoversProcess
+--- PASS: TestCLI_LatestReview_I01_CancelRetryRecoversProcess (1.63s)
+=== RUN   TestCLI_LatestReview_J01_CancelDoesNotKillReusedPGID
+--- PASS: TestCLI_LatestReview_J01_CancelDoesNotKillReusedPGID (1.71s)
+=== RUN   TestCLI_LatestReview_K01_CancelRecoversCleanEnvProcess
+--- PASS: TestCLI_LatestReview_K01_CancelRecoversCleanEnvProcess (1.65s)
+=== RUN   TestCLI_LatestReview_L01_CancelRecoversOrphanProcessGroup
+--- PASS: TestCLI_LatestReview_L01_CancelRecoversOrphanProcessGroup (1.78s)
+=== RUN   TestCLI_LatestReview_M01_OrphanUnknownIdentityFailsSafely
+--- PASS: TestCLI_LatestReview_M01_OrphanUnknownIdentityFailsSafely (0.67s)
+=== RUN   TestCLI_DaemonLifecycle
+--- PASS: TestCLI_DaemonLifecycle (0.50s)
+=== RUN   TestCRON001_WorkspaceMutexQueue
+--- PASS: TestCRON001_WorkspaceMutexQueue (0.07s)
+=== RUN   TestCRON002_InteractiveChannelReserved
+--- PASS: TestCRON002_InteractiveChannelReserved (0.04s)
+=== RUN   TestCRON003_CLICronManagement
+--- PASS: TestCRON003_CLICronManagement (0.46s)
+=== RUN   TestCRON004_PeriodicTriggerCreatesTask
+--- PASS: TestCRON004_PeriodicTriggerCreatesTask (1.01s)
+=== RUN   TestCRON005_OverlapSkip
+--- PASS: TestCRON005_OverlapSkip (0.01s)
+=== RUN   TestCRON006_RestartNoCatchup
+--- PASS: TestCRON006_RestartNoCatchup (0.00s)
+=== RUN   TestCRON007_UnauthorizedWorkspaceAutoPause
+--- PASS: TestCRON007_UnauthorizedWorkspaceAutoPause (0.01s)
+=== RUN   TestCRON008_PersistenceAcrossRestart
+--- PASS: TestCRON008_PersistenceAcrossRestart (0.92s)
+=== RUN   TestWEB002Daemon
+--- PASS: TestWEB002Daemon (0.45s)
+=== RUN   TestWEB001
+--- PASS: TestWEB001 (0.02s)
+=== RUN   TestWEB002
+--- PASS: TestWEB002 (0.01s)
+=== RUN   TestWEB010
+--- PASS: TestWEB010 (0.01s)
+=== RUN   TestWEB003
+--- PASS: TestWEB003 (0.02s)
+=== RUN   TestWEB004
+--- PASS: TestWEB004 (0.01s)
+=== RUN   TestWEB005
+--- PASS: TestWEB005 (0.01s)
+=== RUN   TestWEB008
+--- PASS: TestWEB008 (0.01s)
+=== RUN   TestWEB008ProjectsAndPage
+--- PASS: TestWEB008ProjectsAndPage (0.01s)
+=== RUN   TestWEB006
+--- PASS: TestWEB006 (0.01s)
+=== RUN   TestWEB007
+--- PASS: TestWEB007 (0.01s)
+=== RUN   TestWEB009
+--- PASS: TestWEB009 (0.03s)
+PASS
+ok  	asura/tests/integration	18.821s

@@ -794,8 +794,14 @@ func TestCLI_LatestReview_G01_HandshakeCancelBeforeStart(t *testing.T) {
 		cancelDone <- cancelCmd.Wait()
 	}()
 
-	// 5. 短暫等待確保 cancel 已經將 DB 更新為 cancelled 且正等待排他鎖握手
-	time.Sleep(50 * time.Millisecond)
+	// 5. 等待確保 cancel 已經將 DB 更新為 cancelled 且正等待排他鎖握手
+	for i := 0; i < 100; i++ {
+		tObj, err := store.GetTask(context.Background(), taskID)
+		if err == nil && tObj.Status == storage.StatusCancelled {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	// 6. 釋放排他鎖，放行 cancel 的握手與 run 的進入
 	_ = syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)

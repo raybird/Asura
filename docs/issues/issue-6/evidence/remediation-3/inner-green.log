@@ -1,0 +1,15 @@
+=== GREEN PHASE: Verification of MUST FIX 1, 2, 3, 8 ===
+Date: 2026-09-14T20:19:38+08:00
+Command: go test -count=1 -v -run 'TestDaemon_WakeQueuedTask_WhenTaskStatusIsPending|TestDaemon_WakeQueuedTask_BypassesPoolQueueLimit|TestDaemon_ReleaseWorkspace_SymlinkTargetChanged_DoesNotLeak|TestDaemon_DispatchFailure_HandsOverWorkspaceLock' ./internal/daemon
+
+=== RUN   TestDaemon_WakeQueuedTask_WhenTaskStatusIsPending
+--- PASS: TestDaemon_WakeQueuedTask_WhenTaskStatusIsPending (0.03s)
+=== RUN   TestDaemon_WakeQueuedTask_BypassesPoolQueueLimit
+--- PASS: TestDaemon_WakeQueuedTask_BypassesPoolQueueLimit (0.13s)
+=== RUN   TestDaemon_ReleaseWorkspace_SymlinkTargetChanged_DoesNotLeak
+--- PASS: TestDaemon_ReleaseWorkspace_SymlinkTargetChanged_DoesNotLeak (0.08s)
+=== RUN   TestDaemon_DispatchFailure_HandsOverWorkspaceLock
+--- PASS: TestDaemon_DispatchFailure_HandsOverWorkspaceLock (0.05s)
+PASS
+ok  	asura/internal/daemon	0.304s
+Exit Code: 0

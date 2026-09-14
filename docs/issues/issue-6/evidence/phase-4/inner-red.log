@@ -1,0 +1,12 @@
+# asura/internal/daemon [asura/internal/daemon.test]
+internal/daemon/daemon_test.go:1012:12: undefined: CronAddRequest
+internal/daemon/daemon_test.go:1018:23: client.AddCronSchedule undefined (type *Client has no field or method AddCronSchedule)
+internal/daemon/daemon_test.go:1027:12: undefined: CronAddRequest
+internal/daemon/daemon_test.go:1033:18: client.AddCronSchedule undefined (type *Client has no field or method AddCronSchedule)
+internal/daemon/daemon_test.go:1039:22: client.ListCronSchedules undefined (type *Client has no field or method ListCronSchedules)
+internal/daemon/daemon_test.go:1048:24: client.PauseCronSchedule undefined (type *Client has no field or method PauseCronSchedule)
+internal/daemon/daemon_test.go:1056:25: client.ResumeCronSchedule undefined (type *Client has no field or method ResumeCronSchedule)
+internal/daemon/daemon_test.go:1065:19: client.RemoveCronSchedule undefined (type *Client has no field or method RemoveCronSchedule)
+internal/daemon/daemon_test.go:1068:27: client.ListCronSchedules undefined (type *Client has no field or method ListCronSchedules)
+FAIL	asura/internal/daemon [build failed]
+FAIL

@@ -16,6 +16,7 @@ type TaskStatus string
 
 const (
 	StatusPending   TaskStatus = "pending"
+	StatusQueued    TaskStatus = "queued"
 	StatusRunning   TaskStatus = "running"
 	StatusCompleted TaskStatus = "completed"
 	StatusFailed    TaskStatus = "failed"
@@ -27,7 +28,54 @@ var (
 	ErrTaskNotFound = errors.New("task not found")
 	// ErrDuplicateRequestID 代表相同 request_id 的任務已存在
 	ErrDuplicateRequestID = errors.New("duplicate request_id")
+	// ErrCronNotFound 代表查詢的排程不存在
+	ErrCronNotFound = errors.New("cron schedule not found")
 )
+
+// CronStatus 代表排程的啟用狀態
+type CronStatus string
+
+const (
+	CronStatusActive CronStatus = "active"
+	CronStatusPaused CronStatus = "paused"
+)
+
+// CronRunStatus 代表單次排程觸發的執行狀態
+type CronRunStatus string
+
+const (
+	CronRunTriggered    CronRunStatus = "triggered"
+	CronRunSkipped      CronRunStatus = "skipped"
+	CronRunUnauthorized CronRunStatus = "unauthorized"
+	CronRunFailed       CronRunStatus = "failed"
+)
+
+// CronSchedule 代表定時排程的定義實體
+type CronSchedule struct {
+	ID          string     `json:"id"`
+	Name        string     `json:"name"`
+	Workspace   string     `json:"workspace"`
+	Schedule    string     `json:"schedule"`
+	Prompt      string     `json:"prompt"`
+	Status      CronStatus `json:"status"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	LastRunAt   *time.Time `json:"last_run_at,omitempty"`
+	NextRunAt   *time.Time `json:"next_run_at,omitempty"`
+	PauseReason string     `json:"pause_reason,omitempty"`
+}
+
+// CronRun 代表一次定時排程的觸發紀錄
+type CronRun struct {
+	ID            string        `json:"id"`
+	CronID        string        `json:"cron_id"`
+	ScheduledTime time.Time     `json:"scheduled_time"`
+	TriggeredTime time.Time     `json:"triggered_time"`
+	TaskID        string        `json:"task_id,omitempty"`
+	Status        CronRunStatus `json:"status"`
+	Reason        string        `json:"reason,omitempty"`
+	CreatedAt     time.Time     `json:"created_at"`
+}
 
 // Task 代表本機執行的任務實體
 type Task struct {
@@ -40,6 +88,7 @@ type Task struct {
 	Result       string     `json:"result"`
 	ErrorMessage string     `json:"error_message"`
 	PGID         int        `json:"pgid"`
+	Class        string     `json:"class,omitempty"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 }
@@ -64,6 +113,7 @@ func NewSQLiteStore(dbPath string) (*SQLiteStore, error) {
 		"PRAGMA busy_timeout=10000;",
 		"PRAGMA journal_mode=WAL;",
 		"PRAGMA synchronous=NORMAL;",
+		"PRAGMA foreign_keys=ON;",
 	}
 	for _, pragma := range pragmas {
 		var execErr error
@@ -100,6 +150,7 @@ func (s *SQLiteStore) initSchema() error {
 		result TEXT NOT NULL DEFAULT '',
 		error_message TEXT NOT NULL DEFAULT '',
 		pgid INTEGER NOT NULL DEFAULT 0,
+		class TEXT NOT NULL DEFAULT 'interactive',
 		created_at DATETIME NOT NULL,
 		updated_at DATETIME NOT NULL
 	);
@@ -108,7 +159,7 @@ func (s *SQLiteStore) initSchema() error {
 		return fmt.Errorf("create table: %w", err)
 	}
 
-	// 容錯升級既有表：先確保 request_id 與 fingerprint 欄位存在再建立索引
+	// 容錯升級既有表：先確保 request_id、fingerprint 與 class 欄位存在再建立索引
 	cols, err := s.getTableColumns("tasks")
 	if err != nil {
 		return fmt.Errorf("get table columns: %w", err)
@@ -121,6 +172,11 @@ func (s *SQLiteStore) initSchema() error {
 	if !cols["fingerprint"] {
 		if _, err := s.db.Exec("ALTER TABLE tasks ADD COLUMN fingerprint TEXT NOT NULL DEFAULT ''"); err != nil {
 			return fmt.Errorf("add column fingerprint: %w", err)
+		}
+	}
+	if !cols["class"] {
+		if _, err := s.db.Exec("ALTER TABLE tasks ADD COLUMN class TEXT NOT NULL DEFAULT 'interactive'"); err != nil {
+			return fmt.Errorf("add column class: %w", err)
 		}
 	}
 
@@ -149,9 +205,39 @@ func (s *SQLiteStore) initSchema() error {
 	indices := `
 	CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 	CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_request_id_unique ON tasks(request_id) WHERE request_id != '';
+
+	CREATE TABLE IF NOT EXISTS cron_schedules (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		workspace TEXT NOT NULL,
+		schedule TEXT NOT NULL,
+		prompt TEXT NOT NULL,
+		status TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		last_run_at DATETIME,
+		next_run_at DATETIME,
+		pause_reason TEXT NOT NULL DEFAULT ''
+	);
+
+	CREATE TABLE IF NOT EXISTS cron_runs (
+		id TEXT PRIMARY KEY,
+		cron_id TEXT NOT NULL,
+		scheduled_time DATETIME NOT NULL,
+		triggered_time DATETIME NOT NULL,
+		task_id TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL,
+		reason TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (cron_id) REFERENCES cron_schedules(id) ON DELETE CASCADE
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_cron_schedules_status ON cron_schedules(status);
+	CREATE INDEX IF NOT EXISTS idx_cron_runs_cron_id ON cron_runs(cron_id);
+	CREATE INDEX IF NOT EXISTS idx_cron_runs_scheduled_time ON cron_runs(scheduled_time);
 	`
 	if _, err := s.db.Exec(indices); err != nil {
-		return fmt.Errorf("create indices: %w", err)
+		return fmt.Errorf("create indices and cron tables: %w", err)
 	}
 	return nil
 }
@@ -183,8 +269,8 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 		return errors.New("task cannot be nil")
 	}
 	query := `
-	INSERT INTO tasks (id, request_id, fingerprint, prompt, workspace, status, result, error_message, pgid, created_at, updated_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO tasks (id, request_id, fingerprint, prompt, workspace, status, result, error_message, pgid, class, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	now := time.Now().UTC()
 	if task.CreatedAt.IsZero() {
@@ -192,6 +278,10 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 	}
 	if task.UpdatedAt.IsZero() {
 		task.UpdatedAt = now
+	}
+	taskClass := task.Class
+	if taskClass == "" {
+		taskClass = "interactive"
 	}
 
 	_, err := s.db.ExecContext(ctx, query,
@@ -204,6 +294,7 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 		task.Result,
 		task.ErrorMessage,
 		task.PGID,
+		taskClass,
 		task.CreatedAt,
 		task.UpdatedAt,
 	)
@@ -219,7 +310,7 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 // GetTask 依任務 ID 查詢任務狀態與結果
 func (s *SQLiteStore) GetTask(ctx context.Context, id string) (*Task, error) {
 	query := `
-	SELECT id, request_id, fingerprint, prompt, workspace, status, result, error_message, pgid, created_at, updated_at
+	SELECT id, request_id, fingerprint, prompt, workspace, status, result, error_message, pgid, class, created_at, updated_at
 	FROM tasks
 	WHERE id = ?
 	`
@@ -237,6 +328,7 @@ func (s *SQLiteStore) GetTask(ctx context.Context, id string) (*Task, error) {
 		&task.Result,
 		&task.ErrorMessage,
 		&task.PGID,
+		&task.Class,
 		&task.CreatedAt,
 		&task.UpdatedAt,
 	)
@@ -257,7 +349,7 @@ func (s *SQLiteStore) GetTaskByRequestID(ctx context.Context, requestID string) 
 		return nil, ErrTaskNotFound
 	}
 	query := `
-	SELECT id, request_id, fingerprint, prompt, workspace, status, result, error_message, pgid, created_at, updated_at
+	SELECT id, request_id, fingerprint, prompt, workspace, status, result, error_message, pgid, class, created_at, updated_at
 	FROM tasks
 	WHERE request_id = ?
 	ORDER BY created_at DESC
@@ -277,6 +369,7 @@ func (s *SQLiteStore) GetTaskByRequestID(ctx context.Context, requestID string) 
 		&task.Result,
 		&task.ErrorMessage,
 		&task.PGID,
+		&task.Class,
 		&task.CreatedAt,
 		&task.UpdatedAt,
 	)
@@ -324,6 +417,25 @@ func (s *SQLiteStore) UpdateTaskStatusIfPending(ctx context.Context, id string, 
 	res, err := s.db.ExecContext(ctx, query, string(status), now, id, string(StatusPending))
 	if err != nil {
 		return false, fmt.Errorf("update task status if pending: %w", err)
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("check rows affected: %w", err)
+	}
+	return rowsAffected > 0, nil
+}
+
+// UpdateTaskStatusIfPendingOrQueued 僅在任務處於 pending 或 queued 狀態時才轉移為新狀態
+func (s *SQLiteStore) UpdateTaskStatusIfPendingOrQueued(ctx context.Context, id string, status TaskStatus) (bool, error) {
+	query := `
+	UPDATE tasks
+	SET status = ?, updated_at = ?
+	WHERE id = ? AND (status = ? OR status = ?)
+	`
+	now := time.Now().UTC()
+	res, err := s.db.ExecContext(ctx, query, string(status), now, id, string(StatusPending), string(StatusQueued))
+	if err != nil {
+		return false, fmt.Errorf("update task status if pending or queued: %w", err)
 	}
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
@@ -395,17 +507,17 @@ func (s *SQLiteStore) UpdateTaskPGID(ctx context.Context, id string, pgid int) e
 	return nil
 }
 
-// RecoverInterruptedTasks 掃描並將所有處於 running 或 pending 狀態的孤兒任務標記為 failed
-// 遵循 SCN-006：守護程序重啟時保留已完成結果，揭露中斷工作，杜絕假成功或自動重新執行
+// RecoverInterruptedTasks 掃描並將所有處於 running, pending 或 queued 狀態的孤兒任務標記為 failed
+// 遵循 SCN-006 與 MUST FIX 5：守護程序重啟時保留已完成結果，揭露中斷工作，杜絕假成功、自動重新執行或排隊殘留
 func (s *SQLiteStore) RecoverInterruptedTasks(ctx context.Context) (int64, error) {
 	query := `
 	UPDATE tasks
 	SET status = ?, error_message = ?, updated_at = ?
-	WHERE status IN (?, ?)
+	WHERE status IN (?, ?, ?)
 	`
 	now := time.Now().UTC()
 	msg := "task interrupted: system restarted or terminated unexpectedly"
-	res, err := s.db.ExecContext(ctx, query, StatusFailed, msg, now, StatusRunning, StatusPending)
+	res, err := s.db.ExecContext(ctx, query, StatusFailed, msg, now, StatusRunning, StatusPending, StatusQueued)
 	if err != nil {
 		return 0, fmt.Errorf("recover interrupted tasks: %w", err)
 	}
@@ -425,4 +537,252 @@ func (s *SQLiteStore) DeleteTask(ctx context.Context, id string) error {
 // Close 關閉資料庫連線
 func (s *SQLiteStore) Close() error {
 	return s.db.Close()
+}
+
+// CreateCronSchedule 建立新的定時排程定義
+func (s *SQLiteStore) CreateCronSchedule(ctx context.Context, schedule CronSchedule) error {
+	query := `
+	INSERT INTO cron_schedules (
+		id, name, workspace, schedule, prompt, status, created_at, updated_at, last_run_at, next_run_at, pause_reason
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	var lastRunVal, nextRunVal any
+	if schedule.LastRunAt != nil {
+		lastRunVal = schedule.LastRunAt.UTC()
+	}
+	if schedule.NextRunAt != nil {
+		nextRunVal = schedule.NextRunAt.UTC()
+	}
+	_, err := s.db.ExecContext(ctx, query,
+		schedule.ID,
+		schedule.Name,
+		schedule.Workspace,
+		schedule.Schedule,
+		schedule.Prompt,
+		schedule.Status,
+		schedule.CreatedAt.UTC(),
+		schedule.UpdatedAt.UTC(),
+		lastRunVal,
+		nextRunVal,
+		schedule.PauseReason,
+	)
+	if err != nil {
+		return fmt.Errorf("create cron schedule: %w", err)
+	}
+	return nil
+}
+
+// GetCronSchedule 依 ID 取得排程實體
+func (s *SQLiteStore) GetCronSchedule(ctx context.Context, id string) (*CronSchedule, error) {
+	query := `
+	SELECT id, name, workspace, schedule, prompt, status, created_at, updated_at, last_run_at, next_run_at, pause_reason
+	FROM cron_schedules
+	WHERE id = ?
+	`
+	row := s.db.QueryRowContext(ctx, query, id)
+	var sched CronSchedule
+	var lastRun, nextRun sql.NullTime
+	err := row.Scan(
+		&sched.ID,
+		&sched.Name,
+		&sched.Workspace,
+		&sched.Schedule,
+		&sched.Prompt,
+		&sched.Status,
+		&sched.CreatedAt,
+		&sched.UpdatedAt,
+		&lastRun,
+		&nextRun,
+		&sched.PauseReason,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrCronNotFound
+		}
+		return nil, fmt.Errorf("get cron schedule: %w", err)
+	}
+	if lastRun.Valid {
+		t := lastRun.Time
+		sched.LastRunAt = &t
+	}
+	if nextRun.Valid {
+		t := nextRun.Time
+		sched.NextRunAt = &t
+	}
+	return &sched, nil
+}
+
+// ListCronSchedules 列出所有排程定義
+func (s *SQLiteStore) ListCronSchedules(ctx context.Context) ([]CronSchedule, error) {
+	query := `
+	SELECT id, name, workspace, schedule, prompt, status, created_at, updated_at, last_run_at, next_run_at, pause_reason
+	FROM cron_schedules
+	ORDER BY created_at ASC
+	`
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("list cron schedules: %w", err)
+	}
+	defer rows.Close()
+
+	var list []CronSchedule
+	for rows.Next() {
+		var sched CronSchedule
+		var lastRun, nextRun sql.NullTime
+		if err := rows.Scan(
+			&sched.ID,
+			&sched.Name,
+			&sched.Workspace,
+			&sched.Schedule,
+			&sched.Prompt,
+			&sched.Status,
+			&sched.CreatedAt,
+			&sched.UpdatedAt,
+			&lastRun,
+			&nextRun,
+			&sched.PauseReason,
+		); err != nil {
+			return nil, fmt.Errorf("scan cron schedule: %w", err)
+		}
+		if lastRun.Valid {
+			t := lastRun.Time
+			sched.LastRunAt = &t
+		}
+		if nextRun.Valid {
+			t := nextRun.Time
+			sched.NextRunAt = &t
+		}
+		list = append(list, sched)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+	return list, nil
+}
+
+// UpdateCronScheduleStatus 更新排程啟用狀態與原因
+func (s *SQLiteStore) UpdateCronScheduleStatus(ctx context.Context, id string, status CronStatus, reason string) error {
+	query := `
+	UPDATE cron_schedules
+	SET status = ?, pause_reason = ?, updated_at = ?
+	WHERE id = ?
+	`
+	res, err := s.db.ExecContext(ctx, query, status, reason, time.Now().UTC(), id)
+	if err != nil {
+		return fmt.Errorf("update cron schedule status: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check rows affected: %w", err)
+	}
+	if rows == 0 {
+		return ErrCronNotFound
+	}
+	return nil
+}
+
+// UpdateCronScheduleNextRun 更新排程的下次與上次執行時間
+func (s *SQLiteStore) UpdateCronScheduleNextRun(ctx context.Context, id string, nextRun time.Time, lastRun *time.Time) error {
+	query := `
+	UPDATE cron_schedules
+	SET next_run_at = ?, last_run_at = ?, updated_at = ?
+	WHERE id = ?
+	`
+	var lastRunVal any
+	if lastRun != nil {
+		lastRunVal = lastRun.UTC()
+	}
+	res, err := s.db.ExecContext(ctx, query, nextRun.UTC(), lastRunVal, time.Now().UTC(), id)
+	if err != nil {
+		return fmt.Errorf("update cron schedule next run: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check rows affected: %w", err)
+	}
+	if rows == 0 {
+		return ErrCronNotFound
+	}
+	return nil
+}
+
+// DeleteCronSchedule 依 ID 刪除排程定義
+func (s *SQLiteStore) DeleteCronSchedule(ctx context.Context, id string) error {
+	query := `DELETE FROM cron_schedules WHERE id = ?`
+	res, err := s.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("delete cron schedule: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check rows affected: %w", err)
+	}
+	if rows == 0 {
+		return ErrCronNotFound
+	}
+	return nil
+}
+
+// RecordCronRun 記錄一次排程觸發執行紀錄
+func (s *SQLiteStore) RecordCronRun(ctx context.Context, run CronRun) error {
+	query := `
+	INSERT INTO cron_runs (
+		id, cron_id, scheduled_time, triggered_time, task_id, status, reason, created_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	_, err := s.db.ExecContext(ctx, query,
+		run.ID,
+		run.CronID,
+		run.ScheduledTime.UTC(),
+		run.TriggeredTime.UTC(),
+		run.TaskID,
+		run.Status,
+		run.Reason,
+		run.CreatedAt.UTC(),
+	)
+	if err != nil {
+		return fmt.Errorf("record cron run: %w", err)
+	}
+	return nil
+}
+
+// ListCronRuns 依 scheduled_time 倒序列出指定排程的歷史觸發紀錄
+func (s *SQLiteStore) ListCronRuns(ctx context.Context, cronID string, limit int) ([]CronRun, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	query := `
+	SELECT id, cron_id, scheduled_time, triggered_time, task_id, status, reason, created_at
+	FROM cron_runs
+	WHERE cron_id = ?
+	ORDER BY scheduled_time DESC
+	LIMIT ?
+	`
+	rows, err := s.db.QueryContext(ctx, query, cronID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list cron runs: %w", err)
+	}
+	defer rows.Close()
+
+	var list []CronRun
+	for rows.Next() {
+		var r CronRun
+		if err := rows.Scan(
+			&r.ID,
+			&r.CronID,
+			&r.ScheduledTime,
+			&r.TriggeredTime,
+			&r.TaskID,
+			&r.Status,
+			&r.Reason,
+			&r.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan cron run: %w", err)
+		}
+		list = append(list, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+	return list, nil
 }

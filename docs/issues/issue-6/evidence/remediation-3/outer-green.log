@@ -1,0 +1,15 @@
+=== OUTER GREEN PHASE: Gherkin Acceptance Scenarios ===
+Date: 2026-09-14T20:20:24+08:00
+Command: go test -count=1 -v -run 'TestCRON001_CronAndInteractiveWorkspaceMutex|TestCRON003_CLICronManagement|TestCRON007_CLICronHistoryQuery|TestCRON004_OverlapSkipAndNoCatchup|TestCRON005_UnauthorizedWorkspaceAutoPause|TestCRON008_PersistenceAcrossRestart' ./tests/integration
+
+=== RUN   TestCRON003_CLICronManagement
+--- PASS: TestCRON003_CLICronManagement (0.92s)
+=== RUN   TestCRON008_PersistenceAcrossRestart
+--- PASS: TestCRON008_PersistenceAcrossRestart (1.63s)
+=== RUN   TestCRON001_CronAndInteractiveWorkspaceMutex
+--- PASS: TestCRON001_CronAndInteractiveWorkspaceMutex (0.08s)
+=== RUN   TestCRON007_CLICronHistoryQuery
+--- PASS: TestCRON007_CLICronHistoryQuery (1.57s)
+PASS
+ok  	asura/tests/integration	4.219s
+Exit Code: 0

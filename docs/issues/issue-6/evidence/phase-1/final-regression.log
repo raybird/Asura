@@ -1,0 +1,22 @@
+日期：2026-09-13
+命令：go test -count=1 -race -v ./internal/storage
+退出碼：0
+輸出：
+=== RUN   TestSQLiteStore_CronSchemaMigration
+--- PASS: TestSQLiteStore_CronSchemaMigration (0.05s)
+=== RUN   TestSQLiteStore_CronCRUD
+--- PASS: TestSQLiteStore_CronCRUD (0.07s)
+=== RUN   TestTaskStorage
+--- PASS: TestTaskStorage (0.05s)
+=== RUN   TestSQLiteStore_Unit
+--- PASS: TestSQLiteStore_Unit (0.05s)
+=== RUN   TestSQLiteStore_RecoverInterruptedTasks
+--- PASS: TestSQLiteStore_RecoverInterruptedTasks (0.05s)
+=== RUN   TestSQLiteStore_UpgradeFromOldSchemaWithoutRequestID
+--- PASS: TestSQLiteStore_UpgradeFromOldSchemaWithoutRequestID (0.07s)
+=== RUN   TestSQLiteStore_DuplicateRequestIDUniqueIndex
+--- PASS: TestSQLiteStore_DuplicateRequestIDUniqueIndex (0.06s)
+=== RUN   TestSQLiteStore_UpgradeFromSchemaWithDuplicateRequestIDs
+--- PASS: TestSQLiteStore_UpgradeFromSchemaWithDuplicateRequestIDs (0.08s)
+PASS
+ok  	asura/internal/storage	1.492s

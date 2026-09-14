@@ -1,0 +1,8 @@
+=== RUN   TestCRON001_CronAndInteractiveWorkspaceMutex
+--- PASS: TestCRON001_CronAndInteractiveWorkspaceMutex (0.11s)
+=== RUN   TestCRON003_UnreachableDateRejection
+--- PASS: TestCRON003_UnreachableDateRejection (1.22s)
+=== RUN   TestCRON002_DaemonCronCapacityLimit
+--- PASS: TestCRON002_DaemonCronCapacityLimit (0.12s)
+PASS
+ok  	asura/tests/integration	1.468s
