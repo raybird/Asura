@@ -1,6 +1,6 @@
 # Issue 6 - Phase 2B 容量政策與動態 Cron 排程管理
 
-建立日期：2026-09-13。追蹤：[GitHub Issue #6](https://github.com/raybird/Asura/issues/6)。承接 [Phase 2A](../issue-4/README.md) 與 [階段規劃](../../plans/post-core-roadmap.md)。
+建立日期：2026-09-13。追蹤：[GitHub Issue #6](https://github.com/raybird/Asura/issues/6)，[Pull Request #7](https://github.com/raybird/Asura/pull/7)。承接 [Phase 2A](../issue-4/README.md) 與 [階段規劃](../../plans/post-core-roadmap.md)。
 
 ## 概述
 
@@ -168,10 +168,11 @@ Feature: 常駐中樞容量政策與動態 Cron 排程管理
 | 2026-09-13 | 獨立審查員產出審查報告（`review-a42c088.md`），提出 2 項 MUST FIX 漏洞，判定 RETURN TO execute-task |
 | 2026-09-14 | 完成審查修復：Scheduler 接入 TaskDispatcher 遵循專案鎖與容量分類調度、不可達日期防禦、補齊端到端邊界測試並全綠通過 |
 | 2026-09-14 | 獨立審查員產出複審報告（`review-143b03a.md`），確認 2 項 MUST FIX 漏洞已徹底修復，判定 PASS |
+| 2026-09-14 | 發送 GitHub Pull Request #7 供合併審查 |
 
 ---
 
 **建立日期**: 2026-09-13  
 **分級**: Large（跨 Daemon 容量與排程、Storage Schema 擴充、CLI 子命令與整合測試）  
 **風險**: High（定時自主觸發與檔案寫入互斥）  
-**狀態**: 已通過獨立審查（PASS），待合入 main
+**狀態**: 已發送 PR（#7），待合併
