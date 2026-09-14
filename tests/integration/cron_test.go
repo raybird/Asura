@@ -375,10 +375,13 @@ func TestCRON003_CLICronManagement(t *testing.T) {
 	if !strings.Contains(stdout, "active") {
 		t.Fatalf("expected active status in list output, got: %s", stdout)
 	}
-	// 驗證包含主機本地日期格式 YYYY-MM-DD (MUST FIX 7)
+	// 驗證包含主機本地日期與時刻格式 YYYY-MM-DD 03:00 (MUST FIX 7, MUST FIX 6)
 	today := time.Now().Local().Format("2006-01-")
 	if !strings.Contains(stdout, today) {
 		t.Fatalf("expected local date prefix %q in list output, got: %s", today, stdout)
+	}
+	if !strings.Contains(stdout, "03:00") {
+		t.Fatalf("expected local time 03:00 in list output, got: %s", stdout)
 	}
 
 	// 擷取排程 ID 供後續操作
@@ -916,3 +919,257 @@ func TestCRON008_PersistenceAcrossRestart(t *testing.T) {
 		t.Fatalf("unexpected recovered run: %+v", recoveredRun)
 	}
 }
+
+// TestCRON001_CronAndInteractiveWorkspaceMutex 驗證排程觸發任務與人類互動任務在同專案下嚴格互斥排隊（CRON-001, MUST FIX 7）
+func TestCRON001_CronAndInteractiveWorkspaceMutex(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-cron-mutex-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	socketPath := filepath.Join(tmpDir, "daemon.sock")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	var runningCount int32
+	var maxConcurrent int32
+	runnerStarted := make(chan struct{})
+	runnerBlock := make(chan struct{})
+
+	testRunner := func(ctx context.Context, dir, prompt string) (string, error) {
+		cur := atomic.AddInt32(&runningCount, 1)
+		for {
+			oldMax := atomic.LoadInt32(&maxConcurrent)
+			if cur <= oldMax || atomic.CompareAndSwapInt32(&maxConcurrent, oldMax, cur) {
+				break
+			}
+		}
+
+		if prompt == "task 1 interactive" {
+			close(runnerStarted)
+			<-runnerBlock
+		}
+		atomic.AddInt32(&runningCount, -1)
+		return "done", nil
+	}
+
+	eng := engine.NewEngine(store, policy, engine.WithRunner(testRunner))
+	d := daemon.NewDaemon(daemon.Config{
+		SocketPath: socketPath,
+		MaxWorkers: 2,
+		MaxQueue:   10,
+	}, store, policy, daemon.WithEngine(eng))
+
+	go func() {
+		_ = d.Start()
+	}()
+	defer d.Close()
+
+	waitForSocket(t, socketPath)
+	client, err := daemon.NewClient(socketPath)
+	if err != nil {
+		t.Fatalf("NewClient failed: %v", err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+
+	// 1. 先提交一個人類互動任務
+	task1, err := client.Submit(ctx, engine.SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "task 1 interactive",
+	})
+	if err != nil {
+		t.Fatalf("Submit task 1 failed: %v", err)
+	}
+
+	select {
+	case <-runnerStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for task 1 to start")
+	}
+
+	// 2. 新增一個排程在同一個 tmpDir 並觸發
+	sched, err := client.AddCronSchedule(ctx, daemon.CronAddRequest{
+		Name:      "same-workspace-cron",
+		Workspace: tmpDir,
+		Schedule:  "* * * * *",
+		Prompt:    "task 2 cron",
+	})
+	if err != nil {
+		t.Fatalf("AddCronSchedule failed: %v", err)
+	}
+
+	scheduler := d.Scheduler()
+	if scheduler == nil {
+		t.Fatal("expected scheduler to be accessible")
+	}
+	now := time.Now()
+	if err := scheduler.Trigger(ctx, sched.ID, now); err != nil {
+		t.Fatalf("Trigger failed: %v", err)
+	}
+
+	// 驗證同專案下最大並行執行數嚴格為 1
+	concurrent := atomic.LoadInt32(&maxConcurrent)
+	if concurrent > 1 {
+		t.Fatalf("expected max concurrent to be 1, got %d (violated workspace mutex!)", concurrent)
+	}
+
+	// 查詢排程觸發紀錄，應該有一個 run
+	runs, err := client.ListCronRuns(ctx, sched.ID, 10)
+	if err != nil || len(runs) == 0 {
+		t.Fatalf("expected cron run recorded, got err: %v, runs: %+v", err, runs)
+	}
+	cronTaskID := runs[0].TaskID
+	if cronTaskID == "" {
+		t.Fatalf("expected non-empty TaskID for triggered run")
+	}
+
+	cronTask, err := client.GetTask(ctx, cronTaskID)
+	if err != nil {
+		t.Fatalf("GetTask for cronTask failed: %v", err)
+	}
+	if cronTask.Status != storage.StatusQueued {
+		t.Fatalf("expected cronTask to be queued while task 1 is running, got status: %s", cronTask.Status)
+	}
+
+	// 釋放 runnerBlock 讓 task 1 結束，此時 cronTask 應自動被喚醒執行
+	close(runnerBlock)
+
+	// 等待 cronTask 完成
+	for i := 0; i < 40; i++ {
+		time.Sleep(50 * time.Millisecond)
+		cronTask, _ = client.GetTask(ctx, cronTaskID)
+		if cronTask != nil && cronTask.Status == storage.StatusCompleted {
+			break
+		}
+	}
+	if cronTask.Status != storage.StatusCompleted {
+		t.Fatalf("expected cronTask completed after task 1 finished, got status: %s", cronTask.Status)
+	}
+	_ = task1
+}
+
+// TestCRON007_CLICronHistoryQuery 驗證 CRON-007: 透過 CLI/Client 查詢排程歷史觸發紀錄與狀態排序（MUST FIX 7）
+func TestCRON007_CLICronHistoryQuery(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-cron007-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	socketPath := filepath.Join(tmpDir, "daemon.sock")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	now := time.Now().Truncate(time.Second)
+
+	// 預置一筆排程
+	sched := storage.CronSchedule{
+		ID:        "sched-history-1",
+		Name:      "history-test",
+		Workspace: tmpDir,
+		Schedule:  "*/15 * * * *",
+		Prompt:    "echo test",
+		Status:    storage.CronStatusActive,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.CreateCronSchedule(ctx, sched); err != nil {
+		t.Fatal(err)
+	}
+
+	// 預置兩筆歷史觸發記錄 (一筆較早的 skipped, 一筆較晚的 triggered)
+	run1 := storage.CronRun{
+		ID:            "run-hist-1",
+		CronID:        sched.ID,
+		Status:        storage.CronRunSkipped,
+		Reason:        "previous job still running",
+		ScheduledTime: now.Add(-10 * time.Minute),
+		TriggeredTime: now.Add(-10 * time.Minute),
+	}
+	if err := store.RecordCronRun(ctx, run1); err != nil {
+		t.Fatal(err)
+	}
+
+	run2 := storage.CronRun{
+		ID:            "run-hist-2",
+		CronID:        sched.ID,
+		TaskID:        "task-hist-2",
+		Status:        storage.CronRunTriggered,
+		ScheduledTime: now.Add(-5 * time.Minute),
+		TriggeredTime: now.Add(-5 * time.Minute),
+	}
+	if err := store.RecordCronRun(ctx, run2); err != nil {
+		t.Fatal(err)
+	}
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	d := daemon.NewDaemon(daemon.Config{
+		SocketPath: socketPath,
+	}, store, policy)
+
+	go func() {
+		_ = d.Start()
+	}()
+	defer d.Close()
+
+	waitForSocket(t, socketPath)
+
+	asuraBin := filepath.Join(tmpDir, "asura")
+	buildCmd := exec.Command("go", "build", "-o", asuraBin, "../../cmd/asura")
+	if out, err := buildCmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to build asura binary: %v, output: %s", err, string(out))
+	}
+
+	runCLI := func(args ...string) (string, string, int) {
+		cmd := exec.Command(asuraBin, args...)
+		var out, errOut bytes.Buffer
+		cmd.Stdout = &out
+		cmd.Stderr = &errOut
+		err := cmd.Run()
+		code := 0
+		if err != nil {
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				code = exitErr.ExitCode()
+			} else {
+				code = 1
+			}
+		}
+		return out.String(), errOut.String(), code
+	}
+
+	// 執行 asura cron runs 查詢該排程之歷史觸發記錄
+	stdout, stderr, code := runCLI("cron", "runs", "-socket", socketPath, sched.ID)
+	if code != 0 {
+		t.Fatalf("cron runs failed with code %d, stderr: %s", code, stderr)
+	}
+
+	// 驗證輸出包含 triggered 與 skipped 記錄
+	if !strings.Contains(stdout, "triggered") || !strings.Contains(stdout, "skipped") {
+		t.Fatalf("expected both triggered and skipped in runs output, got: %s", stdout)
+	}
+
+	// 驗證時間排序（較新的 run2 在較舊的 run1 之前）
+	idxRun2 := strings.Index(stdout, "run-hist-2")
+	idxRun1 := strings.Index(stdout, "run-hist-1")
+	if idxRun2 == -1 || idxRun1 == -1 {
+		t.Fatalf("expected run-hist-1 and run-hist-2 in output, got: %s", stdout)
+	}
+	if idxRun2 > idxRun1 {
+		t.Fatalf("expected newer run2 to appear before older run1 (ORDER BY triggered_at DESC), got: %s", stdout)
+	}
+}
+

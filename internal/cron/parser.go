@@ -155,6 +155,10 @@ func (s *Schedule) Next(from time.Time) time.Time {
 			newT := time.Date(t.Year(), t.Month()+1, 1, 0, 0, 0, 0, t.Location())
 			if !newT.After(t) {
 				newT = t.AddDate(0, 1, 0)
+				newT = time.Date(newT.Year(), newT.Month(), 1, 0, 0, 0, 0, t.Location())
+				for !newT.After(t) {
+					newT = newT.Add(time.Minute)
+				}
 			}
 			t = newT
 			continue
@@ -168,7 +172,12 @@ func (s *Schedule) Next(from time.Time) time.Time {
 			// 快進到隔天 00:00
 			newT := time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, 0, t.Location())
 			if !newT.After(t) {
+				// 若午夜因 DST 切換不存在，前進一天並歸零時分秒，從當天最早有效時刻開始 (SHOULD FIX 1)
 				newT = t.AddDate(0, 0, 1)
+				newT = time.Date(newT.Year(), newT.Month(), newT.Day(), 0, 0, 0, 0, t.Location())
+				for !newT.After(t) {
+					newT = newT.Add(time.Minute)
+				}
 			}
 			t = newT
 			continue

@@ -165,6 +165,44 @@ func (p *WorkerPool) SubmitAsyncClassifiedWithDone(ctx context.Context, class Ta
 	return item.result, nil
 }
 
+// SubmitEnqueuedClassifiedWithDone 派發已在專案佇列排隊完畢之任務，不受 maxQueue 二次拋棄（修復 MUST FIX 2）
+func (p *WorkerPool) SubmitEnqueuedClassifiedWithDone(ctx context.Context, class TaskClass, fn func() error, onDone func()) (<-chan error, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	if class == "" {
+		class = TaskClassInteractive
+	}
+
+	item := taskItem{
+		ctx:    ctx,
+		class:  class,
+		fn:     fn,
+		onDone: onDone,
+		result: make(chan error, 1),
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.isClosing {
+		return nil, ErrPoolClosed
+	}
+
+	if class == TaskClassCron {
+		p.cronQueue = append(p.cronQueue, item)
+	} else {
+		p.interactiveQueue = append(p.interactiveQueue, item)
+	}
+
+	p.maybeStartWorkersLocked()
+	return item.result, nil
+}
+
+
 func (p *WorkerPool) popNextRunnableLocked() (taskItem, bool) {
 	// 優先挑選互動任務，隨時保證人類互動體驗
 	if len(p.interactiveQueue) > 0 && p.running < p.maxWorkers {

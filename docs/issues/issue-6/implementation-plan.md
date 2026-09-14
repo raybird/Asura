@@ -76,8 +76,8 @@
 | **CRON-001** | 同專案互斥排隊與依序執行 | `tests/integration/cron_test.go:TestCRON001_WorkspaceMutexQueue` | `internal/daemon/workspace_queue_test.go` |
 | **CRON-002** | 保留互動通道與背景容量上限 | `tests/integration/cron_test.go:TestCRON002_InteractiveChannelReserved` | `internal/daemon/pool_test.go` |
 | **CRON-003** | 動態建立與管理排程 | `tests/integration/cron_test.go:TestCRON003_CLICronManagement` | `cmd/asura/run_test.go` |
-| **CRON-004** | 排程週期觸發產生可追蹤任務 | `tests/integration/cron_test.go:TestCRON004_PeriodicTriggerCreatesTask` | `internal/daemon/scheduler_test.go` |
-| **CRON-005** | 排程執行重疊時略過不重複堆疊 | `tests/integration/cron_test.go:TestCRON005_OverlapSkipped` | `internal/daemon/scheduler_test.go` |
-| **CRON-006** | 重啟或中斷後不補跑過期排程 | `tests/integration/cron_test.go:TestCRON006_RestartNoCatchup` | `internal/daemon/scheduler_test.go` |
-| **CRON-007** | 觸發時非授權目錄嚴格拒絕並自動暫停 | `tests/integration/cron_test.go:TestCRON007_UnauthorizedDirectoryRejection` | `internal/daemon/scheduler_test.go` |
+| **CRON-004** | 排程週期觸發產生可追蹤任務 | `tests/integration/cron_test.go:TestCRON004_PeriodicTriggerCreatesTask` | `internal/cron/scheduler_test.go` |
+| **CRON-005** | 排程執行重疊時略過不重複堆疊 | `tests/integration/cron_test.go:TestCRON005_OverlapSkipped` | `internal/cron/scheduler_test.go` |
+| **CRON-006** | 重啟或中斷後不補跑過期排程 | `tests/integration/cron_test.go:TestCRON006_RestartNoCatchup` | `internal/cron/scheduler_test.go` |
+| **CRON-007** | 觸發時非授權目錄嚴格拒絕並自動暫停 | `tests/integration/cron_test.go:TestCRON007_UnauthorizedDirectoryRejection` | `internal/cron/scheduler_test.go` |
 | **CRON-008** | 排程與觸發紀錄於服務重啟後完整持久化 | `tests/integration/cron_test.go:TestCRON008_PersistenceAcrossRestart` | `internal/storage/sqlite_cron_test.go` |

@@ -203,8 +203,8 @@ func (d *Daemon) dispatchCronTask(ctx context.Context, cronID, workspace, prompt
 	// 遵循 CRON-001：同專案嚴格互斥依序排隊
 	acquired, _ := d.wsQueue.TryAcquire(wsKey, taskID)
 	if !acquired {
-		// 專案忙碌中，更新狀態為 queued 並排入專案佇列，待前任務完成後依序喚醒
-		_ = d.store.UpdateTaskStatus(ctx, taskID, storage.StatusQueued, "", "")
+		// 專案忙碌中，條件式更新狀態為 queued 並排入專案佇列，待前任務完成後依序喚醒（修復 MUST FIX 1）
+		_, _ = d.store.UpdateTaskStatusIfPending(ctx, taskID, storage.StatusQueued)
 		return taskID, nil
 	}
 
@@ -526,9 +526,9 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			// 遵循 CRON-001：同專案嚴格互斥依序排隊（僅創建任務之勝者競爭專案鎖）
 			acquired, _ := d.wsQueue.TryAcquire(wsKey, taskID)
 			if !acquired {
-				// 專案忙碌中，更新狀態為 queued 並排入專案佇列，待前任務完成後依序喚醒
+				// 專案忙碌中，條件式更新狀態為 queued 並排入專案佇列，待前任務完成後依序喚醒（修復 MUST FIX 1）
 				initialTask.Status = storage.StatusQueued
-				_ = d.store.UpdateTaskStatus(context.Background(), taskID, storage.StatusQueued, "", "")
+				_, _ = d.store.UpdateTaskStatusIfPending(context.Background(), taskID, storage.StatusQueued)
 				_ = encoder.Encode(IPCResponse{Task: initialTask})
 				continue
 			}
@@ -695,8 +695,8 @@ func (d *Daemon) canonicalWorkspace(ws string) string {
 	return filepath.Clean(ws)
 }
 
-func (d *Daemon) releaseWorkspaceAndWakeNext(workspace, completedTaskID string) {
-	wsKey := d.canonicalWorkspace(workspace)
+func (d *Daemon) releaseWorkspaceAndWakeNext(wsKey, completedTaskID string) {
+	// 遵循 MUST FIX 3：禁止在釋放鎖時重複解析 canonicalWorkspace，確保取鎖與釋放鎖使用嚴格相同的不可變 wsKey
 	nextTaskID, hasNext := d.wsQueue.Release(wsKey, completedTaskID)
 	if hasNext && nextTaskID != "" {
 		d.wakeQueuedTask(nextTaskID, wsKey)
@@ -720,6 +720,21 @@ func (d *Daemon) dispatchTask(taskID, workspace, prompt string, class TaskClass)
 	return err
 }
 
+func (d *Daemon) dispatchQueuedTask(taskID, workspace, prompt string, class TaskClass, wsKey string) error {
+	_, err := d.pool.SubmitEnqueuedClassifiedWithDone(context.Background(), class, func() error {
+		_, runErr := d.engine.SubmitTask(context.Background(), engine.SubmitRequest{
+			ID:        taskID,
+			Workspace: workspace,
+			Prompt:    prompt,
+		})
+		return runErr
+	}, func() {
+		d.releaseCapacity()
+		d.releaseWorkspaceAndWakeNext(wsKey, taskID)
+	})
+	return err
+}
+
 func (d *Daemon) wakeQueuedTask(taskID, wsKey string) {
 	task, err := d.store.GetTask(context.Background(), taskID)
 	if err != nil || task == nil {
@@ -728,7 +743,8 @@ func (d *Daemon) wakeQueuedTask(taskID, wsKey string) {
 		return
 	}
 
-	if task.Status != storage.StatusQueued {
+	// 遵循 MUST FIX 1：接受 StatusQueued 與 StatusPending，防範 SQLite 寫入延遲導致 pending 任務被遺漏丟棄
+	if task.Status != storage.StatusQueued && task.Status != storage.StatusPending {
 		d.releaseCapacity()
 		d.releaseWorkspaceAndWakeNext(wsKey, taskID)
 		return
@@ -740,7 +756,8 @@ func (d *Daemon) wakeQueuedTask(taskID, wsKey string) {
 		taskClass = TaskClassInteractive
 	}
 
-	err = d.dispatchTask(task.ID, task.Workspace, task.Prompt, taskClass)
+	// 遵循 MUST FIX 2：被喚醒任務使用 dispatchQueuedTask，不受 pool.maxQueue 二次拋棄
+	err = d.dispatchQueuedTask(task.ID, task.Workspace, task.Prompt, taskClass, wsKey)
 	if err != nil {
 		d.releaseCapacity()
 		_ = d.store.UpdateTaskStatus(context.Background(), task.ID, storage.StatusFailed, "", err.Error())

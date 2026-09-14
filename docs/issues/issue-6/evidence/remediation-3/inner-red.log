@@ -1,0 +1,17 @@
+=== RED PHASE: Reproduction of MUST FIX 1, 2, 3 ===
+Date: 2026-09-14T20:03:47+08:00
+Command: go test -v -run 'TestDaemon_WakeQueuedTask_WhenTaskStatusIsPending|TestDaemon_WakeQueuedTask_BypassesPoolQueueLimit|TestDaemon_ReleaseWorkspace_SymlinkTargetChanged_DoesNotLeak' ./internal/daemon
+
+=== RUN   TestDaemon_WakeQueuedTask_WhenTaskStatusIsPending
+    daemon_test.go:1474: MUST FIX 1 regression: task 2 remained stuck because its status was pending during wake!
+--- FAIL: TestDaemon_WakeQueuedTask_WhenTaskStatusIsPending (1.02s)
+=== RUN   TestDaemon_WakeQueuedTask_BypassesPoolQueueLimit
+    daemon_test.go:1590: MUST FIX 2 regression: awakened cron-A2 was rejected by pool with error: capacity exceeded: worker pool saturated
+--- FAIL: TestDaemon_WakeQueuedTask_BypassesPoolQueueLimit (0.11s)
+=== RUN   TestDaemon_ReleaseWorkspace_SymlinkTargetChanged_DoesNotLeak
+    daemon_test.go:1666: MUST FIX 3 regression: workspace lock leaked! target1 is permanently locked
+--- FAIL: TestDaemon_ReleaseWorkspace_SymlinkTargetChanged_DoesNotLeak (0.01s)
+FAIL
+FAIL	asura/internal/daemon	1.147s
+FAIL
+Exit Code: 1

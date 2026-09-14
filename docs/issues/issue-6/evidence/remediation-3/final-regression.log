@@ -1,0 +1,387 @@
+=== FINAL REGRESSION TEST REPORT ===
+Date: 2026-09-14T20:21:04+08:00
+Command: go test -count=1 -race -v ./...
+
+=== RUN   TestRunCLI_UsageAndValidation
+=== RUN   TestRunCLI_UsageAndValidation/無參數輸出_Usage_並返回非_0_狀態碼
+=== RUN   TestRunCLI_UsageAndValidation/未知子命令返回非_0_狀態碼
+=== RUN   TestRunCLI_UsageAndValidation/run_指令缺少_prompt_返回非_0_狀態碼
+=== RUN   TestRunCLI_UsageAndValidation/status_指令缺少_task_id_返回非_0_狀態碼
+=== RUN   TestRunCLI_UsageAndValidation/ask_指令缺少_prompt_返回非_0_狀態碼
+=== RUN   TestRunCLI_UsageAndValidation/ask_指令在_Daemon_不可用時回報錯誤且不自動啟動_(P4-T1)
+=== RUN   TestRunCLI_UsageAndValidation/cancel_指令缺少_task_id_返回非_0_狀態碼
+=== RUN   TestRunCLI_UsageAndValidation/web_指令缺少_access_key_返回非_0_狀態碼
+=== RUN   TestRunCLI_UsageAndValidation/web_指令在監聽_0.0.0.0_且未指定_origin_時輸出警告
+--- PASS: TestRunCLI_UsageAndValidation (0.01s)
+    --- PASS: TestRunCLI_UsageAndValidation/無參數輸出_Usage_並返回非_0_狀態碼 (0.00s)
+    --- PASS: TestRunCLI_UsageAndValidation/未知子命令返回非_0_狀態碼 (0.00s)
+    --- PASS: TestRunCLI_UsageAndValidation/run_指令缺少_prompt_返回非_0_狀態碼 (0.00s)
+    --- PASS: TestRunCLI_UsageAndValidation/status_指令缺少_task_id_返回非_0_狀態碼 (0.00s)
+    --- PASS: TestRunCLI_UsageAndValidation/ask_指令缺少_prompt_返回非_0_狀態碼 (0.00s)
+    --- PASS: TestRunCLI_UsageAndValidation/ask_指令在_Daemon_不可用時回報錯誤且不自動啟動_(P4-T1) (0.00s)
+    --- PASS: TestRunCLI_UsageAndValidation/cancel_指令缺少_task_id_返回非_0_狀態碼 (0.00s)
+    --- PASS: TestRunCLI_UsageAndValidation/web_指令缺少_access_key_返回非_0_狀態碼 (0.00s)
+    --- PASS: TestRunCLI_UsageAndValidation/web_指令在監聽_0.0.0.0_且未指定_origin_時輸出警告 (0.00s)
+=== RUN   TestRunCLI_CronValidation
+=== RUN   TestRunCLI_CronValidation/cron_指令無子操作輸出_Usage_並返回非_0
+=== RUN   TestRunCLI_CronValidation/cron_add_缺少必要參數返回非_0
+=== RUN   TestRunCLI_CronValidation/cron_pause_缺少_id_返回非_0
+--- PASS: TestRunCLI_CronValidation (0.00s)
+    --- PASS: TestRunCLI_CronValidation/cron_指令無子操作輸出_Usage_並返回非_0 (0.00s)
+    --- PASS: TestRunCLI_CronValidation/cron_add_缺少必要參數返回非_0 (0.00s)
+    --- PASS: TestRunCLI_CronValidation/cron_pause_缺少_id_返回非_0 (0.00s)
+PASS
+ok  	asura/cmd/asura	1.044s
+=== RUN   TestAuthorizeWorkspace_Denied
+=== RUN   TestAuthorizeWorkspace_Denied/sensitive_root_directory
+=== RUN   TestAuthorizeWorkspace_Denied/outside_allowed_roots
+=== RUN   TestAuthorizeWorkspace_Denied/parent_traversal_attempt
+--- PASS: TestAuthorizeWorkspace_Denied (0.00s)
+    --- PASS: TestAuthorizeWorkspace_Denied/sensitive_root_directory (0.00s)
+    --- PASS: TestAuthorizeWorkspace_Denied/outside_allowed_roots (0.00s)
+    --- PASS: TestAuthorizeWorkspace_Denied/parent_traversal_attempt (0.00s)
+=== RUN   TestAuthorizeWorkspace_Allowed
+=== RUN   TestAuthorizeWorkspace_Allowed/exact_allowed_root
+=== RUN   TestAuthorizeWorkspace_Allowed/subproject_directory
+--- PASS: TestAuthorizeWorkspace_Allowed (0.00s)
+    --- PASS: TestAuthorizeWorkspace_Allowed/exact_allowed_root (0.00s)
+    --- PASS: TestAuthorizeWorkspace_Allowed/subproject_directory (0.00s)
+=== RUN   TestWEB002Unit
+--- PASS: TestWEB002Unit (0.00s)
+PASS
+ok  	asura/internal/auth	1.034s
+=== RUN   TestINT001Unit
+--- PASS: TestINT001Unit (13.15s)
+=== RUN   TestINT007Unit
+--- PASS: TestINT007Unit (0.78s)
+=== RUN   TestAdapter_Run_BackendErrorWithExitZero
+--- PASS: TestAdapter_Run_BackendErrorWithExitZero (0.00s)
+=== RUN   TestProcessCancel
+--- PASS: TestProcessCancel (0.20s)
+=== RUN   TestProcessGroup
+--- PASS: TestProcessGroup (0.05s)
+=== RUN   TestIsTaskProcessGroup
+--- PASS: TestIsTaskProcessGroup (0.04s)
+=== RUN   TestVerifyTaskProcess_StartTime
+--- PASS: TestVerifyTaskProcess_StartTime (0.02s)
+=== RUN   TestVerifyTaskProcessGroup_OrphanGroup
+--- PASS: TestVerifyTaskProcessGroup_OrphanGroup (0.09s)
+=== RUN   TestParseEventLine_Text
+--- PASS: TestParseEventLine_Text (0.00s)
+=== RUN   TestParseEventLine_ToolUse
+--- PASS: TestParseEventLine_ToolUse (0.00s)
+=== RUN   TestParseEventLine_StepFinish
+--- PASS: TestParseEventLine_StepFinish (0.00s)
+=== RUN   TestParseEventLine_RateLimit429
+--- PASS: TestParseEventLine_RateLimit429 (0.00s)
+=== RUN   TestParseEventLine_Invalid
+--- PASS: TestParseEventLine_Invalid (0.00s)
+PASS
+ok  	asura/internal/backend/opencode	15.364s
+=== RUN   TestCronParser_ValidExpressions
+=== RUN   TestCronParser_ValidExpressions/每分鐘表達式_*_*_*_*_*
+=== RUN   TestCronParser_ValidExpressions/間隔表達式_*/5_*_*_*_*
+=== RUN   TestCronParser_ValidExpressions/指定時間與平日_0_2_*_*_1-5
+=== RUN   TestCronParser_ValidExpressions/列表表達式_30_8_1,15_*_*
+=== RUN   TestCronParser_ValidExpressions/跨年計算_0_0_1_1_*
+--- PASS: TestCronParser_ValidExpressions (0.00s)
+    --- PASS: TestCronParser_ValidExpressions/每分鐘表達式_*_*_*_*_* (0.00s)
+    --- PASS: TestCronParser_ValidExpressions/間隔表達式_*/5_*_*_*_* (0.00s)
+    --- PASS: TestCronParser_ValidExpressions/指定時間與平日_0_2_*_*_1-5 (0.00s)
+    --- PASS: TestCronParser_ValidExpressions/列表表達式_30_8_1,15_*_* (0.00s)
+    --- PASS: TestCronParser_ValidExpressions/跨年計算_0_0_1_1_* (0.00s)
+=== RUN   TestCronParser_InvalidExpressions
+=== RUN   TestCronParser_InvalidExpressions/4_欄位不足
+=== RUN   TestCronParser_InvalidExpressions/6_欄位過多
+=== RUN   TestCronParser_InvalidExpressions/空字串
+=== RUN   TestCronParser_InvalidExpressions/分鐘超過_59
+=== RUN   TestCronParser_InvalidExpressions/分鐘小於_0
+=== RUN   TestCronParser_InvalidExpressions/小時超過_23
+=== RUN   TestCronParser_InvalidExpressions/日期超過_31
+=== RUN   TestCronParser_InvalidExpressions/月份超過_12
+=== RUN   TestCronParser_InvalidExpressions/月份為_0
+=== RUN   TestCronParser_InvalidExpressions/星期超過_7
+=== RUN   TestCronParser_InvalidExpressions/非數字無效文字
+=== RUN   TestCronParser_InvalidExpressions/無效步進語法
+=== RUN   TestCronParser_InvalidExpressions/反向範圍
+--- PASS: TestCronParser_InvalidExpressions (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/4_欄位不足 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/6_欄位過多 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/空字串 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/分鐘超過_59 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/分鐘小於_0 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/小時超過_23 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/日期超過_31 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/月份超過_12 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/月份為_0 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/星期超過_7 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/非數字無效文字 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/無效步進語法 (0.00s)
+    --- PASS: TestCronParser_InvalidExpressions/反向範圍 (0.00s)
+=== RUN   TestCronParser_UnreachableDate
+--- PASS: TestCronParser_UnreachableDate (0.01s)
+=== RUN   TestCronParser_DaylightSavingTime
+=== RUN   TestCronParser_DaylightSavingTime/2027-03-14_DST_transition_0_9_*_*_*
+=== RUN   TestCronParser_DaylightSavingTime/2027-03-14_DST_transition_30_2_*_*_*_(missing_hour)
+=== RUN   TestCronParser_DaylightSavingTime/America/Santiago_DST_transition
+--- PASS: TestCronParser_DaylightSavingTime (0.00s)
+    --- PASS: TestCronParser_DaylightSavingTime/2027-03-14_DST_transition_0_9_*_*_* (0.00s)
+    --- PASS: TestCronParser_DaylightSavingTime/2027-03-14_DST_transition_30_2_*_*_*_(missing_hour) (0.00s)
+    --- PASS: TestCronParser_DaylightSavingTime/America/Santiago_DST_transition (0.00s)
+=== RUN   TestCronParser_LeapYearLongWindow
+--- PASS: TestCronParser_LeapYearLongWindow (0.00s)
+=== RUN   TestScheduler_AlignSchedules_NoCatchup
+--- PASS: TestScheduler_AlignSchedules_NoCatchup (0.05s)
+=== RUN   TestScheduler_Trigger_OverlapSkip
+--- PASS: TestScheduler_Trigger_OverlapSkip (0.15s)
+=== RUN   TestScheduler_Trigger_UnauthorizedAutoPause
+--- PASS: TestScheduler_Trigger_UnauthorizedAutoPause (0.12s)
+=== RUN   TestScheduler_Trigger_DispatchFailureAdvancesNextRunAt
+--- PASS: TestScheduler_Trigger_DispatchFailureAdvancesNextRunAt (0.16s)
+PASS
+ok  	asura/internal/cron	1.554s
+=== RUN   TestDaemonConcurrency
+=== RUN   TestDaemonConcurrency/競爭啟動無雙重擁有者
+=== RUN   TestDaemonConcurrency/不超過全域上限且各執行一次
+=== RUN   TestDaemonConcurrency/未接受的請求得到明確結果
+=== RUN   TestDaemonConcurrency/SCN-006:_守護程序重啟保留已完成結果並揭露中斷任務
+=== RUN   TestDaemonConcurrency/R-08:_執行失敗時_Client.Submit_同時回傳_Task_與_Error
+--- PASS: TestDaemonConcurrency (5.46s)
+    --- PASS: TestDaemonConcurrency/競爭啟動無雙重擁有者 (3.61s)
+    --- PASS: TestDaemonConcurrency/不超過全域上限且各執行一次 (0.35s)
+    --- PASS: TestDaemonConcurrency/未接受的請求得到明確結果 (0.06s)
+    --- PASS: TestDaemonConcurrency/SCN-006:_守護程序重啟保留已完成結果並揭露中斷任務 (1.26s)
+    --- PASS: TestDaemonConcurrency/R-08:_執行失敗時_Client.Submit_同時回傳_Task_與_Error (0.11s)
+=== RUN   TestReviewOwnershipDuringDrain
+--- PASS: TestReviewOwnershipDuringDrain (0.11s)
+=== RUN   TestINT002Unit
+--- PASS: TestINT002Unit (0.04s)
+=== RUN   TestINT003Unit
+--- PASS: TestINT003Unit (0.12s)
+=== RUN   TestINT004Unit
+--- PASS: TestINT004Unit (0.16s)
+=== RUN   TestINT004RedeliveryUnit
+--- PASS: TestINT004RedeliveryUnit (0.22s)
+=== RUN   TestDaemon_ConcurrentRedeliveryDedupAtomic
+--- PASS: TestDaemon_ConcurrentRedeliveryDedupAtomic (0.24s)
+=== RUN   TestDaemon_INT007_PermissionPolicy
+--- PASS: TestDaemon_INT007_PermissionPolicy (1.16s)
+=== RUN   TestDaemon_RequestID_FingerprintSafety
+--- PASS: TestDaemon_RequestID_FingerprintSafety (0.05s)
+=== RUN   TestDaemon_CronIPC
+--- PASS: TestDaemon_CronIPC (1.16s)
+=== RUN   TestDaemon_WorkspaceMutex_NormalizedPaths
+--- PASS: TestDaemon_WorkspaceMutex_NormalizedPaths (0.06s)
+=== RUN   TestDaemon_QueuedTaskClassPreservedOnWake
+--- PASS: TestDaemon_QueuedTaskClassPreservedOnWake (0.08s)
+=== RUN   TestDaemon_WakeQueuedTask_PoolSlotFreed
+--- PASS: TestDaemon_WakeQueuedTask_PoolSlotFreed (0.15s)
+=== RUN   TestDaemon_WakeQueuedTask_WhenTaskStatusIsPending
+--- PASS: TestDaemon_WakeQueuedTask_WhenTaskStatusIsPending (0.06s)
+=== RUN   TestDaemon_WakeQueuedTask_BypassesPoolQueueLimit
+--- PASS: TestDaemon_WakeQueuedTask_BypassesPoolQueueLimit (0.18s)
+=== RUN   TestDaemon_ReleaseWorkspace_SymlinkTargetChanged_DoesNotLeak
+--- PASS: TestDaemon_ReleaseWorkspace_SymlinkTargetChanged_DoesNotLeak (0.12s)
+=== RUN   TestDaemon_DispatchFailure_HandsOverWorkspaceLock
+--- PASS: TestDaemon_DispatchFailure_HandsOverWorkspaceLock (0.08s)
+=== RUN   TestWorkerPool
+=== RUN   TestWorkerPool/並行上限控制與各執行一次
+=== RUN   TestWorkerPool/超出容量上限返回明確錯誤
+=== RUN   TestWorkerPool/R-02:_快速交替任務不發生佇列停滯
+=== RUN   TestWorkerPool/排水關閉_(Drain):_已進入佇列之任務在_Close_時必須完整執行完畢
+--- PASS: TestWorkerPool (0.31s)
+    --- PASS: TestWorkerPool/並行上限控制與各執行一次 (0.18s)
+    --- PASS: TestWorkerPool/超出容量上限返回明確錯誤 (0.00s)
+    --- PASS: TestWorkerPool/R-02:_快速交替任務不發生佇列停滯 (0.06s)
+    --- PASS: TestWorkerPool/排水關閉_(Drain):_已進入佇列之任務在_Close_時必須完整執行完畢 (0.07s)
+=== RUN   TestWorkerPool_CapacityClassification
+--- PASS: TestWorkerPool_CapacityClassification (0.10s)
+=== RUN   TestWorkspaceQueue_ExclusiveAccess
+=== RUN   TestWorkspaceQueue_ExclusiveAccess/同專案單一任務直接取得執行權
+=== RUN   TestWorkspaceQueue_ExclusiveAccess/同專案第二個任務排入佇列並依序喚醒
+=== RUN   TestWorkspaceQueue_ExclusiveAccess/不同專案各自獨立互不阻塞
+=== RUN   TestWorkspaceQueue_ExclusiveAccess/並發競爭安全性_(Race_Condition_Check)
+--- PASS: TestWorkspaceQueue_ExclusiveAccess (0.00s)
+    --- PASS: TestWorkspaceQueue_ExclusiveAccess/同專案單一任務直接取得執行權 (0.00s)
+    --- PASS: TestWorkspaceQueue_ExclusiveAccess/同專案第二個任務排入佇列並依序喚醒 (0.00s)
+    --- PASS: TestWorkspaceQueue_ExclusiveAccess/不同專案各自獨立互不阻塞 (0.00s)
+    --- PASS: TestWorkspaceQueue_ExclusiveAccess/並發競爭安全性_(Race_Condition_Check) (0.00s)
+PASS
+ok  	asura/internal/daemon	10.899s
+=== RUN   TestEngineCancel
+--- PASS: TestEngineCancel (0.19s)
+=== RUN   TestEngineCancel_SynchronouslyTerminatesProcessGroup
+--- PASS: TestEngineCancel_SynchronouslyTerminatesProcessGroup (0.26s)
+=== RUN   TestEngineExecute
+=== RUN   TestEngineExecute/SCN-002:_拒絕超出授權範圍的執行
+=== RUN   TestEngineExecute/SCN-001:_授權使用者取得單次任務結果並可重查
+--- PASS: TestEngineExecute (0.19s)
+    --- PASS: TestEngineExecute/SCN-002:_拒絕超出授權範圍的執行 (0.00s)
+    --- PASS: TestEngineExecute/SCN-001:_授權使用者取得單次任務結果並可重查 (0.02s)
+=== RUN   TestEngine_FailedExecution
+--- PASS: TestEngine_FailedExecution (0.13s)
+=== RUN   TestEngine_PartialFailureNoRetry
+--- PASS: TestEngine_PartialFailureNoRetry (0.12s)
+=== RUN   TestEngine_EmptyOutputTreatedAsFailed
+--- PASS: TestEngine_EmptyOutputTreatedAsFailed (0.16s)
+=== RUN   TestEngine_R05_PersistOnCancelledParentContext
+--- PASS: TestEngine_R05_PersistOnCancelledParentContext (0.14s)
+=== RUN   TestEngine_R06_PreservePartialOutputOnCancel
+--- PASS: TestEngine_R06_PreservePartialOutputOnCancel (0.13s)
+=== RUN   TestEngine_R09_UnresolvedStructuredError
+--- PASS: TestEngine_R09_UnresolvedStructuredError (0.09s)
+=== RUN   TestEngine_R10_DoNotOverwriteCancelledStatus
+--- PASS: TestEngine_R10_DoNotOverwriteCancelledStatus (0.10s)
+=== RUN   TestReviewCancelBeforeRunner
+--- PASS: TestReviewCancelBeforeRunner (0.09s)
+=== RUN   TestReviewCancelInRunningBeforeRunner
+--- PASS: TestReviewCancelInRunningBeforeRunner (0.13s)
+=== RUN   TestReviewPersistError
+--- PASS: TestReviewPersistError (0.10s)
+=== RUN   TestReviewToolError
+--- PASS: TestReviewToolError (0.11s)
+=== RUN   TestLatestReview_G02_PersistOnCancelBeforeRunner
+--- PASS: TestLatestReview_G02_PersistOnCancelBeforeRunner (0.11s)
+PASS
+ok  	asura/internal/engine	3.082s
+=== RUN   TestSQLiteStore_CronSchemaMigration
+--- PASS: TestSQLiteStore_CronSchemaMigration (0.05s)
+=== RUN   TestSQLiteStore_CronCRUD
+--- PASS: TestSQLiteStore_CronCRUD (0.15s)
+=== RUN   TestTaskStorage
+--- PASS: TestTaskStorage (0.16s)
+=== RUN   TestSQLiteStore_Unit
+--- PASS: TestSQLiteStore_Unit (0.22s)
+=== RUN   TestSQLiteStore_RecoverInterruptedTasks
+--- PASS: TestSQLiteStore_RecoverInterruptedTasks (0.17s)
+=== RUN   TestSQLiteStore_TaskClassPersistence
+--- PASS: TestSQLiteStore_TaskClassPersistence (0.09s)
+=== RUN   TestSQLiteStore_UpgradeFromOldSchemaWithoutRequestID
+--- PASS: TestSQLiteStore_UpgradeFromOldSchemaWithoutRequestID (0.20s)
+=== RUN   TestSQLiteStore_DuplicateRequestIDUniqueIndex
+--- PASS: TestSQLiteStore_DuplicateRequestIDUniqueIndex (0.08s)
+=== RUN   TestSQLiteStore_UpgradeFromSchemaWithDuplicateRequestIDs
+--- PASS: TestSQLiteStore_UpgradeFromSchemaWithDuplicateRequestIDs (0.21s)
+PASS
+ok  	asura/internal/storage	2.378s
+=== RUN   TestWEB010ExpiredSession
+--- PASS: TestWEB010ExpiredSession (0.00s)
+=== RUN   TestSession_EvictOldestWhenCapacityReached
+--- PASS: TestSession_EvictOldestWhenCapacityReached (0.00s)
+=== RUN   TestWEB001Unit
+--- PASS: TestWEB001Unit (0.01s)
+=== RUN   TestWEB010Unit
+--- PASS: TestWEB010Unit (0.00s)
+=== RUN   TestWEB003Unit
+--- PASS: TestWEB003Unit (0.01s)
+=== RUN   TestWEB004Unit
+--- PASS: TestWEB004Unit (0.01s)
+=== RUN   TestWEB005Unit
+--- PASS: TestWEB005Unit (0.01s)
+=== RUN   TestWEB008Unit
+--- PASS: TestWEB008Unit (0.04s)
+=== RUN   TestWEB007Unit
+--- PASS: TestWEB007Unit (0.01s)
+PASS
+ok  	asura/internal/web	1.165s
+=== RUN   TestCLI_EndToEnd
+=== RUN   TestCLI_EndToEnd/SCN-001:_提交任務並重查結果
+=== RUN   TestCLI_EndToEnd/SCN-002:_拒絕超出授權的工作目錄
+--- PASS: TestCLI_EndToEnd (2.02s)
+    --- PASS: TestCLI_EndToEnd/SCN-001:_提交任務並重查結果 (1.87s)
+    --- PASS: TestCLI_EndToEnd/SCN-002:_拒絕超出授權的工作目錄 (0.14s)
+=== RUN   TestCLI_CancelIsolation
+--- PASS: TestCLI_CancelIsolation (1.27s)
+=== RUN   TestCLI_PartialFailureProtection
+--- PASS: TestCLI_PartialFailureProtection (0.85s)
+=== RUN   TestCLI_RestartRecovery
+--- PASS: TestCLI_RestartRecovery (1.08s)
+=== RUN   TestCLI_EmptyOutputDefense
+--- PASS: TestCLI_EmptyOutputDefense (0.96s)
+=== RUN   TestCLI_ReviewFixes_R03_R06_R07
+--- PASS: TestCLI_ReviewFixes_R03_R06_R07 (0.88s)
+=== RUN   TestCLI_ReviewFixes_R04_ConcurrentOutput
+--- PASS: TestCLI_ReviewFixes_R04_ConcurrentOutput (2.39s)
+=== RUN   TestCLI_LatestReview_G01_HandshakeCancelBeforeStart
+--- PASS: TestCLI_LatestReview_G01_HandshakeCancelBeforeStart (2.16s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.19s)
+=== RUN   TestCLI_LatestReview_H01_LockFailureAbort
+--- PASS: TestCLI_LatestReview_H01_LockFailureAbort (1.27s)
+=== RUN   TestCLI_LatestReview_I01_CancelRetryRecoversProcess
+--- PASS: TestCLI_LatestReview_I01_CancelRetryRecoversProcess (2.32s)
+=== RUN   TestCLI_LatestReview_J01_CancelDoesNotKillReusedPGID
+--- PASS: TestCLI_LatestReview_J01_CancelDoesNotKillReusedPGID (2.33s)
+=== RUN   TestCLI_LatestReview_K01_CancelRecoversCleanEnvProcess
+--- PASS: TestCLI_LatestReview_K01_CancelRecoversCleanEnvProcess (2.28s)
+=== RUN   TestCLI_LatestReview_L01_CancelRecoversOrphanProcessGroup
+--- PASS: TestCLI_LatestReview_L01_CancelRecoversOrphanProcessGroup (2.38s)
+=== RUN   TestCLI_LatestReview_M01_OrphanUnknownIdentityFailsSafely
+--- PASS: TestCLI_LatestReview_M01_OrphanUnknownIdentityFailsSafely (1.22s)
+=== RUN   TestCLI_DaemonLifecycle
+--- PASS: TestCLI_DaemonLifecycle (40.30s)
+=== RUN   TestCRON001_WorkspaceMutexQueue
+--- PASS: TestCRON001_WorkspaceMutexQueue (0.13s)
+=== RUN   TestCRON002_InteractiveChannelReserved
+--- PASS: TestCRON002_InteractiveChannelReserved (0.15s)
+=== RUN   TestCRON003_CLICronManagement
+--- PASS: TestCRON003_CLICronManagement (0.96s)
+=== RUN   TestCRON004_PeriodicTriggerCreatesTask
+--- PASS: TestCRON004_PeriodicTriggerCreatesTask (1.08s)
+=== RUN   TestCRON005_OverlapSkip
+--- PASS: TestCRON005_OverlapSkip (0.07s)
+=== RUN   TestCRON006_RestartNoCatchup
+--- PASS: TestCRON006_RestartNoCatchup (0.05s)
+=== RUN   TestCRON007_UnauthorizedWorkspaceAutoPause
+--- PASS: TestCRON007_UnauthorizedWorkspaceAutoPause (0.05s)
+=== RUN   TestCRON008_PersistenceAcrossRestart
+--- PASS: TestCRON008_PersistenceAcrossRestart (1.79s)
+=== RUN   TestCRON001_CronAndInteractiveWorkspaceMutex
+--- PASS: TestCRON001_CronAndInteractiveWorkspaceMutex (0.17s)
+=== RUN   TestCRON007_CLICronHistoryQuery
+--- PASS: TestCRON007_CLICronHistoryQuery (1.58s)
+=== RUN   TestINT001
+--- PASS: TestINT001 (9.88s)
+=== RUN   TestINT007
+--- PASS: TestINT007 (16.02s)
+=== RUN   TestINT002
+--- PASS: TestINT002 (0.07s)
+=== RUN   TestINT003
+--- PASS: TestINT003 (0.11s)
+=== RUN   TestINT004
+--- PASS: TestINT004 (0.17s)
+=== RUN   TestINT004Redelivery
+--- PASS: TestINT004Redelivery (0.22s)
+=== RUN   TestINT005
+--- PASS: TestINT005 (0.13s)
+=== RUN   TestINT006
+--- PASS: TestINT006 (0.05s)
+=== RUN   TestWEB002Daemon
+--- PASS: TestWEB002Daemon (1.04s)
+=== RUN   TestWEB001
+--- PASS: TestWEB001 (0.08s)
+=== RUN   TestWEB002
+--- PASS: TestWEB002 (0.09s)
+=== RUN   TestWEB010
+--- PASS: TestWEB010 (0.06s)
+=== RUN   TestWEB003
+--- PASS: TestWEB003 (0.14s)
+=== RUN   TestWEB004
+--- PASS: TestWEB004 (0.09s)
+=== RUN   TestWEB005
+--- PASS: TestWEB005 (0.08s)
+=== RUN   TestWEB008
+--- PASS: TestWEB008 (0.16s)
+=== RUN   TestWEB008ProjectsAndPage
+--- PASS: TestWEB008ProjectsAndPage (0.06s)
+=== RUN   TestWEB006
+--- PASS: TestWEB006 (0.14s)
+=== RUN   TestWEB007
+--- PASS: TestWEB007 (0.14s)
+=== RUN   TestWEB009
+--- PASS: TestWEB009 (0.12s)
+PASS
+ok  	asura/tests/integration	101.838s
+
+Exit Code: 0
+Completed At: 2026-09-14T20:22:51+08:00
