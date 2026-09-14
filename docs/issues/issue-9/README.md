@@ -1,0 +1,117 @@
+# Issue 9 - Phase 3A：專案級基礎記憶
+
+## 概述
+
+提供專案隔離、可追溯的記憶寫入、查詢與刪除。追蹤 [Issue #9](https://github.com/raybird/Asura/issues/9)，分支 `issue-9-project-memory`，基底 main `202f1b3`（PR #7 已合併）。
+
+2026-09-14 使用者對「以專案級基礎記憶作為下一個 issue，完成範圍分析並用 gh 建立 issue 與對應分支」回覆「好」。此為方向與立項授權；下列首次提出的具體政策尚待核准。
+
+## 文件清單
+
+- [現況與需求分析](requirement-analysis.md)
+- [技術方案取捨](technical-analysis.md)
+- [實作計畫與唯一任務清單](implementation-plan.md)
+
+## 範圍提案
+
+CLI 經 Daemon 管理 SQLite 中的純文字記憶。人工明確寫入，查詢支援列出及依 ID 取得，手動刪除；每筆回傳 ID、所屬專案、manual 來源及建立時間。建議採正規化後的精確 workspace scope，父子目錄不繼承，保存至手動刪除。
+
+本期建議先交付管理能力。任務選取／注入另立後續工作；不包含 Web 管理頁、全域共享、向量搜尋、自動摘要、TTL、自動反思或 Context 壓縮。刪除只保證記憶 API 不再回傳，不承諾清除 SQLite 儲存媒體殘留、備份或既有任務輸出。
+
+## 涉及檔案
+
+```text
+cmd/asura/memory.go、run.go、run_test.go   # 新增 CLI 管理與分派測試
+internal/daemon/daemon.go、memory_test.go # IPC 操作、授權與錯誤測試
+internal/storage/sqlite.go               # 加法式 schema 初始化
+internal/storage/sqlite_memory.go、sqlite_memory_test.go # 專案限定 CRUD
+internal/auth/policy_test.go             # 既有路徑語意刻畫；必要時局部修正 policy.go
+tests/integration/memory_test.go        # CLI／Daemon／SQLite 整合
+README.md                               # 功能完成後新增使用方式
+internal/engine/、backend/、web/、cron/   # 本期不改行為
+```
+
+## Gherkin 驗收劇本
+
+```gherkin
+Feature: 專案級基礎記憶
+  @MEM-001
+  Scenario: 可追溯寫入與持久化
+    Given A 是授權專案
+    When 使用者寫入純文字記憶並重啟 Daemon
+    Then 可在 A 依回傳 ID 取得相同內容、專案、manual 來源與建立時間
+
+  @MEM-002
+  Scenario: 授權 root 內仍隔離不同專案
+    Given 同一授權 root 下 A 與 B 各有不同的固定記憶內容
+    When 在 A 列出記憶或以 B 的 ID 查詢及刪除
+    Then 清單不含 B 的記憶且查詢及刪除拒絕
+    And B 的記憶內容與筆數不變
+
+  @MEM-003
+  Scenario: 撤權及越界拒絕
+    Given 專案未授權、已撤權或輸入符號連結指向授權範圍外
+    When 請求寫入、列出、查詢或刪除記憶
+    Then 請求拒絕且不回傳受保護內容或變更資料
+
+  @MEM-004
+  Scenario: 精確 workspace 歸屬
+    Given A 的有效別名路徑解析至 A 且 C 是 A 的子目錄
+    When 分別以別名及 C 查詢 A 的記憶
+    Then 別名可取得 A 的記憶而 C 不會繼承 A 的記憶
+
+  @MEM-005
+  Scenario: 指定刪除與恢復
+    Given A 有兩筆已保存記憶
+    When 使用者刪除其中一筆並重啟 Daemon
+    Then 已刪 ID 查無資料且另一筆內容不變
+
+  @MEM-006
+  Scenario: 失敗不冒充成功且管理不啟動模型
+    Given Daemon 不可用或儲存操作失敗
+    When 使用者執行記憶管理命令
+    Then CLI 回報失敗且不冒充已保存或已刪除
+    And 記憶管理不啟動 AI 後端
+    And 既有任務提交不自動加入記憶內容
+```
+
+## Gherkin 核准紀錄
+
+- **核准 commit**: 待提交（尚無已核准的完整規格）
+- **核准來源**: 2026-09-14 對話核准方向與立項；細部政策由下表如實區分。
+
+| Scenario | 核准日期 | 狀態 |
+|---|---|---|
+| MEM-001 | - | 待核准 |
+| MEM-002 | - | 待核准 |
+| MEM-003 | - | 待核准 |
+| MEM-004 | - | 待核准 |
+| MEM-005 | - | 待核准 |
+| MEM-006 | - | 待核准 |
+
+## 風險與首要驗證
+
+- **最大風險**：誤將授權 root 視為共享 scope，讓 A 讀取或刪除 B 的記憶；撤權後仍可取資料。
+- **風險等級與理由**：High，涉及資料隔離、授權與刪除。
+- **首要驗證**：固定 A/B 內容的授權與隔離對照測試，包含相同 root、異 scope ID、撤權與符號連結。
+- **選擇理由**：直接驗證服務端拒絕與儲存 scope 約束比模型呼叫或效能實驗更能降低該風險；不以真實模型端到端流程作為首要手段。
+- **完成證據**：A 正向 CRUD 成功；每個反向案例回傳拒絕、無 B 內容，透過獨立資料讀取確認 B 內容及筆數不變。反向測試先證明能抓到缺少隔離的行為，再取得修復綠燈。
+
+## 待確認事項
+
+| 編號 | 事項 | 狀態 | 影響 |
+|---|---|---|---|
+| TBD-1 | 建議精確 workspace scope，父子不繼承；確認 MEM-002～004 的隔離契約 | 待確認 | 專案鍵值與授權，阻擋相依實作 |
+| TBD-2 | 建議僅人工寫入、manual 來源、保存至手動刪除；確認 MEM-001、005 | 待確認 | 來源、保存與刪除語意 |
+| TBD-3 | 建議本期 CLI 管理，不自動注入；確認 MEM-006 與整組驗收 | 待確認 | 任務與 UI 邊界，阻擋相依實作 |
+
+## Timeline
+
+| 日期 | 異動 |
+|---|---|
+| 2026-09-14 | 使用者核准下一項方向與立項；分析 main 現況，建立 Issue #9 與關聯分支，提出細部政策及驗收草案 |
+
+**建立日期**: 2026-09-14  
+**分級**: Large（新增 schema，跨 Storage、Daemon、CLI 與授權整合）  
+**風險**: High  
+**狀態**: 分析與立項完成；具體政策及驗收待核准，未實作
