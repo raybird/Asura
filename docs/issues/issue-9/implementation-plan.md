@@ -1,49 +1,139 @@
 # 實作計畫與任務清單
 
-建立日期：2026-09-14。規格及風險見 [README](README.md)。本檔是唯一任務來源；2026-09-14 七項驗收已核准，以下 Phase／Task 依相依順序執行；功能實作與測試尚未開始。
+建立日期：2026-09-14。拆解完成日期：2026-09-14。規格與首要風險以 [README](README.md) 為準。本檔為唯一任務清單，沿用 P1-T1～P3-T2 編號；子任務直接細化於本檔，不另建 decomposition 文件。
 
-## 設計提案與使用方式
+2026-09-14 使用者要求「好直接更新同一份計畫」，授權本次文件拆解。MEM-001～007 已逐題核准；本次未修改功能程式碼、建立測試或執行功能驗收。
 
-建議命令 `asura memory add/list/get/remove --workspace <path>`，add 收純文字、get/remove 收 ID。CLI → Daemon 授權與固定 scope → SQLite；不經 WorkerPool。既有命令與 prompt 維持原樣。
+## 已確認的介面現況
 
-擬增 store 操作 `CreateMemory`、`ListMemories`、`GetMemory`、`DeleteMemory`，每個操作都要求 workspace；IPC 使用專屬 action 與具型別參數。實際簽名依已核准查詢契約與既有 IPC 限制決定，不增加泛用 repository 抽象。
+2026-09-14 靜態檢核基準為 `96a50c1`，功能程式碼仍承接 main `202f1b3`。
 
-## Phase / Task
-
-| Task | 狀態 | 相依 | 產出與完成判準 |
-|---|---|---|---|
-| P1-T1 | ⏳ 規格核准完成，待介面檢核 | 無 | 2026-09-14 TBD-1～4 與全部 Scenario 已核准（來源及提交見 README）；實作前核對既有 IPC 輸入界限與錯誤映射，若需新增使用者限制則記錄具體影響，不把未決技術參數當作功能已完成 |
-| P1-T2 | 📝 待實作 | P1-T1 | MEM-002～004、007 的 Daemon 外迴圈及 scope／授權單元紅燈；A 正向有效，B 固定資料無洩漏／變更的反向斷言確實可失敗 |
-| P2-T1 | 📝 待實作 | P1-T2 | MEM-001、005 儲存紅燈後新增 schema 與 scope CRUD；舊 Task／Cron 資料升級前後一致，重啟及指定刪除通過 |
-| P2-T2 | 📝 待實作 | P2-T1 | 接 Daemon 記憶處理器，全部操作使用同一經授權 scope；MEM-002～004、007 外／內迴圈由紅轉綠 |
-| P3-T1 | 📝 待實作 | P2-T2 | CLI 參數及正式 IPC 接線，MEM-001、005、006 外紅與 CLI 單元紅後綠燈；失聯／儲存錯誤非零退出，無替代儲存寫入，管理零後端啟動 |
-| P3-T2 | 📝 待實作 | P3-T1 | 完整記憶及既有 race 回歸，固定 prompt 對照證明無自動注入；更新 README 使用方式，提交可追溯審查資料 |
-
-## 測試策略
-
-| Scenario | 外迴圈 | 內迴圈 |
+| 查核項目 | 現況證據 | 本次實作決定 |
 |---|---|---|
-| MEM-001 | CLI 寫入 → 重啟 → 查詢固定文字及來源 | SQLite CRUD 與舊庫升級 |
-| MEM-002 | 同 root A/B、錯配 scope/ID、資料不變對照 | SQL scope 條件及 Daemon 解析 |
-| MEM-003 | 撤權／越界的讀寫刪除拒絕 | Policy 與 handler 守門 |
-| MEM-004 | 別名可取、子目錄不可繼承 | 固定 canonical scope 與符號連結變更 |
-| MEM-005 | 刪除 → 重啟 → 指定 ID 不存在、另一筆保留 | scope 限定刪除及錯誤 |
-| MEM-007 | 撤權拒絕且資料不變 → 重新授權 → 原內容可讀並可寫入及刪除 | 授權檢查與保留資料，不因撤權清除記憶 |
-| MEM-006 | 失聯／儲存失敗非零退出且無替代儲存寫入；受控 runner 零啟動及原 prompt 對照 | CLI 錯誤映射與 handler 失敗 |
+| IPC 格式與大小 | `internal/daemon/daemon.go` 的 IPCRequest／IPCResponse、handleConn 使用 json.Decoder／Encoder，未設定訊息大小上限 | 沿用 JSON 串流；不虛構既有長度限制、不新增任意截斷或固定前 N 筆 |
+| 失敗回傳 | IPCResponse.Error 為字串；Client 將非空 Error 轉成 error；Cron CLI 將錯誤寫 stderr 並退出 1 | 記憶命令沿用，成功退出 0；必要回應缺欄位亦不得顯示成功 |
+| 連線生命週期 | NewClient 使用 net.Dial；現有方法的 context 參數未自動設定 deadline | 每個 CLI 命令獨立連線並 Close；不宣稱已有逾時保障、不順帶重構所有 Client |
+| 專案授權 | Policy.AuthorizeWorkspace 解析路徑；CanonicalWorkspace 另行解析且失敗會退回字串 | 新記憶路徑須取得同一次解析且授權通過的 canonical scope，解析失敗直接拒絕；不能把回退字串當成功 |
+| 授權更新 | Policy 由啟動設定建立，沒有動態改授權 API | 撤權／恢復測試重啟 Daemon 並改用不同 Policy，保留同一資料庫；不新增熱更新入口 |
+| 儲存與測試 | SQLiteStore 已有 Task／Cron；integration 測試以臨時 DB、Unix socket 與受控 runner 啟動真實 Daemon | 沿用此方式；mock 只用於故障注入與 runner 計數，不替代真實授權／SQLite |
 
-不同層級分別有傳輸／授權／SQL 失敗面，保留雙迴圈。重構若 no-op，記理由並沿用同版最小實作綠燈。證據於原 Task 連結，保存日期、版本、命令、退出碼與固定期望／實際值；不把環境或編譯失敗當行為紅燈。
+以上為靜態證據，不能當作新記憶功能或路徑競態已通過測試。實作若發現確需新增長度、分頁或逾時等外部限制，先記錄具體需求及規格影響，不以拆解推定核准。
 
-預定驗證命令（測試建立後才可執行；須核對實際測試數與零 SKIP）：
+## 設計與使用方式
+
+既有 CLI 無記憶命令；本期新增以下接線，所有參數名稱為最小實作選擇：
+
+```text
+asura memory add --workspace <path> --content <text>
+asura memory list --workspace <path>
+asura memory get --workspace <path> <memory-id>
+asura memory remove --workspace <path> <memory-id>
+```
+
+各命令沿用 `--socket`。CLI 解析必要參數並將 workspace 轉為絕對路徑；Daemon 自行驗證，不相信客戶端傳入的 scope 或來源。內容保持原文，不自動摘要；查詢回傳完整文字及已核准五個欄位。列出限定單一 scope，不提供全域列出或搜尋；不默默省略記憶。
+
+處理順序：解析請求 → 檢查必要欄位 → 一次解析並授權 workspace → 固定 scope → SQLite 操作 → 成功或 Error 回應。輸入缺漏、未知 action、查無指定記憶或儲存錯誤均不得顯示成功。scope 與 ID 不匹配視為查無可操作記憶，錯誤不帶其他專案內容。
+
+擬新增 `Memory`（ID、Workspace、Content、Source、CreatedAt）與以下具體介面；Source 由 Daemon 固定 manual，不接受客戶端指定。
+
+```go
+CreateMemory(ctx context.Context, memory Memory) error
+ListMemories(ctx context.Context, workspace string) ([]Memory, error)
+GetMemory(ctx context.Context, workspace, id string) (*Memory, error)
+DeleteMemory(ctx context.Context, workspace, id string) error
+```
+
+SQL 的列出必須帶 workspace，取得／刪除必須同時匹配 workspace 與 ID；刪除檢查影響筆數。新增資料表採加法式初始化，不改既有 Task／Cron。IPC 使用 memory_add/list/get/remove 與必要具型別欄位；沿用 Client，不建通用 repository 或新的服務。
+
+記憶操作不呼叫 Engine、WorkerPool 或 AI，也不寫入替代檔案。傳輸中斷無法證明伺服器是否已提交時，只回報錯誤，不保證交易未發生、不自動重送寫入；成功僅在收到明確成功回應後輸出。這是失敗不冒充成功的必要區分，不新增寫入去重功能。
+
+## Phase 1：核准查核與隔離紅燈
+
+### P1-T1 — 介面檢核與核准基線
+
+- **狀態**：✅ 2026-09-14 完成靜態檢核與規劃；無功能驗證。
+- **相依／對應**：無；MEM-001～007。
+- **產出**：本檔「已確認的介面現況」、錯誤映射與上述最小 API。
+- **完成證據**：讀取 daemon.go 的 handleConn／Client、auth/policy.go、cmd/asura/cron.go；確認 JSON 無明訂上限、Error 映射及授權解析行為。README 七項 Scenario 核准表與來源齊備。
+- **實作前再查核**：對 README 所列各核准 commit 比對實際工作區的對應 Scenario，包含未提交內容；語意差異才需重新確認，不以文件格式差異抹除既有核准。
+
+### P1-T2 — 先建立風險可被測出的證據
+
+- **狀態**：📝 待實作；**相依**：P1-T1；**對應**：MEM-002、003、004、007。
+- **P1-T2.a 產出**：`tests/integration/memory_test.go` 真實 IPC 測試 fixture，建立同一 root 下 A/B、A 子目錄 C、有效別名與越界連結，A/B 使用不同固定多語文字。既有任務成功路徑驗證 runner 計數器可由 0 變 1。
+- **P1-T2.b 產出**：外迴圈先測授權 A 寫入／查詢成功及 A scope 加 B ID 的拒絕。未知 action 只算「功能尚缺」紅燈，不能宣稱已證明跨專案防護有效。
+- **P1-T2.c 產出**：auth／Daemon 單元紅燈驗證同一次 canonical scope、別名與子目錄、解析失敗及符號連結變更。需要新介面時先用可編譯的最小空殼取得行為紅燈，不把編譯錯誤當證據。
+- **完成判準**：固定字面期望與實際 assertion 失敗原因可讀；記錄缺少操作與隔離缺口的差別。授權既有案例已綠者保留刻畫證據，不故意破壞既有程式製造紅燈。
+- **證據位置**：預定 `evidence/phase-1/`；尚未建立。安全正反向全綠仍由 P2-T2 負責，不要求尚無儲存功能時冒充已完成。
+
+## Phase 2：儲存與服務端授權
+
+### P2-T1 — scope 儲存、升級與刪除
+
+- **狀態**：📝 待實作；**相依**：P1-T2；**對應**：MEM-001、002、005。
+- **P2-T1.a 產出**：sqlite_memory_test.go 先驗固定內容／來源、scope+ID、指定刪除、另一筆保持不變與重啟持久化；取得單元行為紅燈。
+- **P2-T1.b 產出**：sqlite.go 加法式 schema 與 sqlite_memory.go 最小 CRUD，無全域讀取捷徑。若外迴圈亦需可執行介面，先取得功能缺失紅燈再落 schema。
+- **P2-T1.c 產出**：使用明確舊 schema fixture 建立 Task／Cron 歷史；升級、再次開庫，獨立 SQL 讀取確認固定欄位與筆數不變。不可用新版初始化器生成所謂舊庫。
+- **完成判準**：以上單元全綠，異 scope 的讀取／刪除失敗且 B 不變；重啟保留未刪資料、已刪 ID 不恢復。此階段綠燈僅代表儲存層，不代表 IPC 授權已完成。
+- **證據位置**：預定 `evidence/phase-2/`，分開保存 red／minimal-green／final-green 或 no-op 說明。
+
+### P2-T2 — 同次解析授權與 IPC 管理
+
+- **狀態**：📝 待實作；**相依**：P2-T1；**對應**：MEM-002、003、004、007，補 MEM-006 服務端錯誤。
+- **P2-T2.a 產出**：最小 auth helper 回傳已授權 canonical scope 與 error；其餘既有呼叫者語意不變。Daemon 每個記憶操作固定該 scope 後傳入 store，不再解析一次。
+- **P2-T2.b 產出**：memory action、Client 方法與必要回應；單元紅燈涵蓋漏參數、缺失回應、儲存失敗及拒絕內容不得洩漏。
+- **P2-T2.c 產出**：完成 P1-T2 的正反向對照；在同一 DB 依序啟動「授權 A/B → 撤除 A → 恢復 A」的 Daemon，撤權期間四種操作均拒絕，獨立 SQL 證明 A 保留，恢復後再讀寫刪除成功。
+- **完成判準**：A/B 同 root、別名、子目錄、越界及撤權案例全綠；解析途中變動使用可控制同步點驗證，不只靠 sleep 或反覆碰運氣。拒絕後資料無變更、輸出無跨 scope 內容，管理零新增 runner 呼叫。
+- **證據位置**：`evidence/phase-2/`；取得此安全閘門全綠後才進 Phase 3。
+
+## Phase 3：CLI、整合與交付
+
+### P3-T1 — CLI 操作與失敗路徑
+
+- **狀態**：📝 待實作；**相依**：P2-T2；**對應**：MEM-001、005、006。
+- **P3-T1.a 產出**：run_test.go CLI 單元與 integration 真實 CLI 外迴圈紅燈，涵蓋 add/list/get/remove、五欄位及完整多語文字。沿用專案建置測試 binary 方式，不只呼叫 handler 冒充端到端。
+- **P3-T1.b 產出**：memory.go、run.go 分派及旗標；每個操作透過 Daemon，不直接開庫。成功回應前不輸出成功訊息。
+- **P3-T1.c 產出**：不存在 socket、連線中斷、可重複觸發的 SQLite 寫入失敗。先驗健康對照成功，再驗 stderr 錯誤、非零退出且無成功字樣；temp HOME／工作目錄與 DB 對照確認無替代儲存寫入，不以只有 error 文字作為全部證據。
+- **完成判準**：正式 CLI 的寫入／查詢／刪除／重啟可重現；全部五欄位正確且內容不截斷；失敗不冒充成功、不自動重試或啟動 runner。回應遺失案例不得斷言服務端一定未提交。
+- **證據位置**：預定 `evidence/phase-3/`。
+
+### P3-T2 — 完整回歸、文件與審查交付
+
+- **狀態**：📝 待實作；**相依**：P3-T1；**對應**：MEM-001～007。
+- **P3-T2.a 產出**：七項外迴圈與低層回歸全綠；受控 runner 驗證正常 ask 可啟動且收到原 prompt，記憶命令不新增呼叫。既有 CLI／Web／Cron 測試仍通過。
+- **P3-T2.b 產出**：根 README 新增四命令、五欄位、精確 scope、撤權與重啟政策、失敗回報；在 docs/agents/project.md 登記使用者功能 → 根 README。只更新本功能觸發的常青文件。
+- **P3-T2.c 產出**：固定 BASE／HEAD、七項 Proof of Test 與規格基準，交由非實作者獨立 review，保存判定；依 [review-evidence](../../agents/review-evidence.md) 辦理。自我重讀不算獨立審查，本次拆解不宣稱 review PASS。
+- **完成判準**：完整 race 回歸、文件查核及有效獨立 review 無 MUST FIX；所有實作與證據已提交。不自行把此狀態寫成 PR 已合併。
+- **證據位置**：`evidence/phase-3/` 與實際 review artifact；尚未建立。
+
+## Scenario 與測試層級對應
+
+| Scenario | 主責 Task | 外迴圈（預定 TestMEM001～007） | 內迴圈 |
+|---|---|---|---|
+| MEM-001 | P2-T1、P3-T1 | CLI 寫入、重啟、依 ID 取得完整五欄位 | SQLite 持久化、Client 回應、CLI 輸出 |
+| MEM-002 | P1-T2、P2-T2 | 同 root A/B、錯配 scope/ID、B 資料不變 | SQL scope 條件與授權 |
+| MEM-003 | P1-T2、P2-T2 | 未授權、撤權、越界四操作拒絕 | Policy 解析與 handler 守門 |
+| MEM-004 | P1-T2、P2-T2 | 別名可取、子目錄不繼承 | 單次解析及固定 scope |
+| MEM-005 | P2-T1、P3-T1 | 刪除後重啟、另一筆保留 | 限定 scope 刪除與影響筆數 |
+| MEM-006 | P2-T2、P3-T1、P3-T2 | 非零退出、無替代儲存、零 AI 呼叫、原 prompt | Client／CLI 錯誤映射與故障注入 |
+| MEM-007 | P1-T2、P2-T2 | 授權 → 撤權保留 → 重新授權恢復 | Policy 與存取控制，撤權不刪資料 |
+
+P3-T2 彙整全部 Scenario。外迴圈和內迴圈具有傳輸、授權及 SQL 的不同失敗面，保留雙迴圈；不另建第二份任務進度表。
+
+## 執行命令與證據規則
+
+預定每個外迴圈以 `TestMEM001`～`TestMEM007` 為頂層名稱，細例用 subtest。測試建立後才執行以下命令，確認七個頂層案例實際出現、零 FAIL／SKIP，而非僅看退出碼。
 
 ```bash
-go test -count=1 -v ./tests/integration -run '^TestMEM'
+go test -count=1 -v ./tests/integration -run '^TestMEM00[1-7]$'
 go test -count=1 -race ./internal/storage ./internal/auth ./internal/daemon ./cmd/asura
 go test -count=1 -race ./...
 ```
 
-## 文件與交付檢查
+每個 Task 的實際證據回填在原段落，包含系統日期、Scenario、工作區／commit、完整命令、退出碼與固定期望／實際值。預定 evidence 路徑不是已存在的證據。
 
-- 核准集合與 Scenario 完全相等；待核准項不得放行實作。
-- 新增 schema 的相容證據與拒絕路徑均有真實紅綠紀錄。
-- 功能完成才更新根 README；現有 project.md 常青對照仍為範本，本期交付前登記使用者功能 → 根 README 的實際對照，不擴充其他文件。
-- 2026-09-14 此次只有分析文件與 GitHub 立項，功能測試不適用；以相對連結、Scenario 對應、Markdown 圍欄及 git diff --check 檢查文件。
+保留外紅、內紅、最小實作綠燈及重構後綠燈；沒有必要重構時記 no-op 並重用同版綠燈。編譯、依賴、環境失敗不是行為紅燈。SQL 獨立對照用固定字面資料，不共用被測查詢作為唯一真相；未授權回應不能因正向操作也壞掉而假綠。
+
+## 2026-09-14 本次拆解檢查
+
+本次為純文件，功能紅燈／Go 測試不適用。檢查項目為六個既有 Task 編號保留、相依無循環、七個 Scenario 全覆蓋、相對連結及圍欄有效、README 已核准 Gherkin 未改動與 git diff --check。2026-09-14 實際結果：Python 靜態檢查確認六個 Task 保留、相依無循環、七項已核准 Scenario 與映射集合相等、連結與圍欄有效、只有本計畫變更且 README 與 HEAD 相同；退出碼 0。`git diff --check` 退出碼 0。未建立任何功能測試或 review artifact。
