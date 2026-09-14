@@ -235,9 +235,19 @@ func (s *SQLiteStore) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_cron_schedules_status ON cron_schedules(status);
 	CREATE INDEX IF NOT EXISTS idx_cron_runs_cron_id ON cron_runs(cron_id);
 	CREATE INDEX IF NOT EXISTS idx_cron_runs_scheduled_time ON cron_runs(scheduled_time);
+
+	CREATE TABLE IF NOT EXISTS memories (
+		id TEXT PRIMARY KEY,
+		workspace TEXT NOT NULL,
+		content TEXT NOT NULL,
+		source TEXT NOT NULL DEFAULT 'manual',
+		created_at DATETIME NOT NULL
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_memories_workspace ON memories(workspace);
 	`
 	if _, err := s.db.Exec(indices); err != nil {
-		return fmt.Errorf("create indices and cron tables: %w", err)
+		return fmt.Errorf("create indices, cron, and memory tables: %w", err)
 	}
 	return nil
 }

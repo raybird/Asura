@@ -1,0 +1,13 @@
+日期：2026-09-14
+命令：go test -count=1 -v ./internal/storage -run '^TestSQLiteStore_Memory'
+退出碼：1
+輸出：
+=== RUN   TestSQLiteStore_MemoryCRUD
+    sqlite_memory_test.go:65: 內迴圈單元紅燈：CreateMemory(A1) 失敗：CreateMemory: not implemented (待 P2-T1 實作)
+--- FAIL: TestSQLiteStore_MemoryCRUD (0.01s)
+=== RUN   TestSQLiteStore_MemorySchemaUpgrade
+    sqlite_memory_test.go:277: 升級後 CreateMemory 失敗：CreateMemory: not implemented
+--- FAIL: TestSQLiteStore_MemorySchemaUpgrade (0.03s)
+FAIL
+FAIL	asura/internal/storage	0.048s
+FAIL

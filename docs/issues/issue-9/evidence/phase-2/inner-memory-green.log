@@ -1,0 +1,10 @@
+日期：2026-09-14
+命令：go test -count=1 -v ./internal/storage -run '^TestSQLiteStore_Memory'
+退出碼：0
+輸出：
+=== RUN   TestSQLiteStore_MemoryCRUD
+--- PASS: TestSQLiteStore_MemoryCRUD (0.02s)
+=== RUN   TestSQLiteStore_MemorySchemaUpgrade
+--- PASS: TestSQLiteStore_MemorySchemaUpgrade (0.05s)
+PASS
+ok  	asura/internal/storage	0.089s

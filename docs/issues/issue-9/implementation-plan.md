@@ -70,12 +70,12 @@ SQL 的列出必須帶 workspace，取得／刪除必須同時匹配 workspace �
 
 ### P2-T1 — scope 儲存、升級與刪除
 
-- **狀態**：📝 待實作；**相依**：P1-T2；**對應**：MEM-001、002、005。
-- **P2-T1.a 產出**：sqlite_memory_test.go 先驗固定內容／來源、scope+ID、指定刪除、另一筆保持不變與重啟持久化；取得單元行為紅燈。
-- **P2-T1.b 產出**：sqlite.go 加法式 schema 與 sqlite_memory.go 最小 CRUD，無全域讀取捷徑。若外迴圈亦需可執行介面，先取得功能缺失紅燈再落 schema。
-- **P2-T1.c 產出**：使用明確舊 schema fixture 建立 Task／Cron 歷史；升級、再次開庫，獨立 SQL 讀取確認固定欄位與筆數不變。不可用新版初始化器生成所謂舊庫。
-- **完成判準**：以上單元全綠，異 scope 的讀取／刪除失敗且 B 不變；重啟保留未刪資料、已刪 ID 不恢復。此階段綠燈僅代表儲存層，不代表 IPC 授權已完成。
-- **證據位置**：預定 `evidence/phase-2/`，分開保存 red／minimal-green／final-green 或 no-op 說明。
+- **狀態**：✅ 2026-09-14 完成 SQLite schema 加法式擴充、專案限定 CRUD 與無損升級驗證。**相依**：P1-T2；**對應**：MEM-001、002、005。
+- **P2-T1.a 產出**：已於 `internal/storage/sqlite_memory_test.go` 建立 `TestSQLiteStore_MemoryCRUD`，先取得尚未實作之行為紅燈（證據：[inner-memory-red.log](evidence/phase-2/inner-memory-red.log)），實作後驗證固定內容、manual 來源、scope+ID 查詢隔離、指定刪除另一筆不變與重啟持久化全綠（證據：[inner-memory-green.log](evidence/phase-2/inner-memory-green.log)）。
+- **P2-T1.b 產出**：在 `internal/storage/sqlite.go` 擴充加法式 memories DDL 與 workspace 索引；於 `internal/storage/sqlite_memory.go` 實作 `CreateMemory`、`ListMemories`、`GetMemory`、`DeleteMemory`，無全域讀取捷徑，刪除嚴格檢查影響筆數。
+- **P2-T1.c 產出**：建立 `TestSQLiteStore_MemorySchemaUpgrade`，以明確舊 schema 建立歷史 Task/Cron 資料庫；升級後獨立 SQL 驗證既有資料 100% 無損且記憶功能正常，模組回歸含 race 全綠（證據：[storage-regression-green.log](evidence/phase-2/storage-regression-green.log)）。
+- **完成判準**：單元全綠，異 scope 讀取／刪除失敗且另一專案不受影響；重啟保留未刪資料、已刪 ID 不恢復；重構確認為 no-op（證據：[refactor-noop.log](evidence/phase-2/refactor-noop.log)）。此階段綠燈僅代表儲存層，不代表 IPC 授權已完成。
+- **證據位置**：[evidence/phase-2/](evidence/phase-2/)。
 
 ### P2-T2 — 同次解析授權與 IPC 管理
 
