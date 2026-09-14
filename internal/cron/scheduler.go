@@ -7,25 +7,27 @@ import (
 	"time"
 
 	"asura/internal/auth"
-	"asura/internal/engine"
 	"asura/internal/storage"
 )
+
+// TaskDispatcher 定義將排程觸發任務提交至執行中樞之回呼介面（由 Daemon 接入專案鎖與容量管制）
+type TaskDispatcher func(ctx context.Context, cronID, workspace, prompt string) (string, error)
 
 // Scheduler 管理定時排程生命週期、時鐘輪詢、重疊略過與授權防護
 type Scheduler struct {
 	store       *storage.SQLiteStore
 	policy      *auth.Policy
-	engine      *engine.Engine
+	dispatcher  TaskDispatcher
 	mu          sync.Mutex
 	runningRuns map[string]string // cronID -> active taskID
 }
 
 // NewScheduler 建立新的排程調度器實例
-func NewScheduler(store *storage.SQLiteStore, policy *auth.Policy, eng *engine.Engine) *Scheduler {
+func NewScheduler(store *storage.SQLiteStore, policy *auth.Policy, dispatcher TaskDispatcher) *Scheduler {
 	return &Scheduler{
 		store:       store,
 		policy:      policy,
-		engine:      eng,
+		dispatcher:  dispatcher,
 		runningRuns: make(map[string]string),
 	}
 }
@@ -50,6 +52,10 @@ func (s *Scheduler) AlignSchedules(ctx context.Context, now time.Time) error {
 				continue
 			}
 			next := parsed.Next(now)
+			if next.IsZero() {
+				_ = s.store.UpdateCronScheduleStatus(ctx, sched.ID, storage.CronStatusPaused, "unreachable schedule date")
+				continue
+			}
 			if err := s.store.UpdateCronScheduleNextRun(ctx, sched.ID, next, sched.LastRunAt); err != nil {
 				return fmt.Errorf("update schedule %s next run at: %w", sched.ID, err)
 			}
@@ -121,8 +127,11 @@ func (s *Scheduler) Trigger(ctx context.Context, cronID string, now time.Time) e
 		}
 	}
 
-	// 3. 正常觸發執行
-	taskID := engine.GenerateTaskID()
+	// 3. 正常觸發執行：透過 dispatcher 提交任務（受專案鎖與容量調度管制）
+	taskID, err := s.dispatcher(ctx, cronID, sched.Workspace, sched.Prompt)
+	if err != nil {
+		return fmt.Errorf("dispatch cron task: %w", err)
+	}
 
 	s.mu.Lock()
 	s.runningRuns[cronID] = taskID
@@ -147,23 +156,12 @@ func (s *Scheduler) Trigger(ctx context.Context, cronID string, now time.Time) e
 	// 重算並更新下次執行時間（記錄 last_run 為 now）
 	if parsed, err := Parse(sched.Schedule); err == nil {
 		next := parsed.Next(now)
-		_ = s.store.UpdateCronScheduleNextRun(ctx, cronID, next, &now)
+		if next.IsZero() {
+			_ = s.store.UpdateCronScheduleStatus(ctx, cronID, storage.CronStatusPaused, "unreachable schedule date")
+		} else {
+			_ = s.store.UpdateCronScheduleNextRun(ctx, cronID, next, &now)
+		}
 	}
-
-	// 啟動任務執行
-	go func() {
-		defer func() {
-			s.mu.Lock()
-			delete(s.runningRuns, cronID)
-			s.mu.Unlock()
-		}()
-
-		_, _ = s.engine.SubmitTask(context.Background(), engine.SubmitRequest{
-			ID:        taskID,
-			Workspace: sched.Workspace,
-			Prompt:    sched.Prompt,
-		})
-	}()
 
 	return nil
 }

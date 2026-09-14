@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"asura/internal/auth"
-	"asura/internal/engine"
 	"asura/internal/storage"
 )
 
@@ -43,13 +42,13 @@ func TestScheduler_AlignSchedules_NoCatchup(t *testing.T) {
 	}
 
 	policy := auth.NewPolicy([]string{tmpDir})
-	var runnerCalled atomic.Bool
-	eng := engine.NewEngine(store, policy, engine.WithRunner(func(ctx context.Context, ws, p string) (string, error) {
-		runnerCalled.Store(true)
+	var dispatcherCalled atomic.Bool
+	dispatcher := func(ctx context.Context, cronID, ws, p string) (string, error) {
+		dispatcherCalled.Store(true)
 		return "ok", nil
-	}))
+	}
 
-	scheduler := NewScheduler(store, policy, eng)
+	scheduler := NewScheduler(store, policy, dispatcher)
 
 	// 執行重啟對齊
 	if err := scheduler.AlignSchedules(ctx, now); err != nil {
@@ -57,7 +56,7 @@ func TestScheduler_AlignSchedules_NoCatchup(t *testing.T) {
 	}
 
 	// 驗證未補跑任何歷史任務 (CRON-004)
-	if runnerCalled.Load() {
+	if dispatcherCalled.Load() {
 		t.Fatalf("runner was called during alignment, expected no catchup")
 	}
 
@@ -99,22 +98,26 @@ func TestScheduler_Trigger_OverlapSkip(t *testing.T) {
 	}
 
 	policy := auth.NewPolicy([]string{tmpDir})
-	started := make(chan struct{})
-	blocker := make(chan struct{})
+	dispatcher := func(ctx context.Context, cronID, ws, p string) (string, error) {
+		taskID := "task-overlap-1"
+		task := &storage.Task{
+			ID:        taskID,
+			Workspace: ws,
+			Prompt:    p,
+			Status:    storage.StatusRunning,
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+		_ = store.CreateTask(ctx, task)
+		return taskID, nil
+	}
 
-	eng := engine.NewEngine(store, policy, engine.WithRunner(func(ctx context.Context, ws, p string) (string, error) {
-		close(started)
-		<-blocker
-		return "finished", nil
-	}))
-
-	scheduler := NewScheduler(store, policy, eng)
+	scheduler := NewScheduler(store, policy, dispatcher)
 
 	// 1. 第一次觸發
 	if err := scheduler.Trigger(ctx, "sched-overlap-1", now); err != nil {
 		t.Fatalf("first trigger failed: %v", err)
 	}
-	<-started
 
 	// 2. 第二次觸發（前次任務尚未完成）
 	if err := scheduler.Trigger(ctx, "sched-overlap-1", now.Add(time.Minute)); err != nil {
@@ -136,8 +139,6 @@ func TestScheduler_Trigger_OverlapSkip(t *testing.T) {
 	if !foundSkipped {
 		t.Fatalf("expected a skipped run record, got runs: %+v", runs)
 	}
-
-	close(blocker)
 }
 
 func TestScheduler_Trigger_UnauthorizedAutoPause(t *testing.T) {
@@ -161,7 +162,7 @@ func TestScheduler_Trigger_UnauthorizedAutoPause(t *testing.T) {
 
 	sched := storage.CronSchedule{
 		ID:        "sched-unauth-1",
-		Name:      "unauth-task",
+		Name:      "unauthorized-task",
 		Workspace: unauthorizedWs,
 		Schedule:  "0 12 * * *",
 		Prompt:    "should fail",
@@ -174,13 +175,13 @@ func TestScheduler_Trigger_UnauthorizedAutoPause(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var runnerCalled atomic.Bool
-	eng := engine.NewEngine(store, policy, engine.WithRunner(func(ctx context.Context, ws, p string) (string, error) {
-		runnerCalled.Store(true)
+	var dispatcherCalled atomic.Bool
+	dispatcher := func(ctx context.Context, cronID, ws, p string) (string, error) {
+		dispatcherCalled.Store(true)
 		return "ok", nil
-	}))
+	}
 
-	scheduler := NewScheduler(store, policy, eng)
+	scheduler := NewScheduler(store, policy, dispatcher)
 
 	// 觸發未授權排程
 	err = scheduler.Trigger(ctx, "sched-unauth-1", now)
@@ -189,7 +190,7 @@ func TestScheduler_Trigger_UnauthorizedAutoPause(t *testing.T) {
 	}
 
 	// 驗證後端未執行
-	if runnerCalled.Load() {
+	if dispatcherCalled.Load() {
 		t.Fatalf("runner was invoked for unauthorized workspace")
 	}
 

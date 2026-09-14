@@ -100,8 +100,22 @@ func TestCronParser_InvalidExpressions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := Parse(tt.expr)
 			if err == nil {
-				t.Errorf("expected error for expression %q, got nil", tt.expr)
+				t.Errorf("expected error for %s (%s), got nil", tt.name, tt.expr)
 			}
 		})
+	}
+}
+
+func TestCronParser_UnreachableDate(t *testing.T) {
+	sched, err := Parse("0 0 31 2 *")
+	if err != nil {
+		t.Fatalf("unexpected error parsing 0 0 31 2 *: %v", err)
+	}
+	next := sched.Next(time.Now())
+	if !next.IsZero() {
+		t.Errorf("expected zero time for unreachable Feb 31, got %v", next)
+	}
+	if sched.IsReachable(time.Now()) {
+		t.Errorf("expected IsReachable to return false for Feb 31")
 	}
 }

@@ -1,0 +1,4 @@
+# asura/tests/integration [asura/tests/integration.test]
+tests/integration/cron_test.go:840:17: d.Scheduler undefined (type *daemon.Daemon has no field or method Scheduler, but does have unexported field scheduler)
+FAIL	asura/tests/integration [build failed]
+FAIL

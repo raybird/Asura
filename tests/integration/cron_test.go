@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -423,7 +425,20 @@ func TestCRON004_OverlapSkipAndNoCatchup(t *testing.T) {
 		return "ok", nil
 	}))
 
-	scheduler := cron.NewScheduler(store, policy, eng)
+	dispatcher := func(ctx context.Context, cronID, ws, p string) (string, error) {
+		taskID := engine.GenerateTaskID()
+		task, err := eng.SubmitTask(ctx, engine.SubmitRequest{
+			ID:        taskID,
+			Workspace: ws,
+			Prompt:    p,
+		})
+		if err != nil {
+			return "", err
+		}
+		return task.ID, nil
+	}
+
+	scheduler := cron.NewScheduler(store, policy, dispatcher)
 
 	// 重啟啟動時處理過期排程：不補跑，重新計算未來時間
 	if err := scheduler.AlignSchedules(ctx, now); err != nil {
@@ -453,7 +468,18 @@ func TestCRON004_OverlapSkipAndNoCatchup(t *testing.T) {
 		return "done", nil
 	}
 	blockingEng := engine.NewEngine(store, policy, engine.WithRunner(blockingRunner))
-	schedWithBlocker := cron.NewScheduler(store, policy, blockingEng)
+	blockingDispatcher := func(ctx context.Context, cronID, ws, p string) (string, error) {
+		taskID := engine.GenerateTaskID()
+		go func() {
+			_, _ = blockingEng.SubmitTask(context.Background(), engine.SubmitRequest{
+				ID:        taskID,
+				Workspace: ws,
+				Prompt:    p,
+			})
+		}()
+		return taskID, nil
+	}
+	schedWithBlocker := cron.NewScheduler(store, policy, blockingDispatcher)
 
 	// 第一次觸發：啟動任務
 	err = schedWithBlocker.Trigger(ctx, "cron-catchup-test", now)
@@ -535,7 +561,17 @@ func TestCRON005_UnauthorizedWorkspaceAutoPause(t *testing.T) {
 		return "should not run", nil
 	}))
 
-	scheduler := cron.NewScheduler(store, policy, eng)
+	dispatcher := func(ctx context.Context, cronID, ws, p string) (string, error) {
+		taskID := engine.GenerateTaskID()
+		_, err := eng.SubmitTask(ctx, engine.SubmitRequest{
+			ID:        taskID,
+			Workspace: ws,
+			Prompt:    p,
+		})
+		return taskID, err
+	}
+
+	scheduler := cron.NewScheduler(store, policy, dispatcher)
 
 	// 觸發排程
 	err = scheduler.Trigger(ctx, "cron-unauth-test", now)
@@ -748,6 +784,339 @@ func TestCRON007_CLICronHistoryQuery(t *testing.T) {
 		t.Fatalf("unexpected runs order or status: %+v", runs)
 	}
 }
+
+// TestCRON001_CronAndInteractiveWorkspaceMutex 驗證排程觸發任務與人類互動任務在同專案下嚴格互斥排隊（CRON-001）
+func TestCRON001_CronAndInteractiveWorkspaceMutex(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-cron-mutex-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	socketPath := filepath.Join(tmpDir, "daemon.sock")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	// 追蹤 runner 執行狀態
+	var runningCount int32
+	var maxConcurrent int32
+	runnerStarted := make(chan struct{})
+	runnerBlock := make(chan struct{})
+
+	testRunner := func(ctx context.Context, dir, prompt string) (string, error) {
+		cur := atomic.AddInt32(&runningCount, 1)
+		for {
+			oldMax := atomic.LoadInt32(&maxConcurrent)
+			if cur <= oldMax || atomic.CompareAndSwapInt32(&maxConcurrent, oldMax, cur) {
+				break
+			}
+		}
+		select {
+		case runnerStarted <- struct{}{}:
+		default:
+		}
+		<-runnerBlock
+		atomic.AddInt32(&runningCount, -1)
+		return "done", nil
+	}
+
+	eng := engine.NewEngine(store, policy, engine.WithRunner(testRunner))
+	d := daemon.NewDaemon(daemon.Config{
+		SocketPath: socketPath,
+		MaxWorkers: 2,
+	}, store, policy, daemon.WithEngine(eng))
+
+	go func() {
+		_ = d.Start()
+	}()
+	defer d.Close()
+
+	waitForSocket(t, socketPath)
+	client, err := daemon.NewClient(socketPath)
+	if err != nil {
+		t.Fatalf("NewClient failed: %v", err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+
+	// 1. 先提交一個人類互動任務
+	task1, err := client.Submit(ctx, engine.SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "task 1 interactive",
+	})
+	if err != nil {
+		t.Fatalf("Submit task 1 failed: %v", err)
+	}
+
+	select {
+	case <-runnerStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for task 1 to start")
+	}
+
+	// 2. 新增一個排程在同一個 tmpDir 並觸發
+	sched, err := client.AddCronSchedule(ctx, daemon.CronAddRequest{
+		Name:      "same-workspace-cron",
+		Workspace: tmpDir,
+		Schedule:  "* * * * *",
+		Prompt:    "task 2 cron",
+	})
+	if err != nil {
+		t.Fatalf("AddCronSchedule failed: %v", err)
+	}
+
+	// 直接呼叫 Daemon 的 scheduler Trigger
+	scheduler := d.Scheduler()
+	if scheduler == nil {
+		t.Fatal("expected scheduler to be accessible")
+	}
+	now := time.Now()
+	if err := scheduler.Trigger(ctx, sched.ID, now); err != nil {
+		t.Fatalf("Trigger failed: %v", err)
+	}
+
+	// 驗證同專案下最大並行執行數嚴格為 1
+	concurrent := atomic.LoadInt32(&maxConcurrent)
+	if concurrent > 1 {
+		t.Fatalf("expected max concurrent to be 1, got %d (violated workspace mutex!)", concurrent)
+	}
+
+	// 查詢排程觸發紀錄，應該有一個 run
+	runs, err := client.ListCronRuns(ctx, sched.ID, 10)
+	if err != nil || len(runs) == 0 {
+		t.Fatalf("expected cron run recorded, got err: %v, runs: %+v", err, runs)
+	}
+	cronTaskID := runs[0].TaskID
+	if cronTaskID == "" {
+		t.Fatalf("expected non-empty TaskID for triggered run")
+	}
+
+	cronTask, err := client.GetTask(ctx, cronTaskID)
+	if err != nil {
+		t.Fatalf("GetTask for cronTask failed: %v", err)
+	}
+	if cronTask.Status != storage.StatusQueued {
+		t.Fatalf("expected cronTask to be queued while task 1 is running, got status: %s", cronTask.Status)
+	}
+
+	// 釋放 runnerBlock 讓 task 1 結束，此時 cronTask 應自動被喚醒執行
+	close(runnerBlock)
+
+	// 等待 cronTask 完成
+	for i := 0; i < 40; i++ {
+		time.Sleep(50 * time.Millisecond)
+		cronTask, _ = client.GetTask(ctx, cronTaskID)
+		if cronTask != nil && cronTask.Status == storage.StatusCompleted {
+			break
+		}
+	}
+	if cronTask.Status != storage.StatusCompleted {
+		t.Fatalf("expected cronTask completed after task 1 finished, got status: %s", cronTask.Status)
+	}
+	_ = task1
+}
+
+// TestCRON003_UnreachableDateRejection 驗證不可達日期（如 2 月 31 日）在建立時被拒絕，防範雪崩循環（CRON-003）
+func TestCRON003_UnreachableDateRejection(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-cron-unreach-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	socketPath := filepath.Join(tmpDir, "daemon.sock")
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	d := daemon.NewDaemon(daemon.Config{
+		SocketPath: socketPath,
+	}, store, policy)
+
+	go func() {
+		_ = d.Start()
+	}()
+	defer d.Close()
+
+	waitForSocket(t, socketPath)
+	client, err := daemon.NewClient(socketPath)
+	if err != nil {
+		t.Fatalf("NewClient failed: %v", err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+
+	// 嘗試建立 2 月 31 日的不可達排程
+	_, err = client.AddCronSchedule(ctx, daemon.CronAddRequest{
+		Name:      "feb31-job",
+		Workspace: tmpDir,
+		Schedule:  "0 0 31 2 *",
+		Prompt:    "echo impossible",
+	})
+	if err == nil {
+		t.Fatal("expected error adding unreachable cron schedule (Feb 31), got nil")
+	}
+}
+
+// TestCRON002_DaemonCronCapacityLimit 驗證多個排程觸發時受限於 MaxCronWorkers，且不阻礙即時互動任務（CRON-002）
+func TestCRON002_DaemonCronCapacityLimit(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-cron-cap-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	ws1 := filepath.Join(tmpDir, "ws1")
+	ws2 := filepath.Join(tmpDir, "ws2")
+	ws3 := filepath.Join(tmpDir, "ws3")
+	_ = os.MkdirAll(ws1, 0755)
+	_ = os.MkdirAll(ws2, 0755)
+	_ = os.MkdirAll(ws3, 0755)
+
+	socketPath := filepath.Join(tmpDir, "daemon.sock")
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{ws1, ws2, ws3})
+
+	var runningCronCount int32
+	var maxCronConcurrent int32
+	cron1Started := make(chan struct{}, 2)
+	cronBlocker := make(chan struct{})
+	var cronBlockerOnce sync.Once
+	defer cronBlockerOnce.Do(func() { close(cronBlocker) })
+
+	interactiveStarted := make(chan struct{}, 1)
+	interactiveBlocker := make(chan struct{})
+	var interactiveBlockerOnce sync.Once
+	defer interactiveBlockerOnce.Do(func() { close(interactiveBlocker) })
+
+	testRunner := func(ctx context.Context, dir, prompt string) (string, error) {
+		if strings.Contains(prompt, "cron") {
+			cur := atomic.AddInt32(&runningCronCount, 1)
+			for {
+				oldMax := atomic.LoadInt32(&maxCronConcurrent)
+				if cur <= oldMax || atomic.CompareAndSwapInt32(&maxCronConcurrent, oldMax, cur) {
+					break
+				}
+			}
+			cron1Started <- struct{}{}
+			<-cronBlocker
+			atomic.AddInt32(&runningCronCount, -1)
+			return "cron done", nil
+		}
+
+		interactiveStarted <- struct{}{}
+		<-interactiveBlocker
+		return "interactive done", nil
+	}
+
+	eng := engine.NewEngine(store, policy, engine.WithRunner(testRunner))
+	// 配置 MaxWorkers=2, MaxCronWorkers=1
+	d := daemon.NewDaemon(daemon.Config{
+		SocketPath:     socketPath,
+		MaxWorkers:     2,
+		MaxCronWorkers: 1,
+		MaxQueue:       10,
+	}, store, policy, daemon.WithEngine(eng))
+
+	go func() {
+		_ = d.Start()
+	}()
+	defer d.Close()
+
+	waitForSocket(t, socketPath)
+	client, err := daemon.NewClient(socketPath)
+	if err != nil {
+		t.Fatalf("NewClient failed: %v", err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+
+	// 1. 新增兩個不同工作目錄的排程
+	sched1, err := client.AddCronSchedule(ctx, daemon.CronAddRequest{
+		Name:      "cron-job-1",
+		Workspace: ws1,
+		Schedule:  "* * * * *",
+		Prompt:    "task cron 1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sched2, err := client.AddCronSchedule(ctx, daemon.CronAddRequest{
+		Name:      "cron-job-2",
+		Workspace: ws2,
+		Schedule:  "* * * * *",
+		Prompt:    "task cron 2",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. 同時觸發排程 1 與排程 2
+	now := time.Now()
+	if err := d.Scheduler().Trigger(ctx, sched1.ID, now); err != nil {
+		t.Fatalf("Trigger sched1 failed: %v", err)
+	}
+	if err := d.Scheduler().Trigger(ctx, sched2.ID, now); err != nil {
+		t.Fatalf("Trigger sched2 failed: %v", err)
+	}
+
+	// 等待排程 1 啟動
+	select {
+	case <-cron1Started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for cron 1 to start")
+	}
+
+	// 此時 Cron 執行中的數量嚴格為 1（MaxCronWorkers=1）
+	time.Sleep(50 * time.Millisecond)
+	concurrentCron := atomic.LoadInt32(&maxCronConcurrent)
+	if concurrentCron > 1 {
+		t.Fatalf("expected max cron concurrent to be 1, got %d", concurrentCron)
+	}
+
+	// 3. 人類客戶端提交即時互動任務（ws3）
+	// 驗證即使背景 Cron 佔滿 Cron 額度，保留通道確保互動任務立即啟動！
+	_, err = client.Submit(ctx, engine.SubmitRequest{
+		Workspace: ws3,
+		Prompt:    "interactive prompt",
+	})
+	if err != nil {
+		t.Fatalf("Submit interactive task failed: %v", err)
+	}
+
+	select {
+	case <-interactiveStarted:
+		// 互動任務成功啟動！
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for interactive task to start (blocked by cron!)")
+	}
+
+	// 收尾釋放
+	interactiveBlockerOnce.Do(func() { close(interactiveBlocker) })
+	cronBlockerOnce.Do(func() { close(cronBlocker) })
+}
+
+
 
 
 

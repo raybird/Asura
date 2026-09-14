@@ -1,0 +1,4 @@
+=== RUN   TestCronParser_UnreachableDate
+--- PASS: TestCronParser_UnreachableDate (0.00s)
+PASS
+ok  	asura/internal/cron	0.007s

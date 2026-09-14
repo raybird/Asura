@@ -184,3 +184,10 @@ func (s *Schedule) Next(from time.Time) time.Time {
 
 	return time.Time{}
 }
+
+// IsReachable 檢查在未來的時間窗口內是否至少存在一次觸發時間（防範如 2 月 31 日等日曆無效日期）
+func (s *Schedule) IsReachable(from time.Time) bool {
+	next := s.Next(from)
+	return !next.IsZero()
+}
+

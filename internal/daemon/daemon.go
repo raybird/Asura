@@ -162,9 +162,59 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 		d.engine = engine.NewEngine(store, policy, engine.WithRunner(adapter.Run))
 	}
 
-	d.scheduler = cron.NewScheduler(store, policy, d.engine)
+	d.scheduler = cron.NewScheduler(store, policy, d.dispatchCronTask)
 
 	return d
+}
+
+// Scheduler 回傳 Daemon 內部的 Cron Scheduler 實例
+func (d *Daemon) Scheduler() *cron.Scheduler {
+	return d.scheduler
+}
+
+// dispatchCronTask 由 Cron Scheduler 觸發時調用，整合專案互斥鎖與保留通道調度 (CRON-001, CRON-002)
+func (d *Daemon) dispatchCronTask(ctx context.Context, cronID, workspace, prompt string) (string, error) {
+	if !d.tryAcquireCapacity() {
+		return "", ErrCapacityExceeded
+	}
+
+	taskID := engine.GenerateTaskID()
+	now := time.Now().UTC()
+	fp := fmt.Sprintf("%x", sha256.Sum256([]byte(workspace+":"+prompt)))
+
+	initialTask := &storage.Task{
+		ID:          taskID,
+		Fingerprint: fp,
+		Prompt:      prompt,
+		Workspace:   workspace,
+		Status:      storage.StatusPending,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+
+	if err := d.store.CreateTask(ctx, initialTask); err != nil {
+		d.releaseCapacity()
+		return "", fmt.Errorf("create initial cron task: %w", err)
+	}
+
+	// 遵循 CRON-001：同專案嚴格互斥依序排隊
+	acquired, _ := d.wsQueue.TryAcquire(workspace, taskID)
+	if !acquired {
+		// 專案忙碌中，更新狀態為 queued 並排入專案佇列，待前任務完成後依序喚醒
+		_ = d.store.UpdateTaskStatus(ctx, taskID, storage.StatusQueued, "", "")
+		return taskID, nil
+	}
+
+	// 遵循 CRON-002：以 TaskClassCron 類別派工，受 MaxCronWorkers 限制並保留互動通道
+	err := d.dispatchTask(taskID, workspace, prompt, TaskClassCron)
+	if err != nil {
+		d.releaseCapacity()
+		d.wsQueue.Release(workspace, taskID)
+		_ = d.store.UpdateTaskStatus(ctx, taskID, storage.StatusFailed, "", err.Error())
+		return "", err
+	}
+
+	return taskID, nil
 }
 
 // Start 競爭取得 Unix Domain Socket 擁有權並開始監聽
@@ -243,7 +293,7 @@ func (d *Daemon) cronLoop() {
 				continue
 			}
 			for _, sched := range schedules {
-				if sched.Status == storage.CronStatusActive && sched.NextRunAt != nil && !sched.NextRunAt.After(now) {
+				if sched.Status == storage.CronStatusActive && sched.NextRunAt != nil && !sched.NextRunAt.IsZero() && !sched.NextRunAt.After(now) {
 					_ = d.scheduler.Trigger(ctx, sched.ID, now)
 				}
 			}
@@ -510,6 +560,10 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			}
 			now := time.Now().Truncate(time.Second)
 			nextRun := parsed.Next(now)
+			if nextRun.IsZero() {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("cron schedule %q is unreachable (no upcoming trigger dates)", addReq.Schedule)})
+				continue
+			}
 			cronID := fmt.Sprintf("cron-%d", time.Now().UnixNano())
 			sched := storage.CronSchedule{
 				ID:        cronID,
@@ -574,6 +628,10 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			}
 			now := time.Now()
 			next := parsed.Next(now)
+			if next.IsZero() {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("cron schedule %q is unreachable (no upcoming trigger dates)", sched.Schedule)})
+				continue
+			}
 			_ = d.store.UpdateCronScheduleNextRun(context.Background(), req.CronID, next, sched.LastRunAt)
 			if err := d.store.UpdateCronScheduleStatus(context.Background(), req.CronID, storage.CronStatusActive, ""); err != nil {
 				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("resume cron schedule: %v", err)})

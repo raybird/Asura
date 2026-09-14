@@ -1,0 +1,4 @@
+# asura/internal/cron [asura/internal/cron.test]
+internal/cron/parser_test.go:118:11: sched.IsReachable undefined (type *Schedule has no field or method IsReachable)
+FAIL	asura/internal/cron [build failed]
+FAIL

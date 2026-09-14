@@ -164,7 +164,9 @@ Feature: 常駐中樞容量政策與動態 Cron 排程管理
 | 2026-09-13 | 完成 Phase 2 容量調度器升級（CRON-001 同專案互斥排隊、CRON-002 保留互動通道，commit `2c8855d`） |
 | 2026-09-13 | 完成 Phase 3 內嵌 Cron 排程引擎核心（CRON-003 5 欄位解析、CRON-004 重疊略過與漏跑不補、CRON-005 未授權自動暫停，commit `f05dd94`） |
 | 2026-09-13 | 完成 Phase 4 CLI 子命令 `asura cron` 接線與 Daemon IPC 擴充（CRON-006, CRON-007，commit `02fdb92`） |
-| 2026-09-13 | 完成 Phase 5 全套整合回歸驗證、Race 檢測（0 FAIL, 0 DATA RACE）與使用手冊更新 |
+| 2026-09-13 | 完成 Phase 5 全套整合回歸驗證、Race 檢測（0 FAIL, 0 DATA RACE）與使用手冊更新（commit `a42c088`） |
+| 2026-09-13 | 獨立審查員產出審查報告（`review-a42c088.md`），提出 2 項 MUST FIX 漏洞，判定 RETURN TO execute-task |
+| 2026-09-14 | 完成審查修復：Scheduler 接入 TaskDispatcher 遵循專案鎖與容量分類調度、不可達日期防禦、補齊端到端邊界測試並全綠通過 |
 
 ---
 

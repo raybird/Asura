@@ -7,6 +7,7 @@ import (
 	"io"
 	"path/filepath"
 	"text/tabwriter"
+	"time"
 
 	"asura/internal/cron"
 	"asura/internal/daemon"
@@ -40,8 +41,13 @@ func handleCron(args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 
-		if _, err := cron.Parse(*schedule); err != nil {
+		parsed, err := cron.Parse(*schedule)
+		if err != nil {
 			fmt.Fprintf(stderr, "error: invalid cron expression %q: %v\n", *schedule, err)
+			return 1
+		}
+		if !parsed.IsReachable(time.Now()) {
+			fmt.Fprintf(stderr, "error: cron expression %q is unreachable (no upcoming trigger dates)\n", *schedule)
 			return 1
 		}
 
@@ -122,7 +128,7 @@ func handleCron(args []string, stdout, stderr io.Writer) int {
 
 		rem := fs.Args()
 		if len(rem) == 0 {
-			fmt.Fprintln(stderr, "error: schedule id is required")
+			fmt.Fprintln(stderr, "error: schedule id is required (Usage: asura cron pause <schedule-id>)")
 			return 1
 		}
 		cronID := rem[0]
@@ -154,7 +160,7 @@ func handleCron(args []string, stdout, stderr io.Writer) int {
 
 		rem := fs.Args()
 		if len(rem) == 0 {
-			fmt.Fprintln(stderr, "error: schedule id is required")
+			fmt.Fprintln(stderr, "error: schedule id is required (Usage: asura cron resume <schedule-id>)")
 			return 1
 		}
 		cronID := rem[0]
@@ -186,7 +192,7 @@ func handleCron(args []string, stdout, stderr io.Writer) int {
 
 		rem := fs.Args()
 		if len(rem) == 0 {
-			fmt.Fprintln(stderr, "error: schedule id is required")
+			fmt.Fprintln(stderr, "error: schedule id is required (Usage: asura cron remove <schedule-id>)")
 			return 1
 		}
 		cronID := rem[0]
@@ -218,7 +224,7 @@ func handleCron(args []string, stdout, stderr io.Writer) int {
 
 		rem := fs.Args()
 		if len(rem) == 0 {
-			fmt.Fprintln(stderr, "error: schedule id is required")
+			fmt.Fprintln(stderr, "error: schedule id is required (Usage: asura cron runs <schedule-id>)")
 			return 1
 		}
 		cronID := rem[0]
