@@ -790,9 +790,11 @@ func (d *Daemon) handleConn(conn net.Conn) {
 }
 
 func generateMemoryID() string {
-	b := make([]byte, 6)
-	_, _ = rand.Read(b)
-	return fmt.Sprintf("mem-%d-%s", time.Now().Unix(), hex.EncodeToString(b))
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("mem-%d-%x", time.Now().UnixNano(), time.Now().Unix())
+	}
+	return fmt.Sprintf("mem-%d-%s", time.Now().UnixNano(), hex.EncodeToString(b))
 }
 
 func (d *Daemon) canonicalWorkspace(ws string) string {

@@ -2,9 +2,11 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -206,6 +208,103 @@ func TestEngineCancel_SynchronouslyTerminatesProcessGroup(t *testing.T) {
 	// 關鍵驗證：CancelTask 返回的當下，進程組必須已經死亡，不得要求呼叫端 sleep！
 	if opencode.IsProcessGroupAlive(pgid) {
 		t.Errorf("process group %d was still alive immediately after CancelTask returned", pgid)
+	}
+}
+
+// TestEngineCancel_UnknownIdentityDoesNotMarkCancelled 驗證 process group identity 無法確認時，
+// CancelTask 必須回傳 error、完好保留 PGID，且資料庫絕不得呈現 confirmed cancelled 終態。
+func TestEngineCancel_UnknownIdentityDoesNotMarkCancelled(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-cancel-unknown-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	eng := NewEngine(store, policy)
+
+	taskID := "task-unknown-identity"
+
+	// 1. 建立一個孤兒進程組：Leader 啟動 sleep 後立刻 exit 0，清除環境變數
+	cmd := exec.Command("sh", "-c", "exec env -i PATH=/usr/bin:/bin sh -c '(sleep 10) & exit 0'")
+	opencode.ConfigureProcessGroup(cmd)
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to start command: %v", err)
+	}
+	leaderPID := cmd.Process.Pid
+	pgid, err := syscall.Getpgid(leaderPID)
+	if err != nil {
+		pgid = leaderPID
+	}
+
+	// 確保測試清理
+	defer func() {
+		_ = syscall.Kill(-pgid, syscall.SIGKILL)
+	}()
+
+	// 等候 Leader 退出
+	_ = cmd.Wait()
+	for i := 0; i < 50; i++ {
+		if _, statErr := os.Stat(fmt.Sprintf("/proc/%d", leaderPID)); os.IsNotExist(statErr) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// 確保孤兒子進程依然存活
+	if !opencode.IsProcessGroupAlive(pgid) {
+		t.Fatalf("expected orphan process group %d to be alive", pgid)
+	}
+
+	// 2. 在 store 中建立任務，狀態為 running 且登記了該 pgid
+	ctx := context.Background()
+	now := time.Now()
+	task := &storage.Task{
+		ID:        taskID,
+		Workspace: tmpDir,
+		Prompt:    "orphan test",
+		Status:    storage.StatusRunning,
+		PGID:      pgid,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.CreateTask(ctx, task); err != nil {
+		t.Fatalf("CreateTask failed: %v", err)
+	}
+
+	// 3. 呼叫 CancelTask
+	cancelErr := eng.CancelTask(taskID)
+
+	// 4. 斷言 1：CancelTask 必須失敗，且包含 unable to verify process identity
+	if cancelErr == nil {
+		t.Fatalf("expected CancelTask to fail due to unknown process identity, got nil")
+	}
+	if !strings.Contains(cancelErr.Error(), "unable to verify process identity") {
+		t.Errorf("expected error to contain 'unable to verify process identity', got: %v", cancelErr)
+	}
+
+	// 5. 斷言 2：從 store 讀取任務，PGID 必須完好保留
+	saved, err := store.GetTask(ctx, taskID)
+	if err != nil {
+		t.Fatalf("GetTask failed: %v", err)
+	}
+	if saved.PGID != pgid {
+		t.Errorf("expected PGID to be preserved as %d, got %d", pgid, saved.PGID)
+	}
+
+	// 6. 斷言 3：狀態絕不得呈現 confirmed cancelled 終態 (應維持 running)
+	if saved.Status == storage.StatusCancelled {
+		t.Errorf("expected task status NOT to be cancelled when identity is unverified, but got cancelled")
+	}
+	if saved.Status != storage.StatusRunning {
+		t.Errorf("expected task status to remain %q, got %q", storage.StatusRunning, saved.Status)
 	}
 }
 
