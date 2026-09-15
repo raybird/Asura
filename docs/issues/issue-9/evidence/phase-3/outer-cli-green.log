@@ -1,0 +1,8 @@
+=== RUN   TestMEM001
+--- PASS: TestMEM001 (3.97s)
+=== RUN   TestMEM005
+--- PASS: TestMEM005 (4.02s)
+=== RUN   TestMEM006
+--- PASS: TestMEM006 (2.22s)
+PASS
+ok  	asura/tests/integration	10.224s

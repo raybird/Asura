@@ -155,3 +155,77 @@ func TestRunCLI_CronValidation(t *testing.T) {
 	})
 }
 
+// TestRunCLI_MemoryValidation 驗證 memory 命令之參數校驗與錯誤回報行為 (P3-T1.a, MEM-001, MEM-006)
+func TestRunCLI_MemoryValidation(t *testing.T) {
+	t.Run("memory 指令無子操作輸出 Usage 並返回非 0", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		code := RunCLI([]string{"memory"}, out, stderr)
+		if code == 0 {
+			t.Errorf("expected non-zero exit code, got 0")
+		}
+		if !strings.Contains(stderr.String(), "memory subcommands:") {
+			t.Errorf("expected memory subcommands usage, got: %s", stderr.String())
+		}
+	})
+
+	t.Run("memory add 缺少必要參數返回非 0", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		code := RunCLI([]string{"memory", "add", "--workspace", "/tmp"}, out, stderr)
+		if code == 0 {
+			t.Errorf("expected non-zero exit code, got 0")
+		}
+		if !strings.Contains(stderr.String(), "workspace and content are required") {
+			t.Errorf("expected 'workspace and content are required', got: %s", stderr.String())
+		}
+	})
+
+	t.Run("memory list 缺少 workspace 返回非 0", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		code := RunCLI([]string{"memory", "list"}, out, stderr)
+		if code == 0 {
+			t.Errorf("expected non-zero exit code, got 0")
+		}
+		if !strings.Contains(stderr.String(), "workspace is required") {
+			t.Errorf("expected 'workspace is required', got: %s", stderr.String())
+		}
+	})
+
+	t.Run("memory get 缺少參數返回非 0", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		code := RunCLI([]string{"memory", "get", "--workspace", "/tmp"}, out, stderr)
+		if code == 0 {
+			t.Errorf("expected non-zero exit code, got 0")
+		}
+		if !strings.Contains(stderr.String(), "workspace and memory_id are required") {
+			t.Errorf("expected 'workspace and memory_id are required', got: %s", stderr.String())
+		}
+	})
+
+	t.Run("memory remove 缺少參數返回非 0", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		code := RunCLI([]string{"memory", "remove", "--workspace", "/tmp"}, out, stderr)
+		if code == 0 {
+			t.Errorf("expected non-zero exit code, got 0")
+		}
+		if !strings.Contains(stderr.String(), "workspace and memory_id are required") {
+			t.Errorf("expected 'workspace and memory_id are required', got: %s", stderr.String())
+		}
+	})
+
+	t.Run("memory 指令在 Daemon 不可用時回報錯誤 (MEM-006)", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		code := RunCLI([]string{"memory", "list", "--workspace", "/tmp", "-socket", "/tmp/non-existent-mem.sock"}, out, stderr)
+		if code == 0 {
+			t.Errorf("expected non-zero exit code, got 0")
+		}
+		if !strings.Contains(stderr.String(), "daemon unavailable") {
+			t.Errorf("expected 'daemon unavailable' in stderr, got: %s", stderr.String())
+		}
+	})
+}

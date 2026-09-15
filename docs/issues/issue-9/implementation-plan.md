@@ -90,12 +90,12 @@ SQL 的列出必須帶 workspace，取得／刪除必須同時匹配 workspace �
 
 ### P3-T1 — CLI 操作與失敗路徑
 
-- **狀態**：📝 待實作；**相依**：P2-T2；**對應**：MEM-001、005、006。
-- **P3-T1.a 產出**：run_test.go CLI 單元與 integration 真實 CLI 外迴圈紅燈，涵蓋 add/list/get/remove、五欄位及完整多語文字。沿用專案建置測試 binary 方式，不只呼叫 handler 冒充端到端。
-- **P3-T1.b 產出**：memory.go、run.go 分派及旗標；每個操作透過 Daemon，不直接開庫。成功回應前不輸出成功訊息。
-- **P3-T1.c 產出**：不存在 socket、連線中斷、可重複觸發的 SQLite 寫入失敗。先驗健康對照成功，再驗 stderr 錯誤、非零退出且無成功字樣；temp HOME／工作目錄與 DB 對照確認無替代儲存寫入，不以只有 error 文字作為全部證據。
-- **完成判準**：正式 CLI 的寫入／查詢／刪除／重啟可重現；全部五欄位正確且內容不截斷；失敗不冒充成功、不自動重試或啟動 runner。回應遺失案例不得斷言服務端一定未提交。
-- **證據位置**：預定 `evidence/phase-3/`。
+- **狀態**：✅ 2026-09-15 完成 CLI memory 命令分派、真實在端 binary 驗證與失敗路徑安全防護。**相依**：P2-T2；**對應**：MEM-001、005、006。
+- **P3-T1.a 產出**：已於 `cmd/asura/run_test.go` 建立單元紅燈（證據：[inner-cli-red.log](evidence/phase-3/inner-cli-red.log)），並在 `tests/integration/memory_test.go` 建立真實編譯 binary 外迴圈紅燈（證據：[outer-cli-red.log](evidence/phase-3/outer-cli-red.log)），涵蓋 add/list/get/remove、五欄位完整多語文字。
+- **P3-T1.b 產出**：在 `cmd/asura/memory.go` 實作 `handleMemory`、旗標解析與順序相容 helper `reorderArgs`，在 `cmd/asura/run.go` 註冊子命令與 usage；每個操作直通 Daemon IPC，不直接開庫，成功回應前不輸出成功訊息；單元測試全綠（證據：[inner-cli-green.log](evidence/phase-3/inner-cli-green.log)）。
+- **P3-T1.c 產出**：在 `TestMEM001`、`TestMEM005`、`TestMEM006` 驗證真實 CLI binary 端到端寫入重啟持久化、指定刪除隔離、健康對照成功、Daemon 不可用非零退出、輸出 stderr 且無成功字樣、無替代儲存寫入、零 AI 模型呼叫以及任務提交不自動注入記憶；外迴圈全綠（證據：[outer-cli-green.log](evidence/phase-3/outer-cli-green.log)、[outer-all-memory-green.log](evidence/phase-3/outer-all-memory-green.log)）；模組回歸含 race 全綠（證據：[p3t1-regression-green.log](evidence/phase-3/p3t1-regression-green.log)）。
+- **完成判準**：正式 CLI 寫入／查詢／刪除／重啟可重現；全部五欄位正確且繁中多語內容不截斷；失敗不冒充成功、不改走替代儲存、零 runner 呼叫；重構確認為 no-op（證據：[p3t1-refactor-noop.log](evidence/phase-3/p3t1-refactor-noop.log)）。
+- **證據位置**：[evidence/phase-3/](evidence/phase-3/)。已取得 CLI 外迴圈全綠，准予推進至 P3-T2。
 
 ### P3-T2 — 完整回歸、文件與審查交付
 

@@ -1,0 +1,51 @@
+=== RUN   TestMEM001
+    memory_test.go:503: CLI memory add failed: exit status 1, stderr: error: unknown command "memory"
+        
+        Usage: asura <command> [options] [arguments]
+        
+        Commands:
+          daemon  Start the central execution daemon
+          run     Submit and execute a task in a workspace
+          ask     Submit a natural language AI task via Daemon
+          status  Query the execution status and result of a task
+          cancel  Cancel a pending or running task
+          web     Start the local web remote entry console
+          cron    Manage periodic scheduled tasks
+        
+        Run 'asura <command> -h' for details on each command.
+--- FAIL: TestMEM001 (1.08s)
+=== RUN   TestMEM005
+    memory_test.go:604: CLI memory remove failed: exit status 1, stderr: error: unknown command "memory"
+        
+        Usage: asura <command> [options] [arguments]
+        
+        Commands:
+          daemon  Start the central execution daemon
+          run     Submit and execute a task in a workspace
+          ask     Submit a natural language AI task via Daemon
+          status  Query the execution status and result of a task
+          cancel  Cancel a pending or running task
+          web     Start the local web remote entry console
+          cron    Manage periodic scheduled tasks
+        
+        Run 'asura <command> -h' for details on each command.
+--- FAIL: TestMEM005 (1.11s)
+=== RUN   TestMEM006
+    memory_test.go:672: 健康對照失敗：exit status 1, stderr: error: unknown command "memory"
+        
+        Usage: asura <command> [options] [arguments]
+        
+        Commands:
+          daemon  Start the central execution daemon
+          run     Submit and execute a task in a workspace
+          ask     Submit a natural language AI task via Daemon
+          status  Query the execution status and result of a task
+          cancel  Cancel a pending or running task
+          web     Start the local web remote entry console
+          cron    Manage periodic scheduled tasks
+        
+        Run 'asura <command> -h' for details on each command.
+--- FAIL: TestMEM006 (0.99s)
+FAIL
+FAIL	asura/tests/integration	3.190s
+FAIL

@@ -55,6 +55,8 @@ func RunCLI(args []string, stdout, stderr io.Writer) int {
 		return handleWeb(subargs, stdout, stderr)
 	case "cron":
 		return handleCron(subargs, stdout, stderr)
+	case "memory":
+		return handleMemory(subargs, stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "error: unknown command %q\n\n", subcmd)
 		printUsage(stderr)
@@ -73,6 +75,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  cancel  Cancel a pending or running task")
 	fmt.Fprintln(w, "  web     Start the local web remote entry console")
 	fmt.Fprintln(w, "  cron    Manage periodic scheduled tasks")
+	fmt.Fprintln(w, "  memory  Manage project-level long-term memories")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Run 'asura <command> -h' for details on each command.")
 }

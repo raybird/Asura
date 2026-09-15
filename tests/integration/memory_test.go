@@ -1,8 +1,10 @@
 package integration
 
 import (
+	"bytes"
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -465,39 +467,291 @@ func TestMEM007(t *testing.T) {
 	}
 }
 
-// TestMEM001: 可追溯寫入與持久化 (主責 P2-T1、P3-T1 外迴圈預留骨架)
+func buildAsuraBinary(t *testing.T) string {
+	t.Helper()
+	binDir := t.TempDir()
+	asuraBin := filepath.Join(binDir, "asura")
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get wd: %v", err)
+	}
+	projectRoot := filepath.Dir(filepath.Dir(wd))
+	cmdDir := filepath.Join(projectRoot, "cmd", "asura")
+	buildCmd := exec.Command("go", "build", "-race", "-o", asuraBin, cmdDir)
+	if out, err := buildCmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to build asura binary: %v, output: %s", err, string(out))
+	}
+	return asuraBin
+}
+
+// TestMEM001: 可追溯寫入與持久化 (MEM-001, P3-T1 外迴圈真實 CLI 測試)
 func TestMEM001(t *testing.T) {
 	f := setupMemoryFixture(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	asuraBin := buildAsuraBinary(t)
 
-	_, err := f.client.AddMemory(ctx, f.projA, fixedMemoryContentA)
-	if err != nil {
-		t.Fatalf("外迴圈行為紅燈 (功能尚缺)：AddMemory 失敗：%v (待 P2-T1 實作)", err)
+	// 1. 透過真實 CLI binary 寫入純文字記憶
+	addCmd := exec.Command(asuraBin, "memory", "add",
+		"--workspace", f.projA,
+		"--content", fixedMemoryContentA,
+		"--socket", f.sockPath,
+	)
+	var addOut, addErr bytes.Buffer
+	addCmd.Stdout = &addOut
+	addCmd.Stderr = &addErr
+
+	if err := addCmd.Run(); err != nil {
+		t.Fatalf("CLI memory add failed: %v, stderr: %s", err, addErr.String())
+	}
+
+	addOutput := addOut.String()
+	// 驗證輸出包含五欄位且內容完整未被截斷
+	if !strings.Contains(addOutput, "ID:") ||
+		!strings.Contains(addOutput, "Workspace:") ||
+		!strings.Contains(addOutput, "Content:") ||
+		!strings.Contains(addOutput, "Source:") ||
+		!strings.Contains(addOutput, "CreatedAt:") {
+		t.Fatalf("memory add output missing one of five required fields:\n%s", addOutput)
+	}
+	if !strings.Contains(addOutput, fixedMemoryContentA) {
+		t.Fatalf("memory add output truncated or mismatched:\n%s", addOutput)
+	}
+	if !strings.Contains(addOutput, "manual") {
+		t.Fatalf("memory add output missing manual source:\n%s", addOutput)
+	}
+
+	// 擷取 Memory ID
+	var memID string
+	for _, line := range strings.Split(addOutput, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "ID:") {
+			memID = strings.TrimSpace(strings.TrimPrefix(line, "ID:"))
+			break
+		}
+	}
+	if memID == "" {
+		t.Fatalf("failed to extract memory ID from output:\n%s", addOutput)
+	}
+
+	// 2. 模擬重啟 Daemon
+	_ = f.client.Close()
+	_ = f.daemon.Close()
+
+	d2 := daemon.NewDaemon(daemon.Config{
+		SocketPath: f.sockPath,
+		MaxWorkers: 2,
+	}, f.store, f.policy)
+	if err := d2.Start(); err != nil {
+		t.Fatalf("failed to restart daemon: %v", err)
+	}
+	defer d2.Close()
+	waitForSocket(t, f.sockPath)
+
+	// 3. 透過真實 CLI binary 依 ID 查詢該記憶
+	getCmd := exec.Command(asuraBin, "memory", "get",
+		"--workspace", f.projA,
+		memID,
+		"--socket", f.sockPath,
+	)
+	var getOut, getErr bytes.Buffer
+	getCmd.Stdout = &getOut
+	getCmd.Stderr = &getErr
+
+	if err := getCmd.Run(); err != nil {
+		t.Fatalf("CLI memory get failed: %v, stderr: %s", err, getErr.String())
+	}
+
+	getOutput := getOut.String()
+	if !strings.Contains(getOutput, memID) {
+		t.Errorf("get output expected to contain ID %s, got:\n%s", memID, getOutput)
+	}
+	if !strings.Contains(getOutput, fixedMemoryContentA) {
+		t.Errorf("get output expected to contain full content %s, got:\n%s", fixedMemoryContentA, getOutput)
+	}
+	if !strings.Contains(getOutput, "manual") {
+		t.Errorf("get output expected to contain manual source, got:\n%s", getOutput)
+	}
+	if !strings.Contains(getOutput, f.projA) {
+		t.Errorf("get output expected to contain workspace %s, got:\n%s", f.projA, getOutput)
 	}
 }
 
-// TestMEM005: 指定刪除與恢復 (主責 P2-T1、P3-T1 外迴圈預留骨架)
+// TestMEM005: 指定刪除與恢復 (MEM-005, P3-T1 外迴圈真實 CLI 測試)
 func TestMEM005(t *testing.T) {
 	f := setupMemoryFixture(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	asuraBin := buildAsuraBinary(t)
 
-	_, err := f.client.AddMemory(ctx, f.projA, fixedMemoryContentA)
+	// 1. 在專案 A 寫入兩筆記憶
+	mem1, err := f.client.AddMemory(context.Background(), f.projA, "專案A第一筆記憶 (Memory 1)")
 	if err != nil {
-		t.Fatalf("外迴圈行為紅燈 (功能尚缺)：AddMemory 失敗：%v (待 P2-T1 實作)", err)
+		t.Fatalf("AddMemory 1 failed: %v", err)
+	}
+	mem2, err := f.client.AddMemory(context.Background(), f.projA, "專案A第二筆記憶 (Memory 2)")
+	if err != nil {
+		t.Fatalf("AddMemory 2 failed: %v", err)
+	}
+
+	// 2. 透過 CLI 刪除其中一筆 (mem1)
+	removeCmd := exec.Command(asuraBin, "memory", "remove",
+		"--workspace", f.projA,
+		mem1.ID,
+		"--socket", f.sockPath,
+	)
+	var remOut, remErr bytes.Buffer
+	removeCmd.Stdout = &remOut
+	removeCmd.Stderr = &remErr
+
+	if err := removeCmd.Run(); err != nil {
+		t.Fatalf("CLI memory remove failed: %v, stderr: %s", err, remErr.String())
+	}
+	if !strings.Contains(remOut.String(), mem1.ID) {
+		t.Errorf("expected remove output to mention %s, got: %s", mem1.ID, remOut.String())
+	}
+
+	// 3. 重啟 Daemon
+	_ = f.client.Close()
+	_ = f.daemon.Close()
+
+	d2 := daemon.NewDaemon(daemon.Config{
+		SocketPath: f.sockPath,
+		MaxWorkers: 2,
+	}, f.store, f.policy)
+	if err := d2.Start(); err != nil {
+		t.Fatalf("failed to restart daemon: %v", err)
+	}
+	defer d2.Close()
+	waitForSocket(t, f.sockPath)
+
+	// 4. 查詢已刪除之 mem1：預期失敗且 exit code 非 0
+	get1Cmd := exec.Command(asuraBin, "memory", "get",
+		"--workspace", f.projA,
+		mem1.ID,
+		"--socket", f.sockPath,
+	)
+	var get1Out, get1Err bytes.Buffer
+	get1Cmd.Stdout = &get1Out
+	get1Cmd.Stderr = &get1Err
+	if err := get1Cmd.Run(); err == nil {
+		t.Fatalf("expected error getting deleted memory %s, but succeeded:\n%s", mem1.ID, get1Out.String())
+	}
+	if !strings.Contains(get1Err.String(), "not found") {
+		t.Errorf("expected 'not found' in stderr, got: %s", get1Err.String())
+	}
+
+	// 5. 查詢未刪除之 mem2：預期成功且內容完好
+	get2Cmd := exec.Command(asuraBin, "memory", "get",
+		"--workspace", f.projA,
+		mem2.ID,
+		"--socket", f.sockPath,
+	)
+	var get2Out, get2Err bytes.Buffer
+	get2Cmd.Stdout = &get2Out
+	get2Cmd.Stderr = &get2Err
+	if err := get2Cmd.Run(); err != nil {
+		t.Fatalf("failed getting remaining memory %s: %v, stderr: %s", mem2.ID, err, get2Err.String())
+	}
+	if !strings.Contains(get2Out.String(), mem2.ID) || !strings.Contains(get2Out.String(), "專案A第二筆記憶") {
+		t.Errorf("remaining memory output unexpected:\n%s", get2Out.String())
 	}
 }
 
-// TestMEM006: 失敗不冒充成功且管理不啟動模型 (主責 P2-T2、P3-T1 外迴圈預留骨架)
+// TestMEM006: 失敗不冒充成功且管理不啟動模型 (MEM-006, P3-T1 外迴圈真實 CLI 測試)
 func TestMEM006(t *testing.T) {
 	f := setupMemoryFixture(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	asuraBin := buildAsuraBinary(t)
 
-	// 記憶管理操作不應呼叫 runner (runner 計數應保持 0)
-	_, _ = f.client.AddMemory(ctx, f.projA, fixedMemoryContentA)
+	// 1. 健康對照：正常 Daemon 下寫入成功，且 runnerCalls 保持 0
+	healthCmd := exec.Command(asuraBin, "memory", "add",
+		"--workspace", f.projA,
+		"--content", fixedMemoryContentA,
+		"--socket", f.sockPath,
+	)
+	var hOut, hErr bytes.Buffer
+	healthCmd.Stdout = &hOut
+	healthCmd.Stderr = &hErr
+	if err := healthCmd.Run(); err != nil {
+		t.Fatalf("健康對照失敗：%v, stderr: %s", err, hErr.String())
+	}
 	if calls := atomic.LoadInt32(f.runnerCalls); calls != 0 {
-		t.Fatalf("安全違規：記憶管理啟動了 AI 後端/runner，runnerCalls=%d", calls)
+		t.Fatalf("安全違規：正常記憶管理啟動了 AI 後端/runner，runnerCalls=%d", calls)
+	}
+
+	// 2. 失敗對照（Daemon 不可用 / socket 不存在）：
+	nonExistentSocket := filepath.Join(f.rootDir, "non-existent.sock")
+	failCmd := exec.Command(asuraBin, "memory", "add",
+		"--workspace", f.projA,
+		"--content", "失敗測試內容",
+		"--socket", nonExistentSocket,
+	)
+	var fOut, fErr bytes.Buffer
+	failCmd.Stdout = &fOut
+	failCmd.Stderr = &fErr
+	err := failCmd.Run()
+	if err == nil {
+		t.Fatalf("預期 Daemon 不可用時 CLI 失敗，但得到成功 exit code 0")
+	}
+	// stderr 必須有明確錯誤訊息
+	if !strings.Contains(fErr.String(), "daemon unavailable") {
+		t.Errorf("stderr 預期包含 'daemon unavailable'，實際為: %s", fErr.String())
+	}
+	// stdout 不得冒充已保存
+	if strings.Contains(fOut.String(), "ID:") || strings.Contains(fOut.String(), "Created") || strings.Contains(fOut.String(), "Saved") {
+		t.Fatalf("安全漏洞：失敗時 stdout 冒充成功字樣:\n%s", fOut.String())
+	}
+	// 驗證未改走其他儲存方式（檢查沒有在專案或 root 產生任何額外 db/json/memory 檔案）
+	entries, _ := os.ReadDir(f.projA)
+	if len(entries) > 1 { // 原本只有 subC
+		t.Fatalf("安全違規：CLI 在 daemon 失敗時疑似產生了替代儲存檔案: %v", entries)
+	}
+	// runner 計數仍應為 0
+	if calls := atomic.LoadInt32(f.runnerCalls); calls != 0 {
+		t.Fatalf("安全違規：失敗情境啟動了 AI 後端/runner，runnerCalls=%d", calls)
+	}
+
+	// 3. 驗證既有任務提交不自動加入記憶內容 (MEM-006):
+	var receivedPrompt string
+	var promptCaptured = make(chan struct{})
+	captureRunner := func(ctx context.Context, ws, p string) (string, error) {
+		receivedPrompt = p
+		close(promptCaptured)
+		return "ack", nil
+	}
+	// 暫停原 daemon，啟動帶 captureRunner 的 daemon
+	_ = f.client.Close()
+	_ = f.daemon.Close()
+
+	engWithCapture := engine.NewEngine(f.store, f.policy, engine.WithRunner(captureRunner))
+	dCapture := daemon.NewDaemon(daemon.Config{
+		SocketPath: f.sockPath,
+		MaxWorkers: 1,
+	}, f.store, f.policy, daemon.WithEngine(engWithCapture))
+	if err := dCapture.Start(); err != nil {
+		t.Fatalf("failed to start capture daemon: %v", err)
+	}
+	defer dCapture.Close()
+	waitForSocket(t, f.sockPath)
+
+	clientCapture, err := daemon.NewClient(f.sockPath)
+	if err != nil {
+		t.Fatalf("failed to connect to capture daemon: %v", err)
+	}
+	defer clientCapture.Close()
+
+	rawPrompt := "請幫我分析程式碼"
+	_, err = clientCapture.Submit(context.Background(), engine.SubmitRequest{
+		Workspace: f.projA,
+		Prompt:    rawPrompt,
+	})
+	if err != nil {
+		t.Fatalf("submit task failed: %v", err)
+	}
+
+	select {
+	case <-promptCaptured:
+	case <-time.After(3 * time.Second):
+		t.Fatalf("timed out waiting for runner execution")
+	}
+
+	if receivedPrompt != rawPrompt {
+		t.Fatalf("安全違規：既有任務提交被自動篡改或注入記憶內容！expected %q, got %q", rawPrompt, receivedPrompt)
 	}
 }
