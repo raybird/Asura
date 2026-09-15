@@ -60,7 +60,14 @@ func (e *Engine) CancelTask(taskID string) error {
 		targetPGID = latest.PGID
 	}
 
-	// 5. 實施三態進程組身分驗證與安全回收 (防禦 J-01, K-01, L-01, M-01)
+	// 5. 先行標記狀態為 cancelled，確保被信號喚醒之執行端能即時感知取消狀態，防禦失敗覆寫競態
+	existingResult := task.Result
+	if latest, getErr := e.store.GetTask(context.Background(), taskID); getErr == nil && latest.Result != "" {
+		existingResult = latest.Result
+	}
+	_ = e.store.UpdateTaskStatus(context.Background(), taskID, storage.StatusCancelled, existingResult, "task cancelled by user")
+
+	// 實施三態進程組身分驗證與安全回收 (防禦 J-01, K-01, L-01, M-01)
 	if targetPGID > 0 {
 		matched, verifyErr := opencode.VerifyTaskProcessGroup(targetPGID, opencode.TaskProcessMetadata{}, taskID)
 		if verifyErr != nil {
@@ -92,7 +99,7 @@ func (e *Engine) CancelTask(taskID string) error {
 	}
 
 	// 6. 持久化終態為 cancelled (保留既有輸出)
-	existingResult := task.Result
+	existingResult = task.Result
 	if latest, getErr := e.store.GetTask(context.Background(), taskID); getErr == nil && latest.Result != "" {
 		existingResult = latest.Result
 	}

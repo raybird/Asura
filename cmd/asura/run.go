@@ -240,8 +240,16 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 		if currentTaskID != "" {
 			// 若任務已被標記取消，確保殘留之背景孤兒進程組一併被擊殺 (修復 L-01)
 			t, _ := store.GetTask(context.Background(), currentTaskID)
-			if t != nil && t.Status == storage.StatusCancelled && pgid > 0 {
-				_ = opencode.KillProcessGroup(pgid)
+			if t != nil && t.Status == storage.StatusCancelled {
+				if pgid > 0 {
+					_ = opencode.KillProcessGroup(pgid)
+				}
+				if !opencode.IsProcessGroupAlive(pgid) {
+					_ = store.UpdateTaskPGID(context.Background(), currentTaskID, 0)
+					lockPath := taskLockPath(*dbPath, currentTaskID)
+					_ = os.WriteFile(lockPath, []byte(""), 0600)
+				}
+				return buf.String(), context.Canceled
 			}
 			// 僅在進程組已無存活成員時才清空 PGID 與鎖檔
 			if !opencode.IsProcessGroupAlive(pgid) {

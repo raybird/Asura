@@ -178,6 +178,13 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 
 	if !alreadyCreated {
 		if err := e.store.CreateTask(ctx, task); err != nil {
+			if errors.Is(ctx.Err(), context.Canceled) {
+				task.Status = storage.StatusCancelled
+				task.ErrorMessage = "task cancelled by user"
+				_ = e.store.CreateTask(context.Background(), task)
+				_ = e.store.UpdateTaskStatus(context.Background(), task.ID, storage.StatusCancelled, "", "task cancelled by user")
+				return task, ctx.Err()
+			}
 			return nil, fmt.Errorf("create task in storage: %w", err)
 		}
 	}
@@ -273,23 +280,43 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 	}
 
 	if runErr != nil {
+		updated, persistErr := e.store.UpdateTaskStatusIfRunning(persistCtx, task.ID, storage.StatusFailed, output, runErr.Error())
+		if persistErr != nil {
+			return task, fmt.Errorf("%w (persist task status failed: %v)", runErr, persistErr)
+		}
+		if !updated {
+			latest, getErr := e.store.GetTask(persistCtx, task.ID)
+			if getErr == nil && latest.Status == storage.StatusCancelled {
+				task.Status = storage.StatusCancelled
+				task.Result = output
+				task.ErrorMessage = latest.ErrorMessage
+				return task, context.Canceled
+			}
+		}
 		task.Status = storage.StatusFailed
 		task.Result = output
 		task.ErrorMessage = runErr.Error()
-		if persistErr := e.store.UpdateTaskStatus(persistCtx, task.ID, storage.StatusFailed, output, runErr.Error()); persistErr != nil {
-			return task, fmt.Errorf("%w (persist task status failed: %v)", runErr, persistErr)
-		}
 		return task, runErr
 	}
 
 	// 6. 空輸出與未解決結構化錯誤防禦檢查（遵循 SCN-007，修復 R-09 與 F-04）
 	if isErr, errMsg := hasUnresolvedErrorOrEmpty(output); isErr {
+		updated, persistErr := e.store.UpdateTaskStatusIfRunning(persistCtx, task.ID, storage.StatusFailed, output, errMsg)
+		if persistErr != nil {
+			return task, fmt.Errorf("%w (persist task status failed: %v)", ErrEmptyOutput, persistErr)
+		}
+		if !updated {
+			latest, getErr := e.store.GetTask(persistCtx, task.ID)
+			if getErr == nil && latest.Status == storage.StatusCancelled {
+				task.Status = storage.StatusCancelled
+				task.Result = output
+				task.ErrorMessage = latest.ErrorMessage
+				return task, context.Canceled
+			}
+		}
 		task.Status = storage.StatusFailed
 		task.Result = output
 		task.ErrorMessage = errMsg
-		if persistErr := e.store.UpdateTaskStatus(persistCtx, task.ID, storage.StatusFailed, output, errMsg); persistErr != nil {
-			return task, fmt.Errorf("%w (persist task status failed: %v)", ErrEmptyOutput, persistErr)
-		}
 		return task, ErrEmptyOutput
 	}
 
