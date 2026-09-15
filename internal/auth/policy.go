@@ -66,10 +66,29 @@ func (p *Policy) CanonicalWorkspace(targetPath string) string {
 	return filepath.Clean(absTarget)
 }
 
-// AuthorizeCanonicalWorkspace 同次驗證授權並解析出標準工作區路徑 (MEM-003, MEM-004)
-// 若未授權或解析失敗則回傳錯誤；此處為最小可編譯空殼，由 P2-T2 完成正式實作
+// AuthorizeCanonicalWorkspace 同次驗證授權並解析出標準工作區路徑 (MEM-003, MEM-004, P2-T2)
+// 若未授權、路徑為空或解析失敗則直接回傳錯誤，消除符號連結競態並保證 scope 精確性
 func (p *Policy) AuthorizeCanonicalWorkspace(targetPath string) (string, error) {
-	return "", errors.New("AuthorizeCanonicalWorkspace: not implemented")
+	if p == nil {
+		return "", ErrDisallowedWorkspace
+	}
+	if strings.TrimSpace(targetPath) == "" {
+		return "", fmt.Errorf("%w: empty target path", ErrDisallowedWorkspace)
+	}
+
+	absTarget, err := resolveWorkspace(targetPath)
+	if err != nil {
+		return "", fmt.Errorf("%w: invalid target path: %v", ErrDisallowedWorkspace, err)
+	}
+	cleanedTarget := filepath.Clean(absTarget)
+
+	for _, root := range p.allowedRoots {
+		if cleanedTarget == root || strings.HasPrefix(cleanedTarget, root+string(filepath.Separator)) {
+			return cleanedTarget, nil
+		}
+	}
+
+	return "", ErrDisallowedWorkspace
 }
 
 // 2026-09-13：解析既有祖先的連結，仍容許尚未建立的專案路徑。

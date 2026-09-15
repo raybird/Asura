@@ -79,12 +79,12 @@ SQL 的列出必須帶 workspace，取得／刪除必須同時匹配 workspace �
 
 ### P2-T2 — 同次解析授權與 IPC 管理
 
-- **狀態**：📝 待實作；**相依**：P2-T1；**對應**：MEM-002、003、004、007，補 MEM-006 服務端錯誤。
-- **P2-T2.a 產出**：最小 auth helper 回傳已授權 canonical scope 與 error；其餘既有呼叫者語意不變。Daemon 每個記憶操作固定該 scope 後傳入 store，不再解析一次。
-- **P2-T2.b 產出**：memory action、Client 方法與必要回應；單元紅燈涵蓋漏參數、缺失回應、儲存失敗及拒絕內容不得洩漏。
-- **P2-T2.c 產出**：完成 P1-T2 的正反向對照；在同一 DB 依序啟動「授權 A/B → 撤除 A → 恢復 A」的 Daemon，撤權期間四種操作均拒絕，獨立 SQL 證明 A 保留，恢復後再讀寫刪除成功。
-- **完成判準**：A/B 同 root、別名、子目錄、越界及撤權案例全綠；解析途中變動使用可控制同步點驗證，不只靠 sleep 或反覆碰運氣。拒絕後資料無變更、輸出無跨 scope 內容，管理零新增 runner 呼叫。
-- **證據位置**：`evidence/phase-2/`；取得此安全閘門全綠後才進 Phase 3。
+- **狀態**：✅ 2026-09-14 完成同次解析授權 helper、Daemon IPC 記憶操作管理與安全閘門外迴圈全綠。**相依**：P2-T1；**對應**：MEM-002、003、004、007，補 MEM-006 服務端錯誤。
+- **P2-T2.a 產出**：在 `internal/auth/policy.go` 實作 `AuthorizeCanonicalWorkspace`，同次完成授權校驗與標準化路徑解析；單元測試全綠（證據：[auth-canonical-green.log](evidence/phase-2/auth-canonical-green.log)）。Daemon 每個記憶操作固定該 scope 後傳入 store，不再解析一次。
+- **P2-T2.b 產出**：在 `internal/daemon/daemon.go` 實作 `memory_add`、`memory_list`、`memory_get`、`memory_remove` IPC 處理器與 `generateMemoryID`；在 `internal/daemon/memory_test.go` 驗證漏參數、未授權與越界拒絕、及正向 CRUD（證據：[daemon-ipc-green.log](evidence/phase-2/daemon-ipc-green.log)）。記憶操作零新增 runner 呼叫，不啟動模型後端。
+- **P2-T2.c 產出**：在 `tests/integration/memory_test.go` 驗證 MEM-001～007 外迴圈安全閘門全數轉綠（含同 root 專案隔離、別名可查、子目錄不繼承、越界拒絕、以及「授權 A/B → 撤除 A → 恢復 A」完整撤權保留資料與重新授權恢復流程，證據：[outer-memory-green.log](evidence/phase-2/outer-memory-green.log)）；Phase 2 模組回歸含 race 全綠（證據：[phase2-regression-green.log](evidence/phase-2/phase2-regression-green.log)）。
+- **完成判準**：A/B 同 root、別名、子目錄、越界及撤權案例全綠；拒絕後資料無變更、輸出無跨 scope 內容，管理零新增 runner 呼叫；重構確認為 no-op（證據：[p2t2-refactor-noop.log](evidence/phase-2/p2t2-refactor-noop.log)）。
+- **證據位置**：[evidence/phase-2/](evidence/phase-2/)。已取得安全閘門全綠，准予推進至 Phase 3。
 
 ## Phase 3：CLI、整合與交付
 

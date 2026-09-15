@@ -1,0 +1,7 @@
+日期：2026-09-14
+命令：go test -count=1 -race ./internal/auth ./internal/storage ./internal/daemon
+退出碼：0
+輸出：
+ok  	asura/internal/auth	1.031s
+ok  	asura/internal/storage	2.801s
+ok  	asura/internal/daemon	10.508s

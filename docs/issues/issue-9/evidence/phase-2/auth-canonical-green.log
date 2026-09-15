@@ -1,0 +1,18 @@
+日期：2026-09-14
+命令：go test -count=1 -v ./internal/auth -run '^TestAuthorizeCanonicalWorkspace$'
+退出碼：0
+輸出：
+=== RUN   TestAuthorizeCanonicalWorkspace
+=== RUN   TestAuthorizeCanonicalWorkspace/正向授權取得_canonical_scope
+=== RUN   TestAuthorizeCanonicalWorkspace/有效別名解析至同一專案_canonical_scope
+=== RUN   TestAuthorizeCanonicalWorkspace/子目錄_C_獨立且不等於專案_A_之_canonical_scope
+=== RUN   TestAuthorizeCanonicalWorkspace/越界符號連結拒絕
+=== RUN   TestAuthorizeCanonicalWorkspace/未授權外部目錄拒絕
+--- PASS: TestAuthorizeCanonicalWorkspace (0.00s)
+    --- PASS: TestAuthorizeCanonicalWorkspace/正向授權取得_canonical_scope (0.00s)
+    --- PASS: TestAuthorizeCanonicalWorkspace/有效別名解析至同一專案_canonical_scope (0.00s)
+    --- PASS: TestAuthorizeCanonicalWorkspace/子目錄_C_獨立且不等於專案_A_之_canonical_scope (0.00s)
+    --- PASS: TestAuthorizeCanonicalWorkspace/越界符號連結拒絕 (0.00s)
+    --- PASS: TestAuthorizeCanonicalWorkspace/未授權外部目錄拒絕 (0.00s)
+PASS
+ok  	asura/internal/auth	0.008s

@@ -2,7 +2,9 @@ package daemon
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -679,10 +681,118 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			}
 			_ = encoder.Encode(IPCResponse{CronRuns: runs})
 
+		case "memory_add":
+			if req.Workspace == "" || req.Content == "" {
+				_ = encoder.Encode(IPCResponse{Error: "workspace and content are required"})
+				continue
+			}
+			if d.policy == nil {
+				_ = encoder.Encode(IPCResponse{Error: "unauthorized workspace"})
+				continue
+			}
+			canonicalScope, err := d.policy.AuthorizeCanonicalWorkspace(req.Workspace)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unauthorized workspace: %v", err)})
+				continue
+			}
+
+			mem := storage.Memory{
+				ID:        generateMemoryID(),
+				Workspace: canonicalScope,
+				Content:   req.Content,
+				Source:    "manual",
+				CreatedAt: time.Now().UTC(),
+			}
+			if err := d.store.CreateMemory(context.Background(), mem); err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("create memory: %v", err)})
+				continue
+			}
+			_ = encoder.Encode(IPCResponse{Memory: &mem})
+
+		case "memory_list":
+			if req.Workspace == "" {
+				_ = encoder.Encode(IPCResponse{Error: "workspace is required"})
+				continue
+			}
+			if d.policy == nil {
+				_ = encoder.Encode(IPCResponse{Error: "unauthorized workspace"})
+				continue
+			}
+			canonicalScope, err := d.policy.AuthorizeCanonicalWorkspace(req.Workspace)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unauthorized workspace: %v", err)})
+				continue
+			}
+
+			memories, err := d.store.ListMemories(context.Background(), canonicalScope)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("list memories: %v", err)})
+				continue
+			}
+			_ = encoder.Encode(IPCResponse{Memories: memories})
+
+		case "memory_get":
+			if req.Workspace == "" || req.MemoryID == "" {
+				_ = encoder.Encode(IPCResponse{Error: "workspace and memory_id are required"})
+				continue
+			}
+			if d.policy == nil {
+				_ = encoder.Encode(IPCResponse{Error: "unauthorized workspace"})
+				continue
+			}
+			canonicalScope, err := d.policy.AuthorizeCanonicalWorkspace(req.Workspace)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unauthorized workspace: %v", err)})
+				continue
+			}
+
+			mem, err := d.store.GetMemory(context.Background(), canonicalScope, req.MemoryID)
+			if err != nil {
+				if errors.Is(err, storage.ErrMemoryNotFound) {
+					_ = encoder.Encode(IPCResponse{Error: "memory not found"})
+				} else {
+					_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("get memory: %v", err)})
+				}
+				continue
+			}
+			_ = encoder.Encode(IPCResponse{Memory: mem})
+
+		case "memory_remove":
+			if req.Workspace == "" || req.MemoryID == "" {
+				_ = encoder.Encode(IPCResponse{Error: "workspace and memory_id are required"})
+				continue
+			}
+			if d.policy == nil {
+				_ = encoder.Encode(IPCResponse{Error: "unauthorized workspace"})
+				continue
+			}
+			canonicalScope, err := d.policy.AuthorizeCanonicalWorkspace(req.Workspace)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unauthorized workspace: %v", err)})
+				continue
+			}
+
+			err = d.store.DeleteMemory(context.Background(), canonicalScope, req.MemoryID)
+			if err != nil {
+				if errors.Is(err, storage.ErrMemoryNotFound) {
+					_ = encoder.Encode(IPCResponse{Error: "memory not found"})
+				} else {
+					_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("delete memory: %v", err)})
+				}
+				continue
+			}
+			_ = encoder.Encode(IPCResponse{})
+
 		default:
 			_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unknown action: %s", action)})
 		}
 	}
+}
+
+func generateMemoryID() string {
+	b := make([]byte, 6)
+	_, _ = rand.Read(b)
+	return fmt.Sprintf("mem-%d-%s", time.Now().Unix(), hex.EncodeToString(b))
 }
 
 func (d *Daemon) canonicalWorkspace(ws string) string {

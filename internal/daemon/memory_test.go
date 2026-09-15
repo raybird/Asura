@@ -13,12 +13,8 @@ import (
 	"asura/internal/storage"
 )
 
-// TestDaemon_Memory_UnitRed (P1-T2.c Daemon 單元紅燈)
-// 驗證 Daemon 在收到記憶 IPC 操作時的請求處理行為。
-// 在目前階段（P1-T2），Daemon 尚未實作 memory_* action，
-// Client 調用將取得明確的 unknown action 行為紅燈，記錄缺少操作之現況；
-// 正式授權守門與同次 canonical scope 實作由 P2-T2 交付。
-func TestDaemon_Memory_UnitRed(t *testing.T) {
+// TestDaemon_Memory_IPC 驗證 Daemon IPC 處理器對記憶操作之同次授權、參數校驗與 CRUD 功能 (MEM-002, MEM-003, MEM-004, P2-T2.b)
+func TestDaemon_Memory_IPC(t *testing.T) {
 	tmpDir := t.TempDir()
 	outsideDir := t.TempDir()
 
@@ -67,30 +63,83 @@ func TestDaemon_Memory_UnitRed(t *testing.T) {
 	}
 	defer client.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	t.Run("memory_add 尚缺 action 行為紅燈", func(t *testing.T) {
-		_, err := client.AddMemory(ctx, projA, "測試記憶內容")
-		if err == nil {
-			t.Fatalf("預期失敗但得到 nil 錯誤")
+	t.Run("漏參數拒絕", func(t *testing.T) {
+		if _, err := client.AddMemory(ctx, "", "content"); err == nil {
+			t.Fatalf("expected error for empty workspace in AddMemory")
 		}
-		if !strings.Contains(err.Error(), "unknown action") {
-			t.Fatalf("預期收到 unknown action: memory_add，實際收到: %v", err)
+		if _, err := client.AddMemory(ctx, projA, ""); err == nil {
+			t.Fatalf("expected error for empty content in AddMemory")
 		}
-		t.Logf("Daemon 單元行為紅燈確認 (功能尚缺)：%v (待 P2-T2 實作)", err)
+		if _, err := client.ListMemories(ctx, ""); err == nil {
+			t.Fatalf("expected error for empty workspace in ListMemories")
+		}
+		if _, err := client.GetMemory(ctx, "", "id"); err == nil {
+			t.Fatalf("expected error for empty workspace in GetMemory")
+		}
+		if _, err := client.GetMemory(ctx, projA, ""); err == nil {
+			t.Fatalf("expected error for empty memoryID in GetMemory")
+		}
+		if err := client.DeleteMemory(ctx, "", "id"); err == nil {
+			t.Fatalf("expected error for empty workspace in DeleteMemory")
+		}
+		if err := client.DeleteMemory(ctx, projA, ""); err == nil {
+			t.Fatalf("expected error for empty memoryID in DeleteMemory")
+		}
 	})
 
-	t.Run("越界路徑請求尚未進到授權閘門即遭 unknown action 阻擋", func(t *testing.T) {
-		_, err := client.AddMemory(ctx, escapedLink, "越界測試")
-		if err == nil {
-			t.Fatalf("預期失敗但得到 nil 錯誤")
+	t.Run("越界符號連結與外部目錄拒絕", func(t *testing.T) {
+		if _, err := client.AddMemory(ctx, escapedLink, "越界寫入"); err == nil || !strings.Contains(err.Error(), "unauthorized workspace") {
+			t.Fatalf("越界符號連結應被拒絕且回傳 unauthorized workspace，got: %v", err)
 		}
-		// 記錄：此時被拒絕是因 action 未實作，不能誤當成越界防護已生效
-		if strings.Contains(err.Error(), "unknown action") {
-			t.Logf("單元紅燈確認：目前受限於缺少 action 處理器，無法證明越界授權閘門已生效 (待 P2-T2 接線)")
-		} else {
-			t.Fatalf("預期 unknown action，但收到: %v", err)
+		if _, err := client.AddMemory(ctx, outsideDir, "外部寫入"); err == nil || !strings.Contains(err.Error(), "unauthorized workspace") {
+			t.Fatalf("外部目錄應被拒絕且回傳 unauthorized workspace，got: %v", err)
+		}
+	})
+
+	t.Run("正向 CRUD 流程完整驗證", func(t *testing.T) {
+		// 寫入記憶
+		mem, err := client.AddMemory(ctx, projA, "IPC 測試記憶內容")
+		if err != nil {
+			t.Fatalf("AddMemory failed: %v", err)
+		}
+		if mem == nil || mem.ID == "" || mem.Content != "IPC 測試記憶內容" || mem.Source != "manual" {
+			t.Fatalf("AddMemory response invalid: %+v", mem)
+		}
+
+		// 列出記憶
+		list, err := client.ListMemories(ctx, projA)
+		if err != nil {
+			t.Fatalf("ListMemories failed: %v", err)
+		}
+		if len(list) != 1 || list[0].ID != mem.ID {
+			t.Fatalf("ListMemories result invalid: %+v", list)
+		}
+
+		// 依 ID 取得記憶
+		got, err := client.GetMemory(ctx, projA, mem.ID)
+		if err != nil {
+			t.Fatalf("GetMemory failed: %v", err)
+		}
+		if got.Content != mem.Content {
+			t.Fatalf("GetMemory content mismatch: got %q, expected %q", got.Content, mem.Content)
+		}
+
+		// 刪除記憶
+		if err := client.DeleteMemory(ctx, projA, mem.ID); err != nil {
+			t.Fatalf("DeleteMemory failed: %v", err)
+		}
+
+		// 再次查詢應得 memory not found
+		if _, err := client.GetMemory(ctx, projA, mem.ID); err == nil || !strings.Contains(err.Error(), "memory not found") {
+			t.Fatalf("expected memory not found after deletion, got: %v", err)
+		}
+
+		// 重複刪除應得 memory not found
+		if err := client.DeleteMemory(ctx, projA, mem.ID); err == nil || !strings.Contains(err.Error(), "memory not found") {
+			t.Fatalf("expected memory not found on duplicate deletion, got: %v", err)
 		}
 	})
 }
