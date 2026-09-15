@@ -132,6 +132,33 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web \
 - **不可達日期安全防護**：如 2 月 31 日等日曆上不可達之排程在新增時即刻拒絕，防止計時器陷入零值雪崩循環。
 - **日與週匹配語意**：若表達式中同時指定「日（Day of Month）」與「週（Day of Week）」，採用交集（AND）條件匹配（即「當日且當週」同時成立才觸發）。
 
+#### 專案級基礎記憶管理 (memory)
+```bash
+# 新增專案記憶（純文字內容，固定 manual 來源與建立時間）
+./bin/asura memory add \
+  --workspace /path/to/project \
+  --content "專案重要架構決策與業務規則"
+
+# 列出專案所有記憶（五欄位完整顯示）
+./bin/asura memory list \
+  --workspace /path/to/project
+
+# 查詢指定 ID 記憶之詳細五欄位（ID、Workspace、Content、Source、CreatedAt）
+./bin/asura memory get \
+  --workspace /path/to/project <memory-id>
+
+# 刪除指定記憶（依 ID 與專案精確比對刪除）
+./bin/asura memory remove \
+  --workspace /path/to/project <memory-id>
+```
+
+2026-09-15：
+- **五欄位完整回傳**：查詢與寫入均完整回傳 `ID`、`Workspace`（標準化正規路徑）、`Content`（完整文字不截斷）、`Source`（固定為 `manual`）與 `CreatedAt`（建立時間）。
+- **精確 Workspace 隔離**：記憶嚴格限定於該專案的標準化路徑；同一授權 root 下之不同專案嚴格隔離；子目錄不繼承父目錄記憶；有效符號連結別名共用相同專案記憶集合。
+- **撤權與重新授權政策**：專案自 `--allowed-roots` 撤權後，原記憶保留於儲存層，但所有讀寫刪除操作皆嚴格拒絕；重新獲得授權後立即恢復查詢與操作。
+- **重啟持久化與指定刪除**：記憶持久化保存於 SQLite，重啟 Daemon 完整保留未刪資料；刪除指定記憶後重啟不恢復，且另一專案與同專案其他記憶完全不受影響。
+- **失敗回報與零 AI 調用**：Daemon 不可用或操作失敗時，CLI 明確輸出錯誤至 stderr 並回傳非零退出碼，絕不冒充已保存或已刪除，不改走其他儲存方式；記憶管理操作直通儲存層，絕不啟動 AI 模型後端；既有任務提交不自動注入記憶內容。
+
 ---
 
 ## 架構設計與議題文件
@@ -142,6 +169,7 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web \
   - [Issue 2 本機 AI 執行路徑整合 (Phase 1.5)](docs/issues/issue-2/README.md) 與 [實作計畫拆解](docs/issues/issue-2/implementation-plan-decomposition.md)
   - [Issue 4 單一 Web 遠端入口 (Phase 2A)](docs/issues/issue-4/README.md) 與 [實作計畫拆解](docs/issues/issue-4/implementation-plan-decomposition.md)
   - [Issue 6 定時排程與容量調度 (Phase 2B)](docs/issues/issue-6/README.md) 與 [實作計畫拆解](docs/issues/issue-6/implementation-plan-decomposition.md)
+  - [Issue 9 專案級基礎記憶 (Phase 3A)](docs/issues/issue-9/README.md) 與 [實作計畫](docs/issues/issue-9/implementation-plan.md)
 
 ---
 
@@ -191,4 +219,4 @@ new-issue ──► decompose (僅 Large) ──► execute-task (BDD + TDD) ─
 
 ---
 
-*最新更新日期：2026-09-13*
+*最新更新日期：2026-09-15*

@@ -99,12 +99,12 @@ SQL 的列出必須帶 workspace，取得／刪除必須同時匹配 workspace �
 
 ### P3-T2 — 完整回歸、文件與審查交付
 
-- **狀態**：📝 待實作；**相依**：P3-T1；**對應**：MEM-001～007。
-- **P3-T2.a 產出**：七項外迴圈與低層回歸全綠；受控 runner 驗證正常 ask 可啟動且收到原 prompt，記憶命令不新增呼叫。既有 CLI／Web／Cron 測試仍通過。
-- **P3-T2.b 產出**：根 README 新增四命令、五欄位、精確 scope、撤權與重啟政策、失敗回報；在 docs/agents/project.md 登記使用者功能 → 根 README。只更新本功能觸發的常青文件。
-- **P3-T2.c 產出**：固定 BASE／HEAD、七項 Proof of Test 與規格基準，交由非實作者獨立 review，保存判定；依 [review-evidence](../../agents/review-evidence.md) 辦理。自我重讀不算獨立審查，本次拆解不宣稱 review PASS。
+- **狀態**：🚧 進行中（2026-09-15 完成 P3-T2.a 回歸與 P3-T2.b 文件登記，準備獨立審查 P3-T2.c）；**相依**：P3-T1；**對應**：MEM-001～007。
+- **P3-T2.a 產出**：七項外迴圈全數通過（[outer-all-memory-green.log](evidence/phase-3/outer-all-memory-green.log)）；全專案 race 回歸 `go test -count=1 -race ./...` 全數通過（證據：[full-regression-race-green.log](evidence/phase-3/full-regression-race-green.log)）；受控 runner 驗證記憶管理保持 0 次 AI 模型呼叫，既有 ask 任務提交未受干擾。既有 CLI、Web、Cron 整合測試全數維持通過。
+- **P3-T2.b 產出**：根 README 新增記憶管理章節（涵蓋四命令、五欄位、精確 scope、撤權與重啟政策、失敗回報與零 AI 調用）並新增 Issue 9 連結；在 docs/agents/project.md 登記使用者功能與常青文件更新責任對照。
+- **P3-T2.c 產出**：固定 BASE／HEAD、七項 Proof of Test 與規格基準，交由獨立 reviewer 審查，保存判定；依 [review-evidence](../../agents/review-evidence.md) 辦理。自我重讀不算獨立審查。
 - **完成判準**：完整 race 回歸、文件查核及有效獨立 review 無 MUST FIX；所有實作與證據已提交。不自行把此狀態寫成 PR 已合併。
-- **證據位置**：`evidence/phase-3/` 與實際 review artifact；尚未建立。
+- **證據位置**：[evidence/phase-3/](evidence/phase-3/) 與即將產出之 review artifact。
 
 ## Scenario 與測試層級對應
 
