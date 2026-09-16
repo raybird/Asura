@@ -497,3 +497,127 @@ func TestEngineCancel_DoesNotOverwriteCommittedTerminalState(t *testing.T) {
 	}
 }
 
+// TestEngineCancel_StalePendingSnapshotDoesNotOverwriteTerminalState
+// 驗證當 CancelTask 讀取 DB 快照時任務為 pending，但在 CancelTask 繼續進行狀態轉移之前，
+// SubmitTask 或外部已搶先將任務推進至 terminal 狀態 (completed / failed)。
+// CancelTask 絕不得依賴過期的 pending 快照將 DB 中的終態覆寫為 cancelled 或 cancelling。
+func TestEngineCancel_StalePendingSnapshotDoesNotOverwriteTerminalState(t *testing.T) {
+	testCases := []struct {
+		name           string
+		terminalStatus storage.TaskStatus
+		withRunnerReg  bool
+	}{
+		{
+			name:           "stale pending snapshot must not overwrite completed (no registration)",
+			terminalStatus: storage.StatusCompleted,
+			withRunnerReg:  false,
+		},
+		{
+			name:           "stale pending snapshot must not overwrite failed (no registration)",
+			terminalStatus: storage.StatusFailed,
+			withRunnerReg:  false,
+		},
+		{
+			name:           "stale pending snapshot must not overwrite completed (with registration)",
+			terminalStatus: storage.StatusCompleted,
+			withRunnerReg:  true,
+		},
+		{
+			name:           "stale pending snapshot must not overwrite failed (with registration)",
+			terminalStatus: storage.StatusFailed,
+			withRunnerReg:  true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpDir, err := os.MkdirTemp("", "asura-stale-pending-*")
+			if err != nil {
+				t.Fatalf("failed to create temp dir: %v", err)
+			}
+			defer os.RemoveAll(tmpDir)
+
+			dbPath := filepath.Join(tmpDir, "asura.db")
+			store, err := storage.NewSQLiteStore(dbPath)
+			if err != nil {
+				t.Fatalf("NewSQLiteStore failed: %v", err)
+			}
+			defer store.Close()
+
+			policy := auth.NewPolicy([]string{tmpDir})
+			eng := NewEngine(store, policy)
+
+			taskID := "task-stale-pending"
+			now := time.Now().UTC()
+
+			// 1. 初始化 DB 中的任務狀態為 pending
+			task := &storage.Task{
+				ID:        taskID,
+				Workspace: tmpDir,
+				Prompt:    "stale pending task",
+				Status:    storage.StatusPending,
+				Result:    "",
+				PGID:      0,
+				CreatedAt: now,
+				UpdatedAt: now,
+			}
+			if err := store.CreateTask(context.Background(), task); err != nil {
+				t.Fatalf("CreateTask failed: %v", err)
+			}
+
+			// 2. 先持有 cancelsMu，使 CancelTask 在讀取 GetTask(pending) 後暫停在 cancelsMu.Lock()
+			eng.cancelsMu.Lock()
+
+			cancelDone := make(chan error, 1)
+			go func() {
+				// CancelTask 會先執行 store.GetTask()（讀到 pending），然後嘗試獲取 cancelsMu.Lock()
+				err := eng.CancelTask(taskID)
+				cancelDone <- err
+			}()
+
+			// 稍等以確保 goroutine 已進入 CancelTask 並阻塞於 cancelsMu.Lock()
+			time.Sleep(30 * time.Millisecond)
+
+			// 3. 在 CancelTask 持有過期 pending 快照且尚未繼續執行前，
+			// 模擬 SubmitTask 搶先完成並將狀態推進至 terminalStatus
+			if err := store.UpdateTaskStatus(context.Background(), taskID, tc.terminalStatus, "finished result", ""); err != nil {
+				eng.cancelsMu.Unlock()
+				t.Fatalf("UpdateTaskStatus failed: %v", err)
+			}
+
+			if tc.withRunnerReg {
+				eng.cancels[taskID] = func() {}
+				eng.doneChs[taskID] = make(chan struct{})
+			}
+
+			// 4. 釋放 cancelsMu，讓 CancelTask 帶著舊的 pending 快照繼續執行
+			eng.cancelsMu.Unlock()
+
+			// 5. 等待 CancelTask 完成
+			var cancelErr error
+			select {
+			case cancelErr = <-cancelDone:
+			case <-time.After(2 * time.Second):
+				t.Fatalf("CancelTask timed out")
+			}
+
+			// 6. 斷言：CancelTask 必須察覺已是終態並回報 ErrTaskNotRunning
+			if cancelErr == nil {
+				t.Fatalf("expected CancelTask to fail on stale snapshot when DB is %s, but got nil", tc.terminalStatus)
+			}
+			if !errors.Is(cancelErr, ErrTaskNotRunning) {
+				t.Errorf("expected error to wrap ErrTaskNotRunning, got: %v", cancelErr)
+			}
+
+			// 7. 斷言：DB 中的終態絕不可被覆寫為 cancelled 或 cancelling
+			saved, err := store.GetTask(context.Background(), taskID)
+			if err != nil {
+				t.Fatalf("GetTask failed: %v", err)
+			}
+			if saved.Status != tc.terminalStatus {
+				t.Fatalf("CRITICAL BUG: committed terminal status %s was overwritten to %s by stale snapshot!", tc.terminalStatus, saved.Status)
+			}
+		})
+	}
+}
+

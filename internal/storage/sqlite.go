@@ -474,6 +474,45 @@ func (s *SQLiteStore) UpdateTaskStatusIfRunning(ctx context.Context, id string, 
 	return rowsAffected > 0, nil
 }
 
+// UpdateTaskStatusIfPendingOrQueuedWithMsg 僅在任務處於 pending 或 queued 狀態時才轉移為新狀態，並更新 result 與 error_message
+func (s *SQLiteStore) UpdateTaskStatusIfPendingOrQueuedWithMsg(ctx context.Context, id string, status TaskStatus, result string, errMsg string) (bool, error) {
+	query := `
+	UPDATE tasks
+	SET status = ?, result = ?, error_message = ?, updated_at = ?
+	WHERE id = ? AND (status = ? OR status = ?)
+	`
+	now := time.Now().UTC()
+	res, err := s.db.ExecContext(ctx, query, string(status), result, errMsg, now, id, string(StatusPending), string(StatusQueued))
+	if err != nil {
+		return false, fmt.Errorf("update task status if pending or queued: %w", err)
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("check rows affected: %w", err)
+	}
+	return rowsAffected > 0, nil
+}
+
+// UpdateTaskStatusIfCancelling 僅在任務處於 cancelling 狀態時才轉移狀態，防止覆寫終態
+func (s *SQLiteStore) UpdateTaskStatusIfCancelling(ctx context.Context, id string, status TaskStatus, result string, errMsg string) (bool, error) {
+	query := `
+	UPDATE tasks
+	SET status = ?, result = ?, error_message = ?, updated_at = ?
+	WHERE id = ? AND status = ?
+	`
+	now := time.Now().UTC()
+	res, err := s.db.ExecContext(ctx, query, string(status), result, errMsg, now, id, string(StatusCancelling))
+	if err != nil {
+		return false, fmt.Errorf("update task status if cancelling: %w", err)
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("check rows affected: %w", err)
+	}
+	return rowsAffected > 0, nil
+}
+
+
 // UpdateTaskResult 僅更新任務的輸出結果，保留既有狀態與錯誤訊息 (修復 R-06)
 func (s *SQLiteStore) UpdateTaskResult(ctx context.Context, id string, result string) error {
 	query := `
