@@ -518,17 +518,17 @@ func (s *SQLiteStore) UpdateTaskPGID(ctx context.Context, id string, pgid int) e
 	return nil
 }
 
-// RecoverInterruptedTasks 掃描並將所有處於 running, pending 或 queued 狀態的孤兒任務標記為 failed
+// RecoverInterruptedTasks 掃描並將所有處於 running, pending, queued 或 cancelling 狀態的孤兒任務標記為 failed
 // 遵循 SCN-006 與 MUST FIX 5：守護程序重啟時保留已完成結果，揭露中斷工作，杜絕假成功、自動重新執行或排隊殘留
 func (s *SQLiteStore) RecoverInterruptedTasks(ctx context.Context) (int64, error) {
 	query := `
 	UPDATE tasks
 	SET status = ?, error_message = ?, updated_at = ?
-	WHERE status IN (?, ?, ?)
+	WHERE status IN (?, ?, ?, ?)
 	`
 	now := time.Now().UTC()
 	msg := "task interrupted: system restarted or terminated unexpectedly"
-	res, err := s.db.ExecContext(ctx, query, StatusFailed, msg, now, StatusRunning, StatusPending, StatusQueued)
+	res, err := s.db.ExecContext(ctx, query, StatusFailed, msg, now, StatusRunning, StatusPending, StatusQueued, StatusCancelling)
 	if err != nil {
 		return 0, fmt.Errorf("recover interrupted tasks: %w", err)
 	}

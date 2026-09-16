@@ -428,6 +428,9 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				_ = encoder.Encode(IPCResponse{Error: err.Error()})
 				continue
 			}
+			// CancelTask 確認安全回收完成後，釋放該任務持有的 workspace lock 並喚醒下一個排隊任務
+			wsKey := d.canonicalWorkspace(target.Workspace)
+			d.releaseWorkspaceAndWakeNext(wsKey, targetID)
 			task, _ := d.store.GetTask(context.Background(), targetID)
 			_ = encoder.Encode(IPCResponse{Task: task})
 
@@ -829,8 +832,13 @@ func (d *Daemon) dispatchTask(taskID, workspace, prompt string, class TaskClass)
 		})
 		return runErr
 	}, func() {
-		// 在 WorkerPool 槽位完全釋放後執行完成交接 (MUST FIX 3)
+		// 在 WorkerPool 槽位完全釋放後執行容量歸還
 		d.releaseCapacity()
+		// 檢查任務最新狀態：若處於 cancelling，表示進程組尚未確認安全回收，嚴禁提前釋放 workspace lock
+		task, err := d.store.GetTask(context.Background(), taskID)
+		if err == nil && task != nil && task.Status == storage.StatusCancelling {
+			return
+		}
 		d.releaseWorkspaceAndWakeNext(wsKey, taskID)
 	})
 	return err
@@ -846,6 +854,10 @@ func (d *Daemon) dispatchQueuedTask(taskID, workspace, prompt string, class Task
 		return runErr
 	}, func() {
 		d.releaseCapacity()
+		task, err := d.store.GetTask(context.Background(), taskID)
+		if err == nil && task != nil && task.Status == storage.StatusCancelling {
+			return
+		}
 		d.releaseWorkspaceAndWakeNext(wsKey, taskID)
 	})
 	return err

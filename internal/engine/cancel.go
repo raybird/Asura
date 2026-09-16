@@ -51,10 +51,12 @@ func (e *Engine) CancelTask(taskID string) error {
 	// 2. 狀態轉換：若任務為 running 或 active（或有殘留進程），將狀態轉移為 cancelling
 	// cancelling 代表「已發出停止意圖，正在進行安全回收」，絕不提前宣稱已回收 (StatusCancelled)
 	if task.Status == storage.StatusRunning || exists || (task.Status != storage.StatusCancelling && task.Status != storage.StatusCancelled) {
-		_ = e.store.UpdateTaskStatus(context.Background(), taskID, storage.StatusCancelling, task.Result, "task cancellation requested")
+		if err := e.store.UpdateTaskStatus(context.Background(), taskID, storage.StatusCancelling, task.Result, "task cancellation requested"); err != nil {
+			return fmt.Errorf("persist cancelling status: %w", err)
+		}
 	}
 
-	// 3. 觸發 context 取消
+	// 3. 觸發 context 取消 (cancelling 成功持久化後才發出停止意圖)
 	if exists && cancel != nil {
 		cancel()
 	}

@@ -294,6 +294,56 @@ func TestSQLiteStore_RecoverInterruptedTasks(t *testing.T) {
 	}
 }
 
+// TestRecoverInterruptedTasks_Cancelling 驗證當任務處於 StatusCancelling 遭遇守護程序重啟時，被正確復原為 StatusFailed
+func TestRecoverInterruptedTasks_Cancelling(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-storage-cancelling-rec-*")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	task := &Task{
+		ID:        "task-cancelling-rec",
+		Prompt:    "echo test",
+		Workspace: "/tmp/allowed",
+		Status:    StatusCancelling,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.CreateTask(ctx, task); err != nil {
+		t.Fatalf("create cancelling task: %v", err)
+	}
+
+	count, err := store.RecoverInterruptedTasks(ctx)
+	if err != nil {
+		t.Fatalf("RecoverInterruptedTasks failed: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 recovered task, got %d", count)
+	}
+
+	saved, err := store.GetTask(ctx, "task-cancelling-rec")
+	if err != nil {
+		t.Fatalf("get task: %v", err)
+	}
+	if saved.Status != StatusFailed {
+		t.Errorf("expected recovered status %s, got %s", StatusFailed, saved.Status)
+	}
+	if saved.ErrorMessage == "" {
+		t.Errorf("expected non-empty error message for recovered cancelling task")
+	}
+}
+
 func TestSQLiteStore_TaskClassPersistence(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "asura-storage-class-*")
 	if err != nil {
