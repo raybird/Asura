@@ -299,12 +299,117 @@ func TestEngineCancel_UnknownIdentityDoesNotMarkCancelled(t *testing.T) {
 		t.Errorf("expected PGID to be preserved as %d, got %d", pgid, saved.PGID)
 	}
 
-	// 6. 斷言 3：狀態絕不得呈現 confirmed cancelled 終態 (應維持 running)
+	// 6. 斷言 3：狀態絕不得呈現 confirmed cancelled 終態 (因未通過驗證，維持 cancelling)
 	if saved.Status == storage.StatusCancelled {
 		t.Errorf("expected task status NOT to be cancelled when identity is unverified, but got cancelled")
 	}
-	if saved.Status != storage.StatusRunning {
-		t.Errorf("expected task status to remain %q, got %q", storage.StatusRunning, saved.Status)
+	if saved.Status != storage.StatusCancelling {
+		t.Errorf("expected task status to remain %q, got %q", storage.StatusCancelling, saved.Status)
+	}
+}
+
+// TestEngineCancel_ActiveRunnerUnknownIdentityDoesNotMarkCancelled
+// 驗證活躍執行中的任務被取消時，若進程組身分無法確認，CancelTask 必須報錯、PGID 完好保留且任務絕不得被標記為 cancelled
+func TestEngineCancel_ActiveRunnerUnknownIdentityDoesNotMarkCancelled(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-active-unknown-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	taskID := "task-active-unknown-identity"
+	var orphanPGID int
+	runnerStarted := make(chan struct{})
+
+	runner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		cmd := exec.Command("sh", "-c", "exec env -i PATH=/usr/bin:/bin sh -c '(sleep 10) & exit 0'")
+		opencode.ConfigureProcessGroup(cmd)
+		if err := cmd.Start(); err != nil {
+			return "", fmt.Errorf("cmd start failed: %w", err)
+		}
+		leaderPID := cmd.Process.Pid
+		pgid, err := syscall.Getpgid(leaderPID)
+		if err != nil {
+			pgid = leaderPID
+		}
+		orphanPGID = pgid
+
+		_ = cmd.Wait()
+		for i := 0; i < 50; i++ {
+			if _, statErr := os.Stat(fmt.Sprintf("/proc/%d", leaderPID)); os.IsNotExist(statErr) {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+
+		_ = store.UpdateTaskPGID(context.Background(), taskID, orphanPGID)
+		close(runnerStarted)
+
+		<-ctx.Done()
+		return "partial output before cancel", ctx.Err()
+	}
+
+	eng := NewEngine(store, policy, WithRunner(runner))
+
+	defer func() {
+		if orphanPGID > 0 {
+			_ = syscall.Kill(-orphanPGID, syscall.SIGKILL)
+		}
+	}()
+
+	submitErrCh := make(chan error, 1)
+	go func() {
+		_, sErr := eng.SubmitTask(context.Background(), SubmitRequest{
+			ID:        taskID,
+			Workspace: tmpDir,
+			Prompt:    "active orphan prompt",
+		})
+		submitErrCh <- sErr
+	}()
+
+	<-runnerStarted
+
+	if !opencode.IsProcessGroupAlive(orphanPGID) {
+		t.Fatalf("expected orphan process group %d to be alive", orphanPGID)
+	}
+
+	cancelErr := eng.CancelTask(taskID)
+
+	if cancelErr == nil {
+		t.Fatalf("expected CancelTask to fail due to unknown process identity, got nil")
+	}
+	if !strings.Contains(cancelErr.Error(), "unable to verify process identity") {
+		t.Errorf("expected error to contain 'unable to verify process identity', got: %v", cancelErr)
+	}
+
+	select {
+	case <-submitErrCh:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for SubmitTask to finish")
+	}
+
+	saved, err := store.GetTask(context.Background(), taskID)
+	if err != nil {
+		t.Fatalf("GetTask failed: %v", err)
+	}
+	if saved.PGID != orphanPGID {
+		t.Errorf("expected PGID to be preserved as %d, got %d", orphanPGID, saved.PGID)
+	}
+
+	if saved.Status == storage.StatusCancelled {
+		t.Fatalf("CRITICAL BUG: task status in DB was marked as cancelled despite verification failure!")
+	}
+	if saved.Status != storage.StatusCancelling {
+		t.Errorf("expected task status to remain %q, got %q", storage.StatusCancelling, saved.Status)
 	}
 }
 

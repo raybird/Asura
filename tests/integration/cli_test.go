@@ -1649,8 +1649,8 @@ func TestCLI_LatestReview_M01_OrphanUnknownIdentityFailsSafely(t *testing.T) {
 	if finalTask.Status == storage.StatusCancelled {
 		t.Errorf("expected final task status NOT to be cancelled when identity is unverified, but got cancelled")
 	}
-	if finalTask.Status != storage.StatusRunning {
-		t.Errorf("expected final task status to remain %q, got: %q", storage.StatusRunning, finalTask.Status)
+	if finalTask.Status != storage.StatusCancelling {
+		t.Errorf("expected final task status to remain %q, got: %q", storage.StatusCancelling, finalTask.Status)
 	}
 }
 

@@ -39,14 +39,27 @@ func (e *Engine) CancelTask(taskID string) error {
 		if task.Status == storage.StatusCancelled {
 			return nil
 		}
+		if task.Status == storage.StatusPending || task.Status == storage.StatusQueued {
+			// 未啟動且無活躍 runner、無殘留進程組之排隊任務，直接取消
+			if updateErr := e.store.UpdateTaskStatus(context.Background(), taskID, storage.StatusCancelled, task.Result, "task cancelled by user"); updateErr != nil {
+				return fmt.Errorf("persist cancelled status failed: %w", updateErr)
+			}
+			return nil
+		}
 	}
 
-	// 2. 觸發 context 取消
+	// 2. 狀態轉換：若任務為 running 或 active（或有殘留進程），將狀態轉移為 cancelling
+	// cancelling 代表「已發出停止意圖，正在進行安全回收」，絕不提前宣稱已回收 (StatusCancelled)
+	if task.Status == storage.StatusRunning || exists || (task.Status != storage.StatusCancelling && task.Status != storage.StatusCancelled) {
+		_ = e.store.UpdateTaskStatus(context.Background(), taskID, storage.StatusCancelling, task.Result, "task cancellation requested")
+	}
+
+	// 3. 觸發 context 取消
 	if exists && cancel != nil {
 		cancel()
 	}
 
-	// 3. 若有 active runner，等待其完全退出
+	// 4. 若有 active runner，等待其完全退出
 	if doneCh != nil {
 		select {
 		case <-doneCh:
@@ -54,13 +67,13 @@ func (e *Engine) CancelTask(taskID string) error {
 		}
 	}
 
-	// 4. 取得最新 PGID
+	// 5. 取得最新 PGID
 	targetPGID := task.PGID
 	if latest, getErr := e.store.GetTask(context.Background(), taskID); getErr == nil && latest.PGID > 0 {
 		targetPGID = latest.PGID
 	}
 
-	// 5. 實施三態進程組身分驗證與安全回收 (防禦 J-01, K-01, L-01, M-01)
+	// 6. 實施三態進程組身分驗證與安全回收 (防禦 J-01, K-01, L-01, M-01)
 	if targetPGID > 0 {
 		matched, verifyErr := opencode.VerifyTaskProcessGroup(targetPGID, opencode.TaskProcessMetadata{}, taskID)
 		if verifyErr != nil {
@@ -91,7 +104,7 @@ func (e *Engine) CancelTask(taskID string) error {
 		}
 	}
 
-	// 6. 確認回收成功後，最後持久化終態為 cancelled (保留既有輸出)
+	// 7. 確認回收成功後，最後持久化終態為 cancelled (保留既有輸出)
 	existingResult := task.Result
 	if latest, getErr := e.store.GetTask(context.Background(), taskID); getErr == nil && latest.Result != "" {
 		existingResult = latest.Result
