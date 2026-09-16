@@ -30,16 +30,15 @@ func (e *Engine) CancelTask(taskID string) error {
 	doneCh := e.doneChs[taskID]
 	e.cancelsMu.Unlock()
 
-	// 若不在活躍清單中且已經是終態：
-	// 僅當 PGID <= 0 時才視為不可取消；若仍有殘留 PGID > 0 則必須允許回收 (修復 I-01 重試取消)
-	if !exists && task.PGID <= 0 {
+	// 若任務在 DB 中已是終態且無殘留進程組 (PGID <= 0)，即使 registration 尚未 defer 清除，亦嚴禁覆寫已提交之終態
+	if task.PGID <= 0 {
 		if task.Status == storage.StatusCompleted || task.Status == storage.StatusFailed {
 			return fmt.Errorf("%w: task status is %s", ErrTaskNotRunning, task.Status)
 		}
 		if task.Status == storage.StatusCancelled {
 			return nil
 		}
-		if task.Status == storage.StatusPending || task.Status == storage.StatusQueued {
+		if !exists && (task.Status == storage.StatusPending || task.Status == storage.StatusQueued) {
 			// 未啟動且無活躍 runner、無殘留進程組之排隊任務，直接取消
 			if updateErr := e.store.UpdateTaskStatus(context.Background(), taskID, storage.StatusCancelled, task.Result, "task cancelled by user"); updateErr != nil {
 				return fmt.Errorf("persist cancelled status failed: %w", updateErr)
@@ -48,11 +47,51 @@ func (e *Engine) CancelTask(taskID string) error {
 		}
 	}
 
-	// 2. 狀態轉換：若任務為 running 或 active（或有殘留進程），將狀態轉移為 cancelling
-	// cancelling 代表「已發出停止意圖，正在進行安全回收」，絕不提前宣稱已回收 (StatusCancelled)
-	if task.Status == storage.StatusRunning || exists || (task.Status != storage.StatusCancelling && task.Status != storage.StatusCancelled) {
-		if err := e.store.UpdateTaskStatus(context.Background(), taskID, storage.StatusCancelling, task.Result, "task cancellation requested"); err != nil {
-			return fmt.Errorf("persist cancelling status: %w", err)
+	// 2. 狀態轉換：利用 UpdateTaskStatusIfRunning 進行原子條件式 CAS，杜絕 terminal-state race
+	// running ─ CAS ─┬─> completed / failed (SubmitTask 贏)
+	//                └─> cancelling (CancelTask 贏)
+	if task.Status == storage.StatusRunning {
+		updated, casErr := e.store.UpdateTaskStatusIfRunning(
+			context.Background(),
+			taskID,
+			storage.StatusCancelling,
+			task.Result,
+			"task cancellation requested",
+		)
+		if casErr != nil {
+			return fmt.Errorf("persist cancelling status: %w", casErr)
+		}
+		if !updated {
+			// CAS 失敗：表示 SubmitTask 已搶先提交終態，回讀最新狀態
+			latest, getErr := e.store.GetTask(context.Background(), taskID)
+			if getErr != nil {
+				return fmt.Errorf("task not found: %w", getErr)
+			}
+			switch latest.Status {
+			case storage.StatusCancelling:
+				// 已由並發取消或其他協調者設為 cancelling，繼續向下執行
+			case storage.StatusCancelled:
+				return nil
+			case storage.StatusCompleted, storage.StatusFailed:
+				if latest.PGID <= 0 {
+					return fmt.Errorf("%w: task status is %s", ErrTaskNotRunning, latest.Status)
+				}
+			default:
+				if latest.PGID <= 0 {
+					return fmt.Errorf("%w: task status is %s", ErrTaskNotRunning, latest.Status)
+				}
+			}
+		}
+	} else if task.Status != storage.StatusCancelling && task.Status != storage.StatusCancelled {
+		if task.Status == storage.StatusCompleted || task.Status == storage.StatusFailed {
+			if task.PGID <= 0 {
+				return fmt.Errorf("%w: task status is %s", ErrTaskNotRunning, task.Status)
+			}
+		} else {
+			// 針對 pending/queued 但已有 active runner 或殘留 PGID，轉移為 cancelling
+			if err := e.store.UpdateTaskStatus(context.Background(), taskID, storage.StatusCancelling, task.Result, "task cancellation requested"); err != nil {
+				return fmt.Errorf("persist cancelling status: %w", err)
+			}
 		}
 	}
 

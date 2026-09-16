@@ -834,9 +834,9 @@ func (d *Daemon) dispatchTask(taskID, workspace, prompt string, class TaskClass)
 	}, func() {
 		// 在 WorkerPool 槽位完全釋放後執行容量歸還
 		d.releaseCapacity()
-		// 檢查任務最新狀態：若處於 cancelling，表示進程組尚未確認安全回收，嚴禁提前釋放 workspace lock
+		// 檢查任務最新狀態：無法確認狀態時 fail-closed，若處於 cancelling 嚴禁提前釋放 workspace lock
 		task, err := d.store.GetTask(context.Background(), taskID)
-		if err == nil && task != nil && task.Status == storage.StatusCancelling {
+		if err != nil || task == nil || task.Status == storage.StatusCancelling {
 			return
 		}
 		d.releaseWorkspaceAndWakeNext(wsKey, taskID)
@@ -855,7 +855,7 @@ func (d *Daemon) dispatchQueuedTask(taskID, workspace, prompt string, class Task
 	}, func() {
 		d.releaseCapacity()
 		task, err := d.store.GetTask(context.Background(), taskID)
-		if err == nil && task != nil && task.Status == storage.StatusCancelling {
+		if err != nil || task == nil || task.Status == storage.StatusCancelling {
 			return
 		}
 		d.releaseWorkspaceAndWakeNext(wsKey, taskID)

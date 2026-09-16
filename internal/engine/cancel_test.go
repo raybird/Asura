@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -410,6 +411,89 @@ func TestEngineCancel_ActiveRunnerUnknownIdentityDoesNotMarkCancelled(t *testing
 	}
 	if saved.Status != storage.StatusCancelling {
 		t.Errorf("expected task status to remain %q, got %q", storage.StatusCancelling, saved.Status)
+	}
+}
+
+// TestEngineCancel_DoesNotOverwriteCommittedTerminalState
+// 驗證當任務已在資料庫中提交為 terminal state (completed 或 failed)，但 Engine 註冊表 (e.cancels)
+// 尚未 defer 清理的並發競態下，CancelTask 絕不得將其覆寫為 cancelling 或 cancelled，必須返回 ErrTaskNotRunning
+func TestEngineCancel_DoesNotOverwriteCommittedTerminalState(t *testing.T) {
+	testCases := []struct {
+		name           string
+		terminalStatus storage.TaskStatus
+	}{
+		{
+			name:           "completed status must not be overwritten",
+			terminalStatus: storage.StatusCompleted,
+		},
+		{
+			name:           "failed status must not be overwritten",
+			terminalStatus: storage.StatusFailed,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpDir, err := os.MkdirTemp("", "asura-term-race-*")
+			if err != nil {
+				t.Fatalf("failed to create temp dir: %v", err)
+			}
+			defer os.RemoveAll(tmpDir)
+
+			dbPath := filepath.Join(tmpDir, "asura.db")
+			store, err := storage.NewSQLiteStore(dbPath)
+			if err != nil {
+				t.Fatalf("NewSQLiteStore failed: %v", err)
+			}
+			defer store.Close()
+
+			policy := auth.NewPolicy([]string{tmpDir})
+			eng := NewEngine(store, policy)
+
+			taskID := "task-term-race"
+			now := time.Now().UTC()
+
+			// 1. 在 DB 中建立已經是 terminal 狀態的任務
+			task := &storage.Task{
+				ID:        taskID,
+				Workspace: tmpDir,
+				Prompt:    "term task",
+				Status:    tc.terminalStatus,
+				Result:    "original terminal result",
+				PGID:      0,
+				CreatedAt: now,
+				UpdatedAt: now,
+			}
+			if err := store.CreateTask(context.Background(), task); err != nil {
+				t.Fatalf("CreateTask failed: %v", err)
+			}
+
+			// 2. 模擬 Engine registration 尚未 defer cleanup (e.cancels 與 e.doneChs 仍存在)
+			eng.cancelsMu.Lock()
+			eng.cancels[taskID] = func() {}
+			eng.doneChs[taskID] = make(chan struct{})
+			eng.cancelsMu.Unlock()
+
+			// 3. 呼叫 CancelTask
+			cancelErr := eng.CancelTask(taskID)
+
+			// 4. 斷言 1：CancelTask 必須失敗且為 ErrTaskNotRunning
+			if cancelErr == nil {
+				t.Fatalf("expected CancelTask to fail on committed terminal state, got nil")
+			}
+			if !errors.Is(cancelErr, ErrTaskNotRunning) {
+				t.Errorf("expected error to wrap ErrTaskNotRunning, got: %v", cancelErr)
+			}
+
+			// 5. 斷言 2：DB 中的狀態嚴禁被改為 cancelling 或 cancelled
+			saved, err := store.GetTask(context.Background(), taskID)
+			if err != nil {
+				t.Fatalf("GetTask failed: %v", err)
+			}
+			if saved.Status != tc.terminalStatus {
+				t.Fatalf("CRITICAL BUG: committed terminal status %s was overwritten to %s!", tc.terminalStatus, saved.Status)
+			}
+		})
 	}
 }
 
