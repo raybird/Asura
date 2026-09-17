@@ -679,4 +679,111 @@ func TestSQLiteStore_UpgradeFromSchemaWithDuplicateRequestIDs(t *testing.T) {
 	}
 }
 
+// CTXMEM-006: 驗證 tasks 表擴充 memory_refs 與 resolved_context 欄位之加法式無損升級與讀寫持久化
+func TestSQLiteStore_MemoryContextColumnsMigration(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-migration-memctx-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+
+	// 1. 手動建立舊版 tasks 資料表（不含 memory_refs 與 resolved_context 欄位）
+	rawDB, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open raw db: %v", err)
+	}
+	oldSchema := `
+	CREATE TABLE tasks (
+		id TEXT PRIMARY KEY,
+		request_id TEXT NOT NULL DEFAULT '',
+		fingerprint TEXT NOT NULL DEFAULT '',
+		prompt TEXT NOT NULL,
+		workspace TEXT NOT NULL,
+		status TEXT NOT NULL,
+		result TEXT NOT NULL DEFAULT '',
+		error_message TEXT NOT NULL DEFAULT '',
+		pgid INTEGER NOT NULL DEFAULT 0,
+		class TEXT NOT NULL DEFAULT 'interactive',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	);
+	INSERT INTO tasks (id, request_id, fingerprint, prompt, workspace, status, created_at, updated_at)
+	VALUES ('old-task-1', 'req-old-1', 'fp1', 'old prompt', '/tmp/ws', 'completed', datetime('now'), datetime('now'));
+	`
+	if _, err := rawDB.Exec(oldSchema); err != nil {
+		rawDB.Close()
+		t.Fatalf("failed to create old schema: %v", err)
+	}
+	rawDB.Close()
+
+	// 2. 以 NewSQLiteStore 開庫，觸發 initSchema() 的自動遷移
+	store, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed on old schema: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+
+	// 3. 讀取舊任務，驗證加法升級後舊資料完整保留且新欄位為預設值
+	oldTask, err := store.GetTask(ctx, "old-task-1")
+	if err != nil {
+		t.Fatalf("GetTask failed for old-task-1: %v", err)
+	}
+	if oldTask.Prompt != "old prompt" {
+		t.Errorf("expected prompt 'old prompt', got %q", oldTask.Prompt)
+	}
+	if len(oldTask.MemoryRefs) != 0 {
+		t.Errorf("expected empty MemoryRefs, got %v", oldTask.MemoryRefs)
+	}
+	if oldTask.ResolvedContext != "" {
+		t.Errorf("expected empty ResolvedContext, got %q", oldTask.ResolvedContext)
+	}
+
+	// 4. 寫入帶有 MemoryRefs 與 ResolvedContext 的新任務
+	newTask := &Task{
+		ID:              "task-mem-001",
+		RequestID:       "req-mem-001",
+		Prompt:          "check context",
+		Workspace:       "/tmp/ws",
+		MemoryRefs:      []string{"mem-1", "mem-2"},
+		ResolvedContext: `{"original_prompt":"check context","workspace":"/tmp/ws"}`,
+		Status:          StatusPending,
+		CreatedAt:       time.Now().UTC(),
+		UpdatedAt:       time.Now().UTC(),
+	}
+	if err := store.CreateTask(ctx, newTask); err != nil {
+		t.Fatalf("CreateTask with memory context failed: %v", err)
+	}
+
+	// 5. 透過 GetTask 查回並驗證欄位持久化
+	gotTask, err := store.GetTask(ctx, newTask.ID)
+	if err != nil {
+		t.Fatalf("GetTask failed for newTask: %v", err)
+	}
+	if len(gotTask.MemoryRefs) != 2 || gotTask.MemoryRefs[0] != "mem-1" || gotTask.MemoryRefs[1] != "mem-2" {
+		t.Errorf("expected MemoryRefs ['mem-1', 'mem-2'], got %v", gotTask.MemoryRefs)
+	}
+	if gotTask.ResolvedContext != newTask.ResolvedContext {
+		t.Errorf("expected ResolvedContext %q, got %q", newTask.ResolvedContext, gotTask.ResolvedContext)
+	}
+
+	// 6. 透過 GetTaskByRequestID 查回並驗證
+	gotByReq, err := store.GetTaskByRequestID(ctx, "req-mem-001")
+	if err != nil {
+		t.Fatalf("GetTaskByRequestID failed: %v", err)
+	}
+	if gotByReq.ID != newTask.ID {
+		t.Errorf("expected task ID %q, got %q", newTask.ID, gotByReq.ID)
+	}
+	if len(gotByReq.MemoryRefs) != 2 || gotByReq.MemoryRefs[0] != "mem-1" || gotByReq.MemoryRefs[1] != "mem-2" {
+		t.Errorf("expected MemoryRefs ['mem-1', 'mem-2'], got %v", gotByReq.MemoryRefs)
+	}
+	if gotByReq.ResolvedContext != newTask.ResolvedContext {
+		t.Errorf("expected ResolvedContext %q, got %q", newTask.ResolvedContext, gotByReq.ResolvedContext)
+	}
+}
+
 

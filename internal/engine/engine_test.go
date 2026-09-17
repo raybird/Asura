@@ -805,6 +805,251 @@ func TestLatestReview_G02_PersistOnCancelBeforeRunner(t *testing.T) {
 	}
 }
 
+// CTXMEM-007, CTXMEM-001: 驗證 ComposePrompt 在無記憶時維持原樣，有記憶時正確依 Markdown 格式組裝
+func TestComposePrompt(t *testing.T) {
+	origPrompt := "幫我分析系統架構"
+
+	t.Run("CTXMEM-007: 未選取記憶時維持既有任務語意，Prompt 完全原樣", func(t *testing.T) {
+		// nil execCtx
+		gotNil := ComposePrompt(origPrompt, nil)
+		if gotNil != origPrompt {
+			t.Errorf("expected %q, got %q", origPrompt, gotNil)
+		}
+
+		// 空記憶清單
+		emptyCtx := &ExecutionContext{
+			OriginalPrompt:  origPrompt,
+			Workspace:       "/tmp/ws",
+			ProjectMemories: []ProjectMemorySnapshot{},
+		}
+		gotEmpty := ComposePrompt(origPrompt, emptyCtx)
+		if gotEmpty != origPrompt {
+			t.Errorf("expected %q, got %q", origPrompt, gotEmpty)
+		}
+	})
+
+	t.Run("CTXMEM-001: 有記憶時以 Markdown 區塊格式組裝", func(t *testing.T) {
+		execCtx := &ExecutionContext{
+			OriginalPrompt: origPrompt,
+			Workspace:      "/tmp/ws",
+			ProjectMemories: []ProjectMemorySnapshot{
+				{
+					ID:        "mem-1",
+					Workspace: "/tmp/ws",
+					Content:   "架構採 SQLite WAL 模式",
+					Source:    "manual",
+				},
+				{
+					ID:        "mem-2",
+					Workspace: "/tmp/ws",
+					Content:   "錯誤處理採 fail-closed",
+					Source:    "manual",
+				},
+			},
+			MemoryRefs: []string{"mem-1", "mem-2"},
+		}
+
+		got := ComposePrompt(origPrompt, execCtx)
+		if !strings.Contains(got, "### Project Context") {
+			t.Errorf("expected output to contain '### Project Context', got:\n%s", got)
+		}
+		if !strings.Contains(got, "- [mem-1]: 架構採 SQLite WAL 模式") {
+			t.Errorf("expected output to contain mem-1 content, got:\n%s", got)
+		}
+		if !strings.Contains(got, "- [mem-2]: 錯誤處理採 fail-closed") {
+			t.Errorf("expected output to contain mem-2 content, got:\n%s", got)
+		}
+		if !strings.HasSuffix(strings.TrimSpace(got), origPrompt) {
+			t.Errorf("expected output to end with original prompt %q, got:\n%s", origPrompt, got)
+		}
+	})
+}
+
+// CTXMEM-001: 驗證同專案記憶可被任務使用，runner 接收組裝 Context，且 task.Prompt 在資料庫中保留原始輸入
+func TestEngine_SubmitTaskWithMemoryContext(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-engine-ctxmem-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	allowedDir := filepath.Join(tmpDir, "allowed-workspace")
+	if err := os.MkdirAll(allowedDir, 0755); err != nil {
+		t.Fatalf("failed to create allowed dir: %v", err)
+	}
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{allowedDir})
+
+	var receivedPrompt string
+	runner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		receivedPrompt = prompt
+		return "done with output", nil
+	}
+
+	eng := NewEngine(store, policy, WithRunner(runner))
+	ctx := context.Background()
+
+	origPrompt := "檢視資料結構"
+	execCtx := &ExecutionContext{
+		OriginalPrompt: origPrompt,
+		Workspace:      allowedDir,
+		ProjectMemories: []ProjectMemorySnapshot{
+			{
+				ID:        "mem-ctx-1",
+				Workspace: allowedDir,
+				Content:   "架構記憶一",
+				Source:    "manual",
+			},
+		},
+		MemoryRefs: []string{"mem-ctx-1"},
+	}
+
+	task, err := eng.SubmitTask(ctx, SubmitRequest{
+		Workspace:       allowedDir,
+		Prompt:          origPrompt,
+		MemoryIDs:       []string{"mem-ctx-1"},
+		ResolvedContext: execCtx,
+	})
+	if err != nil {
+		t.Fatalf("SubmitTask failed: %v", err)
+	}
+
+	// 1. Runner 必須接收包含記憶內容之組裝 Prompt
+	if !strings.Contains(receivedPrompt, "### Project Context") || !strings.Contains(receivedPrompt, "架構記憶一") {
+		t.Errorf("expected runner to receive memory context in prompt, got:\n%s", receivedPrompt)
+	}
+	if !strings.Contains(receivedPrompt, origPrompt) {
+		t.Errorf("expected runner to receive original prompt, got:\n%s", receivedPrompt)
+	}
+
+	// 2. 資料庫與回傳 Task 之 Prompt 必須嚴格保持為原始 Prompt，不可被組裝內容覆寫
+	if task.Prompt != origPrompt {
+		t.Errorf("expected task.Prompt to remain original %q, got %q", origPrompt, task.Prompt)
+	}
+
+	saved, err := store.GetTask(ctx, task.ID)
+	if err != nil {
+		t.Fatalf("GetTask failed: %v", err)
+	}
+	if saved.Prompt != origPrompt {
+		t.Errorf("expected DB task.Prompt to be %q, got %q", origPrompt, saved.Prompt)
+	}
+
+	// 3. 資料庫 Task 必須保存 MemoryRefs 與 ResolvedContext
+	if len(saved.MemoryRefs) != 1 || saved.MemoryRefs[0] != "mem-ctx-1" {
+		t.Errorf("expected saved.MemoryRefs ['mem-ctx-1'], got %v", saved.MemoryRefs)
+	}
+	if !strings.Contains(saved.ResolvedContext, "架構記憶一") {
+		t.Errorf("expected saved.ResolvedContext to contain '架構記憶一', got %q", saved.ResolvedContext)
+	}
+}
+
+// TestEngine_SubmitTask_CorruptedSealedContextFailsClosed 驗證密封 Context 損毀或遺失時嚴格 Fail-Closed，不呼叫 runner 且任務標為 Failed
+func TestEngine_SubmitTask_CorruptedSealedContextFailsClosed(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-corrupt-ctx-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp failed: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "corrupt.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	var runnerCalls int32
+	runner := func(ctx context.Context, ws, prompt string) (string, error) {
+		atomic.AddInt32(&runnerCalls, 1)
+		return "should not be called", nil
+	}
+
+	eng := NewEngine(store, policy, WithRunner(runner))
+	ctx := context.Background()
+
+	t.Run("損毀的 ResolvedContext JSON 應 fail-closed 拒絕", func(t *testing.T) {
+		atomic.StoreInt32(&runnerCalls, 0)
+		taskID := "task-corrupted-json"
+		now := time.Now().UTC()
+		// 預先在 DB 插入帶有非法 JSON 的 task
+		corruptedTask := &storage.Task{
+			ID:              taskID,
+			Prompt:          "原本的需求",
+			Workspace:       tmpDir,
+			Status:          storage.StatusPending,
+			MemoryRefs:      []string{"mem-1"},
+			ResolvedContext: "{invalid-json-payload",
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		}
+		if err := store.CreateTask(ctx, corruptedTask); err != nil {
+			t.Fatalf("CreateTask failed: %v", err)
+		}
+
+		resTask, err := eng.SubmitTask(ctx, SubmitRequest{
+			ID:        taskID,
+			Workspace: tmpDir,
+			Prompt:    "原本的需求",
+		})
+		if err == nil {
+			t.Fatalf("expected error for corrupted resolved context, got nil")
+		}
+		if calls := atomic.LoadInt32(&runnerCalls); calls != 0 {
+			t.Errorf("expected runner calls to be 0, got %d", calls)
+		}
+		if resTask == nil || resTask.Status != storage.StatusFailed {
+			t.Errorf("expected task status to be %s, got %v", storage.StatusFailed, resTask)
+		}
+	})
+
+	t.Run("有 MemoryRefs 但 ResolvedContext 遺失時應 fail-closed 拒絕", func(t *testing.T) {
+		atomic.StoreInt32(&runnerCalls, 0)
+		taskID := "task-missing-context"
+		now := time.Now().UTC()
+		missingCtxTask := &storage.Task{
+			ID:              taskID,
+			Prompt:          "原本的需求",
+			Workspace:       tmpDir,
+			Status:          storage.StatusPending,
+			MemoryRefs:      []string{"mem-1"},
+			ResolvedContext: "", // 遺失
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		}
+		if err := store.CreateTask(ctx, missingCtxTask); err != nil {
+			t.Fatalf("CreateTask failed: %v", err)
+		}
+
+		resTask, err := eng.SubmitTask(ctx, SubmitRequest{
+			ID:        taskID,
+			Workspace: tmpDir,
+			Prompt:    "原本的需求",
+		})
+		if err == nil {
+			t.Fatalf("expected error for missing resolved context with memory refs, got nil")
+		}
+		if calls := atomic.LoadInt32(&runnerCalls); calls != 0 {
+			t.Errorf("expected runner calls to be 0, got %d", calls)
+		}
+		if resTask == nil || resTask.Status != storage.StatusFailed {
+			t.Errorf("expected task status to be %s, got %v", storage.StatusFailed, resTask)
+		}
+	})
+}
+
+
+
+
 
 
 

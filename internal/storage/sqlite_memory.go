@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -114,3 +115,32 @@ func (s *SQLiteStore) DeleteMemory(ctx context.Context, workspace, id string) er
 	}
 	return nil
 }
+
+// ResolveMemoriesForTask 依據 canonical workspace 解析並驗證任務所需的記憶清單 (CTXMEM-002, CTXMEM-005)
+// 嚴格比對 workspace 與 id；若任一 ID 不存在、已刪除或屬於其他專案，立即回傳 ErrMemoryNotFound
+func (s *SQLiteStore) ResolveMemoriesForTask(ctx context.Context, canonicalWorkspace string, memoryIDs []string) ([]Memory, error) {
+	if strings.TrimSpace(canonicalWorkspace) == "" {
+		return nil, errors.New("canonical workspace cannot be empty")
+	}
+	if len(memoryIDs) == 0 {
+		return []Memory{}, nil
+	}
+
+	memories := make([]Memory, 0, len(memoryIDs))
+	for _, id := range memoryIDs {
+		trimmedID := strings.TrimSpace(id)
+		if trimmedID == "" {
+			return nil, fmt.Errorf("%w: empty memory id", ErrMemoryNotFound)
+		}
+		mem, err := s.GetMemory(ctx, canonicalWorkspace, trimmedID)
+		if err != nil {
+			if errors.Is(err, ErrMemoryNotFound) {
+				return nil, fmt.Errorf("%w: %s", ErrMemoryNotFound, trimmedID)
+			}
+			return nil, fmt.Errorf("resolve memory %s: %w", trimmedID, err)
+		}
+		memories = append(memories, *mem)
+	}
+	return memories, nil
+}
+

@@ -12,6 +12,8 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -344,6 +346,7 @@ type IPCRequest struct {
 	Limit      int             `json:"limit,omitempty"`
 	MemoryID   string          `json:"memory_id,omitempty"`
 	Content    string          `json:"content,omitempty"`
+	MemoryIDs  []string        `json:"memory_ids,omitempty"`
 }
 
 // IPCResponse 定義傳回用戶端之結果
@@ -442,18 +445,29 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			_ = encoder.Encode(IPCResponse{Projects: projects})
 
 		case "submit":
-			// 遵循 INT-002 與 P3-T2：在進入 WorkerPool 與啟動後端前，Daemon 服務端直接校驗專案授權清單
+			// 遵循 INT-002, P3-T2 與 CTXMEM-003：同步校驗專案授權並取得 canonical workspace
+			var canonicalWs string
 			if d.policy != nil {
-				if err := d.policy.AuthorizeWorkspace(req.Workspace); err != nil {
-					_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unauthorized workspace: %v", err)})
+				var authErr error
+				canonicalWs, authErr = d.policy.AuthorizeCanonicalWorkspace(req.Workspace)
+				if authErr != nil {
+					_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unauthorized workspace: %v", authErr)})
 					continue
 				}
+			} else {
+				canonicalWs = d.canonicalWorkspace(req.Workspace)
 			}
 
-			// 計算請求 Fingerprint 確保同 Request ID 之 payload 一致性（防止撞 PK 或錯置）
-			fp := fmt.Sprintf("%x", sha256.Sum256([]byte(req.Workspace+":"+req.Prompt)))
+			// 記憶 ID 去重並排序，定義 Set 語意，確保 fingerprint、解析、snapshot 與 Prompt 順序 100% 一致 (MUST FIX 2)
+			if len(req.MemoryIDs) > 0 {
+				req.MemoryIDs = normalizeMemoryIDs(req.MemoryIDs)
+			}
 
-			// 遵循 INT-004-REDELIVERY：同 RequestID 且非 Cancelled 任務時直接回傳既有任務
+			// 計算請求 Fingerprint 確保同 Request ID 之 payload 一致性（防止撞 PK 或錯置，CTXMEM-004）
+			// 遵循 MUST FIX 1：使用 canonicalWs 作為 fingerprint workspace
+			fp := calculateTaskFingerprint(canonicalWs, req.Prompt, req.MemoryIDs)
+
+			// 遵循 INT-004-REDELIVERY 與 CTXMEM-004：同 RequestID 且非 Cancelled 任務時直接回傳既有密封任務，不重新查詢底層記憶
 			if req.RequestID != "" {
 				existing, err := d.store.GetTaskByRequestID(context.Background(), req.RequestID)
 				if err != nil {
@@ -477,6 +491,17 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				}
 			}
 
+			// 遵循 CTXMEM-002, CTXMEM-005：在容量取得與任務持久化前，解析選取之記憶並嚴格隔離跨專案/不存在記憶
+			var resolvedMemories []storage.Memory
+			if len(req.MemoryIDs) > 0 {
+				var resErr error
+				resolvedMemories, resErr = d.store.ResolveMemoriesForTask(context.Background(), canonicalWs, req.MemoryIDs)
+				if resErr != nil {
+					_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("resolve memories: %v", resErr)})
+					continue
+				}
+			}
+
 			// 遵循 SCN-004 與 INT-003：檢查全域容量上限（Worker 執行槽位 + 佇列排隊槽位）
 			if !d.tryAcquireCapacity() {
 				_ = encoder.Encode(IPCResponse{Error: ErrCapacityExceeded.Error()})
@@ -491,16 +516,47 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				taskClass = TaskClassInteractive
 			}
 
+			var execCtx *engine.ExecutionContext
+			var resolvedCtxJSON string
+			if len(resolvedMemories) > 0 {
+				snapshots := make([]engine.ProjectMemorySnapshot, 0, len(resolvedMemories))
+				for _, m := range resolvedMemories {
+					snapshots = append(snapshots, engine.ProjectMemorySnapshot{
+						ID:        m.ID,
+						Workspace: m.Workspace,
+						Content:   m.Content,
+						Source:    m.Source,
+						CreatedAt: m.CreatedAt,
+					})
+				}
+				execCtx = &engine.ExecutionContext{
+					OriginalPrompt:  req.Prompt,
+					Workspace:       canonicalWs,
+					ProjectMemories: snapshots,
+					MemoryRefs:      req.MemoryIDs,
+					CreatedAt:       now,
+				}
+				raw, err := json.Marshal(execCtx)
+				if err != nil {
+					d.releaseCapacity()
+					_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("seal execution context: %v", err)})
+					continue
+				}
+				resolvedCtxJSON = string(raw)
+			}
+
 			initialTask := &storage.Task{
-				ID:          taskID,
-				RequestID:   req.RequestID,
-				Fingerprint: fp,
-				Prompt:      req.Prompt,
-				Workspace:   req.Workspace,
-				Status:      storage.StatusPending,
-				Class:       string(taskClass),
-				CreatedAt:   now,
-				UpdatedAt:   now,
+				ID:              taskID,
+				RequestID:       req.RequestID,
+				Fingerprint:     fp,
+				Prompt:          req.Prompt,
+				Workspace:       canonicalWs,
+				Status:          storage.StatusPending,
+				Class:           string(taskClass),
+				MemoryRefs:      req.MemoryIDs,
+				ResolvedContext: resolvedCtxJSON,
+				CreatedAt:       now,
+				UpdatedAt:       now,
 			}
 
 			if err := d.store.CreateTask(context.Background(), initialTask); err != nil {
@@ -531,7 +587,7 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				continue
 			}
 
-			wsKey := d.canonicalWorkspace(req.Workspace)
+			wsKey := canonicalWs
 			// 遵循 CRON-001：同專案嚴格互斥依序排隊（僅創建任務之勝者競爭專案鎖）
 			acquired, _ := d.wsQueue.TryAcquire(wsKey, taskID)
 			if !acquired {
@@ -542,7 +598,7 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				continue
 			}
 
-			err := d.dispatchTask(taskID, req.Workspace, req.Prompt, taskClass)
+			err := d.dispatchTask(taskID, canonicalWs, req.Prompt, taskClass, execCtx)
 			if err != nil {
 				d.releaseCapacity()
 				d.releaseWorkspaceAndWakeNext(wsKey, taskID)
@@ -822,13 +878,18 @@ func (d *Daemon) releaseWorkspaceAndWakeNext(wsKey, completedTaskID string) {
 	}
 }
 
-func (d *Daemon) dispatchTask(taskID, workspace, prompt string, class TaskClass) error {
+func (d *Daemon) dispatchTask(taskID, workspace, prompt string, class TaskClass, optCtx ...*engine.ExecutionContext) error {
+	var execCtx *engine.ExecutionContext
+	if len(optCtx) > 0 {
+		execCtx = optCtx[0]
+	}
 	wsKey := d.canonicalWorkspace(workspace)
 	_, err := d.pool.SubmitAsyncClassifiedWithDone(context.Background(), class, func() error {
 		_, runErr := d.engine.SubmitTask(context.Background(), engine.SubmitRequest{
-			ID:        taskID,
-			Workspace: workspace,
-			Prompt:    prompt,
+			ID:              taskID,
+			Workspace:       workspace,
+			Prompt:          prompt,
+			ResolvedContext: execCtx,
 		})
 		return runErr
 	}, func() {
@@ -955,6 +1016,7 @@ func (c *Client) Submit(ctx context.Context, req engine.SubmitRequest) (*storage
 		RequestID: req.ID,
 		Workspace: req.Workspace,
 		Prompt:    req.Prompt,
+		MemoryIDs: req.MemoryIDs,
 	}); err != nil {
 		return nil, fmt.Errorf("encode request: %w", err)
 	}
@@ -1300,3 +1362,34 @@ func (c *Client) Close() error {
 	}
 	return nil
 }
+
+// calculateTaskFingerprint 計算任務請求指紋，包含排序後的 MemoryIDs 以確保 payload 一致性 (CTXMEM-004)
+func calculateTaskFingerprint(workspace, prompt string, memoryIDs []string) string {
+	fpPayload := workspace + ":" + prompt
+	if len(memoryIDs) > 0 {
+		sortedIDs := make([]string, len(memoryIDs))
+		copy(sortedIDs, memoryIDs)
+		sort.Strings(sortedIDs)
+		fpPayload += ":" + strings.Join(sortedIDs, ",")
+	}
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(fpPayload)))
+}
+
+// normalizeMemoryIDs 將 MemoryIDs 去重並依照字母順序排序，定義為 Set 語意 (CTXMEM-004)
+func normalizeMemoryIDs(items []string) []string {
+	if len(items) == 0 {
+		return nil
+	}
+	seen := make(map[string]bool, len(items))
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		if !seen[item] {
+			seen[item] = true
+			result = append(result, item)
+		}
+	}
+	sort.Strings(result)
+	return result
+}
+
+

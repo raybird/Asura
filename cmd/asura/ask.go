@@ -15,6 +15,32 @@ import (
 	"asura/internal/storage"
 )
 
+type stringSliceFlag []string
+
+func (s *stringSliceFlag) String() string {
+	return strings.Join(*s, ",")
+}
+
+func (s *stringSliceFlag) Set(val string) error {
+	parts := strings.Split(val, ",")
+	for _, p := range parts {
+		trimmed := strings.TrimSpace(p)
+		if trimmed != "" {
+			exists := false
+			for _, existing := range *s {
+				if existing == trimmed {
+					exists = true
+					break
+				}
+			}
+			if !exists {
+				*s = append(*s, trimmed)
+			}
+		}
+	}
+	return nil
+}
+
 func handleAsk(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("ask", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -23,6 +49,8 @@ func handleAsk(args []string, stdout, stderr io.Writer) int {
 	workspace := fs.String("workspace", "", "target workspace directory (defaults to current directory)")
 	customID := fs.String("id", "", "optional custom task/request ID")
 	wait := fs.Bool("wait", false, "wait for task to complete")
+	var memoryIDs stringSliceFlag
+	fs.Var(&memoryIDs, "memory-id", "specify project memory ID to include in task context (can be repeated or comma-separated)")
 
 	if err := fs.Parse(args); err != nil {
 		return 1
@@ -68,6 +96,7 @@ func handleAsk(args []string, stdout, stderr io.Writer) int {
 		ID:        *customID,
 		Workspace: absWorkspace,
 		Prompt:    prompt,
+		MemoryIDs: memoryIDs,
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "error: %v\n", err)

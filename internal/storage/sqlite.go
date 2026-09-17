@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -80,18 +81,20 @@ type CronRun struct {
 
 // Task 代表本機執行的任務實體
 type Task struct {
-	ID           string     `json:"id"`
-	RequestID    string     `json:"request_id,omitempty"`
-	Fingerprint  string     `json:"fingerprint,omitempty"`
-	Prompt       string     `json:"prompt"`
-	Workspace    string     `json:"workspace"`
-	Status       TaskStatus `json:"status"`
-	Result       string     `json:"result"`
-	ErrorMessage string     `json:"error_message"`
-	PGID         int        `json:"pgid"`
-	Class        string     `json:"class,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
+	ID              string     `json:"id"`
+	RequestID       string     `json:"request_id,omitempty"`
+	Fingerprint     string     `json:"fingerprint,omitempty"`
+	MemoryRefs      []string   `json:"memory_refs,omitempty"`
+	ResolvedContext string     `json:"resolved_context,omitempty"`
+	Prompt          string     `json:"prompt"`
+	Workspace       string     `json:"workspace"`
+	Status          TaskStatus `json:"status"`
+	Result          string     `json:"result"`
+	ErrorMessage    string     `json:"error_message"`
+	PGID            int        `json:"pgid"`
+	Class           string     `json:"class,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 // SQLiteStore 管理任務資料庫與單一連線池
@@ -145,6 +148,8 @@ func (s *SQLiteStore) initSchema() error {
 		id TEXT PRIMARY KEY,
 		request_id TEXT NOT NULL DEFAULT '',
 		fingerprint TEXT NOT NULL DEFAULT '',
+		memory_refs TEXT NOT NULL DEFAULT '',
+		resolved_context TEXT NOT NULL DEFAULT '',
 		prompt TEXT NOT NULL,
 		workspace TEXT NOT NULL,
 		status TEXT NOT NULL,
@@ -160,7 +165,7 @@ func (s *SQLiteStore) initSchema() error {
 		return fmt.Errorf("create table: %w", err)
 	}
 
-	// 容錯升級既有表：先確保 request_id、fingerprint 與 class 欄位存在再建立索引
+	// 容錯升級既有表：先確保 request_id、fingerprint、memory_refs、resolved_context 與 class 欄位存在再建立索引
 	cols, err := s.getTableColumns("tasks")
 	if err != nil {
 		return fmt.Errorf("get table columns: %w", err)
@@ -173,6 +178,16 @@ func (s *SQLiteStore) initSchema() error {
 	if !cols["fingerprint"] {
 		if _, err := s.db.Exec("ALTER TABLE tasks ADD COLUMN fingerprint TEXT NOT NULL DEFAULT ''"); err != nil {
 			return fmt.Errorf("add column fingerprint: %w", err)
+		}
+	}
+	if !cols["memory_refs"] {
+		if _, err := s.db.Exec("ALTER TABLE tasks ADD COLUMN memory_refs TEXT NOT NULL DEFAULT ''"); err != nil {
+			return fmt.Errorf("add column memory_refs: %w", err)
+		}
+	}
+	if !cols["resolved_context"] {
+		if _, err := s.db.Exec("ALTER TABLE tasks ADD COLUMN resolved_context TEXT NOT NULL DEFAULT ''"); err != nil {
+			return fmt.Errorf("add column resolved_context: %w", err)
 		}
 	}
 	if !cols["class"] {
@@ -279,9 +294,16 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 	if task == nil {
 		return errors.New("task cannot be nil")
 	}
+
+	memRefsJSON := ""
+	if len(task.MemoryRefs) > 0 {
+		b, _ := json.Marshal(task.MemoryRefs)
+		memRefsJSON = string(b)
+	}
+
 	query := `
-	INSERT INTO tasks (id, request_id, fingerprint, prompt, workspace, status, result, error_message, pgid, class, created_at, updated_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO tasks (id, request_id, fingerprint, memory_refs, resolved_context, prompt, workspace, status, result, error_message, pgid, class, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	now := time.Now().UTC()
 	if task.CreatedAt.IsZero() {
@@ -299,6 +321,8 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 		task.ID,
 		task.RequestID,
 		task.Fingerprint,
+		memRefsJSON,
+		task.ResolvedContext,
 		task.Prompt,
 		task.Workspace,
 		string(task.Status),
@@ -321,7 +345,7 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 // GetTask 依任務 ID 查詢任務狀態與結果
 func (s *SQLiteStore) GetTask(ctx context.Context, id string) (*Task, error) {
 	query := `
-	SELECT id, request_id, fingerprint, prompt, workspace, status, result, error_message, pgid, class, created_at, updated_at
+	SELECT id, request_id, fingerprint, memory_refs, resolved_context, prompt, workspace, status, result, error_message, pgid, class, created_at, updated_at
 	FROM tasks
 	WHERE id = ?
 	`
@@ -329,10 +353,13 @@ func (s *SQLiteStore) GetTask(ctx context.Context, id string) (*Task, error) {
 
 	var task Task
 	var statusStr string
+	var memRefsRaw string
 	err := row.Scan(
 		&task.ID,
 		&task.RequestID,
 		&task.Fingerprint,
+		&memRefsRaw,
+		&task.ResolvedContext,
 		&task.Prompt,
 		&task.Workspace,
 		&statusStr,
@@ -351,6 +378,12 @@ func (s *SQLiteStore) GetTask(ctx context.Context, id string) (*Task, error) {
 	}
 
 	task.Status = TaskStatus(statusStr)
+	if memRefsRaw != "" {
+		_ = json.Unmarshal([]byte(memRefsRaw), &task.MemoryRefs)
+	}
+	if task.MemoryRefs == nil {
+		task.MemoryRefs = []string{}
+	}
 	return &task, nil
 }
 
@@ -360,7 +393,7 @@ func (s *SQLiteStore) GetTaskByRequestID(ctx context.Context, requestID string) 
 		return nil, ErrTaskNotFound
 	}
 	query := `
-	SELECT id, request_id, fingerprint, prompt, workspace, status, result, error_message, pgid, class, created_at, updated_at
+	SELECT id, request_id, fingerprint, memory_refs, resolved_context, prompt, workspace, status, result, error_message, pgid, class, created_at, updated_at
 	FROM tasks
 	WHERE request_id = ?
 	ORDER BY created_at DESC
@@ -370,10 +403,13 @@ func (s *SQLiteStore) GetTaskByRequestID(ctx context.Context, requestID string) 
 
 	var task Task
 	var statusStr string
+	var memRefsRaw string
 	err := row.Scan(
 		&task.ID,
 		&task.RequestID,
 		&task.Fingerprint,
+		&memRefsRaw,
+		&task.ResolvedContext,
 		&task.Prompt,
 		&task.Workspace,
 		&statusStr,
@@ -392,6 +428,12 @@ func (s *SQLiteStore) GetTaskByRequestID(ctx context.Context, requestID string) 
 	}
 
 	task.Status = TaskStatus(statusStr)
+	if memRefsRaw != "" {
+		_ = json.Unmarshal([]byte(memRefsRaw), &task.MemoryRefs)
+	}
+	if task.MemoryRefs == nil {
+		task.MemoryRefs = []string{}
+	}
 	return &task, nil
 }
 
