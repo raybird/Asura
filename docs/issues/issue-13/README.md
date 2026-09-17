@@ -176,7 +176,7 @@ Feature: Three-Face Fixed Pipeline
 
 ## Gherkin 核准紀錄
 
-- **核准 commit**: 待提交
+- **核准 commit**: 4f9b19d
 - **核准來源**: 使用者於 2026-09-17 對話明確核准（原話：「好那就開始吧」）
 
 | Scenario | 核准日期 | 狀態 |
