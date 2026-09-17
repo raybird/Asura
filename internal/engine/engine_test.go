@@ -1053,11 +1053,15 @@ type mockEnginePipelineRunner struct {
 	err       error
 	callCount int
 	lastMode  string
+	onExecute func()
 }
 
 func (m *mockEnginePipelineRunner) ExecutePipeline(ctx context.Context, mode string, execCtx *ExecutionContext) (string, string, error) {
 	m.callCount++
 	m.lastMode = mode
+	if m.onExecute != nil {
+		m.onExecute()
+	}
 	return m.output, m.traceJSON, m.err
 }
 
@@ -1271,3 +1275,53 @@ func TestEngine_InvalidExecutionMode_FailClosed(t *testing.T) {
 		t.Errorf("expected task status failed, got %s", resTask.Status)
 	}
 }
+
+func TestEngine_PipelineTracePersistenceError_ErrorsJoin(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-engine-trace-err-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	pipelineErr := errors.New("underlying pipeline run failed")
+	mockPR := &mockEnginePipelineRunner{
+		err:       pipelineErr,
+		traceJSON: `{"mode":"three-face","error":"pipeline exploded"}`,
+		onExecute: func() {
+			// 在 pipeline 執行期間關閉資料庫，使後續 UpdateTaskPipelineTrace 失敗
+			_ = store.Close()
+		},
+	}
+
+	eng := NewEngine(store, policy, WithPipelineRunner(mockPR))
+	ctx := context.Background()
+
+	req := SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "trace persist test",
+		Mode:      "three-face",
+	}
+
+	_, err = eng.SubmitTask(ctx, req)
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+
+	// 驗證 errors.Join 同時保留了底層 pipelineErr 與 trace persistence failure
+	if !errors.Is(err, pipelineErr) {
+		t.Errorf("expected error to wrap pipelineErr, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "persist pipeline trace failed") {
+		t.Errorf("expected 'persist pipeline trace failed' in error, got: %v", err)
+	}
+}
+

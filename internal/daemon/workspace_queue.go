@@ -93,3 +93,12 @@ func (q *WorkspaceQueue) Remove(workspace string, taskID string) bool {
 	}
 	return found
 }
+
+// IsLocked 檢查指定 workspace 目前是否被鎖定（有任務正在執行），此方法為純狀態查詢，無排隊副作用
+func (q *WorkspaceQueue) IsLocked(workspace string) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	current, hasRunning := q.runningTasks[workspace]
+	return hasRunning && current != ""
+}

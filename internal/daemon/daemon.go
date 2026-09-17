@@ -36,8 +36,9 @@ var (
 const DefaultApprovedPermissionPolicy = `{"*":"ask","read":"allow","edit":"allow","build":"allow","test":"allow","bash":"ask"}`
 
 // DefaultReadOnlyPermissionPolicy 定義唯讀角色（Oracle, Critic）之安全操作邊界：
-// 僅允許讀取專案檔案，嚴禁修改、建置、測試或執行任意 Shell 指令
-const DefaultReadOnlyPermissionPolicy = `{"*":"deny","read":"allow"}`
+// 顯式覆寫所有 mutating / escape capability 為 deny，並開放唯讀分析 capability（read, glob, grep, list, lsp）。
+// 由於 OpenCode 以 deep merge 結合既有配置，必須顯式將 edit/write/patch/bash/task/skill 等宣告為 deny，以防外層 allow 勝出。
+const DefaultReadOnlyPermissionPolicy = `{"*":"deny","read":"allow","glob":"allow","grep":"allow","list":"allow","lsp":"allow","edit":"deny","write":"deny","patch":"deny","bash":"deny","task":"deny","skill":"deny","external_directory":"deny","webfetch":"deny","websearch":"deny"}`
 
 // OpenCodeRuntimeConfig 定義 Daemon 底層執行器配置
 type OpenCodeRuntimeConfig struct {

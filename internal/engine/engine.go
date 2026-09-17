@@ -460,9 +460,7 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 
 	if traceJSON != "" {
 		if traceErr := e.store.UpdateTaskPipelineTrace(persistCtx, task.ID, traceJSON); traceErr != nil {
-			if runErr == nil {
-				runErr = fmt.Errorf("persist pipeline trace failed: %w", traceErr)
-			}
+			runErr = errors.Join(runErr, fmt.Errorf("persist pipeline trace failed: %w", traceErr))
 		}
 	}
 
