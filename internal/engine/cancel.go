@@ -130,11 +130,12 @@ cancelAndReap:
 	}
 
 reap:
-	// 4. 取得最新 PGID
-	targetPGID := 0
-	if latest, getErr := e.store.GetTask(context.Background(), taskID); getErr == nil {
-		targetPGID = latest.PGID
+	// 4. 取得最新 PGID (fail-closed，嚴禁吞掉查詢錯誤)
+	latest, getErr := e.store.GetTask(context.Background(), taskID)
+	if getErr != nil {
+		return fmt.Errorf("verify task state before process verification: %w", getErr)
 	}
+	targetPGID := latest.PGID
 
 	// 5. 實施三態進程組身分驗證與安全回收 (防禦 J-01, K-01, L-01, M-01)
 	if targetPGID > 0 {
@@ -159,29 +160,68 @@ reap:
 			if opencode.IsProcessGroupAlive(targetPGID) {
 				return fmt.Errorf("process group %d still alive after cancellation timeout", targetPGID)
 			}
-			_ = e.store.UpdateTaskPGID(context.Background(), taskID, 0)
+			if err := e.store.UpdateTaskPGID(context.Background(), taskID, 0); err != nil {
+				return fmt.Errorf("persist cleared process group: %w", err)
+			}
 		} else {
 			// 進程組已完全退出或 PID 已被系統重新分配給不相關工作 (防禦 J-01 PID 重用誤殺)
 			// 不發信號，清零 PGID
-			_ = e.store.UpdateTaskPGID(context.Background(), taskID, 0)
+			if err := e.store.UpdateTaskPGID(context.Background(), taskID, 0); err != nil {
+				return fmt.Errorf("persist cleared process group: %w", err)
+			}
 		}
 	}
 
-	// 6. 確認回收成功後，最後持久化終態為 cancelled (僅當狀態處於 cancelling 時轉移)
-	latest, getErr := e.store.GetTask(context.Background(), taskID)
-	if getErr == nil && latest.Status == storage.StatusCancelling {
+	// 6. 確認回收成功後，最後確認狀態並持久化終態為 cancelled (fail-closed，嚴禁吞掉錯誤)
+	latest, getErr = e.store.GetTask(context.Background(), taskID)
+	if getErr != nil {
+		return fmt.Errorf("verify task state before finalizing cancellation: %w", getErr)
+	}
+
+	switch latest.Status {
+	case storage.StatusCancelling:
 		existingResult := latest.Result
-		if _, updateErr := e.store.UpdateTaskStatusIfCancelling(
+		updated, updateErr := e.store.UpdateTaskStatusIfCancelling(
 			context.Background(),
 			taskID,
 			storage.StatusCancelled,
 			existingResult,
 			"task cancelled by user",
-		); updateErr != nil {
+		)
+		if updateErr != nil {
 			return fmt.Errorf("persist cancelled status failed: %w", updateErr)
 		}
-	}
+		if !updated {
+			// CAS 失敗，重新讀取以確認獲勝狀態
+			reread, rereadErr := e.store.GetTask(context.Background(), taskID)
+			if rereadErr != nil {
+				return fmt.Errorf("verify task state after failed cancellation CAS: %w", rereadErr)
+			}
+			switch reread.Status {
+			case storage.StatusCancelled:
+				return nil
+			case storage.StatusCompleted, storage.StatusFailed:
+				if reread.PGID <= 0 {
+					return fmt.Errorf("%w: task status is %s", ErrTaskNotRunning, reread.Status)
+				}
+				return fmt.Errorf("task reached terminal state %s with residual pgid %d", reread.Status, reread.PGID)
+			default:
+				return fmt.Errorf("unexpected task status %s after cancellation CAS", reread.Status)
+			}
+		}
+		return nil
 
-	return nil
+	case storage.StatusCancelled:
+		return nil
+
+	case storage.StatusCompleted, storage.StatusFailed:
+		if latest.PGID <= 0 {
+			return fmt.Errorf("%w: task status is %s", ErrTaskNotRunning, latest.Status)
+		}
+		return fmt.Errorf("task reached terminal state %s with residual pgid %d", latest.Status, latest.PGID)
+
+	default:
+		return fmt.Errorf("unexpected task status %s before finalizing cancellation", latest.Status)
+	}
 }
 

@@ -621,3 +621,135 @@ func TestEngineCancel_StalePendingSnapshotDoesNotOverwriteTerminalState(t *testi
 	}
 }
 
+// TestEngineCancel_FinalizeGetTaskErrorFailsClosed
+// 驗證當進程已安全回收，但在最後確認狀態並持久化 cancelled 前，
+// store.GetTask 發生錯誤時，CancelTask 絕不得靜默吞掉錯誤回傳成功 (nil)，必須 fail-closed 回報錯誤
+func TestEngineCancel_FinalizeGetTaskErrorFailsClosed(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-final-err-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	eng := NewEngine(store, policy)
+
+	taskID := "task-final-err"
+	now := time.Now().UTC()
+
+	// 1. 初始化 DB 中的任務狀態為 running
+	task := &storage.Task{
+		ID:        taskID,
+		Workspace: tmpDir,
+		Prompt:    "final err task",
+		Status:    storage.StatusRunning,
+		Result:    "",
+		PGID:      0,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.CreateTask(context.Background(), task); err != nil {
+		t.Fatalf("CreateTask failed: %v", err)
+	}
+
+	// 2. 註冊 active runner，當 runner 收到 cancel 時關閉 store
+	doneCh := make(chan struct{})
+	eng.cancelsMu.Lock()
+	eng.cancels[taskID] = func() {
+		// 收到取消信號時關閉 store，使後續 GetTask 必定出錯，並結束 runner
+		_ = store.Close()
+		close(doneCh)
+	}
+	eng.doneChs[taskID] = doneCh
+	eng.cancelsMu.Unlock()
+
+	// 3. 呼叫 CancelTask
+	cancelErr := eng.CancelTask(taskID)
+
+	// 4. 斷言：CancelTask 絕不能吞掉 DB 錯誤而回傳 nil
+	if cancelErr == nil {
+		t.Fatalf("CRITICAL BUG: CancelTask returned nil (success) when final GetTask failed! Violates synchronization contract")
+	}
+}
+
+// TestEngineCancel_ClearPGIDErrorFailsClosed
+// 驗證當進程組已成功回收，但清除 PGID (UpdateTaskPGID) 發生錯誤時，
+// CancelTask 絕不得忽略該錯誤宣告成功，必須 fail-closed 回報錯誤
+func TestEngineCancel_ClearPGIDErrorFailsClosed(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-clear-pgid-err-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	eng := NewEngine(store, policy)
+
+	taskID := "task-pgid-err"
+	now := time.Now().UTC()
+
+	// 1. 啟動一個 dummy 進程以產生真實 PGID，並帶有任務身分環境變數
+	cmd := exec.Command("sleep", "10")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Env = append(os.Environ(), fmt.Sprintf("ASURA_TASK_ID=%s", taskID))
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to start dummy command: %v", err)
+	}
+	go func() {
+		_ = cmd.Wait()
+	}()
+	pgid, _ := syscall.Getpgid(cmd.Process.Pid)
+	defer func() {
+		_ = syscall.Kill(-pgid, syscall.SIGKILL)
+	}()
+
+
+	task := &storage.Task{
+		ID:        taskID,
+		Workspace: tmpDir,
+		Prompt:    "clear pgid err task",
+		Status:    storage.StatusRunning,
+		Result:    "",
+		PGID:      pgid,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.CreateTask(context.Background(), task); err != nil {
+		t.Fatalf("CreateTask failed: %v", err)
+	}
+
+	// 2. 監聽進程組死亡時，立即關閉 store 使隨後的 UpdateTaskPGID 失敗
+	go func() {
+		for {
+			if !opencode.IsProcessGroupAlive(pgid) {
+				_ = store.Close()
+				break
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}()
+
+	// 3. 呼叫 CancelTask
+	cancelErr := eng.CancelTask(taskID)
+
+	// 4. 斷言：CancelTask 絕不能忽略 DB 錯誤而宣告成功，必須 fail-closed
+	if cancelErr == nil {
+		t.Fatalf("expected CancelTask to fail closed when database error occurs during cleanup, got nil")
+	}
+
+}
+
+
+
