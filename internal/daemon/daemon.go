@@ -2,7 +2,9 @@ package daemon
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -340,6 +342,8 @@ type IPCRequest struct {
 	CronID     string          `json:"cron_id,omitempty"`
 	CronAddReq *CronAddRequest `json:"cron_add_req,omitempty"`
 	Limit      int             `json:"limit,omitempty"`
+	MemoryID   string          `json:"memory_id,omitempty"`
+	Content    string          `json:"content,omitempty"`
 }
 
 // IPCResponse 定義傳回用戶端之結果
@@ -349,6 +353,8 @@ type IPCResponse struct {
 	CronSchedule  *storage.CronSchedule  `json:"cron_schedule,omitempty"`
 	CronSchedules []storage.CronSchedule `json:"cron_schedules,omitempty"`
 	CronRuns      []storage.CronRun      `json:"cron_runs,omitempty"`
+	Memory        *storage.Memory        `json:"memory,omitempty"`
+	Memories      []storage.Memory       `json:"memories,omitempty"`
 	Error         string                 `json:"error,omitempty"`
 }
 
@@ -422,6 +428,9 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				_ = encoder.Encode(IPCResponse{Error: err.Error()})
 				continue
 			}
+			// CancelTask 確認安全回收完成後，釋放該任務持有的 workspace lock 並喚醒下一個排隊任務
+			wsKey := d.canonicalWorkspace(target.Workspace)
+			d.releaseWorkspaceAndWakeNext(wsKey, targetID)
 			task, _ := d.store.GetTask(context.Background(), targetID)
 			_ = encoder.Encode(IPCResponse{Task: task})
 
@@ -675,10 +684,120 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			}
 			_ = encoder.Encode(IPCResponse{CronRuns: runs})
 
+		case "memory_add":
+			if req.Workspace == "" || req.Content == "" {
+				_ = encoder.Encode(IPCResponse{Error: "workspace and content are required"})
+				continue
+			}
+			if d.policy == nil {
+				_ = encoder.Encode(IPCResponse{Error: "unauthorized workspace"})
+				continue
+			}
+			canonicalScope, err := d.policy.AuthorizeCanonicalWorkspace(req.Workspace)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unauthorized workspace: %v", err)})
+				continue
+			}
+
+			mem := storage.Memory{
+				ID:        generateMemoryID(),
+				Workspace: canonicalScope,
+				Content:   req.Content,
+				Source:    "manual",
+				CreatedAt: time.Now().UTC(),
+			}
+			if err := d.store.CreateMemory(context.Background(), mem); err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("create memory: %v", err)})
+				continue
+			}
+			_ = encoder.Encode(IPCResponse{Memory: &mem})
+
+		case "memory_list":
+			if req.Workspace == "" {
+				_ = encoder.Encode(IPCResponse{Error: "workspace is required"})
+				continue
+			}
+			if d.policy == nil {
+				_ = encoder.Encode(IPCResponse{Error: "unauthorized workspace"})
+				continue
+			}
+			canonicalScope, err := d.policy.AuthorizeCanonicalWorkspace(req.Workspace)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unauthorized workspace: %v", err)})
+				continue
+			}
+
+			memories, err := d.store.ListMemories(context.Background(), canonicalScope)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("list memories: %v", err)})
+				continue
+			}
+			_ = encoder.Encode(IPCResponse{Memories: memories})
+
+		case "memory_get":
+			if req.Workspace == "" || req.MemoryID == "" {
+				_ = encoder.Encode(IPCResponse{Error: "workspace and memory_id are required"})
+				continue
+			}
+			if d.policy == nil {
+				_ = encoder.Encode(IPCResponse{Error: "unauthorized workspace"})
+				continue
+			}
+			canonicalScope, err := d.policy.AuthorizeCanonicalWorkspace(req.Workspace)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unauthorized workspace: %v", err)})
+				continue
+			}
+
+			mem, err := d.store.GetMemory(context.Background(), canonicalScope, req.MemoryID)
+			if err != nil {
+				if errors.Is(err, storage.ErrMemoryNotFound) {
+					_ = encoder.Encode(IPCResponse{Error: "memory not found"})
+				} else {
+					_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("get memory: %v", err)})
+				}
+				continue
+			}
+			_ = encoder.Encode(IPCResponse{Memory: mem})
+
+		case "memory_remove":
+			if req.Workspace == "" || req.MemoryID == "" {
+				_ = encoder.Encode(IPCResponse{Error: "workspace and memory_id are required"})
+				continue
+			}
+			if d.policy == nil {
+				_ = encoder.Encode(IPCResponse{Error: "unauthorized workspace"})
+				continue
+			}
+			canonicalScope, err := d.policy.AuthorizeCanonicalWorkspace(req.Workspace)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unauthorized workspace: %v", err)})
+				continue
+			}
+
+			err = d.store.DeleteMemory(context.Background(), canonicalScope, req.MemoryID)
+			if err != nil {
+				if errors.Is(err, storage.ErrMemoryNotFound) {
+					_ = encoder.Encode(IPCResponse{Error: "memory not found"})
+				} else {
+					_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("delete memory: %v", err)})
+				}
+				continue
+			}
+			_ = encoder.Encode(IPCResponse{})
+
 		default:
 			_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unknown action: %s", action)})
 		}
 	}
+}
+
+func generateMemoryID() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("mem-%d-%x", time.Now().UnixNano(), time.Now().Unix())
+	}
+	return fmt.Sprintf("mem-%d-%s", time.Now().UnixNano(), hex.EncodeToString(b))
 }
 
 func (d *Daemon) canonicalWorkspace(ws string) string {
@@ -713,8 +832,13 @@ func (d *Daemon) dispatchTask(taskID, workspace, prompt string, class TaskClass)
 		})
 		return runErr
 	}, func() {
-		// 在 WorkerPool 槽位完全釋放後執行完成交接 (MUST FIX 3)
+		// 在 WorkerPool 槽位完全釋放後執行容量歸還
 		d.releaseCapacity()
+		// 檢查任務最新狀態：無法確認狀態時 fail-closed，若處於 cancelling 嚴禁提前釋放 workspace lock
+		task, err := d.store.GetTask(context.Background(), taskID)
+		if err != nil || task == nil || task.Status == storage.StatusCancelling {
+			return
+		}
 		d.releaseWorkspaceAndWakeNext(wsKey, taskID)
 	})
 	return err
@@ -730,6 +854,10 @@ func (d *Daemon) dispatchQueuedTask(taskID, workspace, prompt string, class Task
 		return runErr
 	}, func() {
 		d.releaseCapacity()
+		task, err := d.store.GetTask(context.Background(), taskID)
+		if err != nil || task == nil || task.Status == storage.StatusCancelling {
+			return
+		}
 		d.releaseWorkspaceAndWakeNext(wsKey, taskID)
 	})
 	return err
@@ -1056,6 +1184,113 @@ func (c *Client) ListCronRuns(ctx context.Context, cronID string, limit int) ([]
 	}
 
 	return resp.CronRuns, nil
+}
+
+// AddMemory 透過 Daemon IPC 新增專案記憶 (MEM-001)
+func (c *Client) AddMemory(ctx context.Context, workspace, content string) (*storage.Memory, error) {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action:    "memory_add",
+		Workspace: workspace,
+		Content:   content,
+	}); err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if resp.Error != "" {
+		return nil, errors.New(resp.Error)
+	}
+
+	if resp.Memory == nil {
+		return nil, errors.New("empty memory in response")
+	}
+
+	return resp.Memory, nil
+}
+
+// ListMemories 透過 Daemon IPC 查詢專案記憶清單 (MEM-001, MEM-002)
+func (c *Client) ListMemories(ctx context.Context, workspace string) ([]storage.Memory, error) {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action:    "memory_list",
+		Workspace: workspace,
+	}); err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if resp.Error != "" {
+		return nil, errors.New(resp.Error)
+	}
+
+	return resp.Memories, nil
+}
+
+// GetMemory 透過 Daemon IPC 查詢指定 ID 之記憶 (MEM-001, MEM-002)
+func (c *Client) GetMemory(ctx context.Context, workspace, id string) (*storage.Memory, error) {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action:    "memory_get",
+		Workspace: workspace,
+		MemoryID:  id,
+	}); err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if resp.Error != "" {
+		return nil, errors.New(resp.Error)
+	}
+
+	if resp.Memory == nil {
+		return nil, errors.New("memory not found")
+	}
+
+	return resp.Memory, nil
+}
+
+// DeleteMemory 透過 Daemon IPC 刪除指定 ID 之記憶 (MEM-005, MEM-002)
+func (c *Client) DeleteMemory(ctx context.Context, workspace, id string) error {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action:    "memory_remove",
+		Workspace: workspace,
+		MemoryID:  id,
+	}); err != nil {
+		return fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return fmt.Errorf("decode response: %w", err)
+	}
+
+	if resp.Error != "" {
+		return errors.New(resp.Error)
+	}
+
+	return nil
 }
 
 // Close 關閉用戶端連線

@@ -1,0 +1,16 @@
+=== RUN   TestRunCLI_MemoryValidation
+=== RUN   TestRunCLI_MemoryValidation/memory_指令無子操作輸出_Usage_並返回非_0
+=== RUN   TestRunCLI_MemoryValidation/memory_add_缺少必要參數返回非_0
+=== RUN   TestRunCLI_MemoryValidation/memory_list_缺少_workspace_返回非_0
+=== RUN   TestRunCLI_MemoryValidation/memory_get_缺少參數返回非_0
+=== RUN   TestRunCLI_MemoryValidation/memory_remove_缺少參數返回非_0
+=== RUN   TestRunCLI_MemoryValidation/memory_指令在_Daemon_不可用時回報錯誤_(MEM-006)
+--- PASS: TestRunCLI_MemoryValidation (0.00s)
+    --- PASS: TestRunCLI_MemoryValidation/memory_指令無子操作輸出_Usage_並返回非_0 (0.00s)
+    --- PASS: TestRunCLI_MemoryValidation/memory_add_缺少必要參數返回非_0 (0.00s)
+    --- PASS: TestRunCLI_MemoryValidation/memory_list_缺少_workspace_返回非_0 (0.00s)
+    --- PASS: TestRunCLI_MemoryValidation/memory_get_缺少參數返回非_0 (0.00s)
+    --- PASS: TestRunCLI_MemoryValidation/memory_remove_缺少參數返回非_0 (0.00s)
+    --- PASS: TestRunCLI_MemoryValidation/memory_指令在_Daemon_不可用時回報錯誤_(MEM-006) (0.00s)
+PASS
+ok  	asura/cmd/asura	0.007s

@@ -1,0 +1,9 @@
+=== P3-T1 重構檢核 (2026-09-15) ===
+程式碼架構檢視：
+1. cmd/asura/memory.go：採用標準 flag.FlagSet，加入 reorderArgs 確保旗標與位置參數順序相容，直通 Daemon IPC，無冗餘抽象層或推測性邏輯。
+2. cmd/asura/run.go：僅於 RunCLI switch 加入 "memory" 分派，並在 printUsage 新增一行說明，極簡手術式修改。
+3. cmd/asura/run_test.go：新增 6 項參數校驗子測試，涵蓋空參數、缺欄位與 Daemon 不可用錯誤。
+4. tests/integration/memory_test.go：實作 buildAsuraBinary 真實編譯測試 binary，TestMEM001, TestMEM005, TestMEM006 外迴圈整合測試包含健康對照、五欄位無截斷、重啟持久化、指定刪除隔離、無替代儲存驗證與零 AI 後端調用。
+
+結論：程式碼簡潔、符合職責單一與最少修改原則，確認無需進行重構 (no-op)。
+exit code: 0

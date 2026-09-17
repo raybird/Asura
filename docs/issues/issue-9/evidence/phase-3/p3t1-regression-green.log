@@ -1,0 +1,4 @@
+ok  	asura/internal/storage	2.639s
+ok  	asura/internal/auth	1.027s
+ok  	asura/internal/daemon	10.928s
+ok  	asura/cmd/asura	1.046s

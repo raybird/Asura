@@ -1,0 +1,8 @@
+日期：2026-09-14
+命令：go test -count=1 -v ./tests/integration -run '^TestP1T2a_FixtureAndRunnerBaseline$'
+退出碼：0
+輸出：
+=== RUN   TestP1T2a_FixtureAndRunnerBaseline
+--- PASS: TestP1T2a_FixtureAndRunnerBaseline (0.04s)
+PASS
+ok  	asura/tests/integration	0.051s

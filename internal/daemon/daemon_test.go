@@ -3,15 +3,19 @@ package daemon
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
 	"asura/internal/auth"
+	"asura/internal/backend/opencode"
 	"asura/internal/engine"
 	"asura/internal/storage"
 )
@@ -1787,6 +1791,151 @@ func TestDaemon_DispatchFailure_HandsOverWorkspaceLock(t *testing.T) {
 	}
 	if !t2Executed.Load() {
 		t.Fatalf("MUST FIX 8 regression: task 2 was not executed after task 1 dispatch failure!")
+	}
+}
+
+// TestDaemon_CancellingTaskKeepsWorkspaceLockedUntilReapConfirmed
+// 驗證任務處於 cancelling 且進程組未確認回收（身分未知或逾時）時，
+// 嚴禁提前釋放 workspace lock，同 workspace 的下一個排隊任務絕不得開始執行
+func TestDaemon_CancellingTaskKeepsWorkspaceLockedUntilReapConfirmed(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-daemon-cancel-lock-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	sockPath := filepath.Join(tmpDir, "asura.sock")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	var (
+		orphanPGID        int
+		runnerInvocations int32
+		taskARunning      = make(chan struct{})
+	)
+
+	runner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		atomic.AddInt32(&runnerInvocations, 1)
+		if prompt == "prompt-task-a" {
+			cmd := exec.Command("sh", "-c", "exec env -i PATH=/usr/bin:/bin sh -c '(sleep 10) & exit 0'")
+			opencode.ConfigureProcessGroup(cmd)
+			if err := cmd.Start(); err != nil {
+				return "", err
+			}
+			leaderPID := cmd.Process.Pid
+			pgid, pErr := syscall.Getpgid(leaderPID)
+			if pErr != nil {
+				pgid = leaderPID
+			}
+			orphanPGID = pgid
+
+			_ = cmd.Wait()
+			for i := 0; i < 50; i++ {
+				if _, statErr := os.Stat(fmt.Sprintf("/proc/%d", leaderPID)); os.IsNotExist(statErr) {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+
+			taskID := engine.TaskIDFromContext(ctx)
+			if taskID != "" {
+				_ = store.UpdateTaskPGID(context.Background(), taskID, orphanPGID)
+			}
+			close(taskARunning)
+
+			<-ctx.Done()
+			return "task A partial output", ctx.Err()
+		}
+
+		return "task B completed", nil
+	}
+
+	eng := engine.NewEngine(store, policy, engine.WithRunner(runner))
+	d := NewDaemon(Config{
+		SocketPath: sockPath,
+	}, store, policy, WithEngine(eng))
+	if err := d.Start(); err != nil {
+		t.Fatalf("daemon start failed: %v", err)
+	}
+	defer d.Close()
+
+	defer func() {
+		if orphanPGID > 0 {
+			_ = syscall.Kill(-orphanPGID, syscall.SIGKILL)
+		}
+	}()
+
+	client, err := NewClient(sockPath)
+	if err != nil {
+		t.Fatalf("NewClient failed: %v", err)
+	}
+	defer client.Close()
+
+	// 1. 提交 Task A
+	taskA, err := client.Submit(context.Background(), engine.SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "prompt-task-a",
+	})
+	if err != nil {
+		t.Fatalf("submit task A failed: %v", err)
+	}
+
+	// 等候 Task A 啟動並登記 orphan PGID
+	select {
+	case <-taskARunning:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for task A to start")
+	}
+
+	// 2. 提交 Task B（相同 workspace），必然排入 queue
+	taskB, err := client.Submit(context.Background(), engine.SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "prompt-task-b",
+	})
+	if err != nil {
+		t.Fatalf("submit task B failed: %v", err)
+	}
+	if taskB.Status != storage.StatusQueued {
+		t.Fatalf("expected task B to be queued, got: %s", taskB.Status)
+	}
+
+	// 3. 取消 Task A：因為身分無法確認，CancelTask 必須失敗
+	_, cancelErr := client.CancelTask(context.Background(), taskA.ID)
+	if cancelErr == nil {
+		t.Fatalf("expected cancel task A to fail due to unknown identity, got nil")
+	}
+
+	// 等候背景 SubmitTask(A) 退出
+	time.Sleep(150 * time.Millisecond)
+
+	// 4. 斷言 Task A
+	savedA, err := store.GetTask(context.Background(), taskA.ID)
+	if err != nil {
+		t.Fatalf("failed to query task A: %v", err)
+	}
+	if savedA.Status != storage.StatusCancelling {
+		t.Errorf("expected task A to be %s, got: %s", storage.StatusCancelling, savedA.Status)
+	}
+	if savedA.PGID != orphanPGID {
+		t.Errorf("expected task A PGID to be preserved as %d, got: %d", orphanPGID, savedA.PGID)
+	}
+
+	// 5. 核心斷言：Task B 絕不得被喚醒或執行！
+	savedB, err := store.GetTask(context.Background(), taskB.ID)
+	if err != nil {
+		t.Fatalf("failed to query task B: %v", err)
+	}
+	if savedB.Status != storage.StatusQueued {
+		t.Fatalf("CRITICAL BUG: task B was transitioned to %s, workspace lock was released before reap confirmed!", savedB.Status)
+	}
+	if invocations := atomic.LoadInt32(&runnerInvocations); invocations != 1 {
+		t.Fatalf("CRITICAL BUG: runner invocations expected 1 (only A), got: %d (task B was executed!)", invocations)
 	}
 }
 

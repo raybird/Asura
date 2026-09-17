@@ -142,6 +142,93 @@ func TestScheduler_Trigger_OverlapSkip(t *testing.T) {
 	}
 }
 
+// TestScheduler_Trigger_OverlapSkip_Cancelling 驗證當前次任務處於 StatusCancelling 時，依 CRON-004 略過本次觸發
+func TestScheduler_Trigger_OverlapSkip_Cancelling(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-cron-cancelling-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	now := time.Now().UTC().Truncate(time.Second)
+	sched := storage.CronSchedule{
+		ID:        "sched-cancelling-1",
+		Name:      "test-cancelling-overlap",
+		Workspace: tmpDir,
+		Schedule:  "* * * * *",
+		Prompt:    "echo test",
+		Status:    storage.CronStatusActive,
+		NextRunAt: &now,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.CreateCronSchedule(ctx, sched); err != nil {
+		t.Fatal(err)
+	}
+
+	callCount := 0
+	dispatcher := func(ctx context.Context, cronID, workspace, prompt string) (string, error) {
+		callCount++
+		taskID := "task-cancelling-1"
+		task := &storage.Task{
+			ID:        taskID,
+			Workspace: workspace,
+			Prompt:    prompt,
+			Status:    storage.StatusRunning,
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+		_ = store.CreateTask(ctx, task)
+		return taskID, nil
+	}
+
+	scheduler := NewScheduler(store, policy, dispatcher)
+
+	// 1. 第一次觸發
+	if err := scheduler.Trigger(ctx, "sched-cancelling-1", now); err != nil {
+		t.Fatalf("first trigger failed: %v", err)
+	}
+
+	// 將前次任務狀態更新為 StatusCancelling（模擬正在取消中）
+	_ = store.UpdateTaskStatus(ctx, "task-cancelling-1", storage.StatusCancelling, "", "cancellation requested")
+
+	// 2. 第二次觸發：前次任務處於 cancelling，必須略過
+	if err := scheduler.Trigger(ctx, "sched-cancelling-1", now.Add(time.Minute)); err != nil {
+		t.Fatalf("second trigger failed: %v", err)
+	}
+
+	// 驗證 dispatcher 沒有被第二次呼叫
+	if callCount != 1 {
+		t.Fatalf("expected dispatcher callCount to be 1, got %d", callCount)
+	}
+
+	// 3. 驗證記錄為 skipped
+	runs, err := store.ListCronRuns(ctx, "sched-cancelling-1", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundSkipped := false
+	for _, r := range runs {
+		if r.Status == storage.CronRunSkipped {
+			foundSkipped = true
+			break
+		}
+	}
+	if !foundSkipped {
+		t.Fatalf("expected a skipped run record when task is cancelling, got runs: %+v", runs)
+	}
+}
+
 func TestScheduler_Trigger_UnauthorizedAutoPause(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "asura.db")

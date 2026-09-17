@@ -178,6 +178,13 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 
 	if !alreadyCreated {
 		if err := e.store.CreateTask(ctx, task); err != nil {
+			if errors.Is(ctx.Err(), context.Canceled) {
+				task.Status = storage.StatusCancelled
+				task.ErrorMessage = "task cancelled by user"
+				_ = e.store.CreateTask(context.Background(), task)
+				_ = e.store.UpdateTaskStatus(context.Background(), task.ID, storage.StatusCancelled, "", "task cancelled by user")
+				return task, ctx.Err()
+			}
 			return nil, fmt.Errorf("create task in storage: %w", err)
 		}
 	}
@@ -221,16 +228,23 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 		close(doneCh)
 	}()
 
-	// 進入 runner 前查核儲存層與 context 最新狀態，若已被外部取消則直接退出，絕不呼叫 runner (修復 F-02)
+	// 進入 runner 前查核儲存層與 context 最新狀態，若已被外部取消或處於取消中則直接退出，絕不呼叫 runner (修復 F-02)
 	latestCheck, checkErr := e.store.GetTask(ctx, task.ID)
-	if checkErr == nil && latestCheck.Status == storage.StatusCancelled {
-		task.Status = storage.StatusCancelled
+	if checkErr == nil && (latestCheck.Status == storage.StatusCancelled || latestCheck.Status == storage.StatusCancelling) {
+		task.Status = latestCheck.Status
 		task.ErrorMessage = latestCheck.ErrorMessage
 		return task, context.Canceled
 	}
 	if taskCtx.Err() == context.Canceled {
 		persistCtx, persistCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer persistCancel()
+
+		latestBeforeRun, _ := e.store.GetTask(persistCtx, task.ID)
+		if latestBeforeRun != nil && (latestBeforeRun.Status == storage.StatusCancelling || latestBeforeRun.Status == storage.StatusCancelled) {
+			task.Status = latestBeforeRun.Status
+			task.ErrorMessage = latestBeforeRun.ErrorMessage
+			return task, taskCtx.Err()
+		}
 
 		task.Status = storage.StatusCancelled
 		task.ErrorMessage = "task cancelled by user"
@@ -263,6 +277,19 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 
 	// 檢查內部 taskCtx 是否已被取消
 	if taskCtx.Err() == context.Canceled {
+		if output != "" {
+			_ = e.store.UpdateTaskResult(persistCtx, task.ID, output)
+		}
+
+		// 若儲存層已處於 StatusCancelling 或 StatusCancelled，嚴禁 SubmitTask 自行宣告或升級為 StatusCancelled！
+		// 終態 StatusCancelled 之宣告權屬於 CancelTask 協調器，必須於進程組核驗並安全確認回收後方可持久化
+		if fetchErr == nil && (latestTask.Status == storage.StatusCancelling || latestTask.Status == storage.StatusCancelled) {
+			task.Status = latestTask.Status
+			task.Result = output
+			task.ErrorMessage = latestTask.ErrorMessage
+			return task, taskCtx.Err()
+		}
+
 		task.Status = storage.StatusCancelled
 		task.Result = output
 		task.ErrorMessage = "task cancelled by user"
@@ -273,27 +300,47 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 	}
 
 	if runErr != nil {
+		updated, persistErr := e.store.UpdateTaskStatusIfRunning(persistCtx, task.ID, storage.StatusFailed, output, runErr.Error())
+		if persistErr != nil {
+			return task, fmt.Errorf("%w (persist task status failed: %v)", runErr, persistErr)
+		}
+		if !updated {
+			latest, getErr := e.store.GetTask(persistCtx, task.ID)
+			if getErr == nil && (latest.Status == storage.StatusCancelled || latest.Status == storage.StatusCancelling) {
+				task.Status = latest.Status
+				task.Result = output
+				task.ErrorMessage = latest.ErrorMessage
+				return task, context.Canceled
+			}
+		}
 		task.Status = storage.StatusFailed
 		task.Result = output
 		task.ErrorMessage = runErr.Error()
-		if persistErr := e.store.UpdateTaskStatus(persistCtx, task.ID, storage.StatusFailed, output, runErr.Error()); persistErr != nil {
-			return task, fmt.Errorf("%w (persist task status failed: %v)", runErr, persistErr)
-		}
 		return task, runErr
 	}
 
 	// 6. 空輸出與未解決結構化錯誤防禦檢查（遵循 SCN-007，修復 R-09 與 F-04）
 	if isErr, errMsg := hasUnresolvedErrorOrEmpty(output); isErr {
+		updated, persistErr := e.store.UpdateTaskStatusIfRunning(persistCtx, task.ID, storage.StatusFailed, output, errMsg)
+		if persistErr != nil {
+			return task, fmt.Errorf("%w (persist task status failed: %v)", ErrEmptyOutput, persistErr)
+		}
+		if !updated {
+			latest, getErr := e.store.GetTask(persistCtx, task.ID)
+			if getErr == nil && (latest.Status == storage.StatusCancelled || latest.Status == storage.StatusCancelling) {
+				task.Status = latest.Status
+				task.Result = output
+				task.ErrorMessage = latest.ErrorMessage
+				return task, context.Canceled
+			}
+		}
 		task.Status = storage.StatusFailed
 		task.Result = output
 		task.ErrorMessage = errMsg
-		if persistErr := e.store.UpdateTaskStatus(persistCtx, task.ID, storage.StatusFailed, output, errMsg); persistErr != nil {
-			return task, fmt.Errorf("%w (persist task status failed: %v)", ErrEmptyOutput, persistErr)
-		}
 		return task, ErrEmptyOutput
 	}
 
-	// 7. 條件式記錄成功結果（修復 R-10）：僅在狀態仍為 running 時才標記為 completed，防止覆寫已被外部標記之 cancelled 狀態
+	// 7. 條件式記錄成功結果（修復 R-10）：僅在狀態仍為 running 時才標記為 completed，防止覆寫已被外部標記之 cancelled 或 cancelling 狀態
 	updated, err = e.store.UpdateTaskStatusIfRunning(persistCtx, task.ID, storage.StatusCompleted, output, "")
 	if err != nil {
 		return nil, fmt.Errorf("update task to completed: %w", err)
@@ -301,7 +348,7 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 	if !updated {
 		latest, getErr := e.store.GetTask(persistCtx, task.ID)
 		if getErr == nil {
-			if latest.Status == storage.StatusCancelled && output != "" {
+			if (latest.Status == storage.StatusCancelled || latest.Status == storage.StatusCancelling) && output != "" {
 				if updateErr := e.store.UpdateTaskResult(persistCtx, task.ID, output); updateErr != nil {
 					return task, fmt.Errorf("task cancelled: persist output failed: %w", updateErr)
 				}
@@ -309,7 +356,7 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 			task.Status = latest.Status
 			task.Result = output
 			task.ErrorMessage = latest.ErrorMessage
-			if latest.Status == storage.StatusCancelled {
+			if latest.Status == storage.StatusCancelled || latest.Status == storage.StatusCancelling {
 				return task, context.Canceled
 			}
 			return task, nil

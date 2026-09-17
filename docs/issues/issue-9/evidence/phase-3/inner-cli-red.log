@@ -1,0 +1,101 @@
+=== RUN   TestRunCLI_MemoryValidation
+=== RUN   TestRunCLI_MemoryValidation/memory_指令無子操作輸出_Usage_並返回非_0
+    run_test.go:168: expected memory subcommands usage, got: error: unknown command "memory"
+        
+        Usage: asura <command> [options] [arguments]
+        
+        Commands:
+          daemon  Start the central execution daemon
+          run     Submit and execute a task in a workspace
+          ask     Submit a natural language AI task via Daemon
+          status  Query the execution status and result of a task
+          cancel  Cancel a pending or running task
+          web     Start the local web remote entry console
+          cron    Manage periodic scheduled tasks
+        
+        Run 'asura <command> -h' for details on each command.
+=== RUN   TestRunCLI_MemoryValidation/memory_add_缺少必要參數返回非_0
+    run_test.go:180: expected 'workspace and content are required', got: error: unknown command "memory"
+        
+        Usage: asura <command> [options] [arguments]
+        
+        Commands:
+          daemon  Start the central execution daemon
+          run     Submit and execute a task in a workspace
+          ask     Submit a natural language AI task via Daemon
+          status  Query the execution status and result of a task
+          cancel  Cancel a pending or running task
+          web     Start the local web remote entry console
+          cron    Manage periodic scheduled tasks
+        
+        Run 'asura <command> -h' for details on each command.
+=== RUN   TestRunCLI_MemoryValidation/memory_list_缺少_workspace_返回非_0
+    run_test.go:192: expected 'workspace is required', got: error: unknown command "memory"
+        
+        Usage: asura <command> [options] [arguments]
+        
+        Commands:
+          daemon  Start the central execution daemon
+          run     Submit and execute a task in a workspace
+          ask     Submit a natural language AI task via Daemon
+          status  Query the execution status and result of a task
+          cancel  Cancel a pending or running task
+          web     Start the local web remote entry console
+          cron    Manage periodic scheduled tasks
+        
+        Run 'asura <command> -h' for details on each command.
+=== RUN   TestRunCLI_MemoryValidation/memory_get_缺少參數返回非_0
+    run_test.go:204: expected 'workspace and memory_id are required', got: error: unknown command "memory"
+        
+        Usage: asura <command> [options] [arguments]
+        
+        Commands:
+          daemon  Start the central execution daemon
+          run     Submit and execute a task in a workspace
+          ask     Submit a natural language AI task via Daemon
+          status  Query the execution status and result of a task
+          cancel  Cancel a pending or running task
+          web     Start the local web remote entry console
+          cron    Manage periodic scheduled tasks
+        
+        Run 'asura <command> -h' for details on each command.
+=== RUN   TestRunCLI_MemoryValidation/memory_remove_缺少參數返回非_0
+    run_test.go:216: expected 'workspace and memory_id are required', got: error: unknown command "memory"
+        
+        Usage: asura <command> [options] [arguments]
+        
+        Commands:
+          daemon  Start the central execution daemon
+          run     Submit and execute a task in a workspace
+          ask     Submit a natural language AI task via Daemon
+          status  Query the execution status and result of a task
+          cancel  Cancel a pending or running task
+          web     Start the local web remote entry console
+          cron    Manage periodic scheduled tasks
+        
+        Run 'asura <command> -h' for details on each command.
+=== RUN   TestRunCLI_MemoryValidation/memory_指令在_Daemon_不可用時回報錯誤_(MEM-006)
+    run_test.go:228: expected 'daemon unavailable' in stderr, got: error: unknown command "memory"
+        
+        Usage: asura <command> [options] [arguments]
+        
+        Commands:
+          daemon  Start the central execution daemon
+          run     Submit and execute a task in a workspace
+          ask     Submit a natural language AI task via Daemon
+          status  Query the execution status and result of a task
+          cancel  Cancel a pending or running task
+          web     Start the local web remote entry console
+          cron    Manage periodic scheduled tasks
+        
+        Run 'asura <command> -h' for details on each command.
+--- FAIL: TestRunCLI_MemoryValidation (0.00s)
+    --- FAIL: TestRunCLI_MemoryValidation/memory_指令無子操作輸出_Usage_並返回非_0 (0.00s)
+    --- FAIL: TestRunCLI_MemoryValidation/memory_add_缺少必要參數返回非_0 (0.00s)
+    --- FAIL: TestRunCLI_MemoryValidation/memory_list_缺少_workspace_返回非_0 (0.00s)
+    --- FAIL: TestRunCLI_MemoryValidation/memory_get_缺少參數返回非_0 (0.00s)
+    --- FAIL: TestRunCLI_MemoryValidation/memory_remove_缺少參數返回非_0 (0.00s)
+    --- FAIL: TestRunCLI_MemoryValidation/memory_指令在_Daemon_不可用時回報錯誤_(MEM-006) (0.00s)
+FAIL
+FAIL	asura/cmd/asura	0.005s
+FAIL

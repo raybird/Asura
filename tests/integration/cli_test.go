@@ -1638,13 +1638,19 @@ func TestCLI_LatestReview_M01_OrphanUnknownIdentityFailsSafely(t *testing.T) {
 		t.Errorf("expected stderr to contain 'unable to verify process identity', got: %s", cancelErr.String())
 	}
 
-	// 6. 驗證 SQLite 中的 PGID 必須完好保留（嚴禁清零抹煞未知進程組之追蹤）
+	// 6. 驗證 SQLite 中的 PGID 必須完好保留（嚴禁清零抹煞未知進程組之追蹤），且狀態嚴禁呈現 cancelled
 	finalTask, err := store.GetTask(context.Background(), taskID)
 	if err != nil {
 		t.Fatalf("failed to query final task: %v", err)
 	}
 	if finalTask.PGID != targetPGID {
 		t.Errorf("expected final PGID to be preserved as %d, got: %d (cleared violates M-01)", targetPGID, finalTask.PGID)
+	}
+	if finalTask.Status == storage.StatusCancelled {
+		t.Errorf("expected final task status NOT to be cancelled when identity is unverified, but got cancelled")
+	}
+	if finalTask.Status != storage.StatusCancelling {
+		t.Errorf("expected final task status to remain %q, got: %q", storage.StatusCancelling, finalTask.Status)
 	}
 }
 

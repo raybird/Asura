@@ -1,0 +1,20 @@
+=== RUN   TestMEM002
+--- PASS: TestMEM002 (0.01s)
+=== RUN   TestMEM003
+=== RUN   TestMEM003/越界符號連結操作拒絕
+=== RUN   TestMEM003/未授權外部目錄操作拒絕
+--- PASS: TestMEM003 (0.01s)
+    --- PASS: TestMEM003/越界符號連結操作拒絕 (0.00s)
+    --- PASS: TestMEM003/未授權外部目錄操作拒絕 (0.00s)
+=== RUN   TestMEM004
+--- PASS: TestMEM004 (0.01s)
+=== RUN   TestMEM007
+--- PASS: TestMEM007 (1.66s)
+=== RUN   TestMEM001
+--- PASS: TestMEM001 (3.85s)
+=== RUN   TestMEM005
+--- PASS: TestMEM005 (4.11s)
+=== RUN   TestMEM006
+--- PASS: TestMEM006 (2.15s)
+PASS
+ok  	asura/tests/integration	11.818s

@@ -106,26 +106,32 @@ func (s *Scheduler) Trigger(ctx context.Context, cronID string, now time.Time) e
 	if isRunning && activeTaskID != "" {
 		// 檢查前次任務在儲存層之最新狀態
 		task, err := s.store.GetTask(ctx, activeTaskID)
-		if err == nil && task != nil && (task.Status == storage.StatusRunning || task.Status == storage.StatusPending || task.Status == storage.StatusQueued) {
-			// 前次任務尚未結束，依 CRON-004 直接略過 (Skip)
-			skippedRun := storage.CronRun{
-				ID:            runID,
-				CronID:        cronID,
-				ScheduledTime: now,
-				TriggeredTime: now,
-				TaskID:        activeTaskID,
-				Status:        storage.CronRunSkipped,
-				Reason:        "previous task still active",
-				CreatedAt:     now,
-			}
-			_ = s.store.RecordCronRun(ctx, skippedRun)
+		if err == nil && task != nil {
+			switch task.Status {
+			case storage.StatusPending,
+				storage.StatusQueued,
+				storage.StatusRunning,
+				storage.StatusCancelling:
+				// 前次任務尚未結束或仍在取消中，依 CRON-004 直接略過 (Skip)
+				skippedRun := storage.CronRun{
+					ID:            runID,
+					CronID:        cronID,
+					ScheduledTime: now,
+					TriggeredTime: now,
+					TaskID:        activeTaskID,
+					Status:        storage.CronRunSkipped,
+					Reason:        "previous task still active",
+					CreatedAt:     now,
+				}
+				_ = s.store.RecordCronRun(ctx, skippedRun)
 
-			// 重算下次執行時間
-			if parsed, err := Parse(sched.Schedule); err == nil {
-				next := parsed.Next(now)
-				_ = s.store.UpdateCronScheduleNextRun(ctx, cronID, next, sched.LastRunAt)
+				// 重算下次執行時間
+				if parsed, err := Parse(sched.Schedule); err == nil {
+					next := parsed.Next(now)
+					_ = s.store.UpdateCronScheduleNextRun(ctx, cronID, next, sched.LastRunAt)
+				}
+				return nil
 			}
-			return nil
 		}
 	}
 

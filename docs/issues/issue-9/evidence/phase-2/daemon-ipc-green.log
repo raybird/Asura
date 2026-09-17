@@ -1,0 +1,14 @@
+日期：2026-09-14
+命令：go test -count=1 -race -v ./internal/daemon -run '^TestDaemon_Memory_IPC$'
+退出碼：0
+輸出：
+=== RUN   TestDaemon_Memory_IPC
+=== RUN   TestDaemon_Memory_IPC/漏參數拒絕
+=== RUN   TestDaemon_Memory_IPC/越界符號連結與外部目錄拒絕
+=== RUN   TestDaemon_Memory_IPC/正向_CRUD_流程完整驗證
+--- PASS: TestDaemon_Memory_IPC (0.87s)
+    --- PASS: TestDaemon_Memory_IPC/漏參數拒絕 (0.00s)
+    --- PASS: TestDaemon_Memory_IPC/越界符號連結與外部目錄拒絕 (0.00s)
+    --- PASS: TestDaemon_Memory_IPC/正向_CRUD_流程完整驗證 (0.02s)
+PASS
+ok  	asura/internal/daemon	1.899s

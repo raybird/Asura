@@ -15,12 +15,13 @@ import (
 type TaskStatus string
 
 const (
-	StatusPending   TaskStatus = "pending"
-	StatusQueued    TaskStatus = "queued"
-	StatusRunning   TaskStatus = "running"
-	StatusCompleted TaskStatus = "completed"
-	StatusFailed    TaskStatus = "failed"
-	StatusCancelled TaskStatus = "cancelled"
+	StatusPending    TaskStatus = "pending"
+	StatusQueued     TaskStatus = "queued"
+	StatusRunning    TaskStatus = "running"
+	StatusCancelling TaskStatus = "cancelling"
+	StatusCompleted  TaskStatus = "completed"
+	StatusFailed     TaskStatus = "failed"
+	StatusCancelled  TaskStatus = "cancelled"
 )
 
 var (
@@ -235,9 +236,19 @@ func (s *SQLiteStore) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_cron_schedules_status ON cron_schedules(status);
 	CREATE INDEX IF NOT EXISTS idx_cron_runs_cron_id ON cron_runs(cron_id);
 	CREATE INDEX IF NOT EXISTS idx_cron_runs_scheduled_time ON cron_runs(scheduled_time);
+
+	CREATE TABLE IF NOT EXISTS memories (
+		id TEXT PRIMARY KEY,
+		workspace TEXT NOT NULL,
+		content TEXT NOT NULL,
+		source TEXT NOT NULL DEFAULT 'manual',
+		created_at DATETIME NOT NULL
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_memories_workspace ON memories(workspace);
 	`
 	if _, err := s.db.Exec(indices); err != nil {
-		return fmt.Errorf("create indices and cron tables: %w", err)
+		return fmt.Errorf("create indices, cron, and memory tables: %w", err)
 	}
 	return nil
 }
@@ -463,6 +474,45 @@ func (s *SQLiteStore) UpdateTaskStatusIfRunning(ctx context.Context, id string, 
 	return rowsAffected > 0, nil
 }
 
+// UpdateTaskStatusIfPendingOrQueuedWithMsg 僅在任務處於 pending 或 queued 狀態時才轉移為新狀態，並更新 result 與 error_message
+func (s *SQLiteStore) UpdateTaskStatusIfPendingOrQueuedWithMsg(ctx context.Context, id string, status TaskStatus, result string, errMsg string) (bool, error) {
+	query := `
+	UPDATE tasks
+	SET status = ?, result = ?, error_message = ?, updated_at = ?
+	WHERE id = ? AND (status = ? OR status = ?)
+	`
+	now := time.Now().UTC()
+	res, err := s.db.ExecContext(ctx, query, string(status), result, errMsg, now, id, string(StatusPending), string(StatusQueued))
+	if err != nil {
+		return false, fmt.Errorf("update task status if pending or queued: %w", err)
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("check rows affected: %w", err)
+	}
+	return rowsAffected > 0, nil
+}
+
+// UpdateTaskStatusIfCancelling 僅在任務處於 cancelling 狀態時才轉移狀態，防止覆寫終態
+func (s *SQLiteStore) UpdateTaskStatusIfCancelling(ctx context.Context, id string, status TaskStatus, result string, errMsg string) (bool, error) {
+	query := `
+	UPDATE tasks
+	SET status = ?, result = ?, error_message = ?, updated_at = ?
+	WHERE id = ? AND status = ?
+	`
+	now := time.Now().UTC()
+	res, err := s.db.ExecContext(ctx, query, string(status), result, errMsg, now, id, string(StatusCancelling))
+	if err != nil {
+		return false, fmt.Errorf("update task status if cancelling: %w", err)
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("check rows affected: %w", err)
+	}
+	return rowsAffected > 0, nil
+}
+
+
 // UpdateTaskResult 僅更新任務的輸出結果，保留既有狀態與錯誤訊息 (修復 R-06)
 func (s *SQLiteStore) UpdateTaskResult(ctx context.Context, id string, result string) error {
 	query := `
@@ -507,17 +557,17 @@ func (s *SQLiteStore) UpdateTaskPGID(ctx context.Context, id string, pgid int) e
 	return nil
 }
 
-// RecoverInterruptedTasks 掃描並將所有處於 running, pending 或 queued 狀態的孤兒任務標記為 failed
+// RecoverInterruptedTasks 掃描並將所有處於 running, pending, queued 或 cancelling 狀態的孤兒任務標記為 failed
 // 遵循 SCN-006 與 MUST FIX 5：守護程序重啟時保留已完成結果，揭露中斷工作，杜絕假成功、自動重新執行或排隊殘留
 func (s *SQLiteStore) RecoverInterruptedTasks(ctx context.Context) (int64, error) {
 	query := `
 	UPDATE tasks
 	SET status = ?, error_message = ?, updated_at = ?
-	WHERE status IN (?, ?, ?)
+	WHERE status IN (?, ?, ?, ?)
 	`
 	now := time.Now().UTC()
 	msg := "task interrupted: system restarted or terminated unexpectedly"
-	res, err := s.db.ExecContext(ctx, query, StatusFailed, msg, now, StatusRunning, StatusPending, StatusQueued)
+	res, err := s.db.ExecContext(ctx, query, StatusFailed, msg, now, StatusRunning, StatusPending, StatusQueued, StatusCancelling)
 	if err != nil {
 		return 0, fmt.Errorf("recover interrupted tasks: %w", err)
 	}
