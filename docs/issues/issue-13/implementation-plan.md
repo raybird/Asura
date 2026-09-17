@@ -80,16 +80,18 @@
 
 ### Phase 3：儲存層持久化與 Engine 整合
 
-- [ ] 📝 **Task 3.1: 儲存層 tasks 表擴充 execution_mode 與 pipeline_trace**
+- [x] ✅ **Task 3.1: 儲存層 tasks 表擴充 execution_mode 與 pipeline_trace**
   - **對應驗收**：`@TFACE-001`, `@TFACE-002`, `@TFACE-006`
   - **前置相依**：Task 1.1
   - **產出檔案**：`internal/storage/sqlite.go`, `internal/storage/sqlite_test.go`
   - **實作內容**：
     1. 在 `storage.Task` 結構體新增 `ExecutionMode` 與 `PipelineTrace` 欄位。
     2. 更新 `initSchema`，自動 migration 新增欄位。
-    3. 擴充 `CreateTask`、`GetTask`、`UpdateTask` 支援新欄位之讀寫。
+    3. 擴充 `CreateTask`、`GetTask`、`GetTaskByRequestID` 支援新欄位之讀寫。
+    4. 新增 `UpdateTaskPipelineTrace` 支援管線審計追蹤單獨更新。
   - **完成判準**：SQLite 遷移測試通過，新舊資料相容無損。
   - **驗證命令**：`go test -v ./internal/storage/...`
+  - **完成證據**：`internal/storage/sqlite_test.go` 新增 `TestTaskPipelineTraceStorage` 通過。全套 storage 測試全綠（PASS）。
 
 - [ ] 📝 **Task 3.2: 整合 Engine 與 Pipeline 調度**
   - **對應驗收**：`@TFACE-001`, `@TFACE-008`
