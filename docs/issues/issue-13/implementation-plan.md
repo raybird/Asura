@@ -150,7 +150,7 @@
   - **完成判準**：CLI 測試覆蓋參數解析與分派。
   - **驗證命令**：`go test -v ./cmd/asura/...`
 
-- [ ] ⏳ **Task 5.2: 全套 Gherkin 端到端整合測試**
+- [x] ✅ **Task 5.2: 全套 Gherkin 端到端整合測試**
   - **對應驗收**：`@TFACE-001` ~ `@TFACE-010`
   - **前置相依**：Task 5.1
   - **產出檔案**：`tests/integration/three_face_pipeline_test.go`
@@ -160,7 +160,7 @@
   - **完成判準**：整合測試全數通過（All Green）。
   - **驗證命令**：`go test -v ./tests/integration/...`
 
-- [ ] 📝 **Task 5.3: 全系統回歸測試與文件收尾**
+- [ ] ⏳ **Task 5.3: 全系統回歸測試與文件收尾**
   - **對應驗收**：全體驗收條件
   - **前置相依**：Task 5.2
   - **產出檔案**：根目錄 `README.md`

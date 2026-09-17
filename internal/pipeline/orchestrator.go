@@ -3,6 +3,8 @@ package pipeline
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"time"
 
 	"asura/internal/engine"
@@ -159,6 +161,14 @@ func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, 
 		Output:     string(review.Verdict),
 	})
 	trace.DurationMs = time.Since(pipelineStart).Milliseconds()
+
+	if review.Verdict == VerdictFailed {
+		errMsg := fmt.Sprintf("critic review verdict failed: %s", review.Summary)
+		if review.Summary == "" {
+			errMsg = "critic review verdict failed"
+		}
+		return strikerOut, trace, errors.New(errMsg)
+	}
 
 	return strikerOut, trace, nil
 }
