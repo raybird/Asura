@@ -110,16 +110,19 @@
 
 ### Phase 4：Daemon 調度、Redelivery 防禦與 Metrics 收集
 
-- [ ] 📝 **Task 4.1: Daemon IPC 擴充與 Redelivery 冪等防禦**
+- [x] ✅ **Task 4.1: Daemon IPC 擴充與 Redelivery 冪等防禦**
   - **對應驗收**：`@TFACE-009`
   - **前置相依**：Task 3.2
   - **產出檔案**：`internal/daemon/daemon.go`, `internal/daemon/daemon_test.go`
   - **實作內容**：
-    1. `IPCRequest` 擴充 `ExecutionMode` 欄位。
-    2. 將 `ExecutionMode` 納入請求 Fingerprint 計算，避免不同 mode 碰撞。
-    3. 實作同 Request ID 且同 payload 重送時直接回傳已持久化之 Task 與 Trace，不重複執行任何 Stage。
+    1. `IPCRequest` 擴充 `Mode` 欄位。
+    2. 將 `Mode` 納入請求 Fingerprint 計算，防範不同 mode 碰撞與錯置。
+    3. 同 Request ID 且同 payload 重送時直接回傳已持久化之 Task（含 trace），不重複執行任何 Stage。
+    4. 實作 `dispatchTaskWithMode` 保留 `dispatchTask` 向後相容性。
+    5. `NewDaemon` 自動配置預設之 `PipelineOrchestrator`。
   - **完成判準**：Redelivery 測試通過，確認無二次模型調用與副作用。
   - **驗證命令**：`go test -v -run TestThreeFaceRedelivery ./internal/daemon/...`
+  - **完成證據**：`internal/daemon/daemon_test.go` 新增 `TestThreeFaceRedelivery` 通過，確認同 RequestID + Mode 重送不重跑、不同 Mode 重送安全拒絕。全套 daemon 測試 PASS。
 
 - [ ] 📝 **Task 4.2: Pipeline 耗時與模型呼叫計數指標**
   - **對應驗收**：`@TFACE-010`

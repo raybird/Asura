@@ -1939,5 +1939,113 @@ func TestDaemon_CancellingTaskKeepsWorkspaceLockedUntilReapConfirmed(t *testing.
 	}
 }
 
+func TestThreeFaceRedelivery(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-tf-redelivery-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	sockPath := filepath.Join(tmpDir, "daemon.sock")
+
+	var runCount int32
+	mockRunner := func(ctx context.Context, ws, prompt string) (string, error) {
+		atomic.AddInt32(&runCount, 1)
+		return "three-face result", nil
+	}
+
+	eng := engine.NewEngine(store, policy, engine.WithRunner(mockRunner))
+	d := NewDaemon(Config{
+		SocketPath: sockPath,
+		MaxWorkers: 2,
+	}, store, policy, WithEngine(eng))
+
+	if err := d.Start(); err != nil {
+		t.Fatalf("failed to start daemon: %v", err)
+	}
+	defer d.Close()
+
+	client, err := NewClient(sockPath)
+	if err != nil {
+		t.Fatalf("NewClient failed: %v", err)
+	}
+
+	// 1. 提交 Three-Face 任務
+	res1, err := client.Submit(context.Background(), engine.SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "execute complex feature",
+		ID:        "req-tf-redelivery-001",
+		Mode:      "three-face",
+	})
+	if err != nil {
+		t.Fatalf("first submit failed: %v", err)
+	}
+	if res1.ID == "" {
+		t.Fatalf("expected valid task ID, got empty")
+	}
+
+	// 等候背景執行完成
+	var completedTask *storage.Task
+	for i := 0; i < 20; i++ {
+		tQuery, err := store.GetTask(context.Background(), res1.ID)
+		if err == nil && (tQuery.Status == storage.StatusCompleted || tQuery.Status == storage.StatusFailed) {
+			completedTask = tQuery
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if completedTask == nil {
+		t.Fatalf("task timed out waiting for completion")
+	}
+
+	initialRunCount := atomic.LoadInt32(&runCount)
+
+	// 2. 相同 RequestID 與相同 payload 重新發送
+	res2, err := client.Submit(context.Background(), engine.SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "execute complex feature",
+		ID:        "req-tf-redelivery-001",
+		Mode:      "three-face",
+	})
+	if err != nil {
+		t.Fatalf("second submit (redelivery) failed: %v", err)
+	}
+
+	if res2.ID != res1.ID {
+		t.Errorf("expected same task ID %s, got %s", res1.ID, res2.ID)
+	}
+	if res2.ExecutionMode != "three-face" {
+		t.Errorf("expected ExecutionMode three-face, got %s", res2.ExecutionMode)
+	}
+
+	// 斷言：完全不觸發第二次執行
+	if afterCount := atomic.LoadInt32(&runCount); afterCount != initialRunCount {
+		t.Errorf("redelivery triggered second run! expected %d, got %d", initialRunCount, afterCount)
+	}
+
+	// 3. 相同 RequestID 但以不同 Mode (direct) 發送，必須被拒絕
+	_, err = client.Submit(context.Background(), engine.SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "execute complex feature",
+		ID:        "req-tf-redelivery-001",
+		Mode:      "direct",
+	})
+	if err == nil {
+		t.Fatalf("expected different mode redelivery to fail, got nil")
+	}
+	if !strings.Contains(err.Error(), "request ID reused with different payload") {
+		t.Errorf("expected 'request ID reused with different payload', got: %v", err)
+	}
+}
+
+
 
 

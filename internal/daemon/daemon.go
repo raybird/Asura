@@ -22,6 +22,7 @@ import (
 	"asura/internal/backend/opencode"
 	"asura/internal/cron"
 	"asura/internal/engine"
+	"asura/internal/pipeline"
 	"asura/internal/storage"
 )
 
@@ -164,7 +165,15 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 				}
 			},
 		})
-		d.engine = engine.NewEngine(store, policy, engine.WithRunner(adapter.Run))
+		adapterRunner := adapter.Run
+		oracleStage := pipeline.NewOracleStage(adapterRunner)
+		strikerStage := pipeline.NewStrikerStage(adapterRunner)
+		criticStage := pipeline.NewCriticStage(adapterRunner)
+		orc := pipeline.NewOrchestrator(oracleStage, strikerStage, criticStage)
+		d.engine = engine.NewEngine(store, policy,
+			engine.WithRunner(adapterRunner),
+			engine.WithPipelineRunner(orc),
+		)
 	}
 
 	d.scheduler = cron.NewScheduler(store, policy, d.dispatchCronTask)
@@ -347,6 +356,7 @@ type IPCRequest struct {
 	MemoryID   string          `json:"memory_id,omitempty"`
 	Content    string          `json:"content,omitempty"`
 	MemoryIDs  []string        `json:"memory_ids,omitempty"`
+	Mode       string          `json:"mode,omitempty"`
 }
 
 // IPCResponse 定義傳回用戶端之結果
@@ -463,9 +473,14 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				req.MemoryIDs = normalizeMemoryIDs(req.MemoryIDs)
 			}
 
-			// 計算請求 Fingerprint 確保同 Request ID 之 payload 一致性（防止撞 PK 或錯置，CTXMEM-004）
+			reqMode := req.Mode
+			if reqMode == "" {
+				reqMode = "direct"
+			}
+
+			// 計算請求 Fingerprint 確保同 Request ID 之 payload 一致性（防止撞 PK 或錯置，CTXMEM-004, TFACE-009）
 			// 遵循 MUST FIX 1：使用 canonicalWs 作為 fingerprint workspace
-			fp := calculateTaskFingerprint(canonicalWs, req.Prompt, req.MemoryIDs)
+			fp := calculateTaskFingerprint(canonicalWs, req.Prompt, reqMode, req.MemoryIDs)
 
 			// 遵循 INT-004-REDELIVERY 與 CTXMEM-004：同 RequestID 且非 Cancelled 任務時直接回傳既有密封任務，不重新查詢底層記憶
 			if req.RequestID != "" {
@@ -553,6 +568,7 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				Workspace:       canonicalWs,
 				Status:          storage.StatusPending,
 				Class:           string(taskClass),
+				ExecutionMode:   reqMode,
 				MemoryRefs:      req.MemoryIDs,
 				ResolvedContext: resolvedCtxJSON,
 				CreatedAt:       now,
@@ -598,7 +614,7 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				continue
 			}
 
-			err := d.dispatchTask(taskID, canonicalWs, req.Prompt, taskClass, execCtx)
+			err := d.dispatchTaskWithMode(taskID, canonicalWs, req.Prompt, taskClass, reqMode, execCtx)
 			if err != nil {
 				d.releaseCapacity()
 				d.releaseWorkspaceAndWakeNext(wsKey, taskID)
@@ -879,6 +895,10 @@ func (d *Daemon) releaseWorkspaceAndWakeNext(wsKey, completedTaskID string) {
 }
 
 func (d *Daemon) dispatchTask(taskID, workspace, prompt string, class TaskClass, optCtx ...*engine.ExecutionContext) error {
+	return d.dispatchTaskWithMode(taskID, workspace, prompt, class, "direct", optCtx...)
+}
+
+func (d *Daemon) dispatchTaskWithMode(taskID, workspace, prompt string, class TaskClass, mode string, optCtx ...*engine.ExecutionContext) error {
 	var execCtx *engine.ExecutionContext
 	if len(optCtx) > 0 {
 		execCtx = optCtx[0]
@@ -889,6 +909,7 @@ func (d *Daemon) dispatchTask(taskID, workspace, prompt string, class TaskClass,
 			ID:              taskID,
 			Workspace:       workspace,
 			Prompt:          prompt,
+			Mode:            mode,
 			ResolvedContext: execCtx,
 		})
 		return runErr
@@ -905,12 +926,13 @@ func (d *Daemon) dispatchTask(taskID, workspace, prompt string, class TaskClass,
 	return err
 }
 
-func (d *Daemon) dispatchQueuedTask(taskID, workspace, prompt string, class TaskClass, wsKey string) error {
+func (d *Daemon) dispatchQueuedTask(taskID, workspace, prompt string, class TaskClass, mode string, wsKey string) error {
 	_, err := d.pool.SubmitEnqueuedClassifiedWithDone(context.Background(), class, func() error {
 		_, runErr := d.engine.SubmitTask(context.Background(), engine.SubmitRequest{
 			ID:        taskID,
 			Workspace: workspace,
 			Prompt:    prompt,
+			Mode:      mode,
 		})
 		return runErr
 	}, func() {
@@ -946,7 +968,7 @@ func (d *Daemon) wakeQueuedTask(taskID, wsKey string) {
 	}
 
 	// 遵循 MUST FIX 2：被喚醒任務使用 dispatchQueuedTask，不受 pool.maxQueue 二次拋棄
-	err = d.dispatchQueuedTask(task.ID, task.Workspace, task.Prompt, taskClass, wsKey)
+	err = d.dispatchQueuedTask(task.ID, task.Workspace, task.Prompt, taskClass, task.ExecutionMode, wsKey)
 	if err != nil {
 		d.releaseCapacity()
 		_ = d.store.UpdateTaskStatus(context.Background(), task.ID, storage.StatusFailed, "", err.Error())
@@ -1016,6 +1038,7 @@ func (c *Client) Submit(ctx context.Context, req engine.SubmitRequest) (*storage
 		RequestID: req.ID,
 		Workspace: req.Workspace,
 		Prompt:    req.Prompt,
+		Mode:      req.Mode,
 		MemoryIDs: req.MemoryIDs,
 	}); err != nil {
 		return nil, fmt.Errorf("encode request: %w", err)
@@ -1363,9 +1386,12 @@ func (c *Client) Close() error {
 	return nil
 }
 
-// calculateTaskFingerprint 計算任務請求指紋，包含排序後的 MemoryIDs 以確保 payload 一致性 (CTXMEM-004)
-func calculateTaskFingerprint(workspace, prompt string, memoryIDs []string) string {
+// calculateTaskFingerprint 計算任務請求指紋，包含 Mode 與排序後的 MemoryIDs 以確保 payload 一致性 (CTXMEM-004, TFACE-009)
+func calculateTaskFingerprint(workspace, prompt, mode string, memoryIDs []string) string {
 	fpPayload := workspace + ":" + prompt
+	if mode != "" && mode != "direct" {
+		fpPayload += ":mode=" + mode
+	}
 	if len(memoryIDs) > 0 {
 		sortedIDs := make([]string, len(memoryIDs))
 		copy(sortedIDs, memoryIDs)
