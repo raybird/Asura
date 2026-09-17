@@ -54,14 +54,13 @@ fp := fmt.Sprintf("%x", sha256.Sum256([]byte(req.Workspace+":"+req.Prompt)))
 若同一個 Request ID 先後提交相同的 Prompt 與 Workspace，但分別帶有不同的 Memory IDs（例如第一次不帶記憶，第二次帶記憶），若未納入指紋比對，將會被誤判為相同請求而回傳第一次未帶記憶的任務。
 
 #### 選定方案
-將正規化排序後的 `MemoryIDs` 納入指紋計算：
+將 `canonicalWs` 與正規化排序去重後的 `MemoryIDs` 納入指紋計算：
 ```go
-sort.Strings(req.MemoryIDs)
-memPart := strings.Join(req.MemoryIDs, ",")
-fp := fmt.Sprintf("%x", sha256.Sum256([]byte(req.Workspace+":"+req.Prompt+":"+memPart)))
+req.MemoryIDs = normalizeMemoryIDs(req.MemoryIDs)
+fp := calculateTaskFingerprint(canonicalWs, req.Prompt, req.MemoryIDs)
 ```
-- 若同一 Request ID 之 `Workspace + Prompt + MemoryIDs` 完全相符，允許 Redelivery 並回傳當時密封之 Task（CTXMEM-004）。
-- 若 MemoryIDs 不同，明確拒絕 `request ID reused with different payload`。
+- 若同一 Request ID 之 `canonicalWs + Prompt + MemoryIDs` 完全相符，允許 Redelivery 並回傳當時密封之 Task（CTXMEM-004）。
+- 若 MemoryIDs、Prompt 或 Workspace 不同，明確拒絕 `request ID reused with different payload`。
 
 ---
 
@@ -99,25 +98,27 @@ User CLI (asura ask --memory-id M1)
     │
     ▼ IPC (submit: Workspace, Prompt, MemoryIDs)
 Daemon
-    ├── 1. AuthorizeCanonicalWorkspace(req.Workspace)
-    ├── 2. ResolveRequestedMemories(canonicalWs, req.MemoryIDs)
+    ├── 1. AuthorizeCanonicalWorkspace(req.Workspace) -> canonicalWs
+    ├── 2. Normalize MemoryIDs (去重 + 排序，定義 Set 語意)
+    ├── 3. Calculate Fingerprint (canonicalWs + Prompt + sorted MemoryIDs)
+    ├── 4. Redelivery Check (同 Request ID 命中且非 Cancelled 直接回傳 sealed Task，不重查記憶)
+    ├── 5. ResolveMemoriesForTask(canonicalWs, req.MemoryIDs)
     │      └── 嚴格校驗：存在性、未刪除、同 canonical workspace scope
     │          （任一失敗立即在 runner 啟動前拒絕，0 後端調用）
-    ├── 3. Calculate Fingerprint (含 MemoryIDs)
-    ├── 4. Redelivery Check (若命中回傳既有 sealed Task)
-    ├── 5. Seal ExecutionContext (原始 Prompt, Workspace, ProjectMemory[], MemoryRefs)
-    ├── 6. Store.CreateTask(task with memory_refs, resolved_context)
+    ├── 6. Check Capacity & Seal ExecutionContext (Fail-Closed，序列化失敗拒絕)
+    ├── 7. Store.CreateTask (以 canonicalWs、fingerprint、memory_refs、resolved_context 持久化)
+    ├── 8. TryAcquire Workspace Mutex (wsKey: canonicalWs) -> 若專案忙碌以 StatusQueued 排隊
     │
-    ▼ dispatchTask
+    ▼ dispatchTask (workspace: canonicalWs)
 Engine.SubmitTask
-    ├── 讀取或接收 ExecutionContext
+    ├── 讀取或接收 ExecutionContext (解碼失敗或記憶關聯遺失嚴格 Fail-Closed)
     ├── 組裝 Prompt (記憶區塊 + 原始 Prompt)
-    └── runner(taskCtx, workspace, composedPrompt)
+    └── runner(taskCtx, canonicalWs, composedPrompt)
 ```
 
 1. **Storage**：僅在 `tasks` 表新增兩個預設為空字串的文字欄位，加法式向後相容。
-2. **Daemon**：在 `submit` 處理器前半段加入記憶解析閘門；若無記憶參數則走既有快速路徑。
-3. **Engine**：新增 `ExecutionContext` 定義與組裝器；不改動狀態機、取消流程與 Runner 介面。
+2. **Daemon**：在 `submit` 處理器以 `canonicalWs` 為唯一執行身份，Redelivery 先行，新任務才解析記憶並密封 Context；專案鎖與排隊均鎖定 `canonicalWs`。
+3. **Engine**：以 Fail-Closed 原則處理 `ExecutionContext`；不改動狀態機、取消流程與 Runner 介面。
 4. **CLI**：`asura ask` 擴充 `--memory-id` 參數。
 
 ---

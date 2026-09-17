@@ -951,6 +951,103 @@ func TestEngine_SubmitTaskWithMemoryContext(t *testing.T) {
 	}
 }
 
+// TestEngine_SubmitTask_CorruptedSealedContextFailsClosed 驗證密封 Context 損毀或遺失時嚴格 Fail-Closed，不呼叫 runner 且任務標為 Failed
+func TestEngine_SubmitTask_CorruptedSealedContextFailsClosed(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-corrupt-ctx-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp failed: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "corrupt.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	var runnerCalls int32
+	runner := func(ctx context.Context, ws, prompt string) (string, error) {
+		atomic.AddInt32(&runnerCalls, 1)
+		return "should not be called", nil
+	}
+
+	eng := NewEngine(store, policy, WithRunner(runner))
+	ctx := context.Background()
+
+	t.Run("損毀的 ResolvedContext JSON 應 fail-closed 拒絕", func(t *testing.T) {
+		atomic.StoreInt32(&runnerCalls, 0)
+		taskID := "task-corrupted-json"
+		now := time.Now().UTC()
+		// 預先在 DB 插入帶有非法 JSON 的 task
+		corruptedTask := &storage.Task{
+			ID:              taskID,
+			Prompt:          "原本的需求",
+			Workspace:       tmpDir,
+			Status:          storage.StatusPending,
+			MemoryRefs:      []string{"mem-1"},
+			ResolvedContext: "{invalid-json-payload",
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		}
+		if err := store.CreateTask(ctx, corruptedTask); err != nil {
+			t.Fatalf("CreateTask failed: %v", err)
+		}
+
+		resTask, err := eng.SubmitTask(ctx, SubmitRequest{
+			ID:        taskID,
+			Workspace: tmpDir,
+			Prompt:    "原本的需求",
+		})
+		if err == nil {
+			t.Fatalf("expected error for corrupted resolved context, got nil")
+		}
+		if calls := atomic.LoadInt32(&runnerCalls); calls != 0 {
+			t.Errorf("expected runner calls to be 0, got %d", calls)
+		}
+		if resTask == nil || resTask.Status != storage.StatusFailed {
+			t.Errorf("expected task status to be %s, got %v", storage.StatusFailed, resTask)
+		}
+	})
+
+	t.Run("有 MemoryRefs 但 ResolvedContext 遺失時應 fail-closed 拒絕", func(t *testing.T) {
+		atomic.StoreInt32(&runnerCalls, 0)
+		taskID := "task-missing-context"
+		now := time.Now().UTC()
+		missingCtxTask := &storage.Task{
+			ID:              taskID,
+			Prompt:          "原本的需求",
+			Workspace:       tmpDir,
+			Status:          storage.StatusPending,
+			MemoryRefs:      []string{"mem-1"},
+			ResolvedContext: "", // 遺失
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		}
+		if err := store.CreateTask(ctx, missingCtxTask); err != nil {
+			t.Fatalf("CreateTask failed: %v", err)
+		}
+
+		resTask, err := eng.SubmitTask(ctx, SubmitRequest{
+			ID:        taskID,
+			Workspace: tmpDir,
+			Prompt:    "原本的需求",
+		})
+		if err == nil {
+			t.Fatalf("expected error for missing resolved context with memory refs, got nil")
+		}
+		if calls := atomic.LoadInt32(&runnerCalls); calls != 0 {
+			t.Errorf("expected runner calls to be 0, got %d", calls)
+		}
+		if resTask == nil || resTask.Status != storage.StatusFailed {
+			t.Errorf("expected task status to be %s, got %v", storage.StatusFailed, resTask)
+		}
+	})
+}
+
+
 
 
 

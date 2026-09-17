@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"asura/internal/auth"
+	"asura/internal/daemon"
 	"asura/internal/engine"
 	"asura/internal/storage"
 )
@@ -130,6 +132,7 @@ func TestCTXMEM003_RevokedOrOutsideWorkspaceRejection(t *testing.T) {
 		t.Fatalf("AddMemory A failed: %v", err)
 	}
 
+	// 1. 驗證完全未授權之 outside workspace 被拒絕且 runner 調用為 0
 	beforeCalls := atomic.LoadInt32(f.runnerCalls)
 	_, err = f.client.Submit(ctx, engine.SubmitRequest{
 		Workspace: f.outsideDir,
@@ -143,6 +146,48 @@ func TestCTXMEM003_RevokedOrOutsideWorkspaceRejection(t *testing.T) {
 	afterCalls := atomic.LoadInt32(f.runnerCalls)
 	if afterCalls != beforeCalls {
 		t.Errorf("expected runner calls to remain %d, got %d", beforeCalls, afterCalls)
+	}
+
+	// 2. 驗證真實撤權場景：原本合法且已建立記憶，隨後 Policy 移除該專案目錄（撤權）
+	_ = f.client.Close()
+	_ = f.daemon.Close()
+
+	// 建立新 Policy，僅允許 projB，明確將 projA 撤權排除
+	revokedPolicy := auth.NewPolicy([]string{f.projB})
+	var revokedRunnerCalls int32
+	revokedRunner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		atomic.AddInt32(&revokedRunnerCalls, 1)
+		return "should not be called", nil
+	}
+	revokedEngine := engine.NewEngine(f.store, revokedPolicy, engine.WithRunner(revokedRunner))
+	revokedSock := filepath.Join(f.rootDir, "revoked_mem.sock")
+	revokedDaemon := daemon.NewDaemon(daemon.Config{
+		SocketPath: revokedSock,
+		MaxWorkers: 2,
+	}, f.store, revokedPolicy, daemon.WithEngine(revokedEngine))
+	if err := revokedDaemon.Start(); err != nil {
+		t.Fatalf("failed to start daemon with revoked policy: %v", err)
+	}
+	defer revokedDaemon.Close()
+	waitForSocket(t, revokedSock)
+
+	revokedClient, err := daemon.NewClient(revokedSock)
+	if err != nil {
+		t.Fatalf("failed to create client for revoked daemon: %v", err)
+	}
+	defer revokedClient.Close()
+
+	// 對已被撤權之 projA 發送帶有先前合法記憶 memA 的任務
+	_, err = revokedClient.Submit(ctx, engine.SubmitRequest{
+		Workspace: f.projA,
+		Prompt:    "已撤權專案之任務",
+		MemoryIDs: []string{memA.ID},
+	})
+	if err == nil {
+		t.Fatalf("expected error for revoked workspace, got nil")
+	}
+	if calls := atomic.LoadInt32(&revokedRunnerCalls); calls != 0 {
+		t.Errorf("expected revoked runner calls to be 0, got %d", calls)
 	}
 }
 
@@ -399,6 +444,129 @@ func TestCTXMEM_QueuedTaskPreservesSealedContextOnWake(t *testing.T) {
 	}
 	if !strings.Contains(saved2.ResolvedContext, memContent) {
 		t.Errorf("expected saved ResolvedContext to contain memory content, got %q", saved2.ResolvedContext)
+	}
+}
+
+// TestCTXMEM_SymlinkRetargetUsesOriginalCanonicalWorkspace (MUST FIX 1)
+// 驗證以符號連結提交任務後，執行身份（Task.Workspace、runner 參數）嚴格鎖定為授權時的 canonical workspace，
+// 即使在提交後符號連結被 retarget 改指向其他專案，runner 依然在原始 canonical workspace 執行且注入正確記憶。
+func TestCTXMEM_SymlinkRetargetUsesOriginalCanonicalWorkspace(t *testing.T) {
+	rootDir := t.TempDir()
+	projA := filepath.Join(rootDir, "projA")
+	projB := filepath.Join(rootDir, "projB")
+	if err := os.MkdirAll(projA, 0755); err != nil {
+		t.Fatalf("MkdirAll projA failed: %v", err)
+	}
+	if err := os.MkdirAll(projB, 0755); err != nil {
+		t.Fatalf("MkdirAll projB failed: %v", err)
+	}
+
+	// 建立動態符號連結 dynamicLink -> projA
+	dynamicLink := filepath.Join(rootDir, "dynamic_link")
+	if err := os.Symlink(projA, dynamicLink); err != nil {
+		t.Fatalf("Symlink failed: %v", err)
+	}
+
+	dbPath := filepath.Join(rootDir, "retarget_test.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{rootDir})
+
+	// runner 記錄執行的 workspace
+	var executedWorkspace string
+	runnerRan := make(chan struct{}, 1)
+	testRunner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		executedWorkspace = workspace
+		select {
+		case runnerRan <- struct{}{}:
+		default:
+		}
+		return "executed in: " + workspace, nil
+	}
+
+	eng := engine.NewEngine(store, policy, engine.WithRunner(testRunner))
+	sockPath := filepath.Join(rootDir, "retarget.sock")
+	d := daemon.NewDaemon(daemon.Config{
+		SocketPath: sockPath,
+		MaxWorkers: 2,
+	}, store, policy, daemon.WithEngine(eng))
+	if err := d.Start(); err != nil {
+		t.Fatalf("Start daemon failed: %v", err)
+	}
+	defer d.Close()
+	waitForSocket(t, sockPath)
+
+	client, err := daemon.NewClient(sockPath)
+	if err != nil {
+		t.Fatalf("NewClient failed: %v", err)
+	}
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 在 projA 建立專案記憶
+	memA, err := client.AddMemory(ctx, projA, "ProjA 核心記憶")
+	if err != nil {
+		t.Fatalf("AddMemory failed: %v", err)
+	}
+
+	// 使用 dynamicLink 提交任務
+	task, err := client.Submit(ctx, engine.SubmitRequest{
+		Workspace: dynamicLink,
+		Prompt:    "透過 dynamicLink 執行任務",
+		MemoryIDs: []string{memA.ID},
+	})
+	if err != nil {
+		t.Fatalf("Submit failed: %v", err)
+	}
+
+	// 驗證立即回傳之 initialTask.Workspace 已經是 canonical workspace (projA)，絕非 dynamicLink
+	if task.Workspace != projA {
+		t.Errorf("expected initialTask.Workspace to be canonical %s, got %s", projA, task.Workspace)
+	}
+
+	// 關鍵步驟：在任務提交後立即將 dynamicLink 重新指向 projB
+	if err := os.Remove(dynamicLink); err != nil {
+		t.Fatalf("Remove dynamicLink failed: %v", err)
+	}
+	if err := os.Symlink(projB, dynamicLink); err != nil {
+		t.Fatalf("Retarget dynamicLink to projB failed: %v", err)
+	}
+
+	// 等待 runner 執行完成
+	select {
+	case <-runnerRan:
+	case <-time.After(3 * time.Second):
+		t.Fatalf("timed out waiting for runner execution")
+	}
+
+	// 等待任務完成
+	deadline := time.Now().Add(5 * time.Second)
+	var completed *storage.Task
+	for time.Now().Before(deadline) {
+		completed, err = client.GetTask(ctx, task.ID)
+		if err == nil && completed != nil && (completed.Status == storage.StatusCompleted || completed.Status == storage.StatusFailed) {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if completed == nil || completed.Status != storage.StatusCompleted {
+		t.Fatalf("expected task to complete successfully, got status: %v", completed)
+	}
+
+	// 斷言：Runner 執行的 workspace 必須嚴格為 projA，不受 retarget 影響
+	if executedWorkspace != projA {
+		t.Errorf("SECURITY VULNERABILITY: runner executed in %s instead of original canonical workspace %s", executedWorkspace, projA)
+	}
+
+	// 斷言：持久化的 Task.Workspace 亦嚴格為 projA
+	if completed.Workspace != projA {
+		t.Errorf("expected completed Task.Workspace to be %s, got %s", projA, completed.Workspace)
 	}
 }
 

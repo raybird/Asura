@@ -198,9 +198,11 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 		UpdatedAt: now,
 	}
 	if req.ResolvedContext != nil {
-		if rawCtx, err := json.Marshal(req.ResolvedContext); err == nil {
-			task.ResolvedContext = string(rawCtx)
+		rawCtx, err := json.Marshal(req.ResolvedContext)
+		if err != nil {
+			return nil, fmt.Errorf("marshal resolved context: %w", err)
 		}
+		task.ResolvedContext = string(rawCtx)
 		if len(req.ResolvedContext.MemoryRefs) > 0 {
 			task.MemoryRefs = req.ResolvedContext.MemoryRefs
 		} else if len(req.MemoryIDs) > 0 {
@@ -309,9 +311,24 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 		runnerPrompt = ComposePrompt(req.Prompt, req.ResolvedContext)
 	} else if task.ResolvedContext != "" {
 		var execCtx ExecutionContext
-		if err := json.Unmarshal([]byte(task.ResolvedContext), &execCtx); err == nil {
-			runnerPrompt = ComposePrompt(req.Prompt, &execCtx)
+		if err := json.Unmarshal([]byte(task.ResolvedContext), &execCtx); err != nil {
+			persistCtx, persistCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer persistCancel()
+			errMsg := fmt.Sprintf("decode sealed context failed: %v", err)
+			_ = e.store.UpdateTaskStatus(persistCtx, task.ID, storage.StatusFailed, "", errMsg)
+			task.Status = storage.StatusFailed
+			task.ErrorMessage = errMsg
+			return task, fmt.Errorf("decode sealed context: %w", err)
 		}
+		runnerPrompt = ComposePrompt(req.Prompt, &execCtx)
+	} else if len(task.MemoryRefs) > 0 {
+		persistCtx, persistCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer persistCancel()
+		errMsg := "sealed context missing for task with memory refs"
+		_ = e.store.UpdateTaskStatus(persistCtx, task.ID, storage.StatusFailed, "", errMsg)
+		task.Status = storage.StatusFailed
+		task.ErrorMessage = errMsg
+		return task, errors.New(errMsg)
 	}
 	output, runErr := e.runner(taskCtx, req.Workspace, runnerPrompt)
 

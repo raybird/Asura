@@ -458,13 +458,14 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				canonicalWs = d.canonicalWorkspace(req.Workspace)
 			}
 
-			// 記憶 ID 去重，防止重複選取造成的資源浪費與重複 Prompt 注入
+			// 記憶 ID 去重並排序，定義 Set 語意，確保 fingerprint、解析、snapshot 與 Prompt 順序 100% 一致 (MUST FIX 2)
 			if len(req.MemoryIDs) > 0 {
-				req.MemoryIDs = deduplicateStrings(req.MemoryIDs)
+				req.MemoryIDs = normalizeMemoryIDs(req.MemoryIDs)
 			}
 
 			// 計算請求 Fingerprint 確保同 Request ID 之 payload 一致性（防止撞 PK 或錯置，CTXMEM-004）
-			fp := calculateTaskFingerprint(req.Workspace, req.Prompt, req.MemoryIDs)
+			// 遵循 MUST FIX 1：使用 canonicalWs 作為 fingerprint workspace
+			fp := calculateTaskFingerprint(canonicalWs, req.Prompt, req.MemoryIDs)
 
 			// 遵循 INT-004-REDELIVERY 與 CTXMEM-004：同 RequestID 且非 Cancelled 任務時直接回傳既有密封任務，不重新查詢底層記憶
 			if req.RequestID != "" {
@@ -535,9 +536,13 @@ func (d *Daemon) handleConn(conn net.Conn) {
 					MemoryRefs:      req.MemoryIDs,
 					CreatedAt:       now,
 				}
-				if raw, err := json.Marshal(execCtx); err == nil {
-					resolvedCtxJSON = string(raw)
+				raw, err := json.Marshal(execCtx)
+				if err != nil {
+					d.releaseCapacity()
+					_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("seal execution context: %v", err)})
+					continue
 				}
+				resolvedCtxJSON = string(raw)
 			}
 
 			initialTask := &storage.Task{
@@ -545,7 +550,7 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				RequestID:       req.RequestID,
 				Fingerprint:     fp,
 				Prompt:          req.Prompt,
-				Workspace:       req.Workspace,
+				Workspace:       canonicalWs,
 				Status:          storage.StatusPending,
 				Class:           string(taskClass),
 				MemoryRefs:      req.MemoryIDs,
@@ -582,7 +587,7 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				continue
 			}
 
-			wsKey := d.canonicalWorkspace(req.Workspace)
+			wsKey := canonicalWs
 			// 遵循 CRON-001：同專案嚴格互斥依序排隊（僅創建任務之勝者競爭專案鎖）
 			acquired, _ := d.wsQueue.TryAcquire(wsKey, taskID)
 			if !acquired {
@@ -593,7 +598,7 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				continue
 			}
 
-			err := d.dispatchTask(taskID, req.Workspace, req.Prompt, taskClass, execCtx)
+			err := d.dispatchTask(taskID, canonicalWs, req.Prompt, taskClass, execCtx)
 			if err != nil {
 				d.releaseCapacity()
 				d.releaseWorkspaceAndWakeNext(wsKey, taskID)
@@ -1370,8 +1375,8 @@ func calculateTaskFingerprint(workspace, prompt string, memoryIDs []string) stri
 	return fmt.Sprintf("%x", sha256.Sum256([]byte(fpPayload)))
 }
 
-// deduplicateStrings 保留原始順序去除切片中的重複字串
-func deduplicateStrings(items []string) []string {
+// normalizeMemoryIDs 將 MemoryIDs 去重並依照字母順序排序，定義為 Set 語意 (CTXMEM-004)
+func normalizeMemoryIDs(items []string) []string {
 	if len(items) == 0 {
 		return nil
 	}
@@ -1383,6 +1388,7 @@ func deduplicateStrings(items []string) []string {
 			result = append(result, item)
 		}
 	}
+	sort.Strings(result)
 	return result
 }
 
