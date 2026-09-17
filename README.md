@@ -57,8 +57,11 @@ go build -o bin/asura ./cmd/asura
 
 #### 提交自然語言 AI 任務 (ask)
 ```bash
-# 透過 Daemon 中樞提交 AI 任務（非同步接受立即回傳 Task ID，斷線不中斷）
+# 透過 Daemon 中樞提交 AI 任務（非同步接受立即回傳 Task ID，斷線不中斷，預設 direct 模式）
 ./bin/asura ask --socket /tmp/asura.sock --workspace /path/to/project "分析專案代碼並整理函式呼叫圖"
+
+# 啟用 Three-Face 固定管線模式（Oracle 規劃 → Striker 執行 → Critic 審查）
+./bin/asura ask --socket /tmp/asura.sock --workspace /path/to/project --mode three-face "重構認證模組並補齊測試"
 
 # 提交並等待任務完成輸出結果
 ./bin/asura ask --socket /tmp/asura.sock --workspace /path/to/project --wait "執行測試並回報結果"
@@ -66,16 +69,23 @@ go build -o bin/asura ./cmd/asura
 
 #### 本機直接執行指令 (run)
 ```bash
-# 本機直接執行 shell 指令並追蹤任務
+# 本機直接執行 shell 指令並追蹤任務（預設 direct 模式）
 ./bin/asura run \
   --workspace /path/to/project \
   --allowed-roots /path/to/project \
   "echo 'Hello Asura'"
+
+# 指定以 Three-Face 模式執行
+./bin/asura run \
+  --workspace /path/to/project \
+  --allowed-roots /path/to/project \
+  --mode three-face \
+  "make test"
 ```
 
 #### 查詢任務狀態 (status)
 ```bash
-# 向 Daemon 或儲存層查詢指定任務狀態與已保存結果
+# 向 Daemon 或儲存層查詢指定任務狀態、執行模式與 Pipeline 各階段歷程
 ./bin/asura status <task-id>
 ```
 
@@ -159,6 +169,19 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web \
 - **重啟持久化與指定刪除**：記憶持久化保存於 SQLite，重啟 Daemon 完整保留未刪資料；刪除指定記憶後重啟不恢復，且另一專案與同專案其他記憶完全不受影響。
 - **失敗回報與零 AI 調用**：Daemon 不可用或操作失敗時，CLI 明確輸出錯誤至 stderr 並回傳非零退出碼，絕不冒充已保存或已刪除，不改走其他儲存方式；記憶管理操作直通儲存層，絕不啟動 AI 模型後端；既有任務提交不自動注入記憶內容。
 
+#### 固定三面管線 (Three-Face Fixed Pipeline)
+2026-09-17：
+- **模式語意與向後相容**：
+  - `direct`（預設）：直通既有單一 Striker / Runner，完全維持 Phase 3B 的 Prompt、Memory 與 Redelivery 契約，僅產生 1 次模型呼叫。
+  - `three-face`：固定依序執行 Oracle（規劃）→ Striker（執行）→ Critic（審查），各執行 1 次，總計 3 次模型呼叫。
+- **共用不可變 Sealed ExecutionContext**：三角色共用同一 Task execution identity 與快照記憶，執行期間外部新增、修改或刪除記憶絕不破壞既有任務上下文。
+- **結構化契約與 Fail-Closed**：
+  - Oracle 產出結構化 `OraclePlan`（包含 Goal, Constraints, Steps, ExpectedOutcome），Striker 依據該 Plan 執行。
+  - Critic 審查 Striker 產出並產出結構化 `CriticReview`（包含 Verdict, Findings, Summary）。
+  - 嚴格 Fail-Closed：任一 Stage 失敗（或 Critic Verdict 判定 Failed）立即標記任務為 Failed，絕不靜默 fallback，保存已發生 Stage 的 partial output 與錯誤原因。
+- **審計與成本追蹤**：所有任務持久化 `ExecutionMode` 與 `PipelineTrace`（包含各 Stage 狀態、DurationMs、呼叫次數與結構化 Plan/Review），支援 CLI `status` 格式化檢視。
+- **Redelivery 冪等防禦**：請求指紋計算納入 `Mode` 參數；相同 Request ID 與相同 Payload 重送時立即回傳既有 Task，絕不重複觸發三角色執行。
+
 ---
 
 ## 架構設計與議題文件
@@ -170,6 +193,7 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web \
   - [Issue 4 單一 Web 遠端入口 (Phase 2A)](docs/issues/issue-4/README.md) 與 [實作計畫拆解](docs/issues/issue-4/implementation-plan-decomposition.md)
   - [Issue 6 定時排程與容量調度 (Phase 2B)](docs/issues/issue-6/README.md) 與 [實作計畫拆解](docs/issues/issue-6/implementation-plan-decomposition.md)
   - [Issue 9 專案級基礎記憶 (Phase 3A)](docs/issues/issue-9/README.md) 與 [實作計畫](docs/issues/issue-9/implementation-plan.md)
+  - [Issue 13 Three-Face Fixed Pipeline (Phase 3C)](docs/issues/issue-13/README.md) 與 [實作計畫](docs/issues/issue-13/implementation-plan.md)
 
 ---
 
@@ -191,16 +215,18 @@ Asura/
 ├── AGENTS.md              # 跨平台 AI 核心開發規則
 ├── CLAUDE.md              # Claude Code 進入點與導覽
 ├── cmd/
-│   └── asura/             # CLI 程式進入點 (run, cancel, status, version)
+│   └── asura/             # CLI 程式進入點 (run, cancel, status, ask, cron, memory, web)
 ├── internal/
 │   ├── auth/              # 工作目錄與授權政策 (Policy)
 │   ├── backend/           # 執行後端整合 (opencode process, parser)
+│   ├── cron/              # 定時排程器與日曆計算
 │   ├── daemon/            # 守護進程服務中樞
 │   ├── engine/            # 任務狀態引擎 (Engine, Worker Pool)
+│   ├── pipeline/          # Three-Face 管線核心 (Oracle, Striker, Critic, Orchestrator)
 │   ├── storage/           # SQLite 持久化儲存層
 │   └── web/               # 單人 Web 遠端入口 (SPA 控制台與同源 API)
 ├── tests/
-│   └── integration/       # 端到端整合測試 (SCN 驗收與安全覆核)
+│   └── integration/       # 端到端整合測試 (SCN, CRON, MEM, TFACE 驗收)
 └── docs/                  # 專案技術文件與議題紀錄
     ├── AGENTS.md          # docs/ 目錄規範與開發閉環指引
     ├── superpowers/       # 架構設計規格書 (Architecture Spec)
@@ -219,4 +245,4 @@ new-issue ──► decompose (僅 Large) ──► execute-task (BDD + TDD) ─
 
 ---
 
-*最新更新日期：2026-09-15*
+*最新更新日期：2026-09-17*

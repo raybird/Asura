@@ -535,12 +535,20 @@ func TestCRON004_PeriodicTriggerCreatesTask(t *testing.T) {
 	}
 
 	// 使用者可查得該任務之執行狀態與結果
-	task, err := client.GetTask(context.Background(), runs[0].TaskID)
+	var task *storage.Task
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		task, err = client.GetTask(context.Background(), runs[0].TaskID)
+		if err == nil && task != nil && task.Status == storage.StatusCompleted {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
-	if task.Status != storage.StatusCompleted {
-		t.Fatalf("expected task status completed, got %s", task.Status)
+	if task == nil || task.Status != storage.StatusCompleted {
+		t.Fatalf("expected task status completed, got %+v", task)
 	}
 	if task.Result != "periodic done" {
 		t.Fatalf("expected task result 'periodic done', got %q", task.Result)
