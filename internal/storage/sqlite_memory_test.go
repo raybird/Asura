@@ -284,3 +284,114 @@ func TestSQLiteStore_MemorySchemaUpgrade(t *testing.T) {
 		t.Fatalf("升級後記憶內容不符：got %q", gotMem.Content)
 	}
 }
+
+// CTXMEM-002, CTXMEM-005: 驗證 ResolveMemoriesForTask 同專案成功解析、跨專案拒絕、不存在與已刪除記憶拒絕
+func TestResolveMemoriesForTask(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "asura_resolve_mem.db")
+
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	projA := "/workspace/projectA"
+	projB := "/workspace/projectB"
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+
+	memA1 := storage.Memory{
+		ID:        "mem-a-1",
+		Workspace: projA,
+		Content:   testMemContentA1,
+		Source:    "manual",
+		CreatedAt: now,
+	}
+	memA2 := storage.Memory{
+		ID:        "mem-a-2",
+		Workspace: projA,
+		Content:   testMemContentA2,
+		Source:    "manual",
+		CreatedAt: now.Add(time.Second),
+	}
+	memB1 := storage.Memory{
+		ID:        "mem-b-1",
+		Workspace: projB,
+		Content:   testMemContentB1,
+		Source:    "manual",
+		CreatedAt: now.Add(2 * time.Second),
+	}
+
+	if err := store.CreateMemory(ctx, memA1); err != nil {
+		t.Fatalf("CreateMemory(memA1) failed: %v", err)
+	}
+	if err := store.CreateMemory(ctx, memA2); err != nil {
+		t.Fatalf("CreateMemory(memA2) failed: %v", err)
+	}
+	if err := store.CreateMemory(ctx, memB1); err != nil {
+		t.Fatalf("CreateMemory(memB1) failed: %v", err)
+	}
+
+	// 1. 空清單：回傳空切片且無錯誤
+	emptyMems, err := store.ResolveMemoriesForTask(ctx, projA, []string{})
+	if err != nil {
+		t.Fatalf("ResolveMemoriesForTask(empty) unexpected error: %v", err)
+	}
+	if len(emptyMems) != 0 {
+		t.Errorf("expected 0 memories for empty input, got %d", len(emptyMems))
+	}
+
+	// 2. 同專案合法解析（單一與多筆，維持請求順序）
+	resolved, err := store.ResolveMemoriesForTask(ctx, projA, []string{"mem-a-2", "mem-a-1"})
+	if err != nil {
+		t.Fatalf("ResolveMemoriesForTask(A2, A1) failed: %v", err)
+	}
+	if len(resolved) != 2 {
+		t.Fatalf("expected 2 memories, got %d", len(resolved))
+	}
+	if resolved[0].ID != "mem-a-2" || resolved[0].Content != testMemContentA2 {
+		t.Errorf("expected first memory to be mem-a-2, got %+v", resolved[0])
+	}
+	if resolved[1].ID != "mem-a-1" || resolved[1].Content != testMemContentA1 {
+		t.Errorf("expected second memory to be mem-a-1, got %+v", resolved[1])
+	}
+
+	// 3. 跨專案記憶拒絕 (CTXMEM-002)
+	_, err = store.ResolveMemoriesForTask(ctx, projA, []string{"mem-b-1"})
+	if err == nil {
+		t.Fatal("expected error when resolving cross-project memory mem-b-1 from projA, got nil")
+	}
+	if !errors.Is(err, storage.ErrMemoryNotFound) {
+		t.Errorf("expected ErrMemoryNotFound, got %v", err)
+	}
+
+	// 4. 不存在記憶拒絕 (CTXMEM-005)
+	_, err = store.ResolveMemoriesForTask(ctx, projA, []string{"mem-nonexistent"})
+	if err == nil {
+		t.Fatal("expected error when resolving nonexistent memory, got nil")
+	}
+	if !errors.Is(err, storage.ErrMemoryNotFound) {
+		t.Errorf("expected ErrMemoryNotFound, got %v", err)
+	}
+
+	// 5. 已刪除記憶拒絕 (CTXMEM-005)
+	if err := store.DeleteMemory(ctx, projA, "mem-a-1"); err != nil {
+		t.Fatalf("DeleteMemory(mem-a-1) failed: %v", err)
+	}
+	_, err = store.ResolveMemoriesForTask(ctx, projA, []string{"mem-a-1"})
+	if err == nil {
+		t.Fatal("expected error when resolving deleted memory mem-a-1, got nil")
+	}
+	if !errors.Is(err, storage.ErrMemoryNotFound) {
+		t.Errorf("expected ErrMemoryNotFound, got %v", err)
+	}
+
+	// 6. 空 workspace 拒絕
+	_, err = store.ResolveMemoriesForTask(ctx, "", []string{"mem-a-2"})
+	if err == nil {
+		t.Fatal("expected error when resolving with empty workspace, got nil")
+	}
+}
+

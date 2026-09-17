@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -23,11 +24,47 @@ var (
 // RunnerFunc 定義任務底層執行的函式簽名
 type RunnerFunc func(ctx context.Context, workspace string, prompt string) (string, error)
 
+// ProjectMemorySnapshot 代表密封進 Context 的單筆記憶快照
+type ProjectMemorySnapshot struct {
+	ID        string    `json:"id"`
+	Workspace string    `json:"workspace"`
+	Content   string    `json:"content"`
+	Source    string    `json:"source"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// ExecutionContext 代表任務執行時之完整密封上下文
+type ExecutionContext struct {
+	OriginalPrompt  string                  `json:"original_prompt"`
+	Workspace       string                  `json:"workspace"`
+	ProjectMemories []ProjectMemorySnapshot `json:"project_memories"`
+	MemoryRefs      []string                `json:"memory_refs"`
+	CreatedAt       time.Time               `json:"created_at"`
+}
+
 // SubmitRequest 代表提交任務的請求參數
 type SubmitRequest struct {
-	ID        string `json:"id,omitempty"`
-	Workspace string `json:"workspace"`
-	Prompt    string `json:"prompt"`
+	ID              string            `json:"id,omitempty"`
+	Workspace       string            `json:"workspace"`
+	Prompt          string            `json:"prompt"`
+	MemoryIDs       []string          `json:"memory_ids,omitempty"`
+	ResolvedContext *ExecutionContext `json:"resolved_context,omitempty"`
+}
+
+// ComposePrompt 依據 ExecutionContext 將專案記憶與原始 Prompt 進行標準組裝 (CTXMEM-001, CTXMEM-007)
+func ComposePrompt(prompt string, execCtx *ExecutionContext) string {
+	if execCtx == nil || len(execCtx.ProjectMemories) == 0 {
+		return prompt
+	}
+
+	var sb strings.Builder
+	sb.WriteString("### Project Context\n")
+	for _, mem := range execCtx.ProjectMemories {
+		sb.WriteString(fmt.Sprintf("- [%s]: %s\n", mem.ID, mem.Content))
+	}
+	sb.WriteString("\n")
+	sb.WriteString(prompt)
+	return sb.String()
 }
 
 // Engine 協調任務授權、持久化與後端執行
@@ -160,6 +197,18 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
+	if req.ResolvedContext != nil {
+		if rawCtx, err := json.Marshal(req.ResolvedContext); err == nil {
+			task.ResolvedContext = string(rawCtx)
+		}
+		if len(req.ResolvedContext.MemoryRefs) > 0 {
+			task.MemoryRefs = req.ResolvedContext.MemoryRefs
+		} else if len(req.MemoryIDs) > 0 {
+			task.MemoryRefs = req.MemoryIDs
+		}
+	} else if len(req.MemoryIDs) > 0 {
+		task.MemoryRefs = req.MemoryIDs
+	}
 
 	alreadyCreated := false
 	if req.ID != "" {
@@ -255,7 +304,16 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 	}
 
 	// 5. 調用後端執行
-	output, runErr := e.runner(taskCtx, req.Workspace, req.Prompt)
+	runnerPrompt := req.Prompt
+	if req.ResolvedContext != nil {
+		runnerPrompt = ComposePrompt(req.Prompt, req.ResolvedContext)
+	} else if task.ResolvedContext != "" {
+		var execCtx ExecutionContext
+		if err := json.Unmarshal([]byte(task.ResolvedContext), &execCtx); err == nil {
+			runnerPrompt = ComposePrompt(req.Prompt, &execCtx)
+		}
+	}
+	output, runErr := e.runner(taskCtx, req.Workspace, runnerPrompt)
 
 	// 使用未取消且具有超時的獨立 Context 進行終態持久化，杜絕父 Context 取消時狀態遺失（修復 R-05）
 	persistCtx, persistCancel := context.WithTimeout(context.Background(), 5*time.Second)

@@ -20,3 +20,4 @@ Thumbs.db
 
 # Agent & CLI local scratch
 .antigravitycli/
+.serena/

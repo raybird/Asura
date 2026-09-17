@@ -2,8 +2,14 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"net"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"asura/internal/daemon"
+	"asura/internal/storage"
 )
 
 func TestRunCLI_UsageAndValidation(t *testing.T) {
@@ -229,3 +235,45 @@ func TestRunCLI_MemoryValidation(t *testing.T) {
 		}
 	})
 }
+
+// TestHandleAsk_MemoryFlags 驗證 asura ask 支援 --memory-id 重複與逗點分隔格式並傳遞至 Daemon (TBD-2, CTXMEM-001, Task 4.1)
+func TestHandleAsk_MemoryFlags(t *testing.T) {
+	tmpDir := t.TempDir()
+	sockPath := filepath.Join(tmpDir, "mock_ask.sock")
+	l, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+
+	var receivedReq daemon.IPCRequest
+	go func() {
+		conn, err := l.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		_ = json.NewDecoder(conn).Decode(&receivedReq)
+		_ = json.NewEncoder(conn).Encode(daemon.IPCResponse{
+			Task: &storage.Task{ID: "task-mock-ask-123"},
+		})
+	}()
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	code := handleAsk([]string{
+		"-socket", sockPath,
+		"--memory-id", "mem-1",
+		"--memory-id", "mem-2,mem-3",
+		"測試 prompt",
+	}, stdout, stderr)
+
+	if code != 0 {
+		t.Fatalf("expected code 0, got %d, stderr: %s", code, stderr.String())
+	}
+	expectedIDs := []string{"mem-1", "mem-2", "mem-3"}
+	if len(receivedReq.MemoryIDs) != 3 || receivedReq.MemoryIDs[0] != "mem-1" || receivedReq.MemoryIDs[1] != "mem-2" || receivedReq.MemoryIDs[2] != "mem-3" {
+		t.Fatalf("expected MemoryIDs %v, got %v", expectedIDs, receivedReq.MemoryIDs)
+	}
+}
+
