@@ -124,16 +124,17 @@
   - **驗證命令**：`go test -v -run TestThreeFaceRedelivery ./internal/daemon/...`
   - **完成證據**：`internal/daemon/daemon_test.go` 新增 `TestThreeFaceRedelivery` 通過，確認同 RequestID + Mode 重送不重跑、不同 Mode 重送安全拒絕。全套 daemon 測試 PASS。
 
-- [ ] 📝 **Task 4.2: Pipeline 耗時與模型呼叫計數指標**
+- [x] ✅ **Task 4.2: Pipeline 耗時與模型呼叫計數指標**
   - **對應驗收**：`@TFACE-010`
   - **前置相依**：Task 2.1, Task 4.1
-  - **產出檔案**：`internal/pipeline/orchestrator.go`, `internal/daemon/daemon.go`
+  - **產出檔案**：`internal/pipeline/orchestrator.go`, `internal/daemon/metrics_test.go`
   - **實作內容**：
     1. 精確計算各 stage 耗時與 pipeline 總耗時。
     2. 記錄實際調用之 stage call count（Direct 為 1，Three-Face 成功為 3）。
     3. 查詢 Task 時可於 Trace 中完整取得 Metrics。
   - **完成判準**：測試比對 Direct 與 Three-Face 之 Stage 數量與呼叫計數。
   - **驗證命令**：`go test -v -run TestPipelineMetrics ./internal/daemon/...`
+  - **完成證據**：`internal/daemon/metrics_test.go` 建立完成並通過 `TestPipelineMetrics`，驗證 Direct（1 stage, 1 call）與 Three-Face（3 stages: oracle, striker, critic, 3 calls, duration_ms > 0）各指標完全正確。
 
 ---
 
