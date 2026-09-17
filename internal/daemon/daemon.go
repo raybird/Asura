@@ -70,10 +70,12 @@ type Daemon struct {
 	inFlight   int
 	inFlightMu sync.Mutex
 	listener   net.Listener
-	lockFile   *os.File
-	closed     chan struct{}
-	closeOnce  sync.Once
-	wg         sync.WaitGroup
+	lockFile              *os.File
+	closed                chan struct{}
+	closeOnce             sync.Once
+	wg                    sync.WaitGroup
+	readOnlyConfigDir     string
+	readOnlyConfigCleanup func()
 }
 
 func (d *Daemon) tryAcquireCapacity() bool {
@@ -153,12 +155,22 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 	}
 
 	if d.engine == nil {
+		readOnlyConfigDir, cleanupReadOnlyConfig, err := opencode.CreateIsolatedReadOnlyConfigDir()
+		if err == nil {
+			d.readOnlyConfigDir = readOnlyConfigDir
+			d.readOnlyConfigCleanup = cleanupReadOnlyConfig
+		}
+
 		readOnlyAdapter := opencode.NewAdapter(opencode.AdapterConfig{
-			BinaryPath:      d.cfg.OpenCodeConfig.BinaryPath,
-			ExpectedVersion: d.cfg.OpenCodeConfig.ExpectedVersion,
-			ConfigDir:       d.cfg.OpenCodeConfig.ConfigDir,
-			Permission:      DefaultReadOnlyPermissionPolicy,
-			DisableAuto:     true, // 嚴禁自動修改、建置或測試
+			BinaryPath:           d.cfg.OpenCodeConfig.BinaryPath,
+			ExpectedVersion:      d.cfg.OpenCodeConfig.ExpectedVersion,
+			ConfigDir:            d.readOnlyConfigDir,
+			Permission:           DefaultReadOnlyPermissionPolicy,
+			DisableAuto:          true, // 嚴禁自動修改、建置或測試
+			Role:                 opencode.RoleOracle, // Oracle 與 Critic 共享唯讀隔離角色
+			Agent:                opencode.AsuraReadOnlyAgentName,
+			Pure:                 true,
+			DisableProjectConfig: true,
 			OnProcessStarted: func(ctx context.Context, pgid int) {
 				if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
 					_ = store.UpdateTaskPGID(context.Background(), taskID, pgid)
@@ -176,6 +188,7 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 			ConfigDir:       d.cfg.OpenCodeConfig.ConfigDir,
 			Permission:      d.cfg.OpenCodeConfig.Permission,
 			DisableAuto:     d.cfg.OpenCodeConfig.DisableAuto,
+			Role:            opencode.RoleStriker,
 			OnProcessStarted: func(ctx context.Context, pgid int) {
 				if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
 					_ = store.UpdateTaskPGID(context.Background(), taskID, pgid)
@@ -1020,6 +1033,11 @@ func (d *Daemon) Close() error {
 			_ = syscall.Flock(int(d.lockFile.Fd()), syscall.LOCK_UN)
 			_ = d.lockFile.Close()
 			d.lockFile = nil
+		}
+
+		if d.readOnlyConfigCleanup != nil {
+			d.readOnlyConfigCleanup()
+			d.readOnlyConfigCleanup = nil
 		}
 	})
 	return err

@@ -23,15 +23,68 @@ var (
 	ErrEmptyResult = errors.New("opencode produced empty result")
 )
 
+// RuntimeRole 定義 Three-Face Pipeline 各階段在執行器層級之角色標記
+type RuntimeRole string
+
+const (
+	RoleOracle  RuntimeRole = "oracle"
+	RoleStriker RuntimeRole = "striker"
+	RoleCritic  RuntimeRole = "critic"
+)
+
+// AsuraReadOnlyAgentName 定義專屬於 Asura 唯讀角色（Oracle, Critic）的 Agent 名稱
+const AsuraReadOnlyAgentName = "asura-readonly"
+
+// AsuraReadOnlyConfigJSON 定義 Asura 專屬唯讀 Agent 之獨立設定檔內容
+// 透過 primary mode 與明確的 permission 限制，在 OpenCode agent 評估層提供不可覆蓋的唯讀邊界
+const AsuraReadOnlyConfigJSON = `{
+  "agent": {
+    "asura-readonly": {
+      "mode": "primary",
+      "description": "Asura read-only execution agent for Oracle and Critic",
+      "permission": {
+        "*": "deny",
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "lsp": "allow"
+      }
+    }
+  }
+}`
+
+// CreateIsolatedReadOnlyConfigDir 建立包含 asura-readonly agent 的獨立配置目錄
+// 回傳目錄路徑與清理函式，供 Oracle 與 Critic 唯讀階段使用，免受外部或專案設定污染
+func CreateIsolatedReadOnlyConfigDir() (string, func(), error) {
+	dir, err := os.MkdirTemp("", "asura-opencode-readonly-*")
+	if err != nil {
+		return "", nil, fmt.Errorf("create isolated read-only config dir: %w", err)
+	}
+	cfgPath := filepath.Join(dir, "opencode.json")
+	if err := os.WriteFile(cfgPath, []byte(AsuraReadOnlyConfigJSON), 0600); err != nil {
+		_ = os.RemoveAll(dir)
+		return "", nil, fmt.Errorf("write isolated read-only opencode.json: %w", err)
+	}
+	cleanup := func() {
+		_ = os.RemoveAll(dir)
+	}
+	return dir, cleanup, nil
+}
+
 // AdapterConfig 定義 OpenCode Adapter 的執行設定
 type AdapterConfig struct {
-	BinaryPath       string
-	ExpectedVersion  string
-	ConfigDir        string
-	Permission       string // JSON string for OPENCODE_PERMISSION
-	DisableAuto      bool
-	OnProcessStarted func(ctx context.Context, pgid int)
-	OnProcessExited  func(ctx context.Context, pgid int)
+	BinaryPath           string
+	ExpectedVersion      string
+	ConfigDir            string
+	Permission           string // JSON string for OPENCODE_PERMISSION
+	DisableAuto          bool
+	Role                 RuntimeRole
+	Agent                string
+	Pure                 bool
+	DisableProjectConfig bool
+	OnProcessStarted     func(ctx context.Context, pgid int)
+	OnProcessExited      func(ctx context.Context, pgid int)
 }
 
 // Adapter 負責調度固定版本 OpenCode CLI 執行 AI 任務並解析事件串流
@@ -169,6 +222,12 @@ func (a *Adapter) Run(ctx context.Context, workspace string, prompt string) (str
 	}
 
 	args := []string{"run", "--format", "json", "--dir", workspace}
+	if a.cfg.Pure {
+		args = append(args, "--pure")
+	}
+	if a.cfg.Agent != "" {
+		args = append(args, "--agent", a.cfg.Agent)
+	}
 	if !a.cfg.DisableAuto {
 		// 依 Phase 1 探測與核准決策：在核准專案內允許自動修改/建置/測試
 		args = append(args, "--auto")
@@ -182,6 +241,12 @@ func (a *Adapter) Run(ctx context.Context, workspace string, prompt string) (str
 	// 配置環境變數，包含權限控制與隔離設定
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, "OPENCODE_DISABLE_AUTOUPDATE=1")
+	if a.cfg.Pure {
+		cmd.Env = append(cmd.Env, "OPENCODE_PURE=1")
+	}
+	if a.cfg.DisableProjectConfig {
+		cmd.Env = append(cmd.Env, "OPENCODE_DISABLE_PROJECT_CONFIG=1")
+	}
 	if a.cfg.ConfigDir != "" {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("OPENCODE_CONFIG_DIR=%s", a.cfg.ConfigDir))
 	}

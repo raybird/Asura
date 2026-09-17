@@ -2,6 +2,7 @@ package opencode
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -98,6 +99,120 @@ exit 0
 	}
 	if !strings.Contains(out, "部分完成的文字") {
 		t.Errorf("expected partial output to be preserved, got %q", out)
+	}
+}
+
+// TestAdapter_IsolatedReadOnlyConfig 驗證獨立唯讀配置目錄生成及其 agent 定義與權限策略正確
+func TestAdapter_IsolatedReadOnlyConfig(t *testing.T) {
+	dir, cleanup, err := CreateIsolatedReadOnlyConfigDir()
+	if err != nil {
+		t.Fatalf("CreateIsolatedReadOnlyConfigDir failed: %v", err)
+	}
+	defer cleanup()
+
+	cfgPath := filepath.Join(dir, "opencode.json")
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("failed to read generated opencode.json: %v", err)
+	}
+
+	var root struct {
+		Agent map[string]struct {
+			Mode        string            `json:"mode"`
+			Description string            `json:"description"`
+			Permission  map[string]string `json:"permission"`
+		} `json:"agent"`
+	}
+	if err := json.Unmarshal(data, &root); err != nil {
+		t.Fatalf("failed to parse generated opencode.json: %v", err)
+	}
+
+	roAgent, exists := root.Agent[AsuraReadOnlyAgentName]
+	if !exists {
+		t.Fatalf("expected agent %q in generated config", AsuraReadOnlyAgentName)
+	}
+	if roAgent.Mode != "primary" {
+		t.Errorf("expected agent mode primary, got %q", roAgent.Mode)
+	}
+	if roAgent.Permission["*"] != "deny" {
+		t.Errorf("expected default deny rule, got %q", roAgent.Permission["*"])
+	}
+
+	allowKeys := []string{"read", "glob", "grep", "list", "lsp"}
+	for _, k := range allowKeys {
+		if roAgent.Permission[k] != "allow" {
+			t.Errorf("expected permission %s=allow, got %q", k, roAgent.Permission[k])
+		}
+	}
+}
+
+// TestAdapter_Run_IsolatedCommandAndEnv 驗證 Adapter.Run 依設定組裝 --pure、--agent 與環境變數
+func TestAdapter_Run_IsolatedCommandAndEnv(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakeBin := filepath.Join(tmpDir, "check_args.sh")
+
+	// 假 binary: 將傳入的 args 與環境變數寫入 output.txt 供檢查
+	dumpFile := filepath.Join(tmpDir, "dump.txt")
+	script := `#!/bin/sh
+if [ "$1" = "--version" ]; then
+    echo "1.18.23"
+    exit 0
+fi
+echo "ARGS: $@" > ` + dumpFile + `
+echo "OPENCODE_PURE: $OPENCODE_PURE" >> ` + dumpFile + `
+echo "OPENCODE_DISABLE_PROJECT_CONFIG: $OPENCODE_DISABLE_PROJECT_CONFIG" >> ` + dumpFile + `
+echo "OPENCODE_CONFIG_DIR: $OPENCODE_CONFIG_DIR" >> ` + dumpFile + `
+echo "OPENCODE_PERMISSION: $OPENCODE_PERMISSION" >> ` + dumpFile + `
+echo '{"type":"text","part":{"type":"text","text":"ok"}}'
+exit 0
+`
+	if err := os.WriteFile(fakeBin, []byte(script), 0755); err != nil {
+		t.Fatalf("write fake binary failed: %v", err)
+	}
+
+	adapter := NewAdapter(AdapterConfig{
+		BinaryPath:           fakeBin,
+		ExpectedVersion:      "1.18.23",
+		ConfigDir:            "/isolated/config/dir",
+		Permission:           `{"*":"deny"}`,
+		DisableAuto:          true,
+		Role:                 RoleOracle,
+		Agent:                AsuraReadOnlyAgentName,
+		Pure:                 true,
+		DisableProjectConfig: true,
+	})
+
+	out, err := adapter.Run(context.Background(), tmpDir, "read file")
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	if out != "ok" {
+		t.Errorf("expected output 'ok', got %q", out)
+	}
+
+	dumpData, err := os.ReadFile(dumpFile)
+	if err != nil {
+		t.Fatalf("failed to read dump file: %v", err)
+	}
+	dumpStr := string(dumpData)
+
+	if !strings.Contains(dumpStr, "--pure") {
+		t.Errorf("expected --pure in args, got: %s", dumpStr)
+	}
+	if !strings.Contains(dumpStr, "--agent asura-readonly") {
+		t.Errorf("expected --agent asura-readonly in args, got: %s", dumpStr)
+	}
+	if strings.Contains(dumpStr, "--auto") {
+		t.Errorf("did not expect --auto in args when DisableAuto=true, got: %s", dumpStr)
+	}
+	if !strings.Contains(dumpStr, "OPENCODE_PURE: 1") {
+		t.Errorf("expected OPENCODE_PURE: 1 in env, got: %s", dumpStr)
+	}
+	if !strings.Contains(dumpStr, "OPENCODE_DISABLE_PROJECT_CONFIG: 1") {
+		t.Errorf("expected OPENCODE_DISABLE_PROJECT_CONFIG: 1 in env, got: %s", dumpStr)
+	}
+	if !strings.Contains(dumpStr, "OPENCODE_CONFIG_DIR: /isolated/config/dir") {
+		t.Errorf("expected OPENCODE_CONFIG_DIR in env, got: %s", dumpStr)
 	}
 }
 
