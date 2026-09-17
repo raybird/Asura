@@ -23,7 +23,7 @@
   - **驗證命令**：`go test -v ./internal/pipeline/...`
   - **完成證據**：`internal/pipeline/types_test.go` 通過 `TestExecutionMode`, `TestOraclePlanSerialization`, `TestCriticReviewSerialization`, `TestPipelineTraceSerialization`。
 
-- [ ] 📝 **Task 1.2: 建立外迴圈調度與 Fail-Closed 行為測試（首要驗證）**
+- [x] ✅ **Task 1.2: 建立外迴圈調度與 Fail-Closed 行為測試（首要驗證）**
   - **對應驗收**：`@TFACE-001`, `@TFACE-004`, `@TFACE-005`, `@TFACE-007`
   - **前置相依**：Task 1.1
   - **產出檔案**：`internal/pipeline/orchestrator_test.go`
@@ -34,6 +34,7 @@
     4. 撰寫 Critic 失敗測試：驗證不偽裝成成功，保存 Striker output 並明確標註 Review 失敗。
   - **完成判準**：紅燈測試先行（TDD Red），明確刻畫各 stage fail-closed 邊界條件。
   - **驗證命令**：`go test -v -run TestOrchestrator ./internal/pipeline/...`
+  - **完成證據**：`internal/pipeline/orchestrator_test.go` 建立完成，紅燈如期攔截未實作之 `NewOrchestrator`，定義完整外迴圈驗收標準。
 
 ---
 
