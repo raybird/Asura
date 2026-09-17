@@ -35,6 +35,10 @@ var (
 // 允許修改/build/test，但刪除重要資料、部署、push、對外傳送必須另行確認
 const DefaultApprovedPermissionPolicy = `{"*":"ask","read":"allow","edit":"allow","build":"allow","test":"allow","bash":"ask"}`
 
+// DefaultReadOnlyPermissionPolicy 定義唯讀角色（Oracle, Critic）之安全操作邊界：
+// 僅允許讀取專案檔案，嚴禁修改、建置、測試或執行任意 Shell 指令
+const DefaultReadOnlyPermissionPolicy = `{"*":"deny","read":"allow"}`
+
 // OpenCodeRuntimeConfig 定義 Daemon 底層執行器配置
 type OpenCodeRuntimeConfig struct {
 	BinaryPath      string
@@ -148,7 +152,24 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 	}
 
 	if d.engine == nil {
-		adapter := opencode.NewAdapter(opencode.AdapterConfig{
+		readOnlyAdapter := opencode.NewAdapter(opencode.AdapterConfig{
+			BinaryPath:      d.cfg.OpenCodeConfig.BinaryPath,
+			ExpectedVersion: d.cfg.OpenCodeConfig.ExpectedVersion,
+			ConfigDir:       d.cfg.OpenCodeConfig.ConfigDir,
+			Permission:      DefaultReadOnlyPermissionPolicy,
+			DisableAuto:     true, // 嚴禁自動修改、建置或測試
+			OnProcessStarted: func(ctx context.Context, pgid int) {
+				if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
+					_ = store.UpdateTaskPGID(context.Background(), taskID, pgid)
+				}
+			},
+			OnProcessExited: func(ctx context.Context, pgid int) {
+				if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
+					_ = store.UpdateTaskPGID(context.Background(), taskID, 0)
+				}
+			},
+		})
+		strikerAdapter := opencode.NewAdapter(opencode.AdapterConfig{
 			BinaryPath:      d.cfg.OpenCodeConfig.BinaryPath,
 			ExpectedVersion: d.cfg.OpenCodeConfig.ExpectedVersion,
 			ConfigDir:       d.cfg.OpenCodeConfig.ConfigDir,
@@ -165,13 +186,12 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 				}
 			},
 		})
-		adapterRunner := adapter.Run
-		oracleStage := pipeline.NewOracleStage(adapterRunner)
-		strikerStage := pipeline.NewStrikerStage(adapterRunner)
-		criticStage := pipeline.NewCriticStage(adapterRunner)
+		oracleStage := pipeline.NewOracleStage(readOnlyAdapter.Run)
+		strikerStage := pipeline.NewStrikerStage(strikerAdapter.Run)
+		criticStage := pipeline.NewCriticStage(readOnlyAdapter.Run)
 		orc := pipeline.NewOrchestrator(oracleStage, strikerStage, criticStage)
 		d.engine = engine.NewEngine(store, policy,
-			engine.WithRunner(adapterRunner),
+			engine.WithRunner(strikerAdapter.Run),
 			engine.WithPipelineRunner(orc),
 		)
 	}
@@ -476,6 +496,10 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			reqMode := req.Mode
 			if reqMode == "" {
 				reqMode = "direct"
+			}
+			if !pipeline.IsValidExecutionMode(pipeline.ExecutionMode(reqMode)) {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("invalid execution mode: %q", reqMode)})
+				continue
 			}
 
 			// 計算請求 Fingerprint 確保同 Request ID 之 payload 一致性（防止撞 PK 或錯置，CTXMEM-004, TFACE-009）
@@ -916,9 +940,9 @@ func (d *Daemon) dispatchTaskWithMode(taskID, workspace, prompt string, class Ta
 	}, func() {
 		// 在 WorkerPool 槽位完全釋放後執行容量歸還
 		d.releaseCapacity()
-		// 檢查任務最新狀態：無法確認狀態時 fail-closed，若處於 cancelling 嚴禁提前釋放 workspace lock
+		// 檢查任務最新狀態：若處於 cancelling，由 CancelTask 協調器負責安全回收與解鎖，嚴禁提前釋放
 		task, err := d.store.GetTask(context.Background(), taskID)
-		if err != nil || task == nil || task.Status == storage.StatusCancelling {
+		if err == nil && task != nil && task.Status == storage.StatusCancelling {
 			return
 		}
 		d.releaseWorkspaceAndWakeNext(wsKey, taskID)
@@ -938,7 +962,7 @@ func (d *Daemon) dispatchQueuedTask(taskID, workspace, prompt string, class Task
 	}, func() {
 		d.releaseCapacity()
 		task, err := d.store.GetTask(context.Background(), taskID)
-		if err != nil || task == nil || task.Status == storage.StatusCancelling {
+		if err == nil && task != nil && task.Status == storage.StatusCancelling {
 			return
 		}
 		d.releaseWorkspaceAndWakeNext(wsKey, taskID)

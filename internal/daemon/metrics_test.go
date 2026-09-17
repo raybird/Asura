@@ -36,7 +36,7 @@ func TestPipelineMetrics(t *testing.T) {
 	runner := func(ctx context.Context, ws, prompt string) (string, error) {
 		atomic.AddInt32(&modelCallCount, 1)
 		time.Sleep(10 * time.Millisecond) // 確保 duration > 0
-		return "{\"goal\":\"test\",\"verdict\":\"pass\",\"findings\":[]}", nil
+		return "{\"goal\":\"test\",\"steps\":[\"step 1\"],\"expected_outcome\":\"done\",\"verdict\":\"pass\",\"findings\":[]}", nil
 	}
 
 	oracleStage := pipeline.NewOracleStage(runner)

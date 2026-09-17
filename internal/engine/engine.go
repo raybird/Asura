@@ -207,6 +207,9 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 	if mode == "" {
 		mode = "direct"
 	}
+	if mode != "direct" && mode != "three-face" {
+		return nil, fmt.Errorf("invalid execution mode: %q", mode)
+	}
 	task := &storage.Task{
 		ID:            taskID,
 		Prompt:        req.Prompt,
@@ -365,7 +368,8 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 	var runErr error
 	var traceJSON string
 
-	if task.ExecutionMode == "three-face" {
+	switch task.ExecutionMode {
+	case "three-face":
 		if e.pipelineRunner == nil {
 			persistCtx, persistCancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer persistCancel()
@@ -377,7 +381,7 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 		}
 		output, traceJSON, runErr = e.pipelineRunner.ExecutePipeline(taskCtx, task.ExecutionMode, execCtx)
 		task.PipelineTrace = traceJSON
-	} else {
+	case "direct", "":
 		output, runErr = e.runner(taskCtx, req.Workspace, runnerPrompt)
 		statusStr := "completed"
 		errStr := ""
@@ -402,6 +406,14 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 			traceJSON = string(b)
 			task.PipelineTrace = traceJSON
 		}
+	default:
+		persistCtx, persistCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer persistCancel()
+		errMsg := fmt.Sprintf("invalid execution mode: %q", task.ExecutionMode)
+		_ = e.store.UpdateTaskStatus(persistCtx, task.ID, storage.StatusFailed, "", errMsg)
+		task.Status = storage.StatusFailed
+		task.ErrorMessage = errMsg
+		return task, errors.New(errMsg)
 	}
 
 	// 使用未取消且具有超時的獨立 Context 進行終態持久化，杜絕父 Context 取消時狀態遺失（修復 R-05）
@@ -447,7 +459,11 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 	}
 
 	if traceJSON != "" {
-		_ = e.store.UpdateTaskPipelineTrace(persistCtx, task.ID, traceJSON)
+		if traceErr := e.store.UpdateTaskPipelineTrace(persistCtx, task.ID, traceJSON); traceErr != nil {
+			if runErr == nil {
+				runErr = fmt.Errorf("persist pipeline trace failed: %w", traceErr)
+			}
+		}
 	}
 
 	if runErr != nil {

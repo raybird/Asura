@@ -189,7 +189,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 		// 在啟動排他鎖保護下檢查是否已被取消，徹底防禦啟動已取消之任務與外部副作用 (修復 F-02, G-01)
 		if currentTaskID != "" {
 			t, err := store.GetTask(context.Background(), currentTaskID)
-			if err == nil && t.Status == storage.StatusCancelled {
+			if err == nil && (t.Status == storage.StatusCancelled || t.Status == storage.StatusCancelling) {
 				if lockFile != nil {
 					_ = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
 					_ = lockFile.Close()
@@ -223,7 +223,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 					}
 					// 檢查此任務是否在啟動前或啟動當下已被外部標記取消（修復 R-03）
 					t, err := store.GetTask(context.Background(), currentTaskID)
-					if err == nil && t.Status == storage.StatusCancelled {
+					if err == nil && (t.Status == storage.StatusCancelled || t.Status == storage.StatusCancelling) {
 						if lockFile != nil {
 							_ = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
 							_ = lockFile.Close()
@@ -247,7 +247,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 		if currentTaskID != "" {
 			// 若任務已被標記取消，確保殘留之背景孤兒進程組一併被擊殺 (修復 L-01)
 			t, _ := store.GetTask(context.Background(), currentTaskID)
-			if t != nil && t.Status == storage.StatusCancelled {
+			if t != nil && (t.Status == storage.StatusCancelled || t.Status == storage.StatusCancelling) {
 				if pgid > 0 {
 					_ = opencode.KillProcessGroup(pgid)
 				}

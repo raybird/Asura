@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 
 	"asura/internal/engine"
 )
@@ -33,7 +32,7 @@ func (s *DefaultCriticStage) Execute(ctx context.Context, execCtx *engine.Execut
 	prompt := ""
 	if execCtx != nil {
 		workspace = execCtx.Workspace
-		prompt = execCtx.OriginalPrompt
+		prompt = engine.ComposePrompt(execCtx.OriginalPrompt, execCtx)
 	}
 
 	planJSON, _ := json.Marshal(plan)
@@ -49,16 +48,16 @@ func (s *DefaultCriticStage) Execute(ctx context.Context, execCtx *engine.Execut
 	jsonStr := extractJSON(rawOutput)
 	var review CriticReview
 	if err := json.Unmarshal([]byte(jsonStr), &review); err != nil {
-		// 若無法解析 JSON，提供基本的 fallback
-		review = CriticReview{
-			Verdict:  VerdictNeedsAttention,
-			Findings: []string{"Non-structured critic output"},
-			Summary:  strings.TrimSpace(rawOutput),
-		}
+		return nil, fmt.Errorf("critic output invalid json: %w", err)
 	}
 
-	if review.Verdict == "" {
-		review.Verdict = VerdictNeedsAttention
+	switch review.Verdict {
+	case VerdictPass, VerdictNeedsAttention, VerdictFailed:
+		// 合法審查結論
+	case "":
+		return nil, errors.New("critic review missing verdict")
+	default:
+		return nil, fmt.Errorf("critic review invalid verdict: %q", review.Verdict)
 	}
 
 	if review.Metadata == nil {

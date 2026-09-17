@@ -1217,11 +1217,57 @@ func TestEngine_DirectModeTrace(t *testing.T) {
 	}
 }
 
+func TestEngine_InvalidExecutionMode_FailClosed(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
 
+	policy := auth.NewPolicy([]string{tmpDir})
+	eng := NewEngine(store, policy, WithRunner(func(ctx context.Context, ws, p string) (string, error) {
+		return "should not run", nil
+	}))
 
+	// Case 1: SubmitTask 拒絕未定義模式
+	req := SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "test",
+		Mode:      "unknown_mode",
+	}
+	_, submitErr := eng.SubmitTask(context.Background(), req)
+	if submitErr == nil {
+		t.Fatalf("expected error for unknown mode in SubmitTask, got nil")
+	}
 
+	// Case 2: 若 DB 中存在未知 mode 的任務，執行時 switch default 觸發 Fail-Closed
+	taskID := "task-invalid-mode"
+	now := time.Now().UTC()
+	invalidTask := &storage.Task{
+		ID:            taskID,
+		Workspace:     tmpDir,
+		Prompt:        "test",
+		Status:        storage.StatusPending,
+		ExecutionMode: "corrupted_mode",
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	if err := store.CreateTask(context.Background(), invalidTask); err != nil {
+		t.Fatal(err)
+	}
 
-
-
-
-
+	resTask, runErr := eng.SubmitTask(context.Background(), SubmitRequest{
+		ID:        taskID,
+		Workspace: tmpDir,
+		Prompt:    "test",
+		Mode:      "corrupted_mode",
+	})
+	if runErr == nil {
+		t.Fatalf("expected run error for corrupted mode, got nil")
+	}
+	if resTask != nil && resTask.Status != storage.StatusFailed {
+		t.Errorf("expected task status failed, got %s", resTask.Status)
+	}
+}

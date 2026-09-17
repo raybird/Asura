@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"asura/internal/engine"
@@ -141,5 +142,91 @@ func TestCriticStage_RunnerError(t *testing.T) {
 	_, err := stage.Execute(context.Background(), &engine.ExecutionContext{}, &OraclePlan{}, "done")
 	if !errors.Is(err, expectedErr) {
 		t.Errorf("expected %v, got %v", expectedErr, err)
+	}
+}
+
+func TestOracleStage_InvalidJSON_FailClosed(t *testing.T) {
+	mockRunner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		return "This is plain text without valid JSON plan", nil
+	}
+
+	stage := NewOracleStage(mockRunner)
+	_, err := stage.Execute(context.Background(), &engine.ExecutionContext{OriginalPrompt: "test"})
+	if err == nil {
+		t.Fatalf("expected error for invalid json, got nil")
+	}
+}
+
+func TestOracleStage_SemanticValidation_FailClosed(t *testing.T) {
+	// Case 1: empty goal
+	stage1 := NewOracleStage(func(ctx context.Context, ws, p string) (string, error) {
+		return `{"goal": "", "steps": ["step 1"]}`, nil
+	})
+	if _, err := stage1.Execute(context.Background(), &engine.ExecutionContext{}); err == nil {
+		t.Errorf("expected error for empty goal, got nil")
+	}
+
+	// Case 2: empty steps
+	stage2 := NewOracleStage(func(ctx context.Context, ws, p string) (string, error) {
+		return `{"goal": "my goal", "steps": []}`, nil
+	})
+	if _, err := stage2.Execute(context.Background(), &engine.ExecutionContext{}); err == nil {
+		t.Errorf("expected error for empty steps, got nil")
+	}
+
+	// Case 3: blank step
+	stage3 := NewOracleStage(func(ctx context.Context, ws, p string) (string, error) {
+		return `{"goal": "my goal", "steps": ["  "]}`, nil
+	})
+	if _, err := stage3.Execute(context.Background(), &engine.ExecutionContext{}); err == nil {
+		t.Errorf("expected error for blank step, got nil")
+	}
+}
+
+func TestCriticStage_InvalidJSON_FailClosed(t *testing.T) {
+	mockRunner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		return "I am a critic but not returning JSON", nil
+	}
+
+	stage := NewCriticStage(mockRunner)
+	_, err := stage.Execute(context.Background(), &engine.ExecutionContext{}, &OraclePlan{}, "done")
+	if err == nil {
+		t.Fatalf("expected error for invalid json, got nil")
+	}
+}
+
+func TestCriticStage_InvalidVerdict_FailClosed(t *testing.T) {
+	mockRunner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		return `{"verdict": "unknown_verdict", "summary": "hmm"}`, nil
+	}
+
+	stage := NewCriticStage(mockRunner)
+	_, err := stage.Execute(context.Background(), &engine.ExecutionContext{}, &OraclePlan{}, "done")
+	if err == nil {
+		t.Fatalf("expected error for invalid verdict, got nil")
+	}
+}
+
+func TestCriticStage_ComposePromptContext(t *testing.T) {
+	var capturedPrompt string
+	mockRunner := func(ctx context.Context, workspace string, prompt string) (string, error) {
+		capturedPrompt = prompt
+		return `{"verdict": "pass", "summary": "ok"}`, nil
+	}
+
+	stage := NewCriticStage(mockRunner)
+	execCtx := &engine.ExecutionContext{
+		OriginalPrompt: "Write code",
+		ProjectMemories: []engine.ProjectMemorySnapshot{
+			{ID: "mem-1", Content: "No plain text passwords"},
+		},
+	}
+	_, err := stage.Execute(context.Background(), execCtx, &OraclePlan{Goal: "Write code"}, "done")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(capturedPrompt, "mem-1") || !strings.Contains(capturedPrompt, "No plain text passwords") {
+		t.Errorf("expected critic prompt to contain sealed project memories, got: %s", capturedPrompt)
 	}
 }

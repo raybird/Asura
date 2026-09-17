@@ -47,11 +47,18 @@ func (s *DefaultOracleStage) Execute(ctx context.Context, execCtx *engine.Execut
 	jsonStr := extractJSON(rawOutput)
 	var plan OraclePlan
 	if err := json.Unmarshal([]byte(jsonStr), &plan); err != nil {
-		// 若無法解析 JSON，提供以文字為主的結構化 fallback
-		plan = OraclePlan{
-			Goal:            strings.TrimSpace(rawOutput),
-			Steps:           []string{"Execute original prompt according to Oracle analysis"},
-			ExpectedOutcome: "Task successfully completed",
+		return nil, fmt.Errorf("oracle output invalid json: %w", err)
+	}
+
+	if strings.TrimSpace(plan.Goal) == "" {
+		return nil, errors.New("oracle plan missing goal")
+	}
+	if len(plan.Steps) == 0 {
+		return nil, errors.New("oracle plan steps cannot be empty")
+	}
+	for i, step := range plan.Steps {
+		if strings.TrimSpace(step) == "" {
+			return nil, fmt.Errorf("oracle plan step %d is empty", i+1)
 		}
 	}
 

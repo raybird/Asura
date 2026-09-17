@@ -1645,8 +1645,11 @@ func TestDaemon_ReleaseWorkspace_SymlinkTargetChanged_DoesNotLeak(t *testing.T) 
 		inFlight: 0,
 	}
 
+	var t1Started atomic.Bool
 	var t1Completed atomic.Bool
 	runner := func(ctx context.Context, ws string, prompt string) (string, error) {
+		t1Started.Store(true)
+		time.Sleep(30 * time.Millisecond) // 確保在執行期間有窗口進行 symlink 變更
 		t1Completed.Store(true)
 		return "done", nil
 	}
@@ -1666,6 +1669,17 @@ func TestDaemon_ReleaseWorkspace_SymlinkTargetChanged_DoesNotLeak(t *testing.T) 
 		t.Fatalf("dispatchTask failed: %v", err)
 	}
 
+	// 等候任務 1 真正進入執行階段
+	for i := 0; i < 100; i++ {
+		if t1Started.Load() {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !t1Started.Load() {
+		t.Fatal("expected task 1 to start running")
+	}
+
 	// 2. 任務 1 執行期間，symlink 更改指向 target2
 	_ = os.Remove(linkPath)
 	if err := os.Symlink(target2, linkPath); err != nil {
@@ -1673,17 +1687,23 @@ func TestDaemon_ReleaseWorkspace_SymlinkTargetChanged_DoesNotLeak(t *testing.T) 
 	}
 
 	// 等待任務 1 完成
-	for i := 0; i < 50; i++ {
-		time.Sleep(20 * time.Millisecond)
+	for i := 0; i < 100; i++ {
+		time.Sleep(10 * time.Millisecond)
 		if t1Completed.Load() {
 			break
 		}
 	}
-	time.Sleep(50 * time.Millisecond) // 等待 done callback 執行
 
 	// 3. 驗證 target1 的鎖已經被成功釋放（不會因 symlink 更改而洩漏），新任務可以直接取得鎖
 	t2ID := "task-2"
-	acquired2, _ := d.wsQueue.TryAcquire(target1, t2ID)
+	var acquired2 bool
+	for i := 0; i < 100; i++ {
+		acquired2, _ = d.wsQueue.TryAcquire(target1, t2ID)
+		if acquired2 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 	if !acquired2 {
 		t.Fatalf("MUST FIX 3 regression: workspace lock leaked! target1 is permanently locked")
 	}
@@ -2046,6 +2066,64 @@ func TestThreeFaceRedelivery(t *testing.T) {
 	}
 }
 
+// TestDaemon_IPC_InvalidExecutionMode_Rejected 驗證 Daemon IPC Ingress 嚴格阻擋非法 mode
+func TestDaemon_IPC_InvalidExecutionMode_Rejected(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	sockPath := filepath.Join(tmpDir, "asura.sock")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
 
+	policy := auth.NewPolicy([]string{tmpDir})
+	eng := engine.NewEngine(store, policy, engine.WithRunner(func(ctx context.Context, ws, p string) (string, error) {
+		return "ok", nil
+	}))
 
+	d := NewDaemon(Config{
+		SocketPath: sockPath,
+		MaxWorkers: 2,
+	}, store, policy, WithEngine(eng))
 
+	if err := d.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+
+	client, err := NewClient(sockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	// 嘗試提交未定義之 mode "invalid_mode"
+	_, err = client.Submit(context.Background(), engine.SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "test",
+		Mode:      "invalid_mode",
+	})
+	if err == nil {
+		t.Fatalf("expected error for invalid execution mode at IPC ingress, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid execution mode") {
+		t.Errorf("expected 'invalid execution mode' in error, got: %v", err)
+	}
+}
+
+// TestDaemon_ThreeFace_CapabilityIsolation 驗證唯讀權限策略定義與能力邊界隔離
+func TestDaemon_ThreeFace_CapabilityIsolation(t *testing.T) {
+	// 驗證 DefaultReadOnlyPermissionPolicy 包含唯讀限制
+	if !strings.Contains(DefaultReadOnlyPermissionPolicy, `"read":"allow"`) {
+		t.Errorf("expected read:allow in DefaultReadOnlyPermissionPolicy, got %s", DefaultReadOnlyPermissionPolicy)
+	}
+	if !strings.Contains(DefaultReadOnlyPermissionPolicy, `"*":"deny"`) {
+		t.Errorf("expected *:deny in DefaultReadOnlyPermissionPolicy, got %s", DefaultReadOnlyPermissionPolicy)
+	}
+
+	// 驗證 DefaultApprovedPermissionPolicy 允許 edit/build/test
+	if !strings.Contains(DefaultApprovedPermissionPolicy, `"edit":"allow"`) {
+		t.Errorf("expected edit:allow in DefaultApprovedPermissionPolicy, got %s", DefaultApprovedPermissionPolicy)
+	}
+}
