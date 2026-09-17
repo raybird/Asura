@@ -10,7 +10,7 @@
 
 ### Phase 1：契約定義與首要風險驗證（High Risk / First Verification）
 
-- [ ] ⏳ **Task 1.1: 定義資料契約與序列化實體**
+- [x] ✅ **Task 1.1: 定義資料契約與序列化實體**
   - **對應驗收**：`@TFACE-002`, `@TFACE-006`, `@TFACE-010`
   - **前置相依**：無
   - **產出檔案**：`internal/pipeline/types.go`, `internal/pipeline/types_test.go`
@@ -21,6 +21,7 @@
     4. 定義 `PipelineTrace`、`StageTrace`、`StageStatus`。
   - **完成判準**：單元測試驗證所有結構體 JSON 序列化與反序列化 100% 正確，無資料遺失。
   - **驗證命令**：`go test -v ./internal/pipeline/...`
+  - **完成證據**：`internal/pipeline/types_test.go` 通過 `TestExecutionMode`, `TestOraclePlanSerialization`, `TestCriticReviewSerialization`, `TestPipelineTraceSerialization`。
 
 - [ ] 📝 **Task 1.2: 建立外迴圈調度與 Fail-Closed 行為測試（首要驗證）**
   - **對應驗收**：`@TFACE-001`, `@TFACE-004`, `@TFACE-005`, `@TFACE-007`
