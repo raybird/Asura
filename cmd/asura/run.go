@@ -20,6 +20,7 @@ import (
 	"asura/internal/auth"
 	"asura/internal/backend/opencode"
 	"asura/internal/engine"
+	"asura/internal/pipeline"
 	"asura/internal/storage"
 )
 
@@ -106,8 +107,14 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 	customID := fs.String("id", "", "optional custom task ID")
 	workspace := fs.String("workspace", "", "target workspace directory")
 	allowedRoots := fs.String("allowed-roots", "", "comma-separated list of allowed root directories")
+	mode := fs.String("mode", string(pipeline.ModeDirect), "execution mode (direct or three-face)")
 
 	if err := fs.Parse(args); err != nil {
+		return 1
+	}
+
+	if !pipeline.IsValidExecutionMode(pipeline.ExecutionMode(*mode)) {
+		fmt.Fprintf(stderr, "error: invalid mode %q (must be direct or three-face)\n", *mode)
 		return 1
 	}
 
@@ -261,7 +268,15 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 		return buf.String(), err
 	}
 
-	eng := engine.NewEngine(store, policy, engine.WithRunner(runner))
+	oracleStage := pipeline.NewOracleStage(runner)
+	strikerStage := pipeline.NewStrikerStage(runner)
+	criticStage := pipeline.NewCriticStage(runner)
+	orc := pipeline.NewOrchestrator(oracleStage, strikerStage, criticStage)
+
+	eng := engine.NewEngine(store, policy,
+		engine.WithRunner(runner),
+		engine.WithPipelineRunner(orc),
+	)
 
 	ctx := context.Background()
 	reqID := *customID
@@ -279,6 +294,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 		ID:        reqID,
 		Workspace: ws,
 		Prompt:    prompt,
+		Mode:      *mode,
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "error: %v\n", err)

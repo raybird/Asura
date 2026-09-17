@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"asura/internal/daemon"
+	"asura/internal/pipeline"
 	"asura/internal/storage"
 )
 
@@ -59,8 +62,24 @@ func handleStatus(args []string, stdout, stderr io.Writer) int {
 
 	fmt.Fprintf(stdout, "Task ID:   %s\n", task.ID)
 	fmt.Fprintf(stdout, "Status:    %s\n", task.Status)
+	if task.ExecutionMode != "" {
+		fmt.Fprintf(stdout, "Mode:      %s\n", task.ExecutionMode)
+	}
 	fmt.Fprintf(stdout, "Workspace: %s\n", task.Workspace)
 	fmt.Fprintf(stdout, "Prompt:    %s\n", task.Prompt)
+	if task.PipelineTrace != "" {
+		var trace pipeline.PipelineTrace
+		if err := json.Unmarshal([]byte(task.PipelineTrace), &trace); err == nil && len(trace.Stages) > 0 {
+			var stageParts []string
+			for _, s := range trace.Stages {
+				stageParts = append(stageParts, fmt.Sprintf("%s (%s, %dms)", s.Name, s.Status, s.DurationMs))
+			}
+			fmt.Fprintf(stdout, "Pipeline:  %s\n", strings.Join(stageParts, " -> "))
+			if trace.CriticReview != nil {
+				fmt.Fprintf(stdout, "Verdict:   %s\n", trace.CriticReview.Verdict)
+			}
+		}
+	}
 	if task.Result != "" {
 		fmt.Fprintf(stdout, "Result:    %s\n", task.Result)
 	}

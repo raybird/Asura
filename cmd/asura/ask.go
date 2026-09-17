@@ -12,6 +12,7 @@ import (
 
 	"asura/internal/daemon"
 	"asura/internal/engine"
+	"asura/internal/pipeline"
 	"asura/internal/storage"
 )
 
@@ -49,10 +50,16 @@ func handleAsk(args []string, stdout, stderr io.Writer) int {
 	workspace := fs.String("workspace", "", "target workspace directory (defaults to current directory)")
 	customID := fs.String("id", "", "optional custom task/request ID")
 	wait := fs.Bool("wait", false, "wait for task to complete")
+	mode := fs.String("mode", string(pipeline.ModeDirect), "execution mode (direct or three-face)")
 	var memoryIDs stringSliceFlag
 	fs.Var(&memoryIDs, "memory-id", "specify project memory ID to include in task context (can be repeated or comma-separated)")
 
 	if err := fs.Parse(args); err != nil {
+		return 1
+	}
+
+	if !pipeline.IsValidExecutionMode(pipeline.ExecutionMode(*mode)) {
+		fmt.Fprintf(stderr, "error: invalid mode %q (must be direct or three-face)\n", *mode)
 		return 1
 	}
 
@@ -96,6 +103,7 @@ func handleAsk(args []string, stdout, stderr io.Writer) int {
 		ID:        *customID,
 		Workspace: absWorkspace,
 		Prompt:    prompt,
+		Mode:      *mode,
 		MemoryIDs: memoryIDs,
 	})
 	if err != nil {

@@ -140,17 +140,17 @@
 
 ### Phase 5：CLI 整合、端到端整合測試與回歸驗證
 
-- [ ] 📝 **Task 5.1: CLI 參數擴充與指令支援**
+- [x] ✅ **Task 5.1: CLI 參數擴充與指令支援**
   - **對應驗收**：`@TFACE-001`, `@TFACE-008`
   - **前置相依**：Task 4.1
-  - **產出檔案**：`cmd/asura/run.go`, `cmd/asura/ask.go`, `cmd/asura/run_test.go`
+  - **產出檔案**：`cmd/asura/run.go`, `cmd/asura/ask.go`, `cmd/asura/status.go`, `cmd/asura/run_test.go`
   - **實作內容**：
     1. `asura run` 與 `asura ask` 支援 `--mode` 參數（預設 `direct`，可指定 `three-face`）。
     2. CLI status 查詢若有 `pipeline_trace` 則格式化輸出各 Stage 執行狀態。
   - **完成判準**：CLI 測試覆蓋參數解析與分派。
   - **驗證命令**：`go test -v ./cmd/asura/...`
 
-- [ ] 📝 **Task 5.2: 全套 Gherkin 端到端整合測試**
+- [ ] ⏳ **Task 5.2: 全套 Gherkin 端到端整合測試**
   - **對應驗收**：`@TFACE-001` ~ `@TFACE-010`
   - **前置相依**：Task 5.1
   - **產出檔案**：`tests/integration/three_face_pipeline_test.go`
