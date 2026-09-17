@@ -275,10 +275,13 @@ func TestDaemon_MemoryScopeRejection(t *testing.T) {
 	sockPath := filepath.Join(tmpDir, "daemon_scope.sock")
 
 	var runnerCalls int32
+	var promptMu sync.Mutex
 	var receivedPrompt string
 	runner := func(ctx context.Context, ws, prompt string) (string, error) {
 		atomic.AddInt32(&runnerCalls, 1)
+		promptMu.Lock()
 		receivedPrompt = prompt
+		promptMu.Unlock()
 		return "runner output", nil
 	}
 
@@ -410,8 +413,11 @@ func TestDaemon_MemoryScopeRejection(t *testing.T) {
 		if calls := atomic.LoadInt32(&runnerCalls); calls != 1 {
 			t.Fatalf("expected runner to be called 1 time, got %d", calls)
 		}
-		if !strings.Contains(receivedPrompt, "### Project Context") || !strings.Contains(receivedPrompt, "專案 B 記憶內容") {
-			t.Errorf("expected runner prompt to contain memory block, got:\n%s", receivedPrompt)
+		promptMu.Lock()
+		promptCopy := receivedPrompt
+		promptMu.Unlock()
+		if !strings.Contains(promptCopy, "### Project Context") || !strings.Contains(promptCopy, "專案 B 記憶內容") {
+			t.Errorf("expected runner prompt to contain memory block, got:\n%s", promptCopy)
 		}
 	})
 }

@@ -210,10 +210,11 @@ type IPCRequest struct {
 - 驗證：執行端到端整合測試與全專案 race 回歸測試。
 - 狀態：✅ 已完成
 - 證據：
-  - 外迴圈全套整合：`go test -v -run "TestCTXMEM" ./tests/integration/...` (PASS 0.595s: CTXMEM-001～CTXMEM-007 與 CLI 端到端全數通過)
-  - 整合套件回歸：`go test -v ./tests/integration/...` (全部 46 項整合測試 PASS 61.462s)
+  - 外迴圈全套整合：`go test -v -race -run "TestCTXMEM" ./tests/integration/...` (PASS 1.986s: CTXMEM-001～CTXMEM-007、排隊喚醒保留、CLI 端到端 100% 覆蓋且 0 data race)
+  - 記憶單元與調度 Race 驗證：`go test -v -race -run "TestDaemon_.*Memory" ./internal/daemon/...` (PASS 1.588s, 0 data race)
+  - 整合套件回歸：`go test -v ./tests/integration/...` (全部 47 項整合測試 PASS)
   - 全專案無痛回歸：`go test ./...` (全模組 PASS，0 錯誤)
-  - 精煉：全迴圈整合確認端到端與 CLI 參數無痛協同，原始 Prompt 保持隔離，Sealed Context 一致性驗證無懈可擊
+  - 精煉：完成排隊任務喚醒驗證、記憶 ID 去重與 Mutex 同步修復，全迴圈整合確認端到端與 CLI 參數無痛協同，原始 Prompt 保持隔離，Sealed Context 一致性驗證無懈可擊
 
 ---
 

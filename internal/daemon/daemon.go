@@ -458,6 +458,11 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				canonicalWs = d.canonicalWorkspace(req.Workspace)
 			}
 
+			// 記憶 ID 去重，防止重複選取造成的資源浪費與重複 Prompt 注入
+			if len(req.MemoryIDs) > 0 {
+				req.MemoryIDs = deduplicateStrings(req.MemoryIDs)
+			}
+
 			// 計算請求 Fingerprint 確保同 Request ID 之 payload 一致性（防止撞 PK 或錯置，CTXMEM-004）
 			fp := calculateTaskFingerprint(req.Workspace, req.Prompt, req.MemoryIDs)
 
@@ -1364,4 +1369,21 @@ func calculateTaskFingerprint(workspace, prompt string, memoryIDs []string) stri
 	}
 	return fmt.Sprintf("%x", sha256.Sum256([]byte(fpPayload)))
 }
+
+// deduplicateStrings 保留原始順序去除切片中的重複字串
+func deduplicateStrings(items []string) []string {
+	if len(items) == 0 {
+		return nil
+	}
+	seen := make(map[string]bool, len(items))
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		if !seen[item] {
+			seen[item] = true
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
 

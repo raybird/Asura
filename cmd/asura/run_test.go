@@ -264,7 +264,7 @@ func TestHandleAsk_MemoryFlags(t *testing.T) {
 	code := handleAsk([]string{
 		"-socket", sockPath,
 		"--memory-id", "mem-1",
-		"--memory-id", "mem-2,mem-3",
+		"--memory-id", "mem-2,mem-3,mem-1",
 		"測試 prompt",
 	}, stdout, stderr)
 

@@ -26,7 +26,16 @@ func (s *stringSliceFlag) Set(val string) error {
 	for _, p := range parts {
 		trimmed := strings.TrimSpace(p)
 		if trimmed != "" {
-			*s = append(*s, trimmed)
+			exists := false
+			for _, existing := range *s {
+				if existing == trimmed {
+					exists = true
+					break
+				}
+			}
+			if !exists {
+				*s = append(*s, trimmed)
+			}
 		}
 	}
 	return nil

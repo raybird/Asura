@@ -340,3 +340,65 @@ func TestCTXMEM_CLI_EndToEnd(t *testing.T) {
 		t.Errorf("expected error output in stderr, got: %s", failErr.String())
 	}
 }
+
+// TestCTXMEM_QueuedTaskPreservesSealedContextOnWake 驗證排隊任務（StatusQueued）喚醒後仍完整保留 Sealed Context
+func TestCTXMEM_QueuedTaskPreservesSealedContextOnWake(t *testing.T) {
+	f := setupMemoryFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	memContent := "排隊喚醒密封記憶-2026-09-17"
+	mem, err := f.client.AddMemory(ctx, f.projA, memContent)
+	if err != nil {
+		t.Fatalf("AddMemory failed: %v", err)
+	}
+
+	// 1. 提交任務 1（佔用 projA 專案鎖）
+	task1, err := f.client.Submit(ctx, engine.SubmitRequest{
+		Workspace: f.projA,
+		Prompt:    "任務 1 先行佔用",
+	})
+	if err != nil {
+		t.Fatalf("Submit task 1 failed: %v", err)
+	}
+
+	// 2. 緊接著提交帶記憶的任務 2（應進入 StatusQueued 排隊）
+	task2, err := f.client.Submit(ctx, engine.SubmitRequest{
+		Workspace: f.projA,
+		Prompt:    "任務 2 帶記憶排隊",
+		MemoryIDs: []string{mem.ID},
+	})
+	if err != nil {
+		t.Fatalf("Submit task 2 failed: %v", err)
+	}
+
+	// 3. 等待任務 1 完成
+	completed1 := waitForTaskCompletion(t, f, task1.ID)
+	if completed1.Status != storage.StatusCompleted {
+		t.Fatalf("task 1 failed: %s", completed1.ErrorMessage)
+	}
+
+	// 4. 等待任務 2 被喚醒並完成
+	completed2 := waitForTaskCompletion(t, f, task2.ID)
+	if completed2.Status != storage.StatusCompleted {
+		t.Fatalf("task 2 failed: %s", completed2.ErrorMessage)
+	}
+
+	// 5. 斷言任務 2 喚醒後 runner prompt 正確包含記憶區塊
+	if !strings.Contains(completed2.Result, "### Project Context") || !strings.Contains(completed2.Result, memContent) {
+		t.Errorf("expected queued task to receive context block after waking, got:\n%s", completed2.Result)
+	}
+
+	// 6. 斷言資料庫中記憶欄位完好保存
+	saved2, err := f.store.GetTask(ctx, task2.ID)
+	if err != nil {
+		t.Fatalf("GetTask 2 failed: %v", err)
+	}
+	if len(saved2.MemoryRefs) != 1 || saved2.MemoryRefs[0] != mem.ID {
+		t.Errorf("expected saved MemoryRefs [%s], got %v", mem.ID, saved2.MemoryRefs)
+	}
+	if !strings.Contains(saved2.ResolvedContext, memContent) {
+		t.Errorf("expected saved ResolvedContext to contain memory content, got %q", saved2.ResolvedContext)
+	}
+}
+
