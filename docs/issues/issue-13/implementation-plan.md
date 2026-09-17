@@ -52,7 +52,7 @@
   - **驗證命令**：`go test -v ./internal/pipeline/...`
   - **完成證據**：`internal/pipeline/orchestrator.go` 實作完成，外迴圈測試（順序控制、Oracle 失敗中斷、Striker 失敗中斷、Critic 失敗不假裝成功、Direct 模式）全數通過（PASS）。
 
-- [ ] 📝 **Task 2.2: 實作 Oracle Stage 與 Critic Stage**
+- [x] ✅ **Task 2.2: 實作 Oracle Stage 與 Critic Stage**
   - **對應驗收**：`@TFACE-002`, `@TFACE-006`
   - **前置相依**：Task 2.1
   - **產出檔案**：`internal/pipeline/stage_oracle.go`, `internal/pipeline/stage_critic.go`
@@ -62,6 +62,7 @@
     3. 提供可注入模型執行器函式介面（與測試 mock 介面相容）。
   - **完成判準**：單元測試驗證 Oracle 產生結構化 Plan 與 Critic 產出 Review 的正確性。
   - **驗證命令**：`go test -v -run "TestOracle|TestCritic" ./internal/pipeline/...`
+  - **完成證據**：`internal/pipeline/stage_test.go` 通過 `TestOracleStage_Success`, `TestOracleStage_MarkdownJSON`, `TestOracleStage_RunnerError`, `TestCriticStage_Success`, `TestCriticStage_MarkdownJSON`, `TestCriticStage_RunnerError`。
 
 - [ ] 📝 **Task 2.3: 封裝 Striker Stage 與共用 Sealed ExecutionContext**
   - **對應驗收**：`@TFACE-003`, `@TFACE-008`
