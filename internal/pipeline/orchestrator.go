@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"asura/internal/engine"
@@ -160,4 +161,15 @@ func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, 
 	trace.DurationMs = time.Since(pipelineStart).Milliseconds()
 
 	return strikerOut, trace, nil
+}
+
+// ExecutePipeline 提供與 engine.PipelineRunner 介面相容之呼叫入口
+func (o *PipelineOrchestrator) ExecutePipeline(ctx context.Context, mode string, execCtx *engine.ExecutionContext) (string, string, error) {
+	out, trace, err := o.Execute(ctx, ExecutionMode(mode), execCtx)
+	traceJSON := ""
+	if trace != nil {
+		b, _ := json.Marshal(trace)
+		traceJSON = string(b)
+	}
+	return out, traceJSON, err
 }

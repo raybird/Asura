@@ -42,11 +42,17 @@ type ExecutionContext struct {
 	CreatedAt       time.Time               `json:"created_at"`
 }
 
+// PipelineRunner 定義任務執行管線的抽象介面，避免 engine 與 pipeline package 產生循環依賴
+type PipelineRunner interface {
+	ExecutePipeline(ctx context.Context, mode string, execCtx *ExecutionContext) (output string, traceJSON string, err error)
+}
+
 // SubmitRequest 代表提交任務的請求參數
 type SubmitRequest struct {
 	ID              string            `json:"id,omitempty"`
 	Workspace       string            `json:"workspace"`
 	Prompt          string            `json:"prompt"`
+	Mode            string            `json:"mode,omitempty"`
 	MemoryIDs       []string          `json:"memory_ids,omitempty"`
 	ResolvedContext *ExecutionContext `json:"resolved_context,omitempty"`
 }
@@ -69,12 +75,13 @@ func ComposePrompt(prompt string, execCtx *ExecutionContext) string {
 
 // Engine 協調任務授權、持久化與後端執行
 type Engine struct {
-	store     *storage.SQLiteStore
-	policy    *auth.Policy
-	runner    RunnerFunc
-	cancels   map[string]context.CancelFunc
-	doneChs   map[string]chan struct{}
-	cancelsMu sync.Mutex
+	store          *storage.SQLiteStore
+	policy         *auth.Policy
+	runner         RunnerFunc
+	pipelineRunner PipelineRunner
+	cancels        map[string]context.CancelFunc
+	doneChs        map[string]chan struct{}
+	cancelsMu      sync.Mutex
 }
 
 // Option 用於自訂 Engine 行為
@@ -84,6 +91,13 @@ type Option func(*Engine)
 func WithRunner(runner RunnerFunc) Option {
 	return func(e *Engine) {
 		e.runner = runner
+	}
+}
+
+// WithPipelineRunner 注入自訂管線執行器
+func WithPipelineRunner(pr PipelineRunner) Option {
+	return func(e *Engine) {
+		e.pipelineRunner = pr
 	}
 }
 
@@ -189,13 +203,18 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 		taskID = generateTaskID()
 	}
 	now := time.Now().UTC()
+	mode := req.Mode
+	if mode == "" {
+		mode = "direct"
+	}
 	task := &storage.Task{
-		ID:        taskID,
-		Prompt:    req.Prompt,
-		Workspace: req.Workspace,
-		Status:    storage.StatusPending,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:            taskID,
+		Prompt:        req.Prompt,
+		Workspace:     req.Workspace,
+		Status:        storage.StatusPending,
+		ExecutionMode: mode,
+		CreatedAt:     now,
+		UpdatedAt:     now,
 	}
 	if req.ResolvedContext != nil {
 		rawCtx, err := json.Marshal(req.ResolvedContext)
@@ -305,13 +324,15 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 		return task, taskCtx.Err()
 	}
 
-	// 5. 調用後端執行
+	// 5. 調用後端或管線執行
 	runnerPrompt := req.Prompt
+	var execCtx *ExecutionContext
 	if req.ResolvedContext != nil {
+		execCtx = req.ResolvedContext
 		runnerPrompt = ComposePrompt(req.Prompt, req.ResolvedContext)
 	} else if task.ResolvedContext != "" {
-		var execCtx ExecutionContext
-		if err := json.Unmarshal([]byte(task.ResolvedContext), &execCtx); err != nil {
+		var decoded ExecutionContext
+		if err := json.Unmarshal([]byte(task.ResolvedContext), &decoded); err != nil {
 			persistCtx, persistCancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer persistCancel()
 			errMsg := fmt.Sprintf("decode sealed context failed: %v", err)
@@ -320,7 +341,8 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 			task.ErrorMessage = errMsg
 			return task, fmt.Errorf("decode sealed context: %w", err)
 		}
-		runnerPrompt = ComposePrompt(req.Prompt, &execCtx)
+		execCtx = &decoded
+		runnerPrompt = ComposePrompt(req.Prompt, execCtx)
 	} else if len(task.MemoryRefs) > 0 {
 		persistCtx, persistCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer persistCancel()
@@ -330,7 +352,57 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 		task.ErrorMessage = errMsg
 		return task, errors.New(errMsg)
 	}
-	output, runErr := e.runner(taskCtx, req.Workspace, runnerPrompt)
+
+	if execCtx == nil {
+		execCtx = &ExecutionContext{
+			OriginalPrompt: req.Prompt,
+			Workspace:      req.Workspace,
+			CreatedAt:      now,
+		}
+	}
+
+	var output string
+	var runErr error
+	var traceJSON string
+
+	if task.ExecutionMode == "three-face" {
+		if e.pipelineRunner == nil {
+			persistCtx, persistCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer persistCancel()
+			errMsg := "three-face execution mode requested but no pipeline runner configured"
+			_ = e.store.UpdateTaskStatus(persistCtx, task.ID, storage.StatusFailed, "", errMsg)
+			task.Status = storage.StatusFailed
+			task.ErrorMessage = errMsg
+			return task, errors.New(errMsg)
+		}
+		output, traceJSON, runErr = e.pipelineRunner.ExecutePipeline(taskCtx, task.ExecutionMode, execCtx)
+		task.PipelineTrace = traceJSON
+	} else {
+		output, runErr = e.runner(taskCtx, req.Workspace, runnerPrompt)
+		statusStr := "completed"
+		errStr := ""
+		if runErr != nil {
+			statusStr = "failed"
+			errStr = runErr.Error()
+		}
+		directTraceObj := map[string]interface{}{
+			"mode":        "direct",
+			"model_calls": 1,
+			"stages": []map[string]interface{}{
+				{
+					"name":   "striker",
+					"status": statusStr,
+					"output": output,
+					"error":  errStr,
+				},
+			},
+			"final_result": output,
+		}
+		if b, err := json.Marshal(directTraceObj); err == nil {
+			traceJSON = string(b)
+			task.PipelineTrace = traceJSON
+		}
+	}
 
 	// 使用未取消且具有超時的獨立 Context 進行終態持久化，杜絕父 Context 取消時狀態遺失（修復 R-05）
 	persistCtx, persistCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -372,6 +444,10 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 			return task, fmt.Errorf("task cancelled: persist status failed: %w", updateErr)
 		}
 		return task, taskCtx.Err()
+	}
+
+	if traceJSON != "" {
+		_ = e.store.UpdateTaskPipelineTrace(persistCtx, task.ID, traceJSON)
 	}
 
 	if runErr != nil {

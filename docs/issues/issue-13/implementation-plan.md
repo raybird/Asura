@@ -93,16 +93,18 @@
   - **驗證命令**：`go test -v ./internal/storage/...`
   - **完成證據**：`internal/storage/sqlite_test.go` 新增 `TestTaskPipelineTraceStorage` 通過。全套 storage 測試全綠（PASS）。
 
-- [ ] 📝 **Task 3.2: 整合 Engine 與 Pipeline 調度**
+- [x] ✅ **Task 3.2: 整合 Engine 與 Pipeline 調度**
   - **對應驗收**：`@TFACE-001`, `@TFACE-008`
   - **前置相依**：Task 2.3, Task 3.1
   - **產出檔案**：`internal/engine/engine.go`, `internal/engine/engine_test.go`
   - **實作內容**：
-    1. `SubmitRequest` 擴充 `ExecutionMode` 欄位。
-    2. `Engine.SubmitTask` 判斷模式：Direct 模式走原路徑；Three-Face 模式委託 `PipelineOrchestrator`。
-    3. 將最終 `PipelineTrace` 與結果安全持久化至儲存層。
+    1. 定義 `PipelineRunner` 介面，避免 engine 與 pipeline 產生循環依賴。
+    2. `SubmitRequest` 擴充 `Mode` 欄位。
+    3. `Engine.SubmitTask` 依據 `ExecutionMode` 判斷模式：Direct 模式維持既有路徑並自動補齊 trace；Three-Face 模式調用 `PipelineRunner`。
+    4. 將最終 `PipelineTrace` 與結果安全持久化至儲存層。
   - **完成判準**：Direct 模式與 Three-Face 模式均能正確由 Engine 執行並持久化終態。
   - **驗證命令**：`go test -v ./internal/engine/...`
+  - **完成證據**：`internal/engine/engine_test.go` 新增 `TestEngine_ThreeFacePipeline`, `TestEngine_ThreeFacePipeline_Failure`, `TestEngine_DirectModeTrace` 全數通過。全套 engine 測試 PASS。
 
 ---
 
