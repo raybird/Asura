@@ -215,6 +215,7 @@ Feature: Three-Face Fixed Pipeline
 | 2026-09-17 | 建立 Issue 13 架構規範文件並核准 10 項 Gherkin 劇本 | - |
 | 2026-09-17 | 完成 Phase 1 ~ Phase 5 實作、全套 Gherkin 端到端測試與系統回歸 | - |
 | 2026-09-17 | 完成第三輪審查意見修復（唯讀權限顯式覆寫、分析白名單、無副作用鎖查詢、errors.Join）並通過獨立審查 (PASS, review-ec51157.md) | - |
+| 2026-09-17 | 完成第四輪審查意見修復（專屬 asura-readonly agent、獨立 isolated config、OPENCODE_DISABLE_PROJECT_CONFIG、攻擊整合測試）並通過獨立審查 (PASS, review-378b680.md) | - |
 
 ---
 **建立日期**: 2026-09-17  
