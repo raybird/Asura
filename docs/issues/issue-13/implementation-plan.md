@@ -40,16 +40,17 @@
 
 ### Phase 2：Pipeline 調度器與 Stage 核心實作
 
-- [ ] 📝 **Task 2.1: 實作 PipelineOrchestrator 與 Stage 介面**
+- [x] ✅ **Task 2.1: 實作 PipelineOrchestrator 與 Stage 介面**
   - **對應驗收**：`@TFACE-001`, `@TFACE-004`, `@TFACE-005`, `@TFACE-007`
   - **前置相依**：Task 1.2
   - **產出檔案**：`internal/pipeline/orchestrator.go`
   - **實作內容**：
-    1. 定義 `Stage` 介面。
+    1. 定義 `Stage` 介面（`OracleStage`, `StrikerStage`, `CriticStage`）。
     2. 實作 `PipelineOrchestrator`，協調 Stage 依序執行並組裝 `PipelineTrace`。
     3. 實作嚴格的 Fail-Closed 終止邏輯與耗時/呼叫次數記錄。
   - **完成判準**：Task 1.2 建立之外迴圈測試由紅燈轉為綠燈（TDD Green）。
   - **驗證命令**：`go test -v ./internal/pipeline/...`
+  - **完成證據**：`internal/pipeline/orchestrator.go` 實作完成，外迴圈測試（順序控制、Oracle 失敗中斷、Striker 失敗中斷、Critic 失敗不假裝成功、Direct 模式）全數通過（PASS）。
 
 - [ ] 📝 **Task 2.2: 實作 Oracle Stage 與 Critic Stage**
   - **對應驗收**：`@TFACE-002`, `@TFACE-006`
