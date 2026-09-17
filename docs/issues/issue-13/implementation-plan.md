@@ -64,7 +64,7 @@
   - **驗證命令**：`go test -v -run "TestOracle|TestCritic" ./internal/pipeline/...`
   - **完成證據**：`internal/pipeline/stage_test.go` 通過 `TestOracleStage_Success`, `TestOracleStage_MarkdownJSON`, `TestOracleStage_RunnerError`, `TestCriticStage_Success`, `TestCriticStage_MarkdownJSON`, `TestCriticStage_RunnerError`。
 
-- [ ] 📝 **Task 2.3: 封裝 Striker Stage 與共用 Sealed ExecutionContext**
+- [x] ✅ **Task 2.3: 封裝 Striker Stage 與共用 Sealed ExecutionContext**
   - **對應驗收**：`@TFACE-003`, `@TFACE-008`
   - **前置相依**：Task 2.1
   - **產出檔案**：`internal/pipeline/stage_striker.go`
@@ -74,6 +74,7 @@
     3. 確保三個 Stage 嚴格讀取同一個 Sealed Context，不重新解析 Memory。
   - **完成判準**：單元測試驗證 Striker 接收之 Prompt 正確融入 OraclePlan，且記憶參照保持不變。
   - **驗證命令**：`go test -v -run TestStriker ./internal/pipeline/...`
+  - **完成證據**：`internal/pipeline/stage_striker_test.go` 通過 `TestStrikerStage_DirectMode_WithoutPlan`, `TestStrikerStage_ThreeFace_WithPlan`, `TestStrikerStage_RunnerError`。全專案 `go test ./internal/... ./cmd/...` 通過。
 
 ---
 
