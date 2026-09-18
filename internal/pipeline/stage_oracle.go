@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"asura/internal/backend"
 	"asura/internal/engine"
 )
 
@@ -15,7 +16,8 @@ type OracleRunnerFunc func(ctx context.Context, workspace string, prompt string)
 
 // DefaultOracleStage 實作 Oracle 階段
 type DefaultOracleStage struct {
-	runner OracleRunnerFunc
+	runner  OracleRunnerFunc
+	backend backend.Backend
 }
 
 // NewOracleStage 建立 Oracle 階段實例
@@ -23,12 +25,13 @@ func NewOracleStage(runner OracleRunnerFunc) *DefaultOracleStage {
 	return &DefaultOracleStage{runner: runner}
 }
 
+// NewOracleStageWithBackend 建立基於共同 Backend 契約之 Oracle 階段實例
+func NewOracleStageWithBackend(b backend.Backend) *DefaultOracleStage {
+	return &DefaultOracleStage{backend: b}
+}
+
 // Execute 執行 Oracle 分析並產出結構化計畫
 func (s *DefaultOracleStage) Execute(ctx context.Context, execCtx *engine.ExecutionContext) (*OraclePlan, error) {
-	if s.runner == nil {
-		return nil, errors.New("oracle runner is nil")
-	}
-
 	workspace := ""
 	prompt := ""
 	if execCtx != nil {
@@ -39,9 +42,25 @@ func (s *DefaultOracleStage) Execute(ctx context.Context, execCtx *engine.Execut
 	systemInstruction := "You are Oracle, an AI architecture planner. Analyze the execution context and produce a JSON plan matching the schema: {\"goal\":\"...\",\"constraints\":[...],\"steps\":[...],\"expected_outcome\":\"...\"}.\nReturn ONLY the JSON or a json markdown code block."
 	oraclePrompt := fmt.Sprintf("%s\n\nTask Context and Requirements:\n%s", systemInstruction, prompt)
 
-	rawOutput, err := s.runner(ctx, workspace, oraclePrompt)
-	if err != nil {
-		return nil, fmt.Errorf("oracle runner error: %w", err)
+	var rawOutput string
+	if s.backend != nil {
+		res, err := s.backend.Run(ctx, &backend.ExecutionRequest{
+			Role:      backend.RoleOracle,
+			Workspace: workspace,
+			Prompt:    oraclePrompt,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("oracle backend error: %w", err)
+		}
+		rawOutput = res.Output
+	} else if s.runner != nil {
+		out, err := s.runner(ctx, workspace, oraclePrompt)
+		if err != nil {
+			return nil, fmt.Errorf("oracle runner error: %w", err)
+		}
+		rawOutput = out
+	} else {
+		return nil, errors.New("oracle runner is nil")
 	}
 
 	jsonStr := extractJSON(rawOutput)

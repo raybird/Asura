@@ -54,16 +54,19 @@ const (
 
 // StageTrace 代表單一 Stage 的執行歷程與耗時
 type StageTrace struct {
-	Name       string      `json:"name"`
-	Status     StageStatus `json:"status"`
-	DurationMs int64       `json:"duration_ms"`
-	Error      string      `json:"error,omitempty"`
-	Output     string      `json:"output,omitempty"`
+	Name           string      `json:"name"`
+	Status         StageStatus `json:"status"`
+	DurationMs     int64       `json:"duration_ms"`
+	BackendID      string      `json:"backend_id,omitempty"`
+	BackendVersion string      `json:"backend_version,omitempty"`
+	Error          string      `json:"error,omitempty"`
+	Output         string      `json:"output,omitempty"`
 }
 
 // PipelineTrace 代表完整任務執行管線的審計歷程
 type PipelineTrace struct {
 	Mode         ExecutionMode `json:"mode"`
+	BackendID    string        `json:"backend_id,omitempty"`
 	OraclePlan   *OraclePlan   `json:"oracle_plan,omitempty"`
 	CriticReview *CriticReview `json:"critic_review,omitempty"`
 	Stages       []StageTrace  `json:"stages"`

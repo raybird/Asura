@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"asura/internal/backend"
 	"asura/internal/engine"
 )
 
@@ -14,7 +15,8 @@ type CriticRunnerFunc func(ctx context.Context, workspace string, prompt string)
 
 // DefaultCriticStage 實作 Critic 階段
 type DefaultCriticStage struct {
-	runner CriticRunnerFunc
+	runner  CriticRunnerFunc
+	backend backend.Backend
 }
 
 // NewCriticStage 建立 Critic 階段實例
@@ -22,12 +24,13 @@ func NewCriticStage(runner CriticRunnerFunc) *DefaultCriticStage {
 	return &DefaultCriticStage{runner: runner}
 }
 
+// NewCriticStageWithBackend 建立基於共同 Backend 契約之 Critic 階段實例
+func NewCriticStageWithBackend(b backend.Backend) *DefaultCriticStage {
+	return &DefaultCriticStage{backend: b}
+}
+
 // Execute 執行 Critic 審查並產出結構化審查報告
 func (s *DefaultCriticStage) Execute(ctx context.Context, execCtx *engine.ExecutionContext, plan *OraclePlan, strikerOutput string) (*CriticReview, error) {
-	if s.runner == nil {
-		return nil, errors.New("critic runner is nil")
-	}
-
 	workspace := ""
 	prompt := ""
 	if execCtx != nil {
@@ -40,9 +43,25 @@ func (s *DefaultCriticStage) Execute(ctx context.Context, execCtx *engine.Execut
 	criticPrompt := fmt.Sprintf("%s\n\nOriginal Prompt:\n%s\n\nOracle Plan:\n%s\n\nStriker Output:\n%s",
 		systemInstruction, prompt, string(planJSON), strikerOutput)
 
-	rawOutput, err := s.runner(ctx, workspace, criticPrompt)
-	if err != nil {
-		return nil, fmt.Errorf("critic runner error: %w", err)
+	var rawOutput string
+	if s.backend != nil {
+		res, err := s.backend.Run(ctx, &backend.ExecutionRequest{
+			Role:      backend.RoleCritic,
+			Workspace: workspace,
+			Prompt:    criticPrompt,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("critic backend error: %w", err)
+		}
+		rawOutput = res.Output
+	} else if s.runner != nil {
+		out, err := s.runner(ctx, workspace, criticPrompt)
+		if err != nil {
+			return nil, fmt.Errorf("critic runner error: %w", err)
+		}
+		rawOutput = out
+	} else {
+		return nil, errors.New("critic runner is nil")
 	}
 
 	jsonStr := extractJSON(rawOutput)

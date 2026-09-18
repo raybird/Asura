@@ -213,8 +213,8 @@ type Registry interface {
 - **驗收編號**：`@MBACK-001`, `@MBACK-002`
 - **完成判準**：Pipeline 各 Stage 改為接收 `backend.Backend` 與 `Role`；解除對 `engine.RunnerFunc` 之依賴。
 - **驗證**：`go test -v ./internal/pipeline/...`
-- **狀態**：📝 待實作
-- **證據**：-
+- **狀態**：✅ 已完成
+- **證據**：`internal/pipeline` 全部 27 項單元測試全數 PASS，Orchestrator 支援 `WithRegistry` 與後端動態綁定。
 
 #### Task 5.2 — 實作 Three-Face Capability Preflight
 - **產出與範圍**：`internal/pipeline/orchestrator.go`、`internal/pipeline/orchestrator_test.go`。
@@ -222,8 +222,8 @@ type Registry interface {
 - **驗收編號**：`@MBACK-003`, `@MBACK-008`
 - **完成判準**：Three-Face 管線在啟動 Oracle 前，檢查後端是否具備 `CapReadOnlySandbox`；若未具備或後端不存在，立即 fail-closed 終止，0 模型呼叫，絕不 fallback。
 - **驗證**：單元測試驗證不支援唯讀之後端在 Oracle 前被攔截，呼叫次數為 0。
-- **狀態**：📝 待實作
-- **證據**：-
+- **狀態**：✅ 已完成
+- **證據**：`internal/pipeline/orchestrator_backend_test.go` 通過 `TestOrchestrator_UnknownBackend_FailClosed` 與 `TestOrchestrator_ThreeFace_CapabilityPreflight_FailClosed`（PASS）。
 
 #### Task 5.3 — PipelineTrace 擴充 BackendID 與 Version
 - **產出與範圍**：`internal/pipeline/types.go`、`internal/pipeline/orchestrator.go`。
@@ -231,8 +231,8 @@ type Registry interface {
 - **驗收編號**：`@MBACK-009`
 - **完成判準**：`StageTrace` 與 `PipelineTrace` 完整記錄實際執行的 `BackendID` 與版本號。
 - **驗證**：執行 Direct 與 Three-Face 任務，斷言 Trace JSON 包含正確的 backend 資訊。
-- **狀態**：📝 待實作
-- **證據**：-
+- **狀態**：✅ 已完成
+- **證據**：`internal/pipeline/orchestrator_backend_test.go` 通過 `TestOrchestrator_Trace_RecordsActualBackendAndVersion`（PASS）。
 
 #### Task 5.4 — 落實 No Automatic Failover 邊界防禦
 - **產出與範圍**：`internal/pipeline/orchestrator.go`。
@@ -240,8 +240,8 @@ type Registry interface {
 - **驗收編號**：`@MBACK-010`
 - **完成判準**：若指定後端（如 Codex）在 Striker 階段失敗，保存 partial output 並標記 Failed，嚴格禁止自動切換至 OpenCode 重試（OpenCode 呼叫次數為 0）。
 - **驗證**：測試驗證部分執行失敗後無第二次執行嘗試。
-- **狀態**：📝 待實作
-- **證據**：-
+- **狀態**：✅ 已完成
+- **證據**：`internal/pipeline/orchestrator_backend_test.go` 通過 `TestOrchestrator_NoFailoverAfterPartialExecution`（PASS）。
 
 ---
 

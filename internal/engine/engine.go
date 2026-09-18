@@ -37,6 +37,7 @@ type ProjectMemorySnapshot struct {
 type ExecutionContext struct {
 	OriginalPrompt  string                  `json:"original_prompt"`
 	Workspace       string                  `json:"workspace"`
+	Backend         string                  `json:"backend,omitempty"`
 	ProjectMemories []ProjectMemorySnapshot `json:"project_memories"`
 	MemoryRefs      []string                `json:"memory_refs"`
 	CreatedAt       time.Time               `json:"created_at"`
