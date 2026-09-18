@@ -207,7 +207,7 @@ Feature: Multi-Backend Foundation (OpenCode + Codex CLI)
 5. ✅ **Phase 5** - Pipeline Orchestrator 解耦與 Capability Preflight 整合
 6. ✅ **Phase 6** - Engine 整合、SubmitRequest、Fingerprint、Task/Trace 持久化
 7. ✅ **Phase 7** - CLI 整合（`--backend` 旗標）與 Daemon 佇列喚醒保護
-8. 📝 **Phase 8** - 外迴圈測試、MBACK-001 ～ MBACK-012 驗收與回歸驗證
+8. ✅ **Phase 8** - 外迴圈測試、MBACK-001 ～ MBACK-012 驗收與回歸驗證
 
 ## 風險與首要驗證
 
@@ -237,6 +237,7 @@ Feature: Multi-Backend Foundation (OpenCode + Codex CLI)
 |------|------|--------|
 | 2026-09-18 | 建立 Issue 15 架構規範、需求分析、技術分析與實作計畫初稿 | - |
 | 2026-09-18 | 使用者核准 MBACK-001 ～ MBACK-012 全部驗收劇本 | - |
+| 2026-09-18 | 完成 Phase 1 ~ Phase 8 全數實作，通過 MBACK-001 至 MBACK-012 外迴圈驗收與全系統回歸 | - |
 
 ---
 **建立日期**: 2026-09-18  

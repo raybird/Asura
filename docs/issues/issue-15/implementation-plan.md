@@ -301,13 +301,13 @@ type Registry interface {
 ### Phase 8：外迴圈測試、MBACK 驗收與回歸驗證
 
 #### Task 8.1 — 實作 Gherkin MBACK-001 ～ MBACK-012 外迴圈驗收測試
-- **產出與範圍**：`tests/e2e/mback_test.go`。
+- **產出與範圍**：`tests/integration/multi_backend_test.go`。
 - **相依**：Phase 1 ~ Phase 7
 - **驗收編號**：`@MBACK-001` ～ `@MBACK-012`
 - **完成判準**：12 項 Gherkin 驗收劇本外迴圈測試全數 PASS。
-- **驗證**：`go test -v ./tests/e2e/...`
-- **狀態**：📝 待實作
-- **證據**：-
+- **驗證**：`go test -v -run "TestMBACK_" ./tests/integration/...`
+- **狀態**：✅ 已完成
+- **證據**：`tests/integration/multi_backend_test.go` 涵蓋 `TestMBACK_001` 至 `TestMBACK_012` 全部 12 項驗收測試全數 PASS（0.309s）。
 
 #### Task 8.2 — 系統完整回歸測試與靜態檢查
 - **產出與範圍**：全專案。
@@ -315,8 +315,8 @@ type Registry interface {
 - **驗收編號**：所有驗收項目
 - **完成判準**：全專案編譯無警告、race detector 檢查通過、無語法與邏輯回歸。
 - **驗證**：`go test -race -count=1 ./...`、`go vet ./...`、`go build ./cmd/asura`
-- **狀態**：📝 待實作
-- **證據**：-
+- **狀態**：✅ 已完成
+- **證據**：`go vet ./...` 無警告、`go build ./cmd/asura` 成功產出二進位檔、`go test -race -count=1 ./...` 全套件（cmd, auth, backend, codex, opencode, cron, daemon, engine, pipeline, storage, web, integration）全數 PASS。
 
 ---
 

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"asura/internal/auth"
+	"asura/internal/backend"
 	"asura/internal/backend/opencode"
 	"asura/internal/daemon"
 	"asura/internal/engine"
@@ -51,7 +52,18 @@ func TestINT001(t *testing.T) {
 	adapter := opencode.NewAdapter(opencode.AdapterConfig{
 		BinaryPath: binPath,
 	})
-	eng := engine.NewEngine(store, policy, engine.WithRunner(adapter.Run))
+	runner := func(ctx context.Context, ws, p string) (string, error) {
+		res, err := adapter.Run(ctx, &backend.ExecutionRequest{
+			Role:      backend.RoleStriker,
+			Workspace: ws,
+			Prompt:    p,
+		})
+		if err != nil {
+			return "", err
+		}
+		return res.Output, nil
+	}
+	eng := engine.NewEngine(store, policy, engine.WithRunner(runner))
 
 	ctx := context.Background()
 	task, err := eng.SubmitTask(ctx, engine.SubmitRequest{
@@ -101,11 +113,15 @@ func TestINT007(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	out, err := adapter.Run(ctx, tmpDir, "請在 test.txt 加上一行 appended")
+	res, err := adapter.Run(ctx, &backend.ExecutionRequest{
+		Role:      backend.RoleStriker,
+		Workspace: tmpDir,
+		Prompt:    "請在 test.txt 加上一行 appended",
+	})
 	if err != nil {
 		t.Fatalf("adapter.Run failed: %v", err)
 	}
-	if out == "" {
+	if res == nil || res.Output == "" {
 		t.Errorf("expected non-empty output from adapter")
 	}
 }

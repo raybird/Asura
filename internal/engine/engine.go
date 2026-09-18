@@ -426,10 +426,7 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 		output, traceJSON, runErr = e.pipelineRunner.ExecutePipeline(taskCtx, task.ExecutionMode, execCtx)
 		task.PipelineTrace = traceJSON
 	case "direct", "":
-		if e.pipelineRunner != nil {
-			output, traceJSON, runErr = e.pipelineRunner.ExecutePipeline(taskCtx, "direct", execCtx)
-			task.PipelineTrace = traceJSON
-		} else {
+		if e.runner != nil {
 			output, runErr = e.runner(taskCtx, req.Workspace, runnerPrompt)
 			statusStr := "completed"
 			errStr := ""
@@ -454,6 +451,9 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 				traceJSON = string(b)
 				task.PipelineTrace = traceJSON
 			}
+		} else if e.pipelineRunner != nil {
+			output, traceJSON, runErr = e.pipelineRunner.ExecutePipeline(taskCtx, "direct", execCtx)
+			task.PipelineTrace = traceJSON
 		}
 	default:
 		persistCtx, persistCancel := context.WithTimeout(context.Background(), 5*time.Second)

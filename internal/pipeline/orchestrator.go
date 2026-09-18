@@ -43,9 +43,18 @@ func NewOrchestrator(oracle OracleStage, striker StrikerStage, critic CriticStag
 	}
 }
 
-// WithRegistry 為 Orchestrator 配置後端註冊表
+// WithRegistry 為 Orchestrator 配置後端註冊表，並向下傳播至各個 Stage
 func (o *PipelineOrchestrator) WithRegistry(reg backend.Registry) *PipelineOrchestrator {
 	o.registry = reg
+	if s, ok := o.oracle.(*DefaultOracleStage); ok && s != nil {
+		s.WithRegistry(reg)
+	}
+	if s, ok := o.striker.(*DefaultStrikerStage); ok && s != nil {
+		s.WithRegistry(reg)
+	}
+	if s, ok := o.critic.(*DefaultCriticStage); ok && s != nil {
+		s.WithRegistry(reg)
+	}
 	return o
 }
 

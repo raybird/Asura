@@ -221,7 +221,15 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 		orc := pipeline.NewOrchestrator(oracleStage, strikerStage, criticStage).WithRegistry(reg)
 
 		strikerRunner := func(ctx context.Context, ws, prompt string) (string, error) {
-			res, err := strikerAdapter.Run(ctx, &backend.ExecutionRequest{
+			var activeBackend backend.Backend = strikerAdapter
+			if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
+				if t, err := store.GetTask(context.Background(), taskID); err == nil && t != nil && t.Backend != "" {
+					if regB, err := reg.Get(t.Backend); err == nil && regB != nil {
+						activeBackend = regB
+					}
+				}
+			}
+			res, err := activeBackend.Run(ctx, &backend.ExecutionRequest{
 				Role:      backend.RoleStriker,
 				Workspace: ws,
 				Prompt:    prompt,
@@ -638,6 +646,13 @@ func (d *Daemon) handleConn(conn net.Conn) {
 					continue
 				}
 				resolvedCtxJSON = string(raw)
+			} else {
+				execCtx = &engine.ExecutionContext{
+					OriginalPrompt: req.Prompt,
+					Workspace:      canonicalWs,
+					Backend:        backendID,
+					CreatedAt:      now,
+				}
 			}
 
 			initialTask := &storage.Task{

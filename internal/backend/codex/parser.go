@@ -15,7 +15,7 @@ type RawEvent struct {
 	Type     string                 `json:"type"`
 	ThreadID string                 `json:"thread_id,omitempty"`
 	Message  string                 `json:"message,omitempty"`
-	Error    string                 `json:"error,omitempty"`
+	Error    interface{}            `json:"error,omitempty"`
 	Item     map[string]interface{} `json:"item,omitempty"`
 	Usage    map[string]interface{} `json:"usage,omitempty"`
 }
@@ -51,6 +51,22 @@ func ExtractResultAndEvents(rawStdout, rawStderr string) (output string, partial
 			continue
 		}
 
+		if evt.Error != nil {
+			var errStr string
+			switch v := evt.Error.(type) {
+			case string:
+				errStr = v
+			default:
+				b, _ := json.Marshal(v)
+				errStr = string(b)
+			}
+			if errStr != "" {
+				lastErr = errStr
+				events = append(events, backend.NewErrorEvent(errStr))
+				checkErrorLine(errStr, &hasAuth, &hasRateLimit, &lastErr)
+			}
+		}
+
 		switch evt.Type {
 		case "item.completed", "item.started":
 			if item := evt.Item; item != nil {
@@ -75,9 +91,6 @@ func ExtractResultAndEvents(rawStdout, rawStderr string) (output string, partial
 			}
 		case "error":
 			errMsg := evt.Message
-			if errMsg == "" {
-				errMsg = evt.Error
-			}
 			if errMsg != "" {
 				lastErr = errMsg
 				events = append(events, backend.NewErrorEvent(errMsg))
@@ -126,13 +139,13 @@ func ExtractResultAndEvents(rawStdout, rawStderr string) (output string, partial
 
 func checkErrorLine(line string, hasAuth, hasRateLimit *bool, lastErr *string) {
 	lower := strings.ToLower(line)
-	if strings.Contains(lower, "rate limit") || strings.Contains(lower, "429") || strings.Contains(lower, "quota exceeded") {
+	if strings.Contains(lower, "rate limit") || strings.Contains(lower, "rate_limit") || strings.Contains(lower, "429") || strings.Contains(lower, "quota exceeded") {
 		*hasRateLimit = true
 	}
-	if strings.Contains(lower, "unauthorized") || strings.Contains(lower, "invalid api key") || strings.Contains(lower, "authentication") || strings.Contains(lower, "login required") {
+	if strings.Contains(lower, "unauthorized") || strings.Contains(lower, "invalid api key") || strings.Contains(lower, "invalid api token") || strings.Contains(lower, "authentication") || strings.Contains(lower, "login required") || strings.Contains(lower, "auth_error") || strings.Contains(lower, "auth error") {
 		*hasAuth = true
 	}
-	if strings.Contains(lower, "error=") || strings.Contains(lower, "error:") {
+	if strings.Contains(lower, "error=") || strings.Contains(lower, "error:") || strings.Contains(lower, "\"error\"") {
 		if *lastErr == "" {
 			*lastErr = line
 		}
