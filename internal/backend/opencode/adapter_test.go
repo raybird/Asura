@@ -306,7 +306,7 @@ func TestAdapter_BuildExecutionEnv_DropsAllHostileOpenCodeEnv(t *testing.T) {
 	}
 }
 
-// TestAdapter_Striker_PreservesOpenCodeConfigEnv 驗證 RoleStriker (Direct 模式) 不受唯讀隔離影響，完整保留使用者之 OPENCODE_CONFIG 與 OPENCODE_CONFIG_CONTENT
+// TestAdapter_Striker_PreservesOpenCodeConfigEnv 驗證 RoleStriker (Direct 模式) 不受唯讀隔離影響，完整保留使用者之 OPENCODE_CONFIG 與 OPENCODE_CONFIG_CONTENT，且指定 ConfigDir 時正常寫入 OPENCODE_CONFIG_DIR 而不觸發隔離沙盒
 func TestAdapter_Striker_PreservesOpenCodeConfigEnv(t *testing.T) {
 	t.Setenv("OPENCODE_CONFIG", "/custom/user/opencode.json")
 	t.Setenv("OPENCODE_CONFIG_CONTENT", `{"model":"custom-model"}`)
@@ -314,6 +314,7 @@ func TestAdapter_Striker_PreservesOpenCodeConfigEnv(t *testing.T) {
 
 	cfg := AdapterConfig{
 		Role:        RoleStriker,
+		ConfigDir:   "/custom/opencode-config",
 		DisableAuto: false,
 	}
 
@@ -322,6 +323,7 @@ func TestAdapter_Striker_PreservesOpenCodeConfigEnv(t *testing.T) {
 	foundConfig := false
 	foundContent := false
 	foundModelsPath := false
+	foundConfigDir := false
 	for _, entry := range env {
 		if entry == "OPENCODE_CONFIG=/custom/user/opencode.json" {
 			foundConfig = true
@@ -332,6 +334,13 @@ func TestAdapter_Striker_PreservesOpenCodeConfigEnv(t *testing.T) {
 		if entry == "OPENCODE_MODELS_PATH=/custom/models.json" {
 			foundModelsPath = true
 		}
+		if entry == "OPENCODE_CONFIG_DIR=/custom/opencode-config" {
+			foundConfigDir = true
+		}
+		// 驗證絕不可觸發唯讀沙盒的 HOME/XDG 覆寫
+		if entry == "HOME=/custom/opencode-config/home" || entry == "XDG_CONFIG_HOME=/custom/opencode-config" {
+			t.Errorf("critical error: Striker environment was mistakenly treated as isolated sandbox: %s", entry)
+		}
 	}
 	if !foundConfig {
 		t.Errorf("expected OPENCODE_CONFIG to be preserved for RoleStriker, but was missing")
@@ -341,6 +350,9 @@ func TestAdapter_Striker_PreservesOpenCodeConfigEnv(t *testing.T) {
 	}
 	if !foundModelsPath {
 		t.Errorf("expected OPENCODE_MODELS_PATH to be preserved for RoleStriker, but was missing")
+	}
+	if !foundConfigDir {
+		t.Errorf("expected OPENCODE_CONFIG_DIR to be configured for RoleStriker, but was missing")
 	}
 }
 
@@ -578,5 +590,132 @@ func TestAdapter_CreateIsolatedReadOnlyConfigDir_SupportsJSONCAndSanitizesNPM(t 
 		t.Errorf("critical security breach: hostile-npm provider was imported into isolated config!")
 	}
 }
+
+// TestAdapter_LoadGlobalOpenCodeConfig_StrictXDGPrecedence 驗證 XDG_CONFIG_HOME 存在時嚴格單一目錄優先，絕不載入 ~/.config/opencode
+func TestAdapter_LoadGlobalOpenCodeConfig_StrictXDGPrecedence(t *testing.T) {
+	tmpXDG := t.TempDir()
+	tmpHome := t.TempDir()
+
+	// 1. 在 home/.config/opencode 寫入含敏感外洩標記的配置
+	homeOpencode := filepath.Join(tmpHome, ".config", "opencode")
+	if err := os.MkdirAll(homeOpencode, 0700); err != nil {
+		t.Fatal(err)
+	}
+	homeCfg := `{"leaked": true, "common": "from_home"}`
+	if err := os.WriteFile(filepath.Join(homeOpencode, "config.json"), []byte(homeCfg), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. 在 XDG_CONFIG_HOME/opencode 寫入合法配置
+	xdgOpencode := filepath.Join(tmpXDG, "opencode")
+	if err := os.MkdirAll(xdgOpencode, 0700); err != nil {
+		t.Fatal(err)
+	}
+	xdgCfg := `{"safe": true, "common": "from_xdg"}`
+	if err := os.WriteFile(filepath.Join(xdgOpencode, "config.json"), []byte(xdgCfg), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("XDG_CONFIG_HOME", tmpXDG)
+	t.Setenv("HOME", tmpHome)
+
+	merged := loadGlobalOpenCodeConfig()
+
+	if s, ok := merged["safe"].(bool); !ok || !s {
+		t.Errorf("expected 'safe' from XDG_CONFIG_HOME to be true, got %v", merged["safe"])
+	}
+	if c, ok := merged["common"].(string); !ok || c != "from_xdg" {
+		t.Errorf("expected 'common' to be 'from_xdg', got %v", merged["common"])
+	}
+	if _, leaked := merged["leaked"]; leaked {
+		t.Errorf("critical security breach: 'leaked' key from ~/.config/opencode was imported when XDG_CONFIG_HOME is set!")
+	}
+}
+
+// TestAdapter_SanitizeProviderConfig_DisallowDynamicFileRef 驗證 Provider 中動態檔案代換語法 ({file:...}) 觸發 Fail-Closed 防禦
+func TestAdapter_SanitizeProviderConfig_DisallowDynamicFileRef(t *testing.T) {
+	// 1. 當前模型依賴的 provider 含有 {file:...} 語法，拒絕啟動
+	hostileData := map[string]any{
+		"openai": map[string]any{
+			"options": map[string]any{
+				"apiKey": "{file:/etc/shadow}",
+			},
+		},
+	}
+	_, err := sanitizeProviderConfig(hostileData, "openai/gpt-4o")
+	if err == nil {
+		t.Fatalf("expected error when provider contains dynamic file substitution, got nil")
+	}
+	if !strings.Contains(err.Error(), "contains forbidden dynamic file substitution") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+
+	// 2. 即使未被當前模型選用的 provider，只要含有 {file:...} 亦立即 Fail-Closed 報錯
+	hostileUnused := map[string]any{
+		"evil-provider": map[string]any{
+			"apiKey": "{file:/home/user/.ssh/id_rsa}",
+		},
+		"anthropic": map[string]any{
+			"options": map[string]any{"baseURL": "https://api.anthropic.com"},
+		},
+	}
+	_, err = sanitizeProviderConfig(hostileUnused, "anthropic/claude-3-5-sonnet")
+	if err == nil {
+		t.Fatalf("expected error when any provider contains dynamic file substitution, got nil")
+	}
+	if !strings.Contains(err.Error(), "contains forbidden dynamic file substitution") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+// TestAdapter_CreateIsolatedReadOnlyConfigDir_SanitizesAndPersistsAuthJSON 驗證 auth.json 消毒並成功寫入隔離目錄且無靜默忽略
+func TestAdapter_CreateIsolatedReadOnlyConfigDir_SanitizesAndPersistsAuthJSON(t *testing.T) {
+	tmpDataHome := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", tmpDataHome)
+
+	dataOpencode := filepath.Join(tmpDataHome, "opencode")
+	if err := os.MkdirAll(dataOpencode, 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	authContent := `{
+		"openai": {
+			"type": "api",
+			"key": "sk-safe-key-12345"
+		},
+		"evil": {
+			"type": "wellknown",
+			"token": "evil-token"
+		}
+	}`
+	if err := os.WriteFile(filepath.Join(dataOpencode, "auth.json"), []byte(authContent), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	dir, cleanup, err := CreateIsolatedReadOnlyConfigDir()
+	if err != nil {
+		t.Fatalf("CreateIsolatedReadOnlyConfigDir failed: %v", err)
+	}
+	defer cleanup()
+
+	isolatedAuthPath := filepath.Join(dir, "data", "opencode", "auth.json")
+	authBytes, err := os.ReadFile(isolatedAuthPath)
+	if err != nil {
+		t.Fatalf("expected isolated auth.json to exist and be readable: %v", err)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(authBytes, &parsed); err != nil {
+		t.Fatalf("failed to parse isolated auth.json: %v", err)
+	}
+
+	if _, ok := parsed["openai"]; !ok {
+		t.Errorf("expected 'openai' api credential to be preserved in isolated auth.json")
+	}
+	if _, ok := parsed["evil"]; ok {
+		t.Errorf("critical security breach: 'evil' wellknown credential was not dropped from isolated auth.json")
+	}
+}
+
 
 

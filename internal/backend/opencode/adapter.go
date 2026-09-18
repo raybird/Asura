@@ -85,14 +85,25 @@ func CreateIsolatedReadOnlyConfigDir() (string, func(), error) {
 	// 1. 消毒並複製使用者真實 auth.json：保留 api/oauth 憑證，徹底剔除 wellknown 遠端注入風險
 	realAuthPath := findRealAuthJSONPath()
 	if realAuthPath != "" {
-		if rawAuthBytes, err := os.ReadFile(realAuthPath); err == nil {
-			var rawAuth map[string]any
-			if err := json.Unmarshal(stripJSONC(rawAuthBytes), &rawAuth); err == nil {
-				cleanAuth := sanitizeAuthData(rawAuth)
-				if cleanAuthBytes, err := json.MarshalIndent(cleanAuth, "", "  "); err == nil {
-					_ = os.WriteFile(filepath.Join(dataOpencodeDir, "auth.json"), cleanAuthBytes, 0600)
-				}
-			}
+		rawAuthBytes, err := os.ReadFile(realAuthPath)
+		if err != nil {
+			_ = os.RemoveAll(dir)
+			return "", nil, fmt.Errorf("read real auth.json: %w", err)
+		}
+		var rawAuth map[string]any
+		if err := json.Unmarshal(stripJSONC(rawAuthBytes), &rawAuth); err != nil {
+			_ = os.RemoveAll(dir)
+			return "", nil, fmt.Errorf("parse real auth.json: %w", err)
+		}
+		cleanAuth := sanitizeAuthData(rawAuth)
+		cleanAuthBytes, err := json.MarshalIndent(cleanAuth, "", "  ")
+		if err != nil {
+			_ = os.RemoveAll(dir)
+			return "", nil, fmt.Errorf("marshal sanitized auth.json: %w", err)
+		}
+		if err := os.WriteFile(filepath.Join(dataOpencodeDir, "auth.json"), cleanAuthBytes, 0600); err != nil {
+			_ = os.RemoveAll(dir)
+			return "", nil, fmt.Errorf("write isolated auth.json: %w", err)
 		}
 	}
 
@@ -378,7 +389,11 @@ func (a *Adapter) Run(ctx context.Context, workspace string, prompt string) (str
 		}
 		errMsg := strings.TrimSpace(stderrBuf.String())
 		if errMsg == "" {
-			errMsg = waitErr.Error()
+			if trimmedOut := strings.TrimSpace(rawStdout); trimmedOut != "" {
+				errMsg = fmt.Sprintf("%v (stdout: %s)", waitErr, trimmedOut)
+			} else {
+				errMsg = waitErr.Error()
+			}
 		}
 		return "", fmt.Errorf("%w: %s", ErrExecutionFailed, errMsg)
 	}
@@ -491,33 +506,34 @@ func deepMergeMaps(dst, src map[string]any) map[string]any {
 }
 
 // loadGlobalOpenCodeConfig 依 OpenCode 順序載入並合併全域配置：config.json -> opencode.json -> opencode.jsonc
+// 依據 XDG Base Directory 規範，若 XDG_CONFIG_HOME 存在則僅自該目錄讀取，不得回退或併入 ~/.config/opencode
 func loadGlobalOpenCodeConfig() map[string]any {
 	userHome, _ := os.UserHomeDir()
 	xdgConfig := os.Getenv("XDG_CONFIG_HOME")
 
-	var configDirs []string
+	var configDir string
 	if xdgConfig != "" {
-		configDirs = append(configDirs, filepath.Join(xdgConfig, "opencode"))
+		configDir = filepath.Join(xdgConfig, "opencode")
+	} else if userHome != "" {
+		configDir = filepath.Join(userHome, ".config", "opencode")
 	}
-	if userHome != "" {
-		configDirs = append(configDirs, filepath.Join(userHome, ".config", "opencode"))
+	if configDir == "" {
+		return make(map[string]any)
 	}
 
 	merged := make(map[string]any)
 	fileNames := []string{"config.json", "opencode.json", "opencode.jsonc"}
 
-	for _, dir := range configDirs {
-		for _, fn := range fileNames {
-			p := filepath.Join(dir, fn)
-			raw, err := os.ReadFile(p)
-			if err != nil {
-				continue
-			}
-			cleanJSON := stripJSONC(raw)
-			var data map[string]any
-			if err := json.Unmarshal(cleanJSON, &data); err == nil {
-				merged = deepMergeMaps(merged, data)
-			}
+	for _, fn := range fileNames {
+		p := filepath.Join(configDir, fn)
+		raw, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		cleanJSON := stripJSONC(raw)
+		var data map[string]any
+		if err := json.Unmarshal(cleanJSON, &data); err == nil {
+			merged = deepMergeMaps(merged, data)
 		}
 	}
 	return merged
@@ -563,7 +579,7 @@ func isReadOnlyRole(role RuntimeRole) bool {
 
 // isIsolatedRuntime 判定 Adapter 是否運行於隔離沙盒模式
 func isIsolatedRuntime(cfg AdapterConfig) bool {
-	return cfg.Isolated || isReadOnlyRole(cfg.Role) || cfg.ConfigDir != ""
+	return cfg.Isolated || isReadOnlyRole(cfg.Role)
 }
 
 // buildExecutionEnv 依據執行模式構建子進程環境變數：
@@ -579,6 +595,9 @@ func buildExecutionEnv(cfg AdapterConfig) []string {
 // buildStandardExecutionEnv 構建 Striker / Direct 模式之環境變數，維持向後相容
 func buildStandardExecutionEnv(cfg AdapterConfig) []string {
 	env := os.Environ()
+	if cfg.ConfigDir != "" {
+		env = setOrUpdateEnv(env, "OPENCODE_CONFIG_DIR", cfg.ConfigDir)
+	}
 	env = setOrUpdateEnv(env, "OPENCODE_DISABLE_AUTOUPDATE", "1")
 	if cfg.Pure {
 		env = setOrUpdateEnv(env, "OPENCODE_PURE", "1")
@@ -775,11 +794,35 @@ func isModelUsingProvider(selectedModel, providerName string) bool {
 	return strings.HasPrefix(selectedModel, providerName+"/")
 }
 
+// hasDynamicFileRef 遞迴檢查資料結構中是否包含 OpenCode 動態檔案代換語法（"{file:"）
+func hasDynamicFileRef(v any) bool {
+	switch val := v.(type) {
+	case string:
+		if strings.Contains(val, "{file:") {
+			return true
+		}
+	case map[string]any:
+		for _, child := range val {
+			if hasDynamicFileRef(child) {
+				return true
+			}
+		}
+	case []any:
+		for _, item := range val {
+			if hasDynamicFileRef(item) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // sanitizeProviderConfig 檢查並清洗 provider 設定：
-// 1. 若 provider 含有 "npm"，代表為 custom executable provider。
-// 2. 若 selectedModel 依賴該 executable provider，遵循 Fail-Closed 原則，拒絕啟動並回傳錯誤。
-// 3. 若 selectedModel 未使用該 provider，則從配置中排除，不複製進唯讀隔離環境。
-// 4. 確保複製進唯讀配置之 provider 僅為純資料屬性，杜絕任意代碼執行風險。
+// 1. 若 provider 含有動態檔案代換語法 "{file:"，遵循 Fail-Closed 原則，拒絕啟動並回傳錯誤。
+// 2. 若 provider 含有 "npm"，代表為 custom executable provider。
+// 3. 若 selectedModel 依賴該 executable provider，遵循 Fail-Closed 原則，拒絕啟動並回傳錯誤。
+// 4. 若 selectedModel 未使用該 provider，則從配置中排除，不複製進唯讀隔離環境。
+// 5. 確保複製進唯讀配置之 provider 僅為純資料屬性，杜絕任意代碼執行與外部檔案探測風險。
 func sanitizeProviderConfig(rawProvider any, selectedModel string) (map[string]any, error) {
 	if rawProvider == nil {
 		return nil, nil
@@ -792,6 +835,9 @@ func sanitizeProviderConfig(rawProvider any, selectedModel string) (map[string]a
 	cleanProviders := make(map[string]any)
 
 	for name, v := range provMap {
+		if hasDynamicFileRef(v) {
+			return nil, fmt.Errorf("provider %q contains forbidden dynamic file substitution ({file:...})", name)
+		}
 		if hasNPMField(v) {
 			if isModelUsingProvider(selectedModel, name) {
 				return nil, fmt.Errorf("custom executable provider %q with npm package is not allowed in read-only runtime", name)
