@@ -145,19 +145,9 @@ func CreateIsolatedReadOnlyConfigDir() (string, func(), error) {
 					baseData["provider"] = cleanProv
 				}
 			}
-		}
-
-		if baseData["model"] == nil && os.Getenv("OPENCODE_MODEL") != "" {
-			envModel := os.Getenv("OPENCODE_MODEL")
-			if hasUnsafeDynamicRef(envModel) {
-				_ = os.RemoveAll(dir)
-				return "", nil, fmt.Errorf("OPENCODE_MODEL %q contains forbidden dynamic substitution ({file:...} or {env:...})", envModel)
+			if mergedJSON, err := json.MarshalIndent(baseData, "", "  "); err == nil {
+				configContent = mergedJSON
 			}
-			baseData["model"] = envModel
-		}
-
-		if mergedJSON, err := json.MarshalIndent(baseData, "", "  "); err == nil {
-			configContent = mergedJSON
 		}
 	}
 
