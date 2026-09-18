@@ -160,8 +160,8 @@ type Registry interface {
 - **驗收編號**：`@MBACK-001`, `@MBACK-008`
 - **完成判準**：OpenCode Adapter 提供 `ID() = "opencode"`、宣告 `CapReadOnlySandbox`、`CapWorkspaceWrite`、`CapProcessCancellation`、`CapStructuredEvents`，並透過 `Run()` 傳回結構化 `ExecutionResult`。
 - **驗證**：`go test -v ./internal/backend/opencode/...`
-- **狀態**：📝 待實作
-- **證據**：-
+- **狀態**：✅ 已完成
+- **證據**：`internal/backend/opencode/adapter_backend_test.go` 通過 `TestAdapter_BackendInterface`，靜態確認實作 `backend.Backend` 介面（PASS）。
 
 #### Task 3.2 — 回歸驗證 Phase 3C asura-readonly 唯讀安全邊界
 - **產出與範圍**：`internal/backend/opencode/adapter_test.go`。
@@ -169,8 +169,8 @@ type Registry interface {
 - **驗收編號**：`@MBACK-001`, `@MBACK-008`
 - **完成判準**：Phase 3C 建立之 `asura-readonly` 攻擊性整合測試（寫入阻止、配置獨立性、環境變數消毒）全數保持 PASS。
 - **驗證**：`go test -v -run "TestReadOnly|TestAdapter" ./internal/backend/opencode/...`
-- **狀態**：📝 待實作
-- **證據**：-
+- **狀態**：✅ 已完成
+- **證據**：`internal/backend/opencode` 25 項測試全數 PASS（含 16 項 asura-readonly / isolated config 安全邊界測試）。
 
 ---
 
