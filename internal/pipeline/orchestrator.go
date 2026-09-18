@@ -81,10 +81,14 @@ func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, 
 		backendVer, _ = b.Version(ctx)
 	}
 
-	// Three-Face 模式 Capability Preflight (MBACK-008)
-	if mode == ModeThreeFace && activeBackend != nil {
-		if !activeBackend.HasCapability(backend.CapReadOnlySandbox) {
-			// 不支援唯讀沙箱安全能力，在 Oracle 啟動前 fail-closed 終止，0 模型呼叫
+	// 能力預檢 (Capability Preflight, MBACK-008)
+	if activeBackend != nil {
+		// 任何執行模式皆需要工作區寫入能力以供 Striker 執行
+		if !activeBackend.HasCapability(backend.CapWorkspaceWrite) {
+			return "", nil, fmt.Errorf("%w: backend %q does not support workspace write required for execution", backend.ErrUnsupportedCapability, activeBackend.ID())
+		}
+		// Three-Face 模式額外要求 Oracle 與 Critic 之唯讀沙箱安全能力
+		if mode == ModeThreeFace && !activeBackend.HasCapability(backend.CapReadOnlySandbox) {
 			return "", nil, fmt.Errorf("%w: backend %q does not support read-only sandbox required for Three-Face", backend.ErrUnsupportedCapability, activeBackend.ID())
 		}
 	}

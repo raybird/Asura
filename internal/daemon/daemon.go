@@ -207,8 +207,9 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 				}
 			},
 		})
+		opencodeLogicalBackend := opencode.NewRoleRoutingBackend(readOnlyAdapter, strikerAdapter)
 		reg := backend.NewRegistry()
-		_ = reg.Register(strikerAdapter)
+		_ = reg.Register(opencodeLogicalBackend)
 		if codexPath, err := exec.LookPath("codex"); err == nil && codexPath != "" {
 			_ = reg.Register(codex.NewAdapter(codex.AdapterConfig{
 				BinaryPath: codexPath,
@@ -221,13 +222,15 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 		orc := pipeline.NewOrchestrator(oracleStage, strikerStage, criticStage).WithRegistry(reg)
 
 		strikerRunner := func(ctx context.Context, ws, prompt string) (string, error) {
-			var activeBackend backend.Backend = strikerAdapter
+			backendID := "opencode"
 			if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
 				if t, err := store.GetTask(context.Background(), taskID); err == nil && t != nil && t.Backend != "" {
-					if regB, err := reg.Get(t.Backend); err == nil && regB != nil {
-						activeBackend = regB
-					}
+					backendID = t.Backend
 				}
+			}
+			activeBackend, err := reg.Get(backendID)
+			if err != nil {
+				return "", fmt.Errorf("backend preflight failed: %w", err)
 			}
 			res, err := activeBackend.Run(ctx, &backend.ExecutionRequest{
 				Role:      backend.RoleStriker,

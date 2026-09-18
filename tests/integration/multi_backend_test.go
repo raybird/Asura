@@ -284,25 +284,41 @@ func TestMBACK_002_ExplicitBackendCodex(t *testing.T) {
 	}
 }
 
-// @MBACK-003: 指定未知後端 --backend unknown_backend，在執行前 fail-closed 拒絕，0 進程與模型呼叫，不 fallback
+// @MBACK-003: 指定未知後端 --backend unknown_backend，在執行前 fail-closed 拒絕，0 進程與模型呼叫，不 fallback (Three-Face 與 Direct 模式)
 func TestMBACK_003_UnknownBackendFailClosed(t *testing.T) {
 	fix := setupMBACKFixture(t)
 
-	task, err := fix.client.Submit(context.Background(), engine.SubmitRequest{
+	// 1. Three-Face 模式未知後端
+	taskTF, err := fix.client.Submit(context.Background(), engine.SubmitRequest{
 		Workspace: fix.rootDir,
-		Prompt:    "run with unknown backend",
+		Prompt:    "run with unknown backend three-face",
 		Backend:   "unknown_backend",
 		Mode:      "three-face",
 	})
-
-	// 任務應立即失敗或在排程啟動時被 fail-closed 拒絕
 	if err == nil {
-		res := waitForTaskTerminalState(t, fix.client, task.ID, 3*time.Second)
+		res := waitForTaskTerminalState(t, fix.client, taskTF.ID, 3*time.Second)
 		if res.Status != storage.StatusFailed {
-			t.Errorf("expected task to fail for unknown backend, got %s", res.Status)
+			t.Errorf("expected three-face task to fail for unknown backend, got %s", res.Status)
 		}
 		if !strings.Contains(res.ErrorMessage, "backend preflight failed") && !strings.Contains(res.ErrorMessage, "not found") {
 			t.Errorf("expected error message to mention backend failure, got: %s", res.ErrorMessage)
+		}
+	}
+
+	// 2. Direct 模式未知後端 (MUST FIX 2: 無 silent fallback)
+	taskDirect, err := fix.client.Submit(context.Background(), engine.SubmitRequest{
+		Workspace: fix.rootDir,
+		Prompt:    "run with unknown backend direct",
+		Backend:   "unknown_backend",
+		Mode:      "direct",
+	})
+	if err == nil {
+		res := waitForTaskTerminalState(t, fix.client, taskDirect.ID, 3*time.Second)
+		if res.Status != storage.StatusFailed {
+			t.Errorf("expected direct task to fail for unknown backend, got %s", res.Status)
+		}
+		if !strings.Contains(res.ErrorMessage, "backend preflight failed") && !strings.Contains(res.ErrorMessage, "not found") {
+			t.Errorf("expected direct error message to mention backend failure, got: %s", res.ErrorMessage)
 		}
 	}
 
@@ -438,7 +454,14 @@ func TestMBACK_007_CancellationProcessGroup(t *testing.T) {
 	// 建立一個會長時間 sleep 的 fake codex binary
 	tmpDir := t.TempDir()
 	fakeBin := filepath.Join(tmpDir, "fake_codex.sh")
-	if err := os.WriteFile(fakeBin, []byte("#!/bin/sh\nsleep 10\n"), 0755); err != nil {
+	fakeScript := `#!/bin/sh
+if [ "$1" = "--version" ]; then
+    echo "codex-cli 0.155.0"
+    exit 0
+fi
+sleep 10
+`
+	if err := os.WriteFile(fakeBin, []byte(fakeScript), 0755); err != nil {
 		t.Fatalf("failed to create fake codex script: %v", err)
 	}
 
@@ -512,49 +535,91 @@ func TestMBACK_008_ThreeFaceCapabilityPreflight(t *testing.T) {
 	}
 }
 
-// @MBACK-009: PipelineTrace 完整記錄各 Stage 之 BackendID 與 Version
+// @MBACK-009: PipelineTrace 完整記錄各 Stage 之 BackendID 與 Version (支援 Three-Face 與 Direct 模式)
 func TestMBACK_009_PipelineTraceRecordsBackend(t *testing.T) {
 	fix := setupMBACKFixture(t)
 
-	task, err := fix.client.Submit(context.Background(), engine.SubmitRequest{
+	// 1. Three-Face 模式 Trace
+	taskTF, err := fix.client.Submit(context.Background(), engine.SubmitRequest{
 		Workspace: fix.rootDir,
-		Prompt:    "trace audit test",
+		Prompt:    "trace audit test three-face",
 		Backend:   "codex",
 		Mode:      "three-face",
 	})
 	if err != nil {
-		t.Fatalf("Submit failed: %v", err)
+		t.Fatalf("Submit three-face failed: %v", err)
 	}
 
-	res := waitForTaskTerminalState(t, fix.client, task.ID, 3*time.Second)
-	if res.Status != storage.StatusCompleted {
-		t.Fatalf("expected completed task, got %s", res.Status)
+	resTF := waitForTaskTerminalState(t, fix.client, taskTF.ID, 3*time.Second)
+	if resTF.Status != storage.StatusCompleted {
+		t.Fatalf("expected completed three-face task, got %s", resTF.Status)
 	}
 
-	if res.PipelineTrace == "" {
-		t.Fatalf("expected non-empty PipelineTrace")
+	if resTF.PipelineTrace == "" {
+		t.Fatalf("expected non-empty PipelineTrace in three-face")
 	}
 
-	var trace pipeline.PipelineTrace
-	if err := json.Unmarshal([]byte(res.PipelineTrace), &trace); err != nil {
+	var traceTF pipeline.PipelineTrace
+	if err := json.Unmarshal([]byte(resTF.PipelineTrace), &traceTF); err != nil {
 		t.Fatalf("unmarshal PipelineTrace failed: %v", err)
 	}
 
-	if trace.BackendID != "codex" {
-		t.Errorf("expected trace BackendID 'codex', got %q", trace.BackendID)
+	if traceTF.BackendID != "codex" {
+		t.Errorf("expected trace BackendID 'codex', got %q", traceTF.BackendID)
 	}
 
-	if len(trace.Stages) != 3 {
-		t.Fatalf("expected 3 stages in trace, got %d", len(trace.Stages))
+	if len(traceTF.Stages) != 3 {
+		t.Fatalf("expected 3 stages in three-face trace, got %d", len(traceTF.Stages))
 	}
 
-	for _, stage := range trace.Stages {
+	for _, stage := range traceTF.Stages {
 		if stage.BackendID != "codex" {
 			t.Errorf("stage %s: expected BackendID 'codex', got %q", stage.Name, stage.BackendID)
 		}
 		if stage.BackendVersion != "0.155.0" {
 			t.Errorf("stage %s: expected BackendVersion '0.155.0', got %q", stage.Name, stage.BackendVersion)
 		}
+	}
+
+	// 2. Direct 模式 Trace (MUST FIX 3: Direct 模式 trace 包含 BackendID 與 Version)
+	taskDirect, err := fix.client.Submit(context.Background(), engine.SubmitRequest{
+		Workspace: fix.rootDir,
+		Prompt:    "trace audit test direct",
+		Backend:   "codex",
+		Mode:      "direct",
+	})
+	if err != nil {
+		t.Fatalf("Submit direct failed: %v", err)
+	}
+
+	resDirect := waitForTaskTerminalState(t, fix.client, taskDirect.ID, 3*time.Second)
+	if resDirect.Status != storage.StatusCompleted {
+		t.Fatalf("expected completed direct task, got %s (err: %s)", resDirect.Status, resDirect.ErrorMessage)
+	}
+
+	if resDirect.PipelineTrace == "" {
+		t.Fatalf("expected non-empty PipelineTrace in direct mode")
+	}
+
+	var traceDirect pipeline.PipelineTrace
+	if err := json.Unmarshal([]byte(resDirect.PipelineTrace), &traceDirect); err != nil {
+		t.Fatalf("unmarshal direct PipelineTrace failed: %v", err)
+	}
+
+	if traceDirect.BackendID != "codex" {
+		t.Errorf("expected direct trace BackendID 'codex', got %q", traceDirect.BackendID)
+	}
+	if len(traceDirect.Stages) != 1 {
+		t.Fatalf("expected 1 stage in direct trace, got %d", len(traceDirect.Stages))
+	}
+	if traceDirect.Stages[0].Name != "striker" {
+		t.Errorf("expected stage name 'striker', got %q", traceDirect.Stages[0].Name)
+	}
+	if traceDirect.Stages[0].BackendID != "codex" {
+		t.Errorf("direct stage: expected BackendID 'codex', got %q", traceDirect.Stages[0].BackendID)
+	}
+	if traceDirect.Stages[0].BackendVersion != "0.155.0" {
+		t.Errorf("direct stage: expected BackendVersion '0.155.0', got %q", traceDirect.Stages[0].BackendVersion)
 	}
 }
 
@@ -710,3 +775,83 @@ func TestMBACK_012_QueueWakePreservesBackend(t *testing.T) {
 		t.Errorf("expected codex to be called for task 2, got 0")
 	}
 }
+
+// TestMBACK_OpenCode_RoleRouting_Separation 驗證 OpenCode 後端在 Three-Face 模式下，
+// Oracle 與 Critic 嚴格路由至 readOnlyAdapter，Striker 嚴格路由至 strikerAdapter (MUST FIX 1)
+func TestMBACK_OpenCode_RoleRouting_Separation(t *testing.T) {
+	roMock := &mockTrackableBackend{
+		id:      "opencode-ro",
+		version: "1.18.31",
+		caps: []backend.Capability{
+			backend.CapReadOnlySandbox,
+			backend.CapWorkspaceWrite,
+			backend.CapProcessCancellation,
+			backend.CapStructuredEvents,
+		},
+	}
+	strikerMock := &mockTrackableBackend{
+		id:      "opencode-striker",
+		version: "1.18.31",
+		caps: []backend.Capability{
+			backend.CapReadOnlySandbox,
+			backend.CapWorkspaceWrite,
+			backend.CapProcessCancellation,
+			backend.CapStructuredEvents,
+		},
+	}
+
+	roleRouting := opencode.NewRoleRoutingBackend(roMock, strikerMock)
+
+	fix := setupMBACKFixture(t, func(f *mbackTestFixture) {
+		// 將 registry 內的 "opencode" 替換為 roleRouting
+		f.reg.Unregister("opencode")
+		_ = f.reg.Register(roleRouting)
+	})
+
+	task, err := fix.client.Submit(context.Background(), engine.SubmitRequest{
+		Workspace: fix.rootDir,
+		Prompt:    "test role routing separation",
+		Backend:   "opencode",
+		Mode:      "three-face",
+	})
+	if err != nil {
+		t.Fatalf("Submit failed: %v", err)
+	}
+
+	res := waitForTaskTerminalState(t, fix.client, task.ID, 3*time.Second)
+	if res.Status != storage.StatusCompleted {
+		t.Fatalf("expected task completed, got %s (err: %s)", res.Status, res.ErrorMessage)
+	}
+
+	// 核心安全斷言：
+	// 1. readOnlyAdapter 必須被調用 2 次 (Oracle 與 Critic)
+	// 2. strikerAdapter 必須被調用 1 次 (Striker)
+	// 3. readOnlyAdapter 的調用角色只能是 Oracle 或 Critic
+	// 4. strikerAdapter 的調用角色只能是 Striker
+	roCalls := atomic.LoadInt32(&roMock.calls)
+	strikerCalls := atomic.LoadInt32(&strikerMock.calls)
+
+	if roCalls != 2 {
+		t.Errorf("expected readOnlyAdapter to be called exactly 2 times (Oracle+Critic), got %d", roCalls)
+	}
+	if strikerCalls != 1 {
+		t.Errorf("expected strikerAdapter to be called exactly 1 time (Striker), got %d", strikerCalls)
+	}
+
+	roMock.mu.Lock()
+	for _, role := range roMock.callRoles {
+		if role != backend.RoleOracle && role != backend.RoleCritic {
+			t.Errorf("readOnlyAdapter called with invalid role: %s", role)
+		}
+	}
+	roMock.mu.Unlock()
+
+	strikerMock.mu.Lock()
+	for _, role := range strikerMock.callRoles {
+		if role != backend.RoleStriker {
+			t.Errorf("strikerAdapter called with non-striker role: %s", role)
+		}
+	}
+	strikerMock.mu.Unlock()
+}
+

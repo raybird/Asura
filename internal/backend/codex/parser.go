@@ -41,7 +41,9 @@ func ExtractResultAndEvents(rawStdout, rawStderr string) (output string, partial
 	hasAuth := false
 	hasRateLimit := false
 
+	const maxScanCapacity = 4 * 1024 * 1024 // 4MB 支援大型代碼/事件串流輸出
 	scanner := bufio.NewScanner(strings.NewReader(rawStdout))
+	scanner.Buffer(make([]byte, 64*1024), maxScanCapacity)
 	for scanner.Scan() {
 		line := scanner.Text()
 		evt, pErr := ParseJSONLLine(line)
@@ -98,11 +100,18 @@ func ExtractResultAndEvents(rawStdout, rawStderr string) (output string, partial
 			}
 		}
 	}
+	if scanErr := scanner.Err(); scanErr != nil && lastErr == "" {
+		lastErr = fmt.Sprintf("stdout scanner error: %v", scanErr)
+	}
 
 	// 亦掃描 stderr
 	stderrScanner := bufio.NewScanner(strings.NewReader(rawStderr))
+	stderrScanner.Buffer(make([]byte, 64*1024), maxScanCapacity)
 	for stderrScanner.Scan() {
 		checkErrorLine(stderrScanner.Text(), &hasAuth, &hasRateLimit, &lastErr)
+	}
+	if scanErr := stderrScanner.Err(); scanErr != nil && lastErr == "" {
+		lastErr = fmt.Sprintf("stderr scanner error: %v", scanErr)
 	}
 
 	extracted := strings.TrimSpace(sb.String())

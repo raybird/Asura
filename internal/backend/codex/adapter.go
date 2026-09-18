@@ -17,6 +17,8 @@ import (
 var (
 	// ErrNoBinary 代表找不到合格的 Codex binary
 	ErrNoBinary = errors.New("codex binary not found")
+	// ErrVersionMismatch 代表 Codex binary 版本不符合固定契約
+	ErrVersionMismatch = errors.New("unsupported codex version")
 	// ErrExecutionFailed 代表 Codex 執行非零退出
 	ErrExecutionFailed = errors.New("codex execution failed")
 )
@@ -73,6 +75,18 @@ func (a *Adapter) Version(ctx context.Context) (string, error) {
 	return ver, nil
 }
 
+// ValidateVersion 嚴格校驗目前 Codex binary 版本是否符合 ExpectedVersion 契約
+func (a *Adapter) ValidateVersion(ctx context.Context) error {
+	ver, err := a.Version(ctx)
+	if err != nil {
+		return err
+	}
+	if a.cfg.ExpectedVersion != "" && !strings.Contains(ver, a.cfg.ExpectedVersion) {
+		return fmt.Errorf("%w: expected %s, got %s", ErrVersionMismatch, a.cfg.ExpectedVersion, ver)
+	}
+	return nil
+}
+
 // Capabilities 回傳 Codex CLI 支援的能力清單 (MBACK-008)
 func (a *Adapter) Capabilities() []backend.Capability {
 	return []backend.Capability{
@@ -100,6 +114,19 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 	}
 
 	startedAt := time.Now()
+
+	// 嚴格校驗版本 (MUST FIX 4)：版本不符時立即終止，0 執行進程調用
+	if a.cfg.ExpectedVersion != "" {
+		if err := a.ValidateVersion(ctx); err != nil {
+			return &backend.ExecutionResult{
+				BackendID:    "codex",
+				FailureClass: backend.FailureUnavailable,
+				StartedAt:    startedAt,
+				CompletedAt:  time.Now(),
+			}, backend.NewExecutionError("codex", backend.FailureUnavailable, err, "")
+		}
+	}
+
 	binPath := a.cfg.BinaryPath
 	if binPath == "" {
 		p, err := exec.LookPath("codex")

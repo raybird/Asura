@@ -18,6 +18,8 @@ type Registry interface {
 	Default() Backend
 	// SetDefault 設定預設後端 ID
 	SetDefault(id string) error
+	// Unregister 註銷指定後端 ID
+	Unregister(id string)
 }
 
 // InMemoryRegistry 實作線程安全的記憶體後端註冊表
@@ -56,6 +58,17 @@ func (r *InMemoryRegistry) Register(b Backend) error {
 		r.defaultName = id
 	}
 	return nil
+}
+
+// Unregister 註銷後端
+func (r *InMemoryRegistry) Unregister(id string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	delete(r.backends, id)
+	if r.defaultName == id {
+		r.defaultName = ""
+	}
 }
 
 // Get 取得指定後端，查無後端時返回 ErrBackendNotFound
