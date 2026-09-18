@@ -57,11 +57,14 @@ go build -o bin/asura ./cmd/asura
 
 #### 提交自然語言 AI 任務 (ask)
 ```bash
-# 透過 Daemon 中樞提交 AI 任務（非同步接受立即回傳 Task ID，斷線不中斷，預設 direct 模式）
+# 透過 Daemon 中樞提交 AI 任務（非同步接受立即回傳 Task ID，斷線不中斷，預設 direct 模式、opencode 後端）
 ./bin/asura ask --socket /tmp/asura.sock --workspace /path/to/project "分析專案代碼並整理函式呼叫圖"
 
 # 啟用 Three-Face 固定管線模式（Oracle 規劃 → Striker 執行 → Critic 審查）
 ./bin/asura ask --socket /tmp/asura.sock --workspace /path/to/project --mode three-face "重構認證模組並補齊測試"
+
+# 指定後端執行器（支援 opencode、codex，預設 opencode）
+./bin/asura ask --socket /tmp/asura.sock --workspace /path/to/project --backend codex "修復單元測試"
 
 # 提交並等待任務完成輸出結果
 ./bin/asura ask --socket /tmp/asura.sock --workspace /path/to/project --wait "執行測試並回報結果"
@@ -69,19 +72,22 @@ go build -o bin/asura ./cmd/asura
 
 #### 本機直接執行指令 (run)
 ```bash
-# 本機直接執行 shell 指令並追蹤任務（預設 direct 模式）
+# 本機直接執行指令並追蹤任務（預設 direct 模式、opencode 後端）
 ./bin/asura run \
   --workspace /path/to/project \
   --allowed-roots /path/to/project \
   "echo 'Hello Asura'"
 
-# 指定以 Three-Face 模式執行
+# 指定以 Three-Face 模式與指定後端執行
 ./bin/asura run \
   --workspace /path/to/project \
   --allowed-roots /path/to/project \
+  --backend codex \
   --mode three-face \
   "make test"
 ```
+
+2026-09-18：`ask` 與 `run` 支援 `--backend opencode|codex` 旗標（未指定預設為 `opencode`）。指定未知後端時將立即 fail-closed 拒絕，0 模型調用且絕不自動切換。Three-Face 模式下後端須支援唯讀沙箱（`CapReadOnlySandbox`），若能力不符立即拒絕。任務執行期間若部分失敗，保存現場並標記 Failed，絕無第二次自動容錯嘗試（No Automatic Failover）。
 
 #### 查詢任務狀態 (status)
 ```bash
