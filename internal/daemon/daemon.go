@@ -174,6 +174,7 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 			Agent:                opencode.AsuraReadOnlyAgentName,
 			Pure:                 true,
 			DisableProjectConfig: true,
+			Isolated:             true,
 			OnProcessStarted: func(ctx context.Context, pgid int) {
 				if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
 					_ = store.UpdateTaskPGID(context.Background(), taskID, pgid)

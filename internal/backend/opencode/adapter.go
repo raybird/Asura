@@ -55,10 +55,11 @@ const AsuraReadOnlyConfigJSON = `{
   }
 }`
 
-// CreateIsolatedReadOnlyConfigDir 建立包含 asura-readonly agent 的獨立配置目錄與乾淨 home 隔離空間
+// CreateIsolatedReadOnlyConfigDir 建立包含 asura-readonly agent 的獨立配置目錄、乾淨 home 隔離空間與消毒憑證目錄
 // 目錄結構包含：
-//   - <dir>/opencode/opencode.json (只定義 asura-readonly primary agent)
+//   - <dir>/opencode/opencode.json (只定義 asura-readonly primary agent，並安全繼承全域 provider 與 model)
 //   - <dir>/home (乾淨空目錄，用於隔離 HOME/.opencode)
+//   - <dir>/data/opencode/auth.json (消毒後之憑證複本，保留合法 API/OAuth 金鑰，徹底排除可能注入遠端配置之 wellknown 型別)
 // 回傳目錄路徑與清理函式，供 Oracle 與 Critic 唯讀階段使用，免受外部、全域或專案設定污染
 func CreateIsolatedReadOnlyConfigDir() (string, func(), error) {
 	dir, err := os.MkdirTemp("", "asura-opencode-readonly-*")
@@ -75,40 +76,53 @@ func CreateIsolatedReadOnlyConfigDir() (string, func(), error) {
 		_ = os.RemoveAll(dir)
 		return "", nil, fmt.Errorf("create isolated home dir: %w", err)
 	}
-	// 預設純 Asura 唯讀配置
+	dataOpencodeDir := filepath.Join(dir, "data", "opencode")
+	if err := os.MkdirAll(dataOpencodeDir, 0700); err != nil {
+		_ = os.RemoveAll(dir)
+		return "", nil, fmt.Errorf("create isolated data/opencode dir: %w", err)
+	}
+
+	// 1. 消毒並複製使用者真實 auth.json：保留 api/oauth 憑證，徹底剔除 wellknown 遠端注入風險
+	realAuthPath := findRealAuthJSONPath()
+	if realAuthPath != "" {
+		if rawAuthBytes, err := os.ReadFile(realAuthPath); err == nil {
+			var rawAuth map[string]any
+			if err := json.Unmarshal(stripJSONC(rawAuthBytes), &rawAuth); err == nil {
+				cleanAuth := sanitizeAuthData(rawAuth)
+				if cleanAuthBytes, err := json.MarshalIndent(cleanAuth, "", "  "); err == nil {
+					_ = os.WriteFile(filepath.Join(dataOpencodeDir, "auth.json"), cleanAuthBytes, 0600)
+				}
+			}
+		}
+	}
+
+	// 2. 預設純 Asura 唯讀配置
 	configContent := []byte(AsuraReadOnlyConfigJSON)
 
-	// 若使用者全域環境存在 opencode.jsonc / opencode.json / config.json，安全提取 provider 與 model 設定以確保模型調用能力，
-	// 但嚴格過濾、排除任何 agent、permission、mcp、plugin 污染，並杜絕帶有 npm package 之 custom executable provider
-	globalCfgPath := findGlobalOpenCodeConfigPath()
-	if globalCfgPath != "" {
-		if rawGlobal, err := os.ReadFile(globalCfgPath); err == nil {
-			cleanJSON := stripJSONC(rawGlobal)
-			var globalData map[string]any
-			if err := json.Unmarshal(cleanJSON, &globalData); err == nil {
-				var baseData map[string]any
-				if err := json.Unmarshal([]byte(AsuraReadOnlyConfigJSON), &baseData); err == nil {
-					var selectedModel string
-					if m, ok := globalData["model"].(string); ok {
-						selectedModel = m
-						baseData["model"] = m
-					}
+	// 3. 依 OpenCode 順序載入並合併全域配置 (config.json -> opencode.json -> opencode.jsonc)
+	globalData := loadGlobalOpenCodeConfig()
+	if len(globalData) > 0 {
+		var baseData map[string]any
+		if err := json.Unmarshal([]byte(AsuraReadOnlyConfigJSON), &baseData); err == nil {
+			var selectedModel string
+			if m, ok := globalData["model"].(string); ok {
+				selectedModel = m
+				baseData["model"] = m
+			}
 
-					if p, ok := globalData["provider"]; ok {
-						cleanProv, err := sanitizeProviderConfig(p, selectedModel)
-						if err != nil {
-							_ = os.RemoveAll(dir)
-							return "", nil, fmt.Errorf("sanitize provider config: %w", err)
-						}
-						if len(cleanProv) > 0 {
-							baseData["provider"] = cleanProv
-						}
-					}
-
-					if mergedJSON, err := json.MarshalIndent(baseData, "", "  "); err == nil {
-						configContent = mergedJSON
-					}
+			if p, ok := globalData["provider"]; ok {
+				cleanProv, err := sanitizeProviderConfig(p, selectedModel)
+				if err != nil {
+					_ = os.RemoveAll(dir)
+					return "", nil, fmt.Errorf("sanitize provider config: %w", err)
 				}
+				if len(cleanProv) > 0 {
+					baseData["provider"] = cleanProv
+				}
+			}
+
+			if mergedJSON, err := json.MarshalIndent(baseData, "", "  "); err == nil {
+				configContent = mergedJSON
 			}
 		}
 	}
@@ -135,6 +149,7 @@ type AdapterConfig struct {
 	Agent                string
 	Pure                 bool
 	DisableProjectConfig bool
+	Isolated             bool // 標記此 Adapter 是否為受隔離的唯讀沙盒環境
 	OnProcessStarted     func(ctx context.Context, pgid int)
 	OnProcessExited      func(ctx context.Context, pgid int)
 }
@@ -395,10 +410,126 @@ func setOrUpdateEnv(env []string, key, val string) []string {
 	return append(env, entry)
 }
 
-// DisallowedReadOnlyEnvKeys 定義在唯讀/隔離執行時嚴格禁止繼承的環境變數鍵值（防止外部配置與權限注入）
+// findRealAuthJSONPath 尋找本機既有真實之 auth.json 路徑
+func findRealAuthJSONPath() string {
+	realHome, _ := os.UserHomeDir()
+	dataHome := os.Getenv("XDG_DATA_HOME")
+	if dataHome == "" && realHome != "" {
+		dataHome = filepath.Join(realHome, ".local", "share")
+	}
+	if dataHome != "" {
+		p := filepath.Join(dataHome, "opencode", "auth.json")
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+			return p
+		}
+	}
+	return ""
+}
+
+// sanitizeAuthData 過濾 auth 設定，保留合法憑證（api, oauth 等），徹底剔除帶有 "wellknown" 遠端配置注入風險之項目
+func sanitizeAuthData(rawAuth map[string]any) map[string]any {
+	cleanAuth := make(map[string]any)
+	for key, val := range rawAuth {
+		valMap, ok := val.(map[string]any)
+		if !ok {
+			cleanAuth[key] = val
+			continue
+		}
+		if t, ok := valMap["type"].(string); ok && strings.EqualFold(t, "wellknown") {
+			continue
+		}
+		if hasWellknownField(valMap) {
+			continue
+		}
+		cleanAuth[key] = val
+	}
+	return cleanAuth
+}
+
+// hasWellknownField 遞迴檢查是否包含任何 wellknown 型別或欄位
+func hasWellknownField(v any) bool {
+	switch val := v.(type) {
+	case map[string]any:
+		for k, child := range val {
+			if strings.EqualFold(k, "wellknown") {
+				return true
+			}
+			if strings.EqualFold(k, "type") && strings.EqualFold(fmt.Sprintf("%v", child), "wellknown") {
+				return true
+			}
+			if hasWellknownField(child) {
+				return true
+			}
+		}
+	case []any:
+		for _, item := range val {
+			if hasWellknownField(item) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// deepMergeMaps 遞迴合併兩個 map，以 src 之鍵值覆寫 dst
+func deepMergeMaps(dst, src map[string]any) map[string]any {
+	if dst == nil {
+		dst = make(map[string]any)
+	}
+	for k, sv := range src {
+		if dv, ok := dst[k]; ok {
+			dvMap, dvOk := dv.(map[string]any)
+			svMap, svOk := sv.(map[string]any)
+			if dvOk && svOk {
+				dst[k] = deepMergeMaps(dvMap, svMap)
+				continue
+			}
+		}
+		dst[k] = sv
+	}
+	return dst
+}
+
+// loadGlobalOpenCodeConfig 依 OpenCode 順序載入並合併全域配置：config.json -> opencode.json -> opencode.jsonc
+func loadGlobalOpenCodeConfig() map[string]any {
+	userHome, _ := os.UserHomeDir()
+	xdgConfig := os.Getenv("XDG_CONFIG_HOME")
+
+	var configDirs []string
+	if xdgConfig != "" {
+		configDirs = append(configDirs, filepath.Join(xdgConfig, "opencode"))
+	}
+	if userHome != "" {
+		configDirs = append(configDirs, filepath.Join(userHome, ".config", "opencode"))
+	}
+
+	merged := make(map[string]any)
+	fileNames := []string{"config.json", "opencode.json", "opencode.jsonc"}
+
+	for _, dir := range configDirs {
+		for _, fn := range fileNames {
+			p := filepath.Join(dir, fn)
+			raw, err := os.ReadFile(p)
+			if err != nil {
+				continue
+			}
+			cleanJSON := stripJSONC(raw)
+			var data map[string]any
+			if err := json.Unmarshal(cleanJSON, &data); err == nil {
+				merged = deepMergeMaps(merged, data)
+			}
+		}
+	}
+	return merged
+}
+
+// DisallowedReadOnlyEnvKeys 定義在唯讀/隔離執行時嚴格禁止繼承的環境變數鍵值（相容舊有輔助參考）
 var DisallowedReadOnlyEnvKeys = []string{
 	"OPENCODE_CONFIG",
 	"OPENCODE_CONFIG_CONTENT",
+	"OPENCODE_AUTH_CONTENT",
+	"OPENCODE_MODELS_PATH",
+	"OPENCODE_MODELS_URL",
 }
 
 // removeEnv 從環境變數切片中移除特定鍵（不區分大小寫匹配 key= 前綴）
@@ -425,36 +556,79 @@ func removeEnv(env []string, keys ...string) []string {
 	return result
 }
 
-// buildExecutionEnv 根據 AdapterConfig 構建乾淨、無未授權配置注入的子進程環境變數
+// isReadOnlyRole 判斷角色是否為唯讀角色（Oracle, Critic）
+func isReadOnlyRole(role RuntimeRole) bool {
+	return role == RoleOracle || role == RoleCritic
+}
+
+// isIsolatedRuntime 判定 Adapter 是否運行於隔離沙盒模式
+func isIsolatedRuntime(cfg AdapterConfig) bool {
+	return cfg.Isolated || isReadOnlyRole(cfg.Role) || cfg.ConfigDir != ""
+}
+
+// buildExecutionEnv 依據執行模式構建子進程環境變數：
+// - 唯讀/隔離沙盒（Oracle/Critic）：徹底切斷外部 OPENCODE_* 變數、重設 isolated data/home/config 路徑空間，杜絕配置注入與權限逃逸
+// - 一般/核准模式（Striker/Direct）：完整保留既有 OpenCode 環境變數（包含使用者的 OPENCODE_CONFIG / OPENCODE_CONFIG_CONTENT），維持既有語意
 func buildExecutionEnv(cfg AdapterConfig) []string {
+	if isIsolatedRuntime(cfg) {
+		return buildReadOnlyExecutionEnv(cfg)
+	}
+	return buildStandardExecutionEnv(cfg)
+}
+
+// buildStandardExecutionEnv 構建 Striker / Direct 模式之環境變數，維持向後相容
+func buildStandardExecutionEnv(cfg AdapterConfig) []string {
 	env := os.Environ()
+	env = setOrUpdateEnv(env, "OPENCODE_DISABLE_AUTOUPDATE", "1")
+	if cfg.Pure {
+		env = setOrUpdateEnv(env, "OPENCODE_PURE", "1")
+	}
+	if cfg.DisableProjectConfig {
+		env = setOrUpdateEnv(env, "OPENCODE_DISABLE_PROJECT_CONFIG", "1")
+	}
+	if cfg.Permission != "" {
+		env = setOrUpdateEnv(env, "OPENCODE_PERMISSION", cfg.Permission)
+	}
+	return env
+}
 
-	// 1. 強制清除任何外部配置注入標記，杜絕 OPENCODE_CONFIG 與 OPENCODE_CONFIG_CONTENT 越權
-	env = removeEnv(env, DisallowedReadOnlyEnvKeys...)
-	env = removeEnv(env, "OPENCODE_PERMISSION")
+// buildReadOnlyExecutionEnv 構建 Oracle / Critic 之隔離沙盒環境變數
+func buildReadOnlyExecutionEnv(cfg AdapterConfig) []string {
+	rawEnv := os.Environ()
+	env := make([]string, 0, len(rawEnv))
 
-	// 2. 若指定了隔離配置目錄，重設 XDG 與 HOME 空間，切斷未受管配置
+	// 1. 白名單式安全過濾：徹底剔除所有外部 OPENCODE_* 變數，杜絕任何未經受管的配置/目錄/模型/憑證注入通道
+	//    同時過濾外部 XDG_CONFIG_HOME、HOME、XDG_DATA_HOME
+	for _, entry := range rawEnv {
+		parts := strings.SplitN(entry, "=", 2)
+		if len(parts) == 0 {
+			continue
+		}
+		k := strings.ToUpper(parts[0])
+		if strings.HasPrefix(k, "OPENCODE_") {
+			continue // 徹底封鎖外部未受管的 OPENCODE_* 注入（如 OPENCODE_CONFIG, OPENCODE_AUTH_CONTENT, OPENCODE_MODELS_PATH 等）
+		}
+		if k == "XDG_CONFIG_HOME" || k == "HOME" || k == "XDG_DATA_HOME" {
+			continue
+		}
+		env = append(env, entry)
+	}
+
+	// 2. 注入 Asura 隔離沙盒專屬路徑空間
 	if cfg.ConfigDir != "" {
 		opencodeSubdir := filepath.Join(cfg.ConfigDir, "opencode")
 		homeSubdir := filepath.Join(cfg.ConfigDir, "home")
-		if _, err := os.Stat(opencodeSubdir); err == nil {
-			env = setOrUpdateEnv(env, "XDG_CONFIG_HOME", cfg.ConfigDir)
-			env = setOrUpdateEnv(env, "HOME", homeSubdir)
-			env = setOrUpdateEnv(env, "OPENCODE_CONFIG_DIR", opencodeSubdir)
-			realHome, _ := os.UserHomeDir()
-			dataHome := os.Getenv("XDG_DATA_HOME")
-			if dataHome == "" && realHome != "" {
-				dataHome = filepath.Join(realHome, ".local", "share")
-			}
-			if dataHome != "" {
-				env = setOrUpdateEnv(env, "XDG_DATA_HOME", dataHome)
-			}
-		} else {
-			env = setOrUpdateEnv(env, "OPENCODE_CONFIG_DIR", cfg.ConfigDir)
+		dataSubdir := filepath.Join(cfg.ConfigDir, "data")
+
+		env = setOrUpdateEnv(env, "XDG_CONFIG_HOME", cfg.ConfigDir)
+		env = setOrUpdateEnv(env, "HOME", homeSubdir)
+		env = setOrUpdateEnv(env, "OPENCODE_CONFIG_DIR", opencodeSubdir)
+		if _, err := os.Stat(dataSubdir); err == nil {
+			env = setOrUpdateEnv(env, "XDG_DATA_HOME", dataSubdir)
 		}
 	}
 
-	// 3. 設定核心保護標記
+	// 3. 注入 Asura 明確受控之核心保護標記
 	env = setOrUpdateEnv(env, "OPENCODE_DISABLE_AUTOUPDATE", "1")
 	if cfg.Pure {
 		env = setOrUpdateEnv(env, "OPENCODE_PURE", "1")
@@ -466,34 +640,7 @@ func buildExecutionEnv(cfg AdapterConfig) []string {
 		env = setOrUpdateEnv(env, "OPENCODE_PERMISSION", cfg.Permission)
 	}
 
-	// 4. 最後防線：再次過濾禁止繼承的環境變數，確保絕對不殘留
-	return removeEnv(env, DisallowedReadOnlyEnvKeys...)
-}
-
-// findGlobalOpenCodeConfigPath 搜尋全域配置路徑，優先順序：opencode.jsonc -> opencode.json -> config.json
-func findGlobalOpenCodeConfigPath() string {
-	userHome, _ := os.UserHomeDir()
-	xdgConfig := os.Getenv("XDG_CONFIG_HOME")
-
-	var configDirs []string
-	if xdgConfig != "" {
-		configDirs = append(configDirs, filepath.Join(xdgConfig, "opencode"))
-	}
-	if userHome != "" {
-		configDirs = append(configDirs, filepath.Join(userHome, ".config", "opencode"))
-	}
-
-	fileNames := []string{"opencode.jsonc", "opencode.json", "config.json"}
-
-	for _, dir := range configDirs {
-		for _, fn := range fileNames {
-			p := filepath.Join(dir, fn)
-			if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
-				return p
-			}
-		}
-	}
-	return ""
+	return env
 }
 
 // stripJSONC 清除 JSONC 註解（// ... 與 /* ... */）及尾隨逗號（trailing comma before } or ]），
