@@ -180,7 +180,7 @@ Feature: Multi-Backend Foundation (OpenCode + Codex CLI)
 
 ## Gherkin 核准紀錄
 
-- **核准 commit**: 待提交
+- **核准 commit**: 37a2084
 - **核准來源**: 使用者於 2026-09-18 對話明確核准（原話：「核准」）
 
 | Scenario | 核准日期 | 狀態 |
