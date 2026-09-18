@@ -138,8 +138,8 @@ type Registry interface {
 - **驗收編號**：`@MBACK-001`, `@MBACK-006`, `@MBACK-011`
 - **完成判準**：定義 `Backend`、`Registry`、`Role`、`Capability`、`FailureClassification`、`Event`，並包含完整的單元測試與 JSON 序列化驗證。
 - **驗證**：`go test -v ./internal/backend/...`
-- **狀態**：📝 待實作
-- **證據**：-
+- **狀態**：✅ 已完成
+- **證據**：`internal/backend/backend_test.go` 通過 `TestExecutionRequest_JSON`, `TestExecutionResult_JSON`, `TestExecutionError`（PASS）。
 
 #### Task 2.2 — 記憶體 BackendRegistry 實作與未註冊後端 Fail-Closed
 - **產出與範圍**：`internal/backend/registry.go`、`internal/backend/registry_test.go`。
@@ -147,8 +147,8 @@ type Registry interface {
 - **驗收編號**：`@MBACK-003`
 - **完成判準**：實作 Thread-safe `BackendRegistry`，支援註冊、查詢與預設後端；查詢未知後端時明確返回 `ErrBackendNotFound`，禁止 fallback。
 - **驗證**：單元測試驗證註冊成功、覆蓋拒絕、未知查詢錯誤且模型呼叫為 0。
-- **狀態**：📝 待實作
-- **證據**：-
+- **狀態**：✅ 已完成
+- **證據**：`internal/backend/registry_test.go` 通過 `TestRegistry_RegisterAndGet`（驗證 ErrBackendNotFound fail-closed）與 `TestRegistry_Concurrency`（並行安全）（PASS）。
 
 ---
 
