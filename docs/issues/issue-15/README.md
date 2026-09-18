@@ -17,6 +17,7 @@
 - [requirement-analysis.md](./requirement-analysis.md)
 - [technical-analysis.md](./technical-analysis.md)
 - [implementation-plan.md](./implementation-plan.md)
+- [review-af3a43e.md](./review-af3a43e.md)
 
 ## 快速導覽
 
@@ -238,10 +239,11 @@ Feature: Multi-Backend Foundation (OpenCode + Codex CLI)
 | 2026-09-18 | 建立 Issue 15 架構規範、需求分析、技術分析與實作計畫初稿 | - |
 | 2026-09-18 | 使用者核准 MBACK-001 ～ MBACK-012 全部驗收劇本 | - |
 | 2026-09-18 | 完成 Phase 1 ~ Phase 8 全數實作，通過 MBACK-001 至 MBACK-012 外迴圈驗收與全系統回歸 | - |
-| 2026-09-18 | 獨立代碼審查完成，產出審查報告 review-45468c3.md（PASS） | - |
+| 2026-09-18 | 針對審查提出的 4 MUST FIX + 2 SHOULD FIX 徹底完成架構修復與測試補齊，產出審查報告 review-af3a43e.md（PASS） | - |
 
 ---
 **建立日期**: 2026-09-18  
 **分級**: Large  
 **風險**: High  
 **狀態**: 待合併
+
