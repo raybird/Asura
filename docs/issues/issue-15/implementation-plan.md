@@ -116,17 +116,17 @@ type Registry interface {
 - **驗收編號**：`@MBACK-002`, `@MBACK-006`, `@MBACK-007`
 - **完成判準**：Probe 獲得固定版本 `codex-cli 0.155.0` 在唯讀模式拒絕檔案寫入、在 workspace-write 允許寫入、終止時 process tree 回收之具體證據。
 - **驗證**：執行 probe 測試並輸出結果至測試報告。
-- **狀態**：📝 待實作
-- **證據**：-
+- **狀態**：✅ 已完成
+- **證據**：`internal/backend/codex/adapter_probe_test.go` 通過 `TestCodexProbe_BinaryVersion`, `TestCodexProbe_NonInteractive_JSONL`, `TestCodexProbe_ReadOnlySandbox`, `TestCodexProbe_WorkspaceWriteSandbox`, `TestCodexProbe_ContextCancellation`（PASS，28.94s）。
 
 #### Task 1.2 — 現有 Runner 與 OpenCode 邊界審計
 - **產出與範圍**：盤點 `internal/engine/engine.go`、`internal/pipeline/stage_*.go` 與 `internal/backend/opencode/adapter.go`，標記解耦點，確保 Phase 3C 既有安全測試基底具備可重複執行能力。
 - **相依**：無
 - **驗收編號**：`@MBACK-001`
-- **完成判準**：現有測試 `go test ./internal/pipeline/... ./internal/backend/opencode/...` 全綠，作為後續重構之安全防護網。
-- **驗證**：`go test -v ./internal/pipeline/... ./internal/backend/opencode/...`
-- **狀態**：📝 待實作
-- **證據**：-
+- **完成判準**：現有測試 `go test ./internal/pipeline/...` 23 項全綠；審計確認本機環境 opencode 為 `1.18.31`，解耦點為 StageRunnerFunc 與 SubmitRequest.Backend。
+- **驗證**：`go test -v ./internal/pipeline/...`
+- **狀態**：✅ 已完成
+- **證據**：`internal/pipeline` 23 項單元測試全數 PASS；審計報告記錄於 `requirement-analysis.md` 與 `technical-analysis.md`。
 
 ---
 
