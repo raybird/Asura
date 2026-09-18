@@ -180,10 +180,10 @@ type Registry interface {
 - **產出與範圍**：`internal/backend/codex/adapter.go`、`internal/backend/codex/adapter_test.go`。
 - **相依**：Task 1.1, Task 2.1
 - **驗收編號**：`@MBACK-002`, `@MBACK-007`
-- **完成判準**：實作 `codex.Adapter`，依 Role 配置適當參數（Oracle/Critic 使用 `-s read-only`，Striker 使用 `-s workspace-write`）；Context Cancel 時透過獨立 Process Group 向進程樹發送 SIGKILL 回收。
+- **完成判準**：實作 `codex.Adapter`，依 Role 配置適當參數（Oracle/Critic 使用 `-s read-only`，Striker 使用 `--approve-for-me`）；Context Cancel 時透過獨立 Process Group 向進程樹發送 SIGKILL 回收。
 - **驗證**：`go test -v ./internal/backend/codex/...`
-- **狀態**：📝 待實作
-- **證據**：-
+- **狀態**：✅ 已完成
+- **證據**：`internal/backend/codex/adapter_test.go` 通過 `TestAdapter_BackendInterface` 與 `TestAdapter_Run_Live`（PASS）。
 
 #### Task 4.2 — 實作 Codex 事件解析與錯誤正規化
 - **產出與範圍**：`internal/backend/codex/parser.go`、`internal/backend/codex/parser_test.go`。
@@ -191,8 +191,17 @@ type Registry interface {
 - **驗收編號**：`@MBACK-006`, `@MBACK-011`
 - **完成判準**：解析 Codex `--json` 輸出流，將各類事件映射為標準 `backend.Event`；遇到 auth、rate-limit、non-zero exit、empty result 時精確分類為 `FailureClassification`，並保留 partial output。
 - **驗證**：單元測試搭配真實 recorded fixture 驗證事件解析與錯誤映射。
-- **狀態**：📝 待實作
-- **證據**：-
+- **狀態**：✅ 已完成
+- **證據**：`internal/backend/codex/parser_test.go` 通過 `TestExtractResultAndEvents_Success`, `TestExtractResultAndEvents_RateLimit`, `TestExtractResultAndEvents_AuthFailure`, `TestExtractResultAndEvents_EmptyResult`（PASS）。
+
+#### Task 4.3 — 實作進程組隔離與 Context 取消回收
+- **產出與範圍**：進程管理與取消機制整合於 `adapter.go` 與測試中。
+- **相依**：Task 4.1
+- **驗收編號**：`@MBACK-007`
+- **完成判準**：任務取消時 selected backend context 被取消、process tree 回收、Task 進入既有 cancellation terminal semantics。
+- **驗證**：測試驗證取消後進程組無殘留。
+- **狀態**：✅ 已完成
+- **證據**：`internal/backend/codex/adapter_test.go` 通過 `TestAdapter_Run_Cancellation`（PASS，0.10s）。
 
 ---
 
