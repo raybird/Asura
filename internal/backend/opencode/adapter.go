@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -54,15 +55,62 @@ const AsuraReadOnlyConfigJSON = `{
   }
 }`
 
-// CreateIsolatedReadOnlyConfigDir 建立包含 asura-readonly agent 的獨立配置目錄
-// 回傳目錄路徑與清理函式，供 Oracle 與 Critic 唯讀階段使用，免受外部或專案設定污染
+// CreateIsolatedReadOnlyConfigDir 建立包含 asura-readonly agent 的獨立配置目錄與乾淨 home 隔離空間
+// 目錄結構包含：
+//   - <dir>/opencode/opencode.json (只定義 asura-readonly primary agent)
+//   - <dir>/home (乾淨空目錄，用於隔離 HOME/.opencode)
+// 回傳目錄路徑與清理函式，供 Oracle 與 Critic 唯讀階段使用，免受外部、全域或專案設定污染
 func CreateIsolatedReadOnlyConfigDir() (string, func(), error) {
 	dir, err := os.MkdirTemp("", "asura-opencode-readonly-*")
 	if err != nil {
 		return "", nil, fmt.Errorf("create isolated read-only config dir: %w", err)
 	}
-	cfgPath := filepath.Join(dir, "opencode.json")
-	if err := os.WriteFile(cfgPath, []byte(AsuraReadOnlyConfigJSON), 0600); err != nil {
+	opencodeDir := filepath.Join(dir, "opencode")
+	if err := os.MkdirAll(opencodeDir, 0700); err != nil {
+		_ = os.RemoveAll(dir)
+		return "", nil, fmt.Errorf("create isolated opencode dir: %w", err)
+	}
+	homeDir := filepath.Join(dir, "home")
+	if err := os.MkdirAll(homeDir, 0700); err != nil {
+		_ = os.RemoveAll(dir)
+		return "", nil, fmt.Errorf("create isolated home dir: %w", err)
+	}
+	// 預設純 Asura 唯讀配置
+	configContent := []byte(AsuraReadOnlyConfigJSON)
+
+	// 若使用者全域環境存在 opencode.json，安全提取 provider 與 model 設定以確保模型調用能力，
+	// 但嚴格過濾、排除任何 agent、permission、mcp、plugin 污染
+	userHome, _ := os.UserHomeDir()
+	xdgConfig := os.Getenv("XDG_CONFIG_HOME")
+	var globalCfgPath string
+	if xdgConfig != "" {
+		globalCfgPath = filepath.Join(xdgConfig, "opencode", "opencode.json")
+	} else if userHome != "" {
+		globalCfgPath = filepath.Join(userHome, ".config", "opencode", "opencode.json")
+	}
+
+	if globalCfgPath != "" {
+		if rawGlobal, err := os.ReadFile(globalCfgPath); err == nil {
+			var globalData map[string]any
+			if err := json.Unmarshal(rawGlobal, &globalData); err == nil {
+				var baseData map[string]any
+				if err := json.Unmarshal([]byte(AsuraReadOnlyConfigJSON), &baseData); err == nil {
+					if p, ok := globalData["provider"]; ok {
+						baseData["provider"] = p
+					}
+					if m, ok := globalData["model"]; ok {
+						baseData["model"] = m
+					}
+					if mergedJSON, err := json.MarshalIndent(baseData, "", "  "); err == nil {
+						configContent = mergedJSON
+					}
+				}
+			}
+		}
+	}
+
+	cfgPath := filepath.Join(opencodeDir, "opencode.json")
+	if err := os.WriteFile(cfgPath, configContent, 0600); err != nil {
 		_ = os.RemoveAll(dir)
 		return "", nil, fmt.Errorf("write isolated read-only opencode.json: %w", err)
 	}
@@ -240,18 +288,39 @@ func (a *Adapter) Run(ctx context.Context, workspace string, prompt string) (str
 
 	// 配置環境變數，包含權限控制與隔離設定
 	cmd.Env = os.Environ()
-	cmd.Env = append(cmd.Env, "OPENCODE_DISABLE_AUTOUPDATE=1")
+	cmd.Env = setOrUpdateEnv(cmd.Env, "OPENCODE_DISABLE_AUTOUPDATE", "1")
 	if a.cfg.Pure {
-		cmd.Env = append(cmd.Env, "OPENCODE_PURE=1")
+		cmd.Env = setOrUpdateEnv(cmd.Env, "OPENCODE_PURE", "1")
 	}
 	if a.cfg.DisableProjectConfig {
-		cmd.Env = append(cmd.Env, "OPENCODE_DISABLE_PROJECT_CONFIG=1")
+		cmd.Env = setOrUpdateEnv(cmd.Env, "OPENCODE_DISABLE_PROJECT_CONFIG", "1")
 	}
 	if a.cfg.ConfigDir != "" {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("OPENCODE_CONFIG_DIR=%s", a.cfg.ConfigDir))
+		opencodeSubdir := filepath.Join(a.cfg.ConfigDir, "opencode")
+		homeSubdir := filepath.Join(a.cfg.ConfigDir, "home")
+		if _, err := os.Stat(opencodeSubdir); err == nil {
+			// 乾淨 Configuration Namespace：
+			// 1. XDG_CONFIG_HOME 指向 a.cfg.ConfigDir，使 OpenCode 的 config 路徑解析為 <ConfigDir>/opencode
+			// 2. HOME 指向乾淨的空目錄 homeSubdir，阻斷任何 $HOME/.opencode 的全域設定污染
+			// 3. OPENCODE_CONFIG_DIR 指向 opencodeSubdir
+			// 4. XDG_DATA_HOME 保留使用者真實資料路徑，確保 auth.json 模型憑證可正常讀取
+			cmd.Env = setOrUpdateEnv(cmd.Env, "XDG_CONFIG_HOME", a.cfg.ConfigDir)
+			cmd.Env = setOrUpdateEnv(cmd.Env, "HOME", homeSubdir)
+			cmd.Env = setOrUpdateEnv(cmd.Env, "OPENCODE_CONFIG_DIR", opencodeSubdir)
+			realHome, _ := os.UserHomeDir()
+			dataHome := os.Getenv("XDG_DATA_HOME")
+			if dataHome == "" && realHome != "" {
+				dataHome = filepath.Join(realHome, ".local", "share")
+			}
+			if dataHome != "" {
+				cmd.Env = setOrUpdateEnv(cmd.Env, "XDG_DATA_HOME", dataHome)
+			}
+		} else {
+			cmd.Env = setOrUpdateEnv(cmd.Env, "OPENCODE_CONFIG_DIR", a.cfg.ConfigDir)
+		}
 	}
 	if a.cfg.Permission != "" {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("OPENCODE_PERMISSION=%s", a.cfg.Permission))
+		cmd.Env = setOrUpdateEnv(cmd.Env, "OPENCODE_PERMISSION", a.cfg.Permission)
 	}
 
 	var stdoutBuf, stderrBuf bytes.Buffer
@@ -321,4 +390,17 @@ func (a *Adapter) Run(ctx context.Context, workspace string, prompt string) (str
 	}
 
 	return extracted, nil
+}
+
+// setOrUpdateEnv 更新或追加環境變數切片中的鍵值，避免重複設定
+func setOrUpdateEnv(env []string, key, val string) []string {
+	prefix := key + "="
+	entry := prefix + val
+	for i, e := range env {
+		if strings.HasPrefix(e, prefix) {
+			env[i] = entry
+			return env
+		}
+	}
+	return append(env, entry)
 }

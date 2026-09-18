@@ -76,6 +76,7 @@ type Daemon struct {
 	wg                    sync.WaitGroup
 	readOnlyConfigDir     string
 	readOnlyConfigCleanup func()
+	initErr               error
 }
 
 func (d *Daemon) tryAcquireCapacity() bool {
@@ -156,7 +157,9 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 
 	if d.engine == nil {
 		readOnlyConfigDir, cleanupReadOnlyConfig, err := opencode.CreateIsolatedReadOnlyConfigDir()
-		if err == nil {
+		if err != nil {
+			d.initErr = fmt.Errorf("create read-only runtime config failed: %w", err)
+		} else {
 			d.readOnlyConfigDir = readOnlyConfigDir
 			d.readOnlyConfigCleanup = cleanupReadOnlyConfig
 		}
@@ -270,6 +273,10 @@ func (d *Daemon) dispatchCronTask(ctx context.Context, cronID, workspace, prompt
 // Start 競爭取得 Unix Domain Socket 擁有權並開始監聽
 // 遵循 SCN-003 與 R-01：以 flock 原子排他鎖消除 TOCTOU 競爭，確保單一擁有權無雙重 Daemon
 func (d *Daemon) Start() error {
+	if d.initErr != nil {
+		return fmt.Errorf("daemon start aborted due to initialization error: %w", d.initErr)
+	}
+
 	// 1. 先取得跨進程檔案排他鎖，保護後續探測、清理與綁定過程
 	lockPath := d.cfg.SocketPath + ".lock"
 	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600)

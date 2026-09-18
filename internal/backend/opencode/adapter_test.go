@@ -110,10 +110,18 @@ func TestAdapter_IsolatedReadOnlyConfig(t *testing.T) {
 	}
 	defer cleanup()
 
-	cfgPath := filepath.Join(dir, "opencode.json")
+	// 驗證 opencode/opencode.json 存在且正確
+	cfgPath := filepath.Join(dir, "opencode", "opencode.json")
 	data, err := os.ReadFile(cfgPath)
 	if err != nil {
 		t.Fatalf("failed to read generated opencode.json: %v", err)
+	}
+
+	// 驗證 home 目錄存在（用於隔離 HOME/.opencode）
+	homeDir := filepath.Join(dir, "home")
+	fi, err := os.Stat(homeDir)
+	if err != nil || !fi.IsDir() {
+		t.Fatalf("expected home directory to exist in isolated dir, got err=%v", err)
 	}
 
 	var root struct {
@@ -146,7 +154,7 @@ func TestAdapter_IsolatedReadOnlyConfig(t *testing.T) {
 	}
 }
 
-// TestAdapter_Run_IsolatedCommandAndEnv 驗證 Adapter.Run 依設定組裝 --pure、--agent 與環境變數
+// TestAdapter_Run_IsolatedCommandAndEnv 驗證 Adapter.Run 依設定組裝 --pure、--agent 與乾淨 Configuration Namespace
 func TestAdapter_Run_IsolatedCommandAndEnv(t *testing.T) {
 	tmpDir := t.TempDir()
 	fakeBin := filepath.Join(tmpDir, "check_args.sh")
@@ -163,6 +171,9 @@ echo "OPENCODE_PURE: $OPENCODE_PURE" >> ` + dumpFile + `
 echo "OPENCODE_DISABLE_PROJECT_CONFIG: $OPENCODE_DISABLE_PROJECT_CONFIG" >> ` + dumpFile + `
 echo "OPENCODE_CONFIG_DIR: $OPENCODE_CONFIG_DIR" >> ` + dumpFile + `
 echo "OPENCODE_PERMISSION: $OPENCODE_PERMISSION" >> ` + dumpFile + `
+echo "XDG_CONFIG_HOME: $XDG_CONFIG_HOME" >> ` + dumpFile + `
+echo "HOME: $HOME" >> ` + dumpFile + `
+echo "XDG_DATA_HOME: $XDG_DATA_HOME" >> ` + dumpFile + `
 echo '{"type":"text","part":{"type":"text","text":"ok"}}'
 exit 0
 `
@@ -170,10 +181,17 @@ exit 0
 		t.Fatalf("write fake binary failed: %v", err)
 	}
 
+	// 建立真實 isolated read-only config 目錄結構
+	isolatedDir, cleanup, err := CreateIsolatedReadOnlyConfigDir()
+	if err != nil {
+		t.Fatalf("CreateIsolatedReadOnlyConfigDir failed: %v", err)
+	}
+	defer cleanup()
+
 	adapter := NewAdapter(AdapterConfig{
 		BinaryPath:           fakeBin,
 		ExpectedVersion:      "1.18.23",
-		ConfigDir:            "/isolated/config/dir",
+		ConfigDir:            isolatedDir,
 		Permission:           `{"*":"deny"}`,
 		DisableAuto:          true,
 		Role:                 RoleOracle,
@@ -211,8 +229,19 @@ exit 0
 	if !strings.Contains(dumpStr, "OPENCODE_DISABLE_PROJECT_CONFIG: 1") {
 		t.Errorf("expected OPENCODE_DISABLE_PROJECT_CONFIG: 1 in env, got: %s", dumpStr)
 	}
-	if !strings.Contains(dumpStr, "OPENCODE_CONFIG_DIR: /isolated/config/dir") {
-		t.Errorf("expected OPENCODE_CONFIG_DIR in env, got: %s", dumpStr)
+	expectedOpencodeSubdir := filepath.Join(isolatedDir, "opencode")
+	if !strings.Contains(dumpStr, "OPENCODE_CONFIG_DIR: "+expectedOpencodeSubdir) {
+		t.Errorf("expected OPENCODE_CONFIG_DIR to be %s, got: %s", expectedOpencodeSubdir, dumpStr)
+	}
+	if !strings.Contains(dumpStr, "XDG_CONFIG_HOME: "+isolatedDir) {
+		t.Errorf("expected XDG_CONFIG_HOME to be %s, got: %s", isolatedDir, dumpStr)
+	}
+	expectedHomeSubdir := filepath.Join(isolatedDir, "home")
+	if !strings.Contains(dumpStr, "HOME: "+expectedHomeSubdir) {
+		t.Errorf("expected HOME to be %s, got: %s", expectedHomeSubdir, dumpStr)
+	}
+	if !strings.Contains(dumpStr, "XDG_DATA_HOME:") {
+		t.Errorf("expected XDG_DATA_HOME to be populated in env, got: %s", dumpStr)
 	}
 }
 
