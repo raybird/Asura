@@ -134,6 +134,20 @@ func TestAdapter_IsolatedReadOnlyConfig(t *testing.T) {
 		t.Fatalf("expected data/opencode directory to exist in isolated dir, got err=%v", err)
 	}
 
+	// 驗證 cache 目錄存在（用於隔離 XDG_CACHE_HOME，防禦惡意 models.json 注入）
+	cacheDir := filepath.Join(dir, "cache")
+	fiCache, err := os.Stat(cacheDir)
+	if err != nil || !fiCache.IsDir() {
+		t.Fatalf("expected cache directory to exist in isolated dir, got err=%v", err)
+	}
+
+	// 驗證 state 目錄存在（用於隔離 XDG_STATE_HOME）
+	stateDir := filepath.Join(dir, "state")
+	fiState, err := os.Stat(stateDir)
+	if err != nil || !fiState.IsDir() {
+		t.Fatalf("expected state directory to exist in isolated dir, got err=%v", err)
+	}
+
 	var root struct {
 		Agent map[string]struct {
 			Mode        string            `json:"mode"`
@@ -184,6 +198,8 @@ echo "OPENCODE_PERMISSION: $OPENCODE_PERMISSION" >> ` + dumpFile + `
 echo "XDG_CONFIG_HOME: $XDG_CONFIG_HOME" >> ` + dumpFile + `
 echo "HOME: $HOME" >> ` + dumpFile + `
 echo "XDG_DATA_HOME: $XDG_DATA_HOME" >> ` + dumpFile + `
+echo "XDG_CACHE_HOME: $XDG_CACHE_HOME" >> ` + dumpFile + `
+echo "XDG_STATE_HOME: $XDG_STATE_HOME" >> ` + dumpFile + `
 echo '{"type":"text","part":{"type":"text","text":"ok"}}'
 exit 0
 `
@@ -253,6 +269,14 @@ exit 0
 	expectedDataSubdir := filepath.Join(isolatedDir, "data")
 	if !strings.Contains(dumpStr, "XDG_DATA_HOME: "+expectedDataSubdir) {
 		t.Errorf("expected XDG_DATA_HOME to be %s, got: %s", expectedDataSubdir, dumpStr)
+	}
+	expectedCacheSubdir := filepath.Join(isolatedDir, "cache")
+	if !strings.Contains(dumpStr, "XDG_CACHE_HOME: "+expectedCacheSubdir) {
+		t.Errorf("expected XDG_CACHE_HOME to be %s, got: %s", expectedCacheSubdir, dumpStr)
+	}
+	expectedStateSubdir := filepath.Join(isolatedDir, "state")
+	if !strings.Contains(dumpStr, "XDG_STATE_HOME: "+expectedStateSubdir) {
+		t.Errorf("expected XDG_STATE_HOME to be %s, got: %s", expectedStateSubdir, dumpStr)
 	}
 }
 
@@ -633,38 +657,122 @@ func TestAdapter_LoadGlobalOpenCodeConfig_StrictXDGPrecedence(t *testing.T) {
 }
 
 // TestAdapter_SanitizeProviderConfig_DisallowDynamicFileRef 驗證 Provider 中動態檔案代換語法 ({file:...}) 觸發 Fail-Closed 防禦
-func TestAdapter_SanitizeProviderConfig_DisallowDynamicFileRef(t *testing.T) {
-	// 1. 當前模型依賴的 provider 含有 {file:...} 語法，拒絕啟動
-	hostileData := map[string]any{
+// TestAdapter_DisallowUnsafeDynamicRef_ModelAndProvider 驗證頂層 model 與 provider 包含 {file:...} 或 {env:...} 均觸發 Fail-Closed 防禦
+func TestAdapter_DisallowUnsafeDynamicRef_ModelAndProvider(t *testing.T) {
+	// 1. Provider options 含有 {file:...}，拒絕啟動
+	hostileFileProvider := map[string]any{
 		"openai": map[string]any{
 			"options": map[string]any{
 				"apiKey": "{file:/etc/shadow}",
 			},
 		},
 	}
-	_, err := sanitizeProviderConfig(hostileData, "openai/gpt-4o")
+	_, err := sanitizeProviderConfig(hostileFileProvider, "openai/gpt-4o")
 	if err == nil {
 		t.Fatalf("expected error when provider contains dynamic file substitution, got nil")
 	}
-	if !strings.Contains(err.Error(), "contains forbidden dynamic file substitution") {
+	if !strings.Contains(err.Error(), "contains forbidden dynamic substitution") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 
-	// 2. 即使未被當前模型選用的 provider，只要含有 {file:...} 亦立即 Fail-Closed 報錯
-	hostileUnused := map[string]any{
-		"evil-provider": map[string]any{
-			"apiKey": "{file:/home/user/.ssh/id_rsa}",
-		},
-		"anthropic": map[string]any{
-			"options": map[string]any{"baseURL": "https://api.anthropic.com"},
+	// 2. Provider options 含有 {env:...}，拒絕啟動
+	hostileEnvProvider := map[string]any{
+		"openai": map[string]any{
+			"options": map[string]any{
+				"apiKey": "{env:GITHUB_TOKEN}",
+			},
 		},
 	}
-	_, err = sanitizeProviderConfig(hostileUnused, "anthropic/claude-3-5-sonnet")
+	_, err = sanitizeProviderConfig(hostileEnvProvider, "openai/gpt-4o")
 	if err == nil {
-		t.Fatalf("expected error when any provider contains dynamic file substitution, got nil")
+		t.Fatalf("expected error when provider contains dynamic env substitution, got nil")
 	}
-	if !strings.Contains(err.Error(), "contains forbidden dynamic file substitution") {
+	if !strings.Contains(err.Error(), "contains forbidden dynamic substitution") {
 		t.Errorf("unexpected error message: %v", err)
+	}
+
+	// 3. 全域頂層 model 含有 {file:...}，CreateIsolatedReadOnlyConfigDir 立即 Fail-Closed 拒絕啟動
+	tmpGlobalFile := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpGlobalFile)
+	opencodeDirFile := filepath.Join(tmpGlobalFile, "opencode")
+	_ = os.MkdirAll(opencodeDirFile, 0700)
+	_ = os.WriteFile(filepath.Join(opencodeDirFile, "opencode.json"), []byte(`{"model": "openai/{file:/etc/hostname}"}`), 0600)
+
+	_, _, err = CreateIsolatedReadOnlyConfigDir()
+	if err == nil {
+		t.Fatalf("expected error when global model contains dynamic file substitution, got nil")
+	}
+	if !strings.Contains(err.Error(), "contains forbidden dynamic substitution") {
+		t.Errorf("unexpected error message for hostile model file ref: %v", err)
+	}
+
+	// 4. 全域頂層 model 含有 {env:...}，CreateIsolatedReadOnlyConfigDir 立即 Fail-Closed 拒絕啟動
+	tmpGlobalEnv := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpGlobalEnv)
+	opencodeDirEnv := filepath.Join(tmpGlobalEnv, "opencode")
+	_ = os.MkdirAll(opencodeDirEnv, 0700)
+	_ = os.WriteFile(filepath.Join(opencodeDirEnv, "opencode.json"), []byte(`{"model": "openai/{env:SECRET_KEY}"}`), 0600)
+
+	_, _, err = CreateIsolatedReadOnlyConfigDir()
+	if err == nil {
+		t.Fatalf("expected error when global model contains dynamic env substitution, got nil")
+	}
+	if !strings.Contains(err.Error(), "contains forbidden dynamic substitution") {
+		t.Errorf("unexpected error message for hostile model env ref: %v", err)
+	}
+}
+
+// TestAdapter_BuildExecutionEnv_IsolatesAllXDGAndDropsHostileCache 驗證父環境傳入的惡意 XDG_CACHE_HOME 與 XDG_STATE_HOME 被徹底清除且子環境重設為隔離路徑
+func TestAdapter_BuildExecutionEnv_IsolatesAllXDGAndDropsHostileCache(t *testing.T) {
+	hostileCache := "/tmp/hostile-cache"
+	hostileState := "/tmp/hostile-state"
+	t.Setenv("XDG_CACHE_HOME", hostileCache)
+	t.Setenv("XDG_STATE_HOME", hostileState)
+
+	isolatedDir, cleanup, err := CreateIsolatedReadOnlyConfigDir()
+	if err != nil {
+		t.Fatalf("CreateIsolatedReadOnlyConfigDir failed: %v", err)
+	}
+	defer cleanup()
+
+	cfg := AdapterConfig{
+		Role:       RoleOracle,
+		Isolated:   true,
+		ConfigDir:  isolatedDir,
+		Permission: `{"*":"deny"}`,
+	}
+
+	env := buildExecutionEnv(cfg)
+
+	expectedCacheSubdir := filepath.Join(isolatedDir, "cache")
+	expectedStateSubdir := filepath.Join(isolatedDir, "state")
+
+	foundCache := false
+	foundState := false
+	for _, entry := range env {
+		if strings.HasPrefix(entry, "XDG_CACHE_HOME=") {
+			if entry == "XDG_CACHE_HOME="+hostileCache {
+				t.Fatalf("critical security failure: hostile parent XDG_CACHE_HOME survived into isolated child env: %s", entry)
+			}
+			if entry == "XDG_CACHE_HOME="+expectedCacheSubdir {
+				foundCache = true
+			}
+		}
+		if strings.HasPrefix(entry, "XDG_STATE_HOME=") {
+			if entry == "XDG_STATE_HOME="+hostileState {
+				t.Fatalf("critical security failure: hostile parent XDG_STATE_HOME survived into isolated child env: %s", entry)
+			}
+			if entry == "XDG_STATE_HOME="+expectedStateSubdir {
+				foundState = true
+			}
+		}
+	}
+
+	if !foundCache {
+		t.Errorf("expected XDG_CACHE_HOME to be isolated to %s, but not found", expectedCacheSubdir)
+	}
+	if !foundState {
+		t.Errorf("expected XDG_STATE_HOME to be isolated to %s, but not found", expectedStateSubdir)
 	}
 }
 

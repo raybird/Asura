@@ -81,6 +81,16 @@ func CreateIsolatedReadOnlyConfigDir() (string, func(), error) {
 		_ = os.RemoveAll(dir)
 		return "", nil, fmt.Errorf("create isolated data/opencode dir: %w", err)
 	}
+	cacheDir := filepath.Join(dir, "cache")
+	if err := os.MkdirAll(cacheDir, 0700); err != nil {
+		_ = os.RemoveAll(dir)
+		return "", nil, fmt.Errorf("create isolated cache dir: %w", err)
+	}
+	stateDir := filepath.Join(dir, "state")
+	if err := os.MkdirAll(stateDir, 0700); err != nil {
+		_ = os.RemoveAll(dir)
+		return "", nil, fmt.Errorf("create isolated state dir: %w", err)
+	}
 
 	// 1. 消毒並複製使用者真實 auth.json：保留 api/oauth 憑證，徹底剔除 wellknown 遠端注入風險
 	realAuthPath := findRealAuthJSONPath()
@@ -112,11 +122,15 @@ func CreateIsolatedReadOnlyConfigDir() (string, func(), error) {
 
 	// 3. 依 OpenCode 順序載入並合併全域配置 (config.json -> opencode.json -> opencode.jsonc)
 	globalData := loadGlobalOpenCodeConfig()
-	if len(globalData) > 0 {
-		var baseData map[string]any
-		if err := json.Unmarshal([]byte(AsuraReadOnlyConfigJSON), &baseData); err == nil {
-			var selectedModel string
+	var baseData map[string]any
+	if err := json.Unmarshal([]byte(AsuraReadOnlyConfigJSON), &baseData); err == nil {
+		var selectedModel string
+		if len(globalData) > 0 {
 			if m, ok := globalData["model"].(string); ok {
+				if hasUnsafeDynamicRef(m) {
+					_ = os.RemoveAll(dir)
+					return "", nil, fmt.Errorf("model %q contains forbidden dynamic substitution ({file:...} or {env:...})", m)
+				}
 				selectedModel = m
 				baseData["model"] = m
 			}
@@ -131,10 +145,19 @@ func CreateIsolatedReadOnlyConfigDir() (string, func(), error) {
 					baseData["provider"] = cleanProv
 				}
 			}
+		}
 
-			if mergedJSON, err := json.MarshalIndent(baseData, "", "  "); err == nil {
-				configContent = mergedJSON
+		if baseData["model"] == nil && os.Getenv("OPENCODE_MODEL") != "" {
+			envModel := os.Getenv("OPENCODE_MODEL")
+			if hasUnsafeDynamicRef(envModel) {
+				_ = os.RemoveAll(dir)
+				return "", nil, fmt.Errorf("OPENCODE_MODEL %q contains forbidden dynamic substitution ({file:...} or {env:...})", envModel)
 			}
+			baseData["model"] = envModel
+		}
+
+		if mergedJSON, err := json.MarshalIndent(baseData, "", "  "); err == nil {
+			configContent = mergedJSON
 		}
 	}
 
@@ -617,7 +640,7 @@ func buildReadOnlyExecutionEnv(cfg AdapterConfig) []string {
 	env := make([]string, 0, len(rawEnv))
 
 	// 1. 白名單式安全過濾：徹底剔除所有外部 OPENCODE_* 變數，杜絕任何未經受管的配置/目錄/模型/憑證注入通道
-	//    同時過濾外部 XDG_CONFIG_HOME、HOME、XDG_DATA_HOME
+	//    同時過濾外部 XDG_CONFIG_HOME、HOME、XDG_DATA_HOME、XDG_CACHE_HOME、XDG_STATE_HOME
 	for _, entry := range rawEnv {
 		parts := strings.SplitN(entry, "=", 2)
 		if len(parts) == 0 {
@@ -627,7 +650,7 @@ func buildReadOnlyExecutionEnv(cfg AdapterConfig) []string {
 		if strings.HasPrefix(k, "OPENCODE_") {
 			continue // 徹底封鎖外部未受管的 OPENCODE_* 注入（如 OPENCODE_CONFIG, OPENCODE_AUTH_CONTENT, OPENCODE_MODELS_PATH 等）
 		}
-		if k == "XDG_CONFIG_HOME" || k == "HOME" || k == "XDG_DATA_HOME" {
+		if k == "XDG_CONFIG_HOME" || k == "HOME" || k == "XDG_DATA_HOME" || k == "XDG_CACHE_HOME" || k == "XDG_STATE_HOME" {
 			continue
 		}
 		env = append(env, entry)
@@ -638,12 +661,20 @@ func buildReadOnlyExecutionEnv(cfg AdapterConfig) []string {
 		opencodeSubdir := filepath.Join(cfg.ConfigDir, "opencode")
 		homeSubdir := filepath.Join(cfg.ConfigDir, "home")
 		dataSubdir := filepath.Join(cfg.ConfigDir, "data")
+		cacheSubdir := filepath.Join(cfg.ConfigDir, "cache")
+		stateSubdir := filepath.Join(cfg.ConfigDir, "state")
 
 		env = setOrUpdateEnv(env, "XDG_CONFIG_HOME", cfg.ConfigDir)
 		env = setOrUpdateEnv(env, "HOME", homeSubdir)
 		env = setOrUpdateEnv(env, "OPENCODE_CONFIG_DIR", opencodeSubdir)
 		if _, err := os.Stat(dataSubdir); err == nil {
 			env = setOrUpdateEnv(env, "XDG_DATA_HOME", dataSubdir)
+		}
+		if _, err := os.Stat(cacheSubdir); err == nil {
+			env = setOrUpdateEnv(env, "XDG_CACHE_HOME", cacheSubdir)
+		}
+		if _, err := os.Stat(stateSubdir); err == nil {
+			env = setOrUpdateEnv(env, "XDG_STATE_HOME", stateSubdir)
 		}
 	}
 
@@ -794,22 +825,22 @@ func isModelUsingProvider(selectedModel, providerName string) bool {
 	return strings.HasPrefix(selectedModel, providerName+"/")
 }
 
-// hasDynamicFileRef 遞迴檢查資料結構中是否包含 OpenCode 動態檔案代換語法（"{file:"）
-func hasDynamicFileRef(v any) bool {
+// hasUnsafeDynamicRef 遞迴檢查資料結構中是否包含 OpenCode 動態代換語法（"{file:" 或 "{env:"）
+func hasUnsafeDynamicRef(v any) bool {
 	switch val := v.(type) {
 	case string:
-		if strings.Contains(val, "{file:") {
+		if strings.Contains(val, "{file:") || strings.Contains(val, "{env:") {
 			return true
 		}
 	case map[string]any:
 		for _, child := range val {
-			if hasDynamicFileRef(child) {
+			if hasUnsafeDynamicRef(child) {
 				return true
 			}
 		}
 	case []any:
 		for _, item := range val {
-			if hasDynamicFileRef(item) {
+			if hasUnsafeDynamicRef(item) {
 				return true
 			}
 		}
@@ -818,11 +849,11 @@ func hasDynamicFileRef(v any) bool {
 }
 
 // sanitizeProviderConfig 檢查並清洗 provider 設定：
-// 1. 若 provider 含有動態檔案代換語法 "{file:"，遵循 Fail-Closed 原則，拒絕啟動並回傳錯誤。
+// 1. 若 provider 含有動態代換語法 "{file:" 或 "{env:"，遵循 Fail-Closed 原則，拒絕啟動並回傳錯誤。
 // 2. 若 provider 含有 "npm"，代表為 custom executable provider。
 // 3. 若 selectedModel 依賴該 executable provider，遵循 Fail-Closed 原則，拒絕啟動並回傳錯誤。
 // 4. 若 selectedModel 未使用該 provider，則從配置中排除，不複製進唯讀隔離環境。
-// 5. 確保複製進唯讀配置之 provider 僅為純資料屬性，杜絕任意代碼執行與外部檔案探測風險。
+// 5. 確保複製進唯讀配置之 provider 僅為純資料屬性，杜絕任意代碼執行、外部檔案探測與機密環境變數洩漏風險。
 func sanitizeProviderConfig(rawProvider any, selectedModel string) (map[string]any, error) {
 	if rawProvider == nil {
 		return nil, nil
@@ -835,8 +866,8 @@ func sanitizeProviderConfig(rawProvider any, selectedModel string) (map[string]a
 	cleanProviders := make(map[string]any)
 
 	for name, v := range provMap {
-		if hasDynamicFileRef(v) {
-			return nil, fmt.Errorf("provider %q contains forbidden dynamic file substitution ({file:...})", name)
+		if hasUnsafeDynamicRef(v) {
+			return nil, fmt.Errorf("provider %q contains forbidden dynamic substitution ({file:...} or {env:...})", name)
 		}
 		if hasNPMField(v) {
 			if isModelUsingProvider(selectedModel, name) {
