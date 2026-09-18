@@ -108,6 +108,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 	workspace := fs.String("workspace", "", "target workspace directory")
 	allowedRoots := fs.String("allowed-roots", "", "comma-separated list of allowed root directories")
 	mode := fs.String("mode", string(pipeline.ModeDirect), "execution mode (direct or three-face)")
+	backendFlag := fs.String("backend", "opencode", "execution backend (opencode or codex)")
 
 	if err := fs.Parse(args); err != nil {
 		return 1
@@ -115,6 +116,15 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 
 	if !pipeline.IsValidExecutionMode(pipeline.ExecutionMode(*mode)) {
 		fmt.Fprintf(stderr, "error: invalid mode %q (must be direct or three-face)\n", *mode)
+		return 1
+	}
+
+	bID := *backendFlag
+	if bID == "" {
+		bID = "opencode"
+	}
+	if bID != "opencode" && bID != "codex" {
+		fmt.Fprintf(stderr, "error: unknown backend %q (supported: opencode, codex)\n", bID)
 		return 1
 	}
 
@@ -295,6 +305,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 		Workspace: ws,
 		Prompt:    prompt,
 		Mode:      *mode,
+		Backend:   bID,
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "error: %v\n", err)

@@ -122,6 +122,30 @@ func TestRunCLI_UsageAndValidation(t *testing.T) {
 			t.Errorf("expected 0.0.0.0 warning in stderr, got: %s", stderr.String())
 		}
 	})
+
+	t.Run("ask 指令傳入未知 backend 拒絕 (MBACK-003)", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		code := RunCLI([]string{"ask", "-backend", "unknown_backend", "prompt"}, out, stderr)
+		if code == 0 {
+			t.Errorf("expected non-zero exit code for unknown backend, got 0")
+		}
+		if !strings.Contains(stderr.String(), "unknown backend") {
+			t.Errorf("expected 'unknown backend' in stderr, got: %s", stderr.String())
+		}
+	})
+
+	t.Run("run 指令傳入未知 backend 拒絕 (MBACK-003)", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		code := RunCLI([]string{"run", "-backend", "unknown_backend", "prompt"}, out, stderr)
+		if code == 0 {
+			t.Errorf("expected non-zero exit code for unknown backend, got 0")
+		}
+		if !strings.Contains(stderr.String(), "unknown backend") {
+			t.Errorf("expected 'unknown backend' in stderr, got: %s", stderr.String())
+		}
+	})
 }
 
 func TestRunCLI_CronValidation(t *testing.T) {
@@ -327,6 +351,84 @@ func TestHandleAsk_ModeFlags(t *testing.T) {
 		}
 		if receivedReq.Mode != "three-face" {
 			t.Fatalf("expected Mode 'three-face', got %q", receivedReq.Mode)
+		}
+	})
+}
+
+// MBACK-001, MBACK-002: 驗證 asura ask 支援 --backend 參數並傳遞至 Daemon
+func TestHandleAsk_BackendFlags(t *testing.T) {
+	t.Run("指定 --backend codex 正確傳遞至 Daemon", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		sockPath := filepath.Join(tmpDir, "c.sock")
+		l, err := net.Listen("unix", sockPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer l.Close()
+
+		var receivedReq daemon.IPCRequest
+		go func() {
+			conn, err := l.Accept()
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+			_ = json.NewDecoder(conn).Decode(&receivedReq)
+			_ = json.NewEncoder(conn).Encode(daemon.IPCResponse{
+				Task: &storage.Task{ID: "task-mock-codex", Backend: "codex"},
+			})
+		}()
+
+		stdout := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		code := handleAsk([]string{
+			"-socket", sockPath,
+			"--backend", "codex",
+			"測試 prompt",
+		}, stdout, stderr)
+
+		if code != 0 {
+			t.Fatalf("expected code 0, got %d, stderr: %s", code, stderr.String())
+		}
+		if receivedReq.Backend != "codex" {
+			t.Fatalf("expected Backend 'codex', got %q", receivedReq.Backend)
+		}
+	})
+
+	t.Run("未指定 --backend 預設為 opencode 並傳遞至 Daemon", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		sockPath := filepath.Join(tmpDir, "d.sock")
+		l, err := net.Listen("unix", sockPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer l.Close()
+
+		var receivedReq daemon.IPCRequest
+		go func() {
+			conn, err := l.Accept()
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+			_ = json.NewDecoder(conn).Decode(&receivedReq)
+			_ = json.NewEncoder(conn).Encode(daemon.IPCResponse{
+				Task: &storage.Task{ID: "task-mock-default", Backend: "opencode"},
+			})
+		}()
+
+		stdout := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		code := handleAsk([]string{
+			"-socket", sockPath,
+			"測試 prompt",
+		}, stdout, stderr)
+
+		if code != 0 {
+			t.Fatalf("expected code 0, got %d, stderr: %s", code, stderr.String())
+		}
+		if receivedReq.Backend != "opencode" {
+			t.Fatalf("expected Backend 'opencode', got %q", receivedReq.Backend)
 		}
 	})
 }

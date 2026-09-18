@@ -51,6 +51,7 @@ func handleAsk(args []string, stdout, stderr io.Writer) int {
 	customID := fs.String("id", "", "optional custom task/request ID")
 	wait := fs.Bool("wait", false, "wait for task to complete")
 	mode := fs.String("mode", string(pipeline.ModeDirect), "execution mode (direct or three-face)")
+	backendFlag := fs.String("backend", "opencode", "execution backend (opencode or codex)")
 	var memoryIDs stringSliceFlag
 	fs.Var(&memoryIDs, "memory-id", "specify project memory ID to include in task context (can be repeated or comma-separated)")
 
@@ -60,6 +61,15 @@ func handleAsk(args []string, stdout, stderr io.Writer) int {
 
 	if !pipeline.IsValidExecutionMode(pipeline.ExecutionMode(*mode)) {
 		fmt.Fprintf(stderr, "error: invalid mode %q (must be direct or three-face)\n", *mode)
+		return 1
+	}
+
+	bID := *backendFlag
+	if bID == "" {
+		bID = "opencode"
+	}
+	if bID != "opencode" && bID != "codex" {
+		fmt.Fprintf(stderr, "error: unknown backend %q (supported: opencode, codex)\n", bID)
 		return 1
 	}
 
@@ -104,6 +114,7 @@ func handleAsk(args []string, stdout, stderr io.Writer) int {
 		Workspace: absWorkspace,
 		Prompt:    prompt,
 		Mode:      *mode,
+		Backend:   bID,
 		MemoryIDs: memoryIDs,
 	})
 	if err != nil {

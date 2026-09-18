@@ -2469,3 +2469,127 @@ func TestDaemon_Start_FailClosedOnInitError(t *testing.T) {
 	}
 }
 
+// MBACK-012: 驗證 Task 在排隊喚醒執行時，依 Task 內記錄之 BackendID 執行，不重新套用預設值 opencode
+func TestDaemon_QueueWake_PreservesBackend(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	sockPath := filepath.Join(tmpDir, "q.sock")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	taskAStarted := make(chan struct{})
+	taskABlock := make(chan struct{})
+	var mu sync.Mutex
+	executedBackends := make(map[string]string)
+
+	runner := func(ctx context.Context, ws, p string) (string, error) {
+		taskID := engine.TaskIDFromContext(ctx)
+		task, _ := store.GetTask(context.Background(), taskID)
+		if task != nil {
+			mu.Lock()
+			executedBackends[taskID] = task.Backend
+			mu.Unlock()
+		}
+
+		if strings.Contains(p, "prompt-task-a") {
+			close(taskAStarted)
+			<-taskABlock
+		}
+		return "ok", nil
+	}
+
+	eng := engine.NewEngine(store, policy, engine.WithRunner(runner))
+	d := NewDaemon(Config{
+		SocketPath: sockPath,
+	}, store, policy, WithEngine(eng))
+
+	if err := d.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+
+	client, err := NewClient(sockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	// 1. 提交 Task A (占用工作區鎖)
+	taskA, err := client.Submit(context.Background(), engine.SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "prompt-task-a",
+		Backend:   "opencode",
+	})
+	if err != nil {
+		t.Fatalf("submit task A failed: %v", err)
+	}
+	if taskA == nil || taskA.ID == "" {
+		t.Fatalf("expected valid task A returned")
+	}
+
+	// 等候 Task A 開始執行
+	select {
+	case <-taskAStarted:
+	case <-time.After(3 * time.Second):
+		t.Fatalf("timed out waiting for task A to start")
+	}
+
+	// 2. 提交 Task B (相同工作區，指定 Backend 為 codex)
+	taskB, err := client.Submit(context.Background(), engine.SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "prompt-task-b",
+		Backend:   "codex",
+	})
+	if err != nil {
+		t.Fatalf("submit task B failed: %v", err)
+	}
+
+	// 斷言：Task B 因專案互斥鎖而進入 Queued 狀態
+	if taskB.Status != storage.StatusQueued {
+		t.Fatalf("expected task B to be Queued, got %s", taskB.Status)
+	}
+	if taskB.Backend != "codex" {
+		t.Errorf("expected initial task B backend to be 'codex', got %q", taskB.Backend)
+	}
+
+	// 3. 釋放 Task A，允許 Task A 完成並喚醒 Task B
+	close(taskABlock)
+
+	// 等候 Task B 被喚醒並完成執行
+	deadline := time.Now().Add(5 * time.Second)
+	var finalTaskB *storage.Task
+	for time.Now().Before(deadline) {
+		t, err := client.GetTask(context.Background(), taskB.ID)
+		if err == nil && (t.Status == storage.StatusCompleted || t.Status == storage.StatusFailed) {
+			finalTaskB = t
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	if finalTaskB == nil {
+		t.Fatalf("timed out waiting for task B to be awakened and finish")
+	}
+	if finalTaskB.Status != storage.StatusCompleted {
+		t.Fatalf("expected task B status Completed, got %s (err: %s)", finalTaskB.Status, finalTaskB.ErrorMessage)
+	}
+
+	// 4. MBACK-012 核心斷言：Task B 在被喚醒後依然以其記錄之 "codex" backend 執行，絕無被重置為預設 "opencode"
+	if finalTaskB.Backend != "codex" {
+		t.Errorf("expected final task B backend to be 'codex', got %q", finalTaskB.Backend)
+	}
+
+	mu.Lock()
+	backendRun := executedBackends[taskB.ID]
+	mu.Unlock()
+
+	if backendRun != "codex" {
+		t.Errorf("expected task B to execute with backend 'codex', got %q", backendRun)
+	}
+}
+

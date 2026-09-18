@@ -279,22 +279,22 @@ type Registry interface {
 ### Phase 7：CLI 與 Daemon 整合
 
 #### Task 7.1 — CLI `asura ask` 與 `asura run` 支援 `--backend`
-- **產出與範圍**：`cmd/asura/main.go`。
+- **產出與範圍**：`cmd/asura/ask.go`、`cmd/asura/run.go`、`cmd/asura/run_test.go`。
 - **相依**：Task 6.1
 - **驗收編號**：`@MBACK-001`, `@MBACK-002`, `@MBACK-003`
 - **完成判準**：CLI 增加 `--backend` 參數（預設 `opencode`），支援指定 `codex`；輸入未知後端時在發送前報錯。
 - **驗證**：`go build ./cmd/asura` 並執行 CLI 參數測試。
-- **狀態**：📝 待實作
-- **證據**：-
+- **狀態**：✅ 已完成
+- **證據**：`cmd/asura/run_test.go` 通過 `TestHandleAsk_BackendFlags` 與未知後端拒絕測試，二進位建置成功並驗證 CLI 阻擋行為（PASS）。
 
 #### Task 7.2 — Daemon 排程佇列喚醒保護
-- **產出與範圍**：`internal/daemon/workspace_queue.go`、`internal/daemon/daemon.go`。
+- **產出與範圍**：`internal/daemon/workspace_queue.go`、`internal/daemon/daemon.go`、`internal/daemon/daemon_test.go`。
 - **相依**：Task 6.1
 - **驗收編號**：`@MBACK-012`
 - **完成判準**：Task 在 Workspace 佇列排隊後喚醒執行時，依 Task 內記錄之 BackendID 執行，不重新套用預設值。
 - **驗證**：`go test -v ./internal/daemon/...`
-- **狀態**：📝 待實作
-- **證據**：-
+- **狀態**：✅ 已完成
+- **證據**：`internal/daemon/daemon_test.go` 通過 `TestDaemon_QueueWake_PreservesBackend`，排隊任務喚醒執行時維持 `codex` 後端（PASS）。
 
 ---
 
