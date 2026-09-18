@@ -2233,6 +2233,9 @@ func TestDaemon_ThreeFace_HostileWorkspaceConfig_CannotEscapeReadOnly(t *testing
 	if err != nil {
 		t.Skipf("skipping live hostile opencode test: valid opencode binary not found: %v", err)
 	}
+	if !opencode.HasLiveCredentials() {
+		t.Skip("skipping live hostile opencode test: no model credentials configured in this environment")
+	}
 
 	dbPath := filepath.Join(tmpDir, "asura.db")
 	store, err := storage.NewSQLiteStore(dbPath)

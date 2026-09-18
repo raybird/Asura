@@ -153,6 +153,26 @@ func ValidateOpenCodeVersion(binPath string, expectedVersion string) error {
 	return nil
 }
 
+// HasLiveCredentials 檢查當前執行環境是否已配置真實模型連線憑證（環境變數或 auth.json）
+func HasLiveCredentials() bool {
+	if os.Getenv("OPENAI_API_KEY") != "" || os.Getenv("ANTHROPIC_API_KEY") != "" || os.Getenv("GEMINI_API_KEY") != "" {
+		return true
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	dataHome := os.Getenv("XDG_DATA_HOME")
+	if dataHome == "" {
+		dataHome = filepath.Join(home, ".local", "share")
+	}
+	authPath := filepath.Join(dataHome, "opencode", "auth.json")
+	if fi, err := os.Stat(authPath); err == nil && !fi.IsDir() {
+		return true
+	}
+	return false
+}
+
 // ResolveOpenCodeBinary 解析並驗證 OpenCode 二進位檔路徑與版本
 func ResolveOpenCodeBinary(preferredPath string, expectedVersion string) (string, error) {
 	if preferredPath != "" {

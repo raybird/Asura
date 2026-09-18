@@ -26,6 +26,9 @@ func TestINT001Unit(t *testing.T) {
 	}
 
 	// 2. 驗證 Adapter.Run 執行
+	if !HasLiveCredentials() {
+		t.Skip("skipping live adapter.Run test: no model credentials configured in this environment")
+	}
 	ctx := context.Background()
 	out, err := adapter.Run(ctx, "/tmp", "test prompt")
 	if err != nil {

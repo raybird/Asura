@@ -28,6 +28,9 @@ func TestINT001(t *testing.T) {
 	if binErr != nil {
 		t.Skipf("opencode 1.18.23 not available in this environment: %v; skipping contract test", binErr)
 	}
+	if !opencode.HasLiveCredentials() {
+		t.Skip("skipping contract test: no model credentials configured in this environment")
+	}
 
 	tmpDir, err := os.MkdirTemp("", "asura-int001-*")
 	if err != nil {
@@ -75,6 +78,9 @@ func TestINT007(t *testing.T) {
 	binPath, binErr := opencode.ResolveOpenCodeBinary("", "1.18.23")
 	if binErr != nil {
 		t.Skipf("opencode 1.18.23 not available in this environment: %v; skipping contract test", binErr)
+	}
+	if !opencode.HasLiveCredentials() {
+		t.Skip("skipping contract test: no model credentials configured in this environment")
 	}
 
 	tmpDir, err := os.MkdirTemp("", "asura-int007-*")
