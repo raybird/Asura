@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"asura/internal/auth"
-	"asura/internal/backend/opencode"
 	"asura/internal/storage"
 )
 
@@ -53,6 +52,7 @@ type SubmitRequest struct {
 	ID              string            `json:"id,omitempty"`
 	Workspace       string            `json:"workspace"`
 	Prompt          string            `json:"prompt"`
+	Backend         string            `json:"backend,omitempty"`
 	Mode            string            `json:"mode,omitempty"`
 	MemoryIDs       []string          `json:"memory_ids,omitempty"`
 	ResolvedContext *ExecutionContext `json:"resolved_context,omitempty"`
@@ -169,12 +169,41 @@ func hasUnresolvedErrorOrEmpty(output string) (bool, string) {
 		if l == "" {
 			continue
 		}
-		evt, err := opencode.ParseEventLine(l)
-		if err == nil && evt != nil {
-			if evt.Type == "error" || evt.IsRateLimit || evt.ToolStatus == "error" {
+		var raw struct {
+			Type  string `json:"type"`
+			Error *struct {
+				Message    string `json:"message"`
+				StatusCode int    `json:"statusCode"`
+			} `json:"error"`
+			Part *struct {
+				Text  string `json:"text"`
+				Tool  string `json:"tool"`
+				State *struct {
+					Status string `json:"status"`
+				} `json:"state"`
+			} `json:"part"`
+		}
+		if err := json.Unmarshal([]byte(l), &raw); err == nil {
+			isRateLimit := false
+			if raw.Error != nil {
+				if raw.Error.StatusCode == 429 || strings.Contains(strings.ToLower(raw.Error.Message), "rate limit") {
+					isRateLimit = true
+				}
+			}
+			toolStatus := ""
+			text := ""
+			tool := ""
+			if raw.Part != nil {
+				text = raw.Part.Text
+				tool = raw.Part.Tool
+				if raw.Part.State != nil {
+					toolStatus = raw.Part.State.Status
+				}
+			}
+			if raw.Type == "error" || isRateLimit || toolStatus == "error" {
 				hasErrorEvent = true
 			}
-			if evt.Text != "" || (evt.Tool != "" && evt.ToolStatus != "error") {
+			if text != "" || (tool != "" && toolStatus != "error") {
 				hasValidContent = true
 			}
 		} else {
@@ -203,6 +232,10 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 	if taskID == "" {
 		taskID = generateTaskID()
 	}
+	backendID := req.Backend
+	if backendID == "" {
+		backendID = "opencode"
+	}
 	now := time.Now().UTC()
 	mode := req.Mode
 	if mode == "" {
@@ -216,11 +249,15 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 		Prompt:        req.Prompt,
 		Workspace:     req.Workspace,
 		Status:        storage.StatusPending,
+		Backend:       backendID,
 		ExecutionMode: mode,
 		CreatedAt:     now,
 		UpdatedAt:     now,
 	}
 	if req.ResolvedContext != nil {
+		if req.ResolvedContext.Backend == "" {
+			req.ResolvedContext.Backend = backendID
+		}
 		rawCtx, err := json.Marshal(req.ResolvedContext)
 		if err != nil {
 			return nil, fmt.Errorf("marshal resolved context: %w", err)
@@ -239,6 +276,9 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 	if req.ID != "" {
 		existing, err := e.store.GetTask(ctx, req.ID)
 		if err == nil {
+			if existing.Backend != "" && backendID != "" && existing.Backend != backendID {
+				return nil, fmt.Errorf("request ID %q reused with different backend (existing: %q, requested: %q)", req.ID, existing.Backend, backendID)
+			}
 			if existing.Status == storage.StatusCancelled {
 				return existing, context.Canceled
 			}
@@ -361,8 +401,11 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 		execCtx = &ExecutionContext{
 			OriginalPrompt: req.Prompt,
 			Workspace:      req.Workspace,
+			Backend:        backendID,
 			CreatedAt:      now,
 		}
+	} else if execCtx.Backend == "" {
+		execCtx.Backend = backendID
 	}
 
 	var output string
@@ -383,29 +426,34 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 		output, traceJSON, runErr = e.pipelineRunner.ExecutePipeline(taskCtx, task.ExecutionMode, execCtx)
 		task.PipelineTrace = traceJSON
 	case "direct", "":
-		output, runErr = e.runner(taskCtx, req.Workspace, runnerPrompt)
-		statusStr := "completed"
-		errStr := ""
-		if runErr != nil {
-			statusStr = "failed"
-			errStr = runErr.Error()
-		}
-		directTraceObj := map[string]interface{}{
-			"mode":        "direct",
-			"model_calls": 1,
-			"stages": []map[string]interface{}{
-				{
-					"name":   "striker",
-					"status": statusStr,
-					"output": output,
-					"error":  errStr,
-				},
-			},
-			"final_result": output,
-		}
-		if b, err := json.Marshal(directTraceObj); err == nil {
-			traceJSON = string(b)
+		if e.pipelineRunner != nil {
+			output, traceJSON, runErr = e.pipelineRunner.ExecutePipeline(taskCtx, "direct", execCtx)
 			task.PipelineTrace = traceJSON
+		} else {
+			output, runErr = e.runner(taskCtx, req.Workspace, runnerPrompt)
+			statusStr := "completed"
+			errStr := ""
+			if runErr != nil {
+				statusStr = "failed"
+				errStr = runErr.Error()
+			}
+			directTraceObj := map[string]interface{}{
+				"mode":        "direct",
+				"model_calls": 1,
+				"stages": []map[string]interface{}{
+					{
+						"name":   "striker",
+						"status": statusStr,
+						"output": output,
+						"error":  errStr,
+					},
+				},
+				"final_result": output,
+			}
+			if b, err := json.Marshal(directTraceObj); err == nil {
+				traceJSON = string(b)
+				task.PipelineTrace = traceJSON
+			}
 		}
 	default:
 		persistCtx, persistCancel := context.WithTimeout(context.Background(), 5*time.Second)

@@ -253,26 +253,26 @@ type Registry interface {
 - **驗收編號**：`@MBACK-001`
 - **完成判準**：`SubmitRequest` 增加 `Backend string` 欄位，未指定時預設 `"opencode"`；解耦對 `opencode` 套件的直接 import。
 - **驗證**：`go test -v ./internal/engine/...`
-- **狀態**：📝 待實作
-- **證據**：-
+- **狀態**：✅ 已完成
+- **證據**：`internal/engine/engine_test.go` 通過 `TestEngine_SubmitTask_BackendDefaultAndOverride`，靜態確認 `engine.go` 無直接 import `opencode`（PASS）。
 
 #### Task 6.2 — BackendID 納入 Request Fingerprint 計算
-- **產出與範圍**：`internal/engine/engine.go`、`internal/engine/engine_test.go`。
+- **產出與範圍**：`internal/engine/engine.go`、`internal/engine/engine_test.go`、`internal/daemon/daemon.go`、`internal/daemon/daemon_test.go`。
 - **相依**：Task 6.1
 - **驗收編號**：`@MBACK-004`
 - **完成判準**：更新 Request Fingerprint 演算法，相同 Request ID 但不同 Backend 必須產出不同 Hash，系統判定為衝突並拒絕。
 - **驗證**：單元測試驗證同 Request ID 不同 Backend 遭到拒絕。
-- **狀態**：📝 待實作
-- **證據**：-
+- **狀態**：✅ 已完成
+- **證據**：`internal/daemon/daemon_test.go` 通過 `TestDaemon_BackendFingerprint_ConflictAndRedelivery`，斷言同 Request ID 不同 Backend 拒絕並保持 0 額外模型呼叫（PASS）。
 
 #### Task 6.3 — Redelivery 保持同一 Backend 身份
-- **產出與範圍**：`internal/engine/engine.go`。
+- **產出與範圍**：`internal/engine/engine.go`、`internal/daemon/daemon.go`。
 - **相依**：Task 6.2
 - **驗收編號**：`@MBACK-005`
 - **完成判準**：相同 Request ID 與相同 Backend 重送時返回既有 Task，不重複調用後端，不重新選後端。
 - **驗證**：單元測試驗證 Redelivery 命中既有 Task。
-- **狀態**：📝 待實作
-- **證據**：-
+- **狀態**：✅ 已完成
+- **證據**：`internal/daemon/daemon_test.go` 通過 `TestDaemon_BackendFingerprint_ConflictAndRedelivery`，同 Request ID 相同 Backend 重送傳回既有 Task，0 重複執行（PASS）。
 
 ---
 

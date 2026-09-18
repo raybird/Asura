@@ -205,7 +205,7 @@ Feature: Multi-Backend Foundation (OpenCode + Codex CLI)
 3. ✅ **Phase 3** - 遷移 OpenCode Adapter 至共同合約（保留 Phase 3C 安全邊界）
 4. ✅ **Phase 4** - 實作 Codex CLI Adapter（支援 non-interactive, jsonl, sandbox, cancel）
 5. ✅ **Phase 5** - Pipeline Orchestrator 解耦與 Capability Preflight 整合
-6. 📝 **Phase 6** - Engine 整合、SubmitRequest、Fingerprint、Task/Trace 持久化
+6. ✅ **Phase 6** - Engine 整合、SubmitRequest、Fingerprint、Task/Trace 持久化
 7. 📝 **Phase 7** - CLI 整合（`--backend` 旗標）與 Daemon 佇列喚醒保護
 8. 📝 **Phase 8** - 外迴圈測試、MBACK-001 ～ MBACK-012 驗收與回歸驗證
 
