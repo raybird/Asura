@@ -22,6 +22,7 @@ import (
 	"asura/internal/backend/opencode"
 	"asura/internal/cron"
 	"asura/internal/engine"
+	"asura/internal/pipeline"
 	"asura/internal/storage"
 )
 
@@ -33,6 +34,11 @@ var (
 // DefaultApprovedPermissionPolicy 定義 INT-007 核准之安全操作邊界：
 // 允許修改/build/test，但刪除重要資料、部署、push、對外傳送必須另行確認
 const DefaultApprovedPermissionPolicy = `{"*":"ask","read":"allow","edit":"allow","build":"allow","test":"allow","bash":"ask"}`
+
+// DefaultReadOnlyPermissionPolicy 定義唯讀角色（Oracle, Critic）之安全操作邊界：
+// 顯式覆寫所有 mutating / escape capability 為 deny，並開放唯讀分析 capability（read, glob, grep, list, lsp）。
+// 由於 OpenCode 以 deep merge 結合既有配置，必須顯式將 edit/write/patch/bash/task/skill 等宣告為 deny，以防外層 allow 勝出。
+const DefaultReadOnlyPermissionPolicy = `{"*":"deny","read":"allow","glob":"allow","grep":"allow","list":"allow","lsp":"allow","edit":"deny","write":"deny","patch":"deny","bash":"deny","task":"deny","skill":"deny","external_directory":"deny","webfetch":"deny","websearch":"deny"}`
 
 // OpenCodeRuntimeConfig 定義 Daemon 底層執行器配置
 type OpenCodeRuntimeConfig struct {
@@ -64,10 +70,13 @@ type Daemon struct {
 	inFlight   int
 	inFlightMu sync.Mutex
 	listener   net.Listener
-	lockFile   *os.File
-	closed     chan struct{}
-	closeOnce  sync.Once
-	wg         sync.WaitGroup
+	lockFile              *os.File
+	closed                chan struct{}
+	closeOnce             sync.Once
+	wg                    sync.WaitGroup
+	readOnlyConfigDir     string
+	readOnlyConfigCleanup func()
+	initErr               error
 }
 
 func (d *Daemon) tryAcquireCapacity() bool {
@@ -147,12 +156,25 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 	}
 
 	if d.engine == nil {
-		adapter := opencode.NewAdapter(opencode.AdapterConfig{
-			BinaryPath:      d.cfg.OpenCodeConfig.BinaryPath,
-			ExpectedVersion: d.cfg.OpenCodeConfig.ExpectedVersion,
-			ConfigDir:       d.cfg.OpenCodeConfig.ConfigDir,
-			Permission:      d.cfg.OpenCodeConfig.Permission,
-			DisableAuto:     d.cfg.OpenCodeConfig.DisableAuto,
+		readOnlyConfigDir, cleanupReadOnlyConfig, err := opencode.CreateIsolatedReadOnlyConfigDir()
+		if err != nil {
+			d.initErr = fmt.Errorf("create read-only runtime config failed: %w", err)
+		} else {
+			d.readOnlyConfigDir = readOnlyConfigDir
+			d.readOnlyConfigCleanup = cleanupReadOnlyConfig
+		}
+
+		readOnlyAdapter := opencode.NewAdapter(opencode.AdapterConfig{
+			BinaryPath:           d.cfg.OpenCodeConfig.BinaryPath,
+			ExpectedVersion:      d.cfg.OpenCodeConfig.ExpectedVersion,
+			ConfigDir:            d.readOnlyConfigDir,
+			Permission:           DefaultReadOnlyPermissionPolicy,
+			DisableAuto:          true, // 嚴禁自動修改、建置或測試
+			Role:                 opencode.RoleOracle, // Oracle 與 Critic 共享唯讀隔離角色
+			Agent:                opencode.AsuraReadOnlyAgentName,
+			Pure:                 true,
+			DisableProjectConfig: true,
+			Isolated:             true,
 			OnProcessStarted: func(ctx context.Context, pgid int) {
 				if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
 					_ = store.UpdateTaskPGID(context.Background(), taskID, pgid)
@@ -164,7 +186,32 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 				}
 			},
 		})
-		d.engine = engine.NewEngine(store, policy, engine.WithRunner(adapter.Run))
+		strikerAdapter := opencode.NewAdapter(opencode.AdapterConfig{
+			BinaryPath:      d.cfg.OpenCodeConfig.BinaryPath,
+			ExpectedVersion: d.cfg.OpenCodeConfig.ExpectedVersion,
+			ConfigDir:       d.cfg.OpenCodeConfig.ConfigDir,
+			Permission:      d.cfg.OpenCodeConfig.Permission,
+			DisableAuto:     d.cfg.OpenCodeConfig.DisableAuto,
+			Role:            opencode.RoleStriker,
+			OnProcessStarted: func(ctx context.Context, pgid int) {
+				if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
+					_ = store.UpdateTaskPGID(context.Background(), taskID, pgid)
+				}
+			},
+			OnProcessExited: func(ctx context.Context, pgid int) {
+				if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
+					_ = store.UpdateTaskPGID(context.Background(), taskID, 0)
+				}
+			},
+		})
+		oracleStage := pipeline.NewOracleStage(readOnlyAdapter.Run)
+		strikerStage := pipeline.NewStrikerStage(strikerAdapter.Run)
+		criticStage := pipeline.NewCriticStage(readOnlyAdapter.Run)
+		orc := pipeline.NewOrchestrator(oracleStage, strikerStage, criticStage)
+		d.engine = engine.NewEngine(store, policy,
+			engine.WithRunner(strikerAdapter.Run),
+			engine.WithPipelineRunner(orc),
+		)
 	}
 
 	d.scheduler = cron.NewScheduler(store, policy, d.dispatchCronTask)
@@ -227,6 +274,10 @@ func (d *Daemon) dispatchCronTask(ctx context.Context, cronID, workspace, prompt
 // Start 競爭取得 Unix Domain Socket 擁有權並開始監聽
 // 遵循 SCN-003 與 R-01：以 flock 原子排他鎖消除 TOCTOU 競爭，確保單一擁有權無雙重 Daemon
 func (d *Daemon) Start() error {
+	if d.initErr != nil {
+		return fmt.Errorf("daemon start aborted due to initialization error: %w", d.initErr)
+	}
+
 	// 1. 先取得跨進程檔案排他鎖，保護後續探測、清理與綁定過程
 	lockPath := d.cfg.SocketPath + ".lock"
 	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600)
@@ -347,6 +398,7 @@ type IPCRequest struct {
 	MemoryID   string          `json:"memory_id,omitempty"`
 	Content    string          `json:"content,omitempty"`
 	MemoryIDs  []string        `json:"memory_ids,omitempty"`
+	Mode       string          `json:"mode,omitempty"`
 }
 
 // IPCResponse 定義傳回用戶端之結果
@@ -463,9 +515,18 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				req.MemoryIDs = normalizeMemoryIDs(req.MemoryIDs)
 			}
 
-			// 計算請求 Fingerprint 確保同 Request ID 之 payload 一致性（防止撞 PK 或錯置，CTXMEM-004）
+			reqMode := req.Mode
+			if reqMode == "" {
+				reqMode = "direct"
+			}
+			if !pipeline.IsValidExecutionMode(pipeline.ExecutionMode(reqMode)) {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("invalid execution mode: %q", reqMode)})
+				continue
+			}
+
+			// 計算請求 Fingerprint 確保同 Request ID 之 payload 一致性（防止撞 PK 或錯置，CTXMEM-004, TFACE-009）
 			// 遵循 MUST FIX 1：使用 canonicalWs 作為 fingerprint workspace
-			fp := calculateTaskFingerprint(canonicalWs, req.Prompt, req.MemoryIDs)
+			fp := calculateTaskFingerprint(canonicalWs, req.Prompt, reqMode, req.MemoryIDs)
 
 			// 遵循 INT-004-REDELIVERY 與 CTXMEM-004：同 RequestID 且非 Cancelled 任務時直接回傳既有密封任務，不重新查詢底層記憶
 			if req.RequestID != "" {
@@ -553,6 +614,7 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				Workspace:       canonicalWs,
 				Status:          storage.StatusPending,
 				Class:           string(taskClass),
+				ExecutionMode:   reqMode,
 				MemoryRefs:      req.MemoryIDs,
 				ResolvedContext: resolvedCtxJSON,
 				CreatedAt:       now,
@@ -598,7 +660,7 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				continue
 			}
 
-			err := d.dispatchTask(taskID, canonicalWs, req.Prompt, taskClass, execCtx)
+			err := d.dispatchTaskWithMode(taskID, canonicalWs, req.Prompt, taskClass, reqMode, execCtx)
 			if err != nil {
 				d.releaseCapacity()
 				d.releaseWorkspaceAndWakeNext(wsKey, taskID)
@@ -879,6 +941,10 @@ func (d *Daemon) releaseWorkspaceAndWakeNext(wsKey, completedTaskID string) {
 }
 
 func (d *Daemon) dispatchTask(taskID, workspace, prompt string, class TaskClass, optCtx ...*engine.ExecutionContext) error {
+	return d.dispatchTaskWithMode(taskID, workspace, prompt, class, "direct", optCtx...)
+}
+
+func (d *Daemon) dispatchTaskWithMode(taskID, workspace, prompt string, class TaskClass, mode string, optCtx ...*engine.ExecutionContext) error {
 	var execCtx *engine.ExecutionContext
 	if len(optCtx) > 0 {
 		execCtx = optCtx[0]
@@ -889,15 +955,16 @@ func (d *Daemon) dispatchTask(taskID, workspace, prompt string, class TaskClass,
 			ID:              taskID,
 			Workspace:       workspace,
 			Prompt:          prompt,
+			Mode:            mode,
 			ResolvedContext: execCtx,
 		})
 		return runErr
 	}, func() {
 		// 在 WorkerPool 槽位完全釋放後執行容量歸還
 		d.releaseCapacity()
-		// 檢查任務最新狀態：無法確認狀態時 fail-closed，若處於 cancelling 嚴禁提前釋放 workspace lock
+		// 檢查任務最新狀態：若處於 cancelling，由 CancelTask 協調器負責安全回收與解鎖，嚴禁提前釋放
 		task, err := d.store.GetTask(context.Background(), taskID)
-		if err != nil || task == nil || task.Status == storage.StatusCancelling {
+		if err == nil && task != nil && task.Status == storage.StatusCancelling {
 			return
 		}
 		d.releaseWorkspaceAndWakeNext(wsKey, taskID)
@@ -905,18 +972,19 @@ func (d *Daemon) dispatchTask(taskID, workspace, prompt string, class TaskClass,
 	return err
 }
 
-func (d *Daemon) dispatchQueuedTask(taskID, workspace, prompt string, class TaskClass, wsKey string) error {
+func (d *Daemon) dispatchQueuedTask(taskID, workspace, prompt string, class TaskClass, mode string, wsKey string) error {
 	_, err := d.pool.SubmitEnqueuedClassifiedWithDone(context.Background(), class, func() error {
 		_, runErr := d.engine.SubmitTask(context.Background(), engine.SubmitRequest{
 			ID:        taskID,
 			Workspace: workspace,
 			Prompt:    prompt,
+			Mode:      mode,
 		})
 		return runErr
 	}, func() {
 		d.releaseCapacity()
 		task, err := d.store.GetTask(context.Background(), taskID)
-		if err != nil || task == nil || task.Status == storage.StatusCancelling {
+		if err == nil && task != nil && task.Status == storage.StatusCancelling {
 			return
 		}
 		d.releaseWorkspaceAndWakeNext(wsKey, taskID)
@@ -946,7 +1014,7 @@ func (d *Daemon) wakeQueuedTask(taskID, wsKey string) {
 	}
 
 	// 遵循 MUST FIX 2：被喚醒任務使用 dispatchQueuedTask，不受 pool.maxQueue 二次拋棄
-	err = d.dispatchQueuedTask(task.ID, task.Workspace, task.Prompt, taskClass, wsKey)
+	err = d.dispatchQueuedTask(task.ID, task.Workspace, task.Prompt, taskClass, task.ExecutionMode, wsKey)
 	if err != nil {
 		d.releaseCapacity()
 		_ = d.store.UpdateTaskStatus(context.Background(), task.ID, storage.StatusFailed, "", err.Error())
@@ -973,6 +1041,11 @@ func (d *Daemon) Close() error {
 			_ = syscall.Flock(int(d.lockFile.Fd()), syscall.LOCK_UN)
 			_ = d.lockFile.Close()
 			d.lockFile = nil
+		}
+
+		if d.readOnlyConfigCleanup != nil {
+			d.readOnlyConfigCleanup()
+			d.readOnlyConfigCleanup = nil
 		}
 	})
 	return err
@@ -1016,6 +1089,7 @@ func (c *Client) Submit(ctx context.Context, req engine.SubmitRequest) (*storage
 		RequestID: req.ID,
 		Workspace: req.Workspace,
 		Prompt:    req.Prompt,
+		Mode:      req.Mode,
 		MemoryIDs: req.MemoryIDs,
 	}); err != nil {
 		return nil, fmt.Errorf("encode request: %w", err)
@@ -1363,9 +1437,12 @@ func (c *Client) Close() error {
 	return nil
 }
 
-// calculateTaskFingerprint 計算任務請求指紋，包含排序後的 MemoryIDs 以確保 payload 一致性 (CTXMEM-004)
-func calculateTaskFingerprint(workspace, prompt string, memoryIDs []string) string {
+// calculateTaskFingerprint 計算任務請求指紋，包含 Mode 與排序後的 MemoryIDs 以確保 payload 一致性 (CTXMEM-004, TFACE-009)
+func calculateTaskFingerprint(workspace, prompt, mode string, memoryIDs []string) string {
 	fpPayload := workspace + ":" + prompt
+	if mode != "" && mode != "direct" {
+		fpPayload += ":mode=" + mode
+	}
 	if len(memoryIDs) > 0 {
 		sortedIDs := make([]string, len(memoryIDs))
 		copy(sortedIDs, memoryIDs)

@@ -93,6 +93,8 @@ type Task struct {
 	ErrorMessage    string     `json:"error_message"`
 	PGID            int        `json:"pgid"`
 	Class           string     `json:"class,omitempty"`
+	ExecutionMode   string     `json:"execution_mode,omitempty"`
+	PipelineTrace   string     `json:"pipeline_trace,omitempty"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
@@ -157,6 +159,8 @@ func (s *SQLiteStore) initSchema() error {
 		error_message TEXT NOT NULL DEFAULT '',
 		pgid INTEGER NOT NULL DEFAULT 0,
 		class TEXT NOT NULL DEFAULT 'interactive',
+		execution_mode TEXT NOT NULL DEFAULT 'direct',
+		pipeline_trace TEXT NOT NULL DEFAULT '',
 		created_at DATETIME NOT NULL,
 		updated_at DATETIME NOT NULL
 	);
@@ -165,7 +169,7 @@ func (s *SQLiteStore) initSchema() error {
 		return fmt.Errorf("create table: %w", err)
 	}
 
-	// 容錯升級既有表：先確保 request_id、fingerprint、memory_refs、resolved_context 與 class 欄位存在再建立索引
+	// 容錯升級既有表：先確保 request_id、fingerprint、memory_refs、resolved_context、class、execution_mode 與 pipeline_trace 欄位存在再建立索引
 	cols, err := s.getTableColumns("tasks")
 	if err != nil {
 		return fmt.Errorf("get table columns: %w", err)
@@ -193,6 +197,16 @@ func (s *SQLiteStore) initSchema() error {
 	if !cols["class"] {
 		if _, err := s.db.Exec("ALTER TABLE tasks ADD COLUMN class TEXT NOT NULL DEFAULT 'interactive'"); err != nil {
 			return fmt.Errorf("add column class: %w", err)
+		}
+	}
+	if !cols["execution_mode"] {
+		if _, err := s.db.Exec("ALTER TABLE tasks ADD COLUMN execution_mode TEXT NOT NULL DEFAULT 'direct'"); err != nil {
+			return fmt.Errorf("add column execution_mode: %w", err)
+		}
+	}
+	if !cols["pipeline_trace"] {
+		if _, err := s.db.Exec("ALTER TABLE tasks ADD COLUMN pipeline_trace TEXT NOT NULL DEFAULT ''"); err != nil {
+			return fmt.Errorf("add column pipeline_trace: %w", err)
 		}
 	}
 
@@ -302,8 +316,8 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 	}
 
 	query := `
-	INSERT INTO tasks (id, request_id, fingerprint, memory_refs, resolved_context, prompt, workspace, status, result, error_message, pgid, class, created_at, updated_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO tasks (id, request_id, fingerprint, memory_refs, resolved_context, prompt, workspace, status, result, error_message, pgid, class, execution_mode, pipeline_trace, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	now := time.Now().UTC()
 	if task.CreatedAt.IsZero() {
@@ -315,6 +329,10 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 	taskClass := task.Class
 	if taskClass == "" {
 		taskClass = "interactive"
+	}
+	mode := task.ExecutionMode
+	if mode == "" {
+		mode = "direct"
 	}
 
 	_, err := s.db.ExecContext(ctx, query,
@@ -330,6 +348,8 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 		task.ErrorMessage,
 		task.PGID,
 		taskClass,
+		mode,
+		task.PipelineTrace,
 		task.CreatedAt,
 		task.UpdatedAt,
 	)
@@ -345,7 +365,7 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 // GetTask 依任務 ID 查詢任務狀態與結果
 func (s *SQLiteStore) GetTask(ctx context.Context, id string) (*Task, error) {
 	query := `
-	SELECT id, request_id, fingerprint, memory_refs, resolved_context, prompt, workspace, status, result, error_message, pgid, class, created_at, updated_at
+	SELECT id, request_id, fingerprint, memory_refs, resolved_context, prompt, workspace, status, result, error_message, pgid, class, execution_mode, pipeline_trace, created_at, updated_at
 	FROM tasks
 	WHERE id = ?
 	`
@@ -367,6 +387,8 @@ func (s *SQLiteStore) GetTask(ctx context.Context, id string) (*Task, error) {
 		&task.ErrorMessage,
 		&task.PGID,
 		&task.Class,
+		&task.ExecutionMode,
+		&task.PipelineTrace,
 		&task.CreatedAt,
 		&task.UpdatedAt,
 	)
@@ -378,6 +400,9 @@ func (s *SQLiteStore) GetTask(ctx context.Context, id string) (*Task, error) {
 	}
 
 	task.Status = TaskStatus(statusStr)
+	if task.ExecutionMode == "" {
+		task.ExecutionMode = "direct"
+	}
 	if memRefsRaw != "" {
 		_ = json.Unmarshal([]byte(memRefsRaw), &task.MemoryRefs)
 	}
@@ -393,7 +418,7 @@ func (s *SQLiteStore) GetTaskByRequestID(ctx context.Context, requestID string) 
 		return nil, ErrTaskNotFound
 	}
 	query := `
-	SELECT id, request_id, fingerprint, memory_refs, resolved_context, prompt, workspace, status, result, error_message, pgid, class, created_at, updated_at
+	SELECT id, request_id, fingerprint, memory_refs, resolved_context, prompt, workspace, status, result, error_message, pgid, class, execution_mode, pipeline_trace, created_at, updated_at
 	FROM tasks
 	WHERE request_id = ?
 	ORDER BY created_at DESC
@@ -417,6 +442,8 @@ func (s *SQLiteStore) GetTaskByRequestID(ctx context.Context, requestID string) 
 		&task.ErrorMessage,
 		&task.PGID,
 		&task.Class,
+		&task.ExecutionMode,
+		&task.PipelineTrace,
 		&task.CreatedAt,
 		&task.UpdatedAt,
 	)
@@ -428,6 +455,9 @@ func (s *SQLiteStore) GetTaskByRequestID(ctx context.Context, requestID string) 
 	}
 
 	task.Status = TaskStatus(statusStr)
+	if task.ExecutionMode == "" {
+		task.ExecutionMode = "direct"
+	}
 	if memRefsRaw != "" {
 		_ = json.Unmarshal([]byte(memRefsRaw), &task.MemoryRefs)
 	}
@@ -435,6 +465,28 @@ func (s *SQLiteStore) GetTaskByRequestID(ctx context.Context, requestID string) 
 		task.MemoryRefs = []string{}
 	}
 	return &task, nil
+}
+
+// UpdateTaskPipelineTrace 更新指定任務的管線追蹤審計紀錄
+func (s *SQLiteStore) UpdateTaskPipelineTrace(ctx context.Context, id string, trace string) error {
+	query := `
+	UPDATE tasks
+	SET pipeline_trace = ?, updated_at = ?
+	WHERE id = ?
+	`
+	now := time.Now().UTC()
+	res, err := s.db.ExecContext(ctx, query, trace, now, id)
+	if err != nil {
+		return fmt.Errorf("update task pipeline trace: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
+	if rows == 0 {
+		return ErrTaskNotFound
+	}
+	return nil
 }
 
 // UpdateTaskStatus 更新指定任務的狀態、輸出結果或錯誤訊息

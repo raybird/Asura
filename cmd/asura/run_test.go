@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net"
 	"path/filepath"
@@ -276,4 +277,116 @@ func TestHandleAsk_MemoryFlags(t *testing.T) {
 		t.Fatalf("expected MemoryIDs %v, got %v", expectedIDs, receivedReq.MemoryIDs)
 	}
 }
+
+// TestHandleAsk_ModeFlags 驗證 asura ask 支援 --mode 參數並校驗合法性 (TFACE-001, TFACE-002, Task 5.1)
+func TestHandleAsk_ModeFlags(t *testing.T) {
+	t.Run("非法 mode 返回非 0 並輸出錯誤", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		code := handleAsk([]string{"--mode", "invalid-mode", "test prompt"}, out, stderr)
+		if code == 0 {
+			t.Errorf("expected non-zero exit code, got 0")
+		}
+		if !strings.Contains(stderr.String(), "invalid mode") {
+			t.Errorf("expected 'invalid mode' in stderr, got: %s", stderr.String())
+		}
+	})
+
+	t.Run("合法 three-face mode 正確傳遞至 Daemon", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		sockPath := filepath.Join(tmpDir, "mock_ask_mode.sock")
+		l, err := net.Listen("unix", sockPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer l.Close()
+
+		var receivedReq daemon.IPCRequest
+		go func() {
+			conn, err := l.Accept()
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+			_ = json.NewDecoder(conn).Decode(&receivedReq)
+			_ = json.NewEncoder(conn).Encode(daemon.IPCResponse{
+				Task: &storage.Task{ID: "task-mock-three-face"},
+			})
+		}()
+
+		stdout := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		code := handleAsk([]string{
+			"-socket", sockPath,
+			"--mode", "three-face",
+			"測試 prompt",
+		}, stdout, stderr)
+
+		if code != 0 {
+			t.Fatalf("expected code 0, got %d, stderr: %s", code, stderr.String())
+		}
+		if receivedReq.Mode != "three-face" {
+			t.Fatalf("expected Mode 'three-face', got %q", receivedReq.Mode)
+		}
+	})
+}
+
+// TestHandleRun_ModeValidation 驗證 asura run 支援 --mode 參數與校驗 (TFACE-001, TFACE-002, Task 5.1)
+func TestHandleRun_ModeValidation(t *testing.T) {
+	t.Run("非法 mode 返回非 0 並輸出錯誤", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		code := handleRun([]string{"--mode", "bad-mode", "test prompt"}, out, stderr)
+		if code == 0 {
+			t.Errorf("expected non-zero exit code, got 0")
+		}
+		if !strings.Contains(stderr.String(), "invalid mode") {
+			t.Errorf("expected 'invalid mode' in stderr, got: %s", stderr.String())
+		}
+	})
+}
+
+// TestHandleStatus_PipelineTrace 驗證 status 指令格式化輸出 Mode 與 Pipeline 狀態 (Task 5.1)
+func TestHandleStatus_PipelineTrace(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test_status.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	taskID := "task-trace-test"
+	traceJSON := `{"mode":"three-face","stages":[{"name":"oracle","status":"completed","duration_ms":120},{"name":"striker","status":"completed","duration_ms":350},{"name":"critic","status":"completed","duration_ms":80}],"critic_review":{"verdict":"pass","summary":"All good"}}`
+	task := &storage.Task{
+		ID:            taskID,
+		Prompt:        "demo",
+		Workspace:     tmpDir,
+		Status:        storage.StatusCompleted,
+		ExecutionMode: "three-face",
+		PipelineTrace: traceJSON,
+		Result:        "final output",
+	}
+	if err := store.CreateTask(context.Background(), task); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	code := handleStatus([]string{"-db", dbPath, taskID}, stdout, stderr)
+	if code != 0 {
+		t.Fatalf("expected code 0, got %d, stderr: %s", code, stderr.String())
+	}
+	outStr := stdout.String()
+	if !strings.Contains(outStr, "Mode:      three-face") {
+		t.Errorf("expected 'Mode:      three-face' in stdout, got:\n%s", outStr)
+	}
+	if !strings.Contains(outStr, "Pipeline:  oracle (completed, 120ms) -> striker (completed, 350ms) -> critic (completed, 80ms)") {
+		t.Errorf("expected Pipeline trace summary in stdout, got:\n%s", outStr)
+	}
+	if !strings.Contains(outStr, "Verdict:   pass") {
+		t.Errorf("expected 'Verdict:   pass' in stdout, got:\n%s", outStr)
+	}
+}
+
 

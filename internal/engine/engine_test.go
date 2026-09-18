@@ -1047,11 +1047,281 @@ func TestEngine_SubmitTask_CorruptedSealedContextFailsClosed(t *testing.T) {
 	})
 }
 
+type mockEnginePipelineRunner struct {
+	output    string
+	traceJSON string
+	err       error
+	callCount int
+	lastMode  string
+	onExecute func()
+}
 
+func (m *mockEnginePipelineRunner) ExecutePipeline(ctx context.Context, mode string, execCtx *ExecutionContext) (string, string, error) {
+	m.callCount++
+	m.lastMode = mode
+	if m.onExecute != nil {
+		m.onExecute()
+	}
+	return m.output, m.traceJSON, m.err
+}
 
+func TestEngine_ThreeFacePipeline(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-engine-pipeline-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
 
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
 
+	policy := auth.NewPolicy([]string{tmpDir})
 
+	mockPR := &mockEnginePipelineRunner{
+		output:    "three-face completed output",
+		traceJSON: `{"mode":"three-face","model_calls":3,"final_result":"three-face completed output"}`,
+	}
 
+	eng := NewEngine(store, policy, WithPipelineRunner(mockPR))
+	ctx := context.Background()
 
+	req := SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "build feature",
+		Mode:      "three-face",
+	}
+
+	task, err := eng.SubmitTask(ctx, req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if task.Status != storage.StatusCompleted {
+		t.Errorf("expected task status completed, got %s", task.Status)
+	}
+	if task.Result != "three-face completed output" {
+		t.Errorf("expected result 'three-face completed output', got %s", task.Result)
+	}
+	if task.ExecutionMode != "three-face" {
+		t.Errorf("expected ExecutionMode 'three-face', got %s", task.ExecutionMode)
+	}
+	if task.PipelineTrace != mockPR.traceJSON {
+		t.Errorf("expected PipelineTrace %s, got %s", mockPR.traceJSON, task.PipelineTrace)
+	}
+
+	if mockPR.callCount != 1 || mockPR.lastMode != "three-face" {
+		t.Errorf("expected pipelineRunner called once with three-face, got count=%d, mode=%s",
+			mockPR.callCount, mockPR.lastMode)
+	}
+
+	// 驗證從資料庫讀回也是一致的
+	savedTask, err := store.GetTask(ctx, task.ID)
+	if err != nil {
+		t.Fatalf("failed to get saved task: %v", err)
+	}
+	if savedTask.ExecutionMode != "three-face" || savedTask.PipelineTrace != mockPR.traceJSON {
+		t.Errorf("persisted task mismatch: mode=%s, trace=%s", savedTask.ExecutionMode, savedTask.PipelineTrace)
+	}
+}
+
+func TestEngine_ThreeFacePipeline_Failure(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-engine-pipe-fail-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	failErr := errors.New("pipeline failed at oracle stage")
+	mockPR := &mockEnginePipelineRunner{
+		err:       failErr,
+		traceJSON: `{"mode":"three-face","model_calls":1,"error":"oracle failed"}`,
+	}
+
+	eng := NewEngine(store, policy, WithPipelineRunner(mockPR))
+	ctx := context.Background()
+
+	req := SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "do something",
+		Mode:      "three-face",
+	}
+
+	task, err := eng.SubmitTask(ctx, req)
+	if err == nil {
+		t.Fatalf("expected error from failed pipeline, got nil")
+	}
+	if !errors.Is(err, failErr) && !strings.Contains(err.Error(), failErr.Error()) {
+		t.Errorf("expected error %v, got %v", failErr, err)
+	}
+	if task.Status != storage.StatusFailed {
+		t.Errorf("expected task status failed, got %s", task.Status)
+	}
+	if task.PipelineTrace != mockPR.traceJSON {
+		t.Errorf("expected failure trace saved, got %s", task.PipelineTrace)
+	}
+}
+
+func TestEngine_DirectModeTrace(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-engine-direct-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	runner := func(ctx context.Context, ws, prompt string) (string, error) {
+		return "direct success output", nil
+	}
+
+	eng := NewEngine(store, policy, WithRunner(runner))
+	ctx := context.Background()
+
+	req := SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "direct prompt",
+		Mode:      "direct",
+	}
+
+	task, err := eng.SubmitTask(ctx, req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if task.Status != storage.StatusCompleted {
+		t.Errorf("expected status completed, got %s", task.Status)
+	}
+	if task.ExecutionMode != "direct" {
+		t.Errorf("expected ExecutionMode direct, got %s", task.ExecutionMode)
+	}
+	if task.PipelineTrace == "" {
+		t.Errorf("expected non-empty PipelineTrace for direct mode")
+	}
+	if !strings.Contains(task.PipelineTrace, `"mode":"direct"`) {
+		t.Errorf("expected direct mode in trace, got %s", task.PipelineTrace)
+	}
+}
+
+func TestEngine_InvalidExecutionMode_FailClosed(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	eng := NewEngine(store, policy, WithRunner(func(ctx context.Context, ws, p string) (string, error) {
+		return "should not run", nil
+	}))
+
+	// Case 1: SubmitTask 拒絕未定義模式
+	req := SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "test",
+		Mode:      "unknown_mode",
+	}
+	_, submitErr := eng.SubmitTask(context.Background(), req)
+	if submitErr == nil {
+		t.Fatalf("expected error for unknown mode in SubmitTask, got nil")
+	}
+
+	// Case 2: 若 DB 中存在未知 mode 的任務，執行時 switch default 觸發 Fail-Closed
+	taskID := "task-invalid-mode"
+	now := time.Now().UTC()
+	invalidTask := &storage.Task{
+		ID:            taskID,
+		Workspace:     tmpDir,
+		Prompt:        "test",
+		Status:        storage.StatusPending,
+		ExecutionMode: "corrupted_mode",
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	if err := store.CreateTask(context.Background(), invalidTask); err != nil {
+		t.Fatal(err)
+	}
+
+	resTask, runErr := eng.SubmitTask(context.Background(), SubmitRequest{
+		ID:        taskID,
+		Workspace: tmpDir,
+		Prompt:    "test",
+		Mode:      "corrupted_mode",
+	})
+	if runErr == nil {
+		t.Fatalf("expected run error for corrupted mode, got nil")
+	}
+	if resTask != nil && resTask.Status != storage.StatusFailed {
+		t.Errorf("expected task status failed, got %s", resTask.Status)
+	}
+}
+
+func TestEngine_PipelineTracePersistenceError_ErrorsJoin(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-engine-trace-err-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	pipelineErr := errors.New("underlying pipeline run failed")
+	mockPR := &mockEnginePipelineRunner{
+		err:       pipelineErr,
+		traceJSON: `{"mode":"three-face","error":"pipeline exploded"}`,
+		onExecute: func() {
+			// 在 pipeline 執行期間關閉資料庫，使後續 UpdateTaskPipelineTrace 失敗
+			_ = store.Close()
+		},
+	}
+
+	eng := NewEngine(store, policy, WithPipelineRunner(mockPR))
+	ctx := context.Background()
+
+	req := SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "trace persist test",
+		Mode:      "three-face",
+	}
+
+	_, err = eng.SubmitTask(ctx, req)
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+
+	// 驗證 errors.Join 同時保留了底層 pipelineErr 與 trace persistence failure
+	if !errors.Is(err, pipelineErr) {
+		t.Errorf("expected error to wrap pipelineErr, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "persist pipeline trace failed") {
+		t.Errorf("expected 'persist pipeline trace failed' in error, got: %v", err)
+	}
+}
 

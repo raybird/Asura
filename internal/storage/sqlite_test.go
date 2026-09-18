@@ -786,4 +786,78 @@ func TestSQLiteStore_MemoryContextColumnsMigration(t *testing.T) {
 	}
 }
 
+func TestTaskPipelineTraceStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "asura-pipeline-storage-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+
+	// 1. 建立具有 three-face mode 與 pipeline_trace 的任務
+	traceJSON := `{"mode":"three-face","model_calls":3,"duration_ms":120}`
+	task := &Task{
+		ID:            "task-pipe-001",
+		RequestID:     "req-pipe-001",
+		Prompt:        "three-face task",
+		Workspace:     "/tmp/ws",
+		Status:        StatusCompleted,
+		ExecutionMode: "three-face",
+		PipelineTrace: traceJSON,
+		CreatedAt:     time.Now().UTC(),
+		UpdatedAt:     time.Now().UTC(),
+	}
+
+	if err := store.CreateTask(ctx, task); err != nil {
+		t.Fatalf("CreateTask failed: %v", err)
+	}
+
+	// 2. 透過 GetTask 查回
+	got, err := store.GetTask(ctx, task.ID)
+	if err != nil {
+		t.Fatalf("GetTask failed: %v", err)
+	}
+	if got.ExecutionMode != "three-face" {
+		t.Errorf("expected ExecutionMode 'three-face', got %q", got.ExecutionMode)
+	}
+	if got.PipelineTrace != traceJSON {
+		t.Errorf("expected PipelineTrace %q, got %q", traceJSON, got.PipelineTrace)
+	}
+
+	// 3. 透過 GetTaskByRequestID 查回
+	gotByReq, err := store.GetTaskByRequestID(ctx, "req-pipe-001")
+	if err != nil {
+		t.Fatalf("GetTaskByRequestID failed: %v", err)
+	}
+	if gotByReq.ExecutionMode != "three-face" {
+		t.Errorf("expected ExecutionMode 'three-face', got %q", gotByReq.ExecutionMode)
+	}
+	if gotByReq.PipelineTrace != traceJSON {
+		t.Errorf("expected PipelineTrace %q, got %q", traceJSON, gotByReq.PipelineTrace)
+	}
+
+	// 4. 測試 UpdateTaskPipelineTrace
+	newTrace := `{"mode":"three-face","model_calls":3,"duration_ms":250,"final_result":"ok"}`
+	if err := store.UpdateTaskPipelineTrace(ctx, task.ID, newTrace); err != nil {
+		t.Fatalf("UpdateTaskPipelineTrace failed: %v", err)
+	}
+
+	updated, err := store.GetTask(ctx, task.ID)
+	if err != nil {
+		t.Fatalf("GetTask after update failed: %v", err)
+	}
+	if updated.PipelineTrace != newTrace {
+		t.Errorf("expected updated PipelineTrace %q, got %q", newTrace, updated.PipelineTrace)
+	}
+}
+
+
 
