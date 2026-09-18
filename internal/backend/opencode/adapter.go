@@ -78,29 +78,33 @@ func CreateIsolatedReadOnlyConfigDir() (string, func(), error) {
 	// 預設純 Asura 唯讀配置
 	configContent := []byte(AsuraReadOnlyConfigJSON)
 
-	// 若使用者全域環境存在 opencode.json，安全提取 provider 與 model 設定以確保模型調用能力，
-	// 但嚴格過濾、排除任何 agent、permission、mcp、plugin 污染
-	userHome, _ := os.UserHomeDir()
-	xdgConfig := os.Getenv("XDG_CONFIG_HOME")
-	var globalCfgPath string
-	if xdgConfig != "" {
-		globalCfgPath = filepath.Join(xdgConfig, "opencode", "opencode.json")
-	} else if userHome != "" {
-		globalCfgPath = filepath.Join(userHome, ".config", "opencode", "opencode.json")
-	}
-
+	// 若使用者全域環境存在 opencode.jsonc / opencode.json / config.json，安全提取 provider 與 model 設定以確保模型調用能力，
+	// 但嚴格過濾、排除任何 agent、permission、mcp、plugin 污染，並杜絕帶有 npm package 之 custom executable provider
+	globalCfgPath := findGlobalOpenCodeConfigPath()
 	if globalCfgPath != "" {
 		if rawGlobal, err := os.ReadFile(globalCfgPath); err == nil {
+			cleanJSON := stripJSONC(rawGlobal)
 			var globalData map[string]any
-			if err := json.Unmarshal(rawGlobal, &globalData); err == nil {
+			if err := json.Unmarshal(cleanJSON, &globalData); err == nil {
 				var baseData map[string]any
 				if err := json.Unmarshal([]byte(AsuraReadOnlyConfigJSON), &baseData); err == nil {
-					if p, ok := globalData["provider"]; ok {
-						baseData["provider"] = p
-					}
-					if m, ok := globalData["model"]; ok {
+					var selectedModel string
+					if m, ok := globalData["model"].(string); ok {
+						selectedModel = m
 						baseData["model"] = m
 					}
+
+					if p, ok := globalData["provider"]; ok {
+						cleanProv, err := sanitizeProviderConfig(p, selectedModel)
+						if err != nil {
+							_ = os.RemoveAll(dir)
+							return "", nil, fmt.Errorf("sanitize provider config: %w", err)
+						}
+						if len(cleanProv) > 0 {
+							baseData["provider"] = cleanProv
+						}
+					}
+
 					if mergedJSON, err := json.MarshalIndent(baseData, "", "  "); err == nil {
 						configContent = mergedJSON
 					}
@@ -306,42 +310,8 @@ func (a *Adapter) Run(ctx context.Context, workspace string, prompt string) (str
 	cmd := exec.CommandContext(ctx, binPath, args...)
 	ConfigureProcessGroup(cmd)
 
-	// 配置環境變數，包含權限控制與隔離設定
-	cmd.Env = os.Environ()
-	cmd.Env = setOrUpdateEnv(cmd.Env, "OPENCODE_DISABLE_AUTOUPDATE", "1")
-	if a.cfg.Pure {
-		cmd.Env = setOrUpdateEnv(cmd.Env, "OPENCODE_PURE", "1")
-	}
-	if a.cfg.DisableProjectConfig {
-		cmd.Env = setOrUpdateEnv(cmd.Env, "OPENCODE_DISABLE_PROJECT_CONFIG", "1")
-	}
-	if a.cfg.ConfigDir != "" {
-		opencodeSubdir := filepath.Join(a.cfg.ConfigDir, "opencode")
-		homeSubdir := filepath.Join(a.cfg.ConfigDir, "home")
-		if _, err := os.Stat(opencodeSubdir); err == nil {
-			// 乾淨 Configuration Namespace：
-			// 1. XDG_CONFIG_HOME 指向 a.cfg.ConfigDir，使 OpenCode 的 config 路徑解析為 <ConfigDir>/opencode
-			// 2. HOME 指向乾淨的空目錄 homeSubdir，阻斷任何 $HOME/.opencode 的全域設定污染
-			// 3. OPENCODE_CONFIG_DIR 指向 opencodeSubdir
-			// 4. XDG_DATA_HOME 保留使用者真實資料路徑，確保 auth.json 模型憑證可正常讀取
-			cmd.Env = setOrUpdateEnv(cmd.Env, "XDG_CONFIG_HOME", a.cfg.ConfigDir)
-			cmd.Env = setOrUpdateEnv(cmd.Env, "HOME", homeSubdir)
-			cmd.Env = setOrUpdateEnv(cmd.Env, "OPENCODE_CONFIG_DIR", opencodeSubdir)
-			realHome, _ := os.UserHomeDir()
-			dataHome := os.Getenv("XDG_DATA_HOME")
-			if dataHome == "" && realHome != "" {
-				dataHome = filepath.Join(realHome, ".local", "share")
-			}
-			if dataHome != "" {
-				cmd.Env = setOrUpdateEnv(cmd.Env, "XDG_DATA_HOME", dataHome)
-			}
-		} else {
-			cmd.Env = setOrUpdateEnv(cmd.Env, "OPENCODE_CONFIG_DIR", a.cfg.ConfigDir)
-		}
-	}
-	if a.cfg.Permission != "" {
-		cmd.Env = setOrUpdateEnv(cmd.Env, "OPENCODE_PERMISSION", a.cfg.Permission)
-	}
+	// 配置環境變數，落實權限控制、Configuration Namespace 隔離並徹底消除外部配置注入
+	cmd.Env = buildExecutionEnv(a.cfg)
 
 	var stdoutBuf, stderrBuf bytes.Buffer
 	cmd.Stdout = &stdoutBuf
@@ -424,3 +394,267 @@ func setOrUpdateEnv(env []string, key, val string) []string {
 	}
 	return append(env, entry)
 }
+
+// DisallowedReadOnlyEnvKeys 定義在唯讀/隔離執行時嚴格禁止繼承的環境變數鍵值（防止外部配置與權限注入）
+var DisallowedReadOnlyEnvKeys = []string{
+	"OPENCODE_CONFIG",
+	"OPENCODE_CONFIG_CONTENT",
+}
+
+// removeEnv 從環境變數切片中移除特定鍵（不區分大小寫匹配 key= 前綴）
+func removeEnv(env []string, keys ...string) []string {
+	if len(keys) == 0 {
+		return env
+	}
+	keyMap := make(map[string]struct{}, len(keys))
+	for _, k := range keys {
+		keyMap[strings.ToUpper(k)] = struct{}{}
+	}
+
+	result := make([]string, 0, len(env))
+	for _, entry := range env {
+		parts := strings.SplitN(entry, "=", 2)
+		if len(parts) > 0 {
+			k := strings.ToUpper(parts[0])
+			if _, drop := keyMap[k]; drop {
+				continue
+			}
+		}
+		result = append(result, entry)
+	}
+	return result
+}
+
+// buildExecutionEnv 根據 AdapterConfig 構建乾淨、無未授權配置注入的子進程環境變數
+func buildExecutionEnv(cfg AdapterConfig) []string {
+	env := os.Environ()
+
+	// 1. 強制清除任何外部配置注入標記，杜絕 OPENCODE_CONFIG 與 OPENCODE_CONFIG_CONTENT 越權
+	env = removeEnv(env, DisallowedReadOnlyEnvKeys...)
+	env = removeEnv(env, "OPENCODE_PERMISSION")
+
+	// 2. 若指定了隔離配置目錄，重設 XDG 與 HOME 空間，切斷未受管配置
+	if cfg.ConfigDir != "" {
+		opencodeSubdir := filepath.Join(cfg.ConfigDir, "opencode")
+		homeSubdir := filepath.Join(cfg.ConfigDir, "home")
+		if _, err := os.Stat(opencodeSubdir); err == nil {
+			env = setOrUpdateEnv(env, "XDG_CONFIG_HOME", cfg.ConfigDir)
+			env = setOrUpdateEnv(env, "HOME", homeSubdir)
+			env = setOrUpdateEnv(env, "OPENCODE_CONFIG_DIR", opencodeSubdir)
+			realHome, _ := os.UserHomeDir()
+			dataHome := os.Getenv("XDG_DATA_HOME")
+			if dataHome == "" && realHome != "" {
+				dataHome = filepath.Join(realHome, ".local", "share")
+			}
+			if dataHome != "" {
+				env = setOrUpdateEnv(env, "XDG_DATA_HOME", dataHome)
+			}
+		} else {
+			env = setOrUpdateEnv(env, "OPENCODE_CONFIG_DIR", cfg.ConfigDir)
+		}
+	}
+
+	// 3. 設定核心保護標記
+	env = setOrUpdateEnv(env, "OPENCODE_DISABLE_AUTOUPDATE", "1")
+	if cfg.Pure {
+		env = setOrUpdateEnv(env, "OPENCODE_PURE", "1")
+	}
+	if cfg.DisableProjectConfig {
+		env = setOrUpdateEnv(env, "OPENCODE_DISABLE_PROJECT_CONFIG", "1")
+	}
+	if cfg.Permission != "" {
+		env = setOrUpdateEnv(env, "OPENCODE_PERMISSION", cfg.Permission)
+	}
+
+	// 4. 最後防線：再次過濾禁止繼承的環境變數，確保絕對不殘留
+	return removeEnv(env, DisallowedReadOnlyEnvKeys...)
+}
+
+// findGlobalOpenCodeConfigPath 搜尋全域配置路徑，優先順序：opencode.jsonc -> opencode.json -> config.json
+func findGlobalOpenCodeConfigPath() string {
+	userHome, _ := os.UserHomeDir()
+	xdgConfig := os.Getenv("XDG_CONFIG_HOME")
+
+	var configDirs []string
+	if xdgConfig != "" {
+		configDirs = append(configDirs, filepath.Join(xdgConfig, "opencode"))
+	}
+	if userHome != "" {
+		configDirs = append(configDirs, filepath.Join(userHome, ".config", "opencode"))
+	}
+
+	fileNames := []string{"opencode.jsonc", "opencode.json", "config.json"}
+
+	for _, dir := range configDirs {
+		for _, fn := range fileNames {
+			p := filepath.Join(dir, fn)
+			if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+				return p
+			}
+		}
+	}
+	return ""
+}
+
+// stripJSONC 清除 JSONC 註解（// ... 與 /* ... */）及尾隨逗號（trailing comma before } or ]），
+// 同時保留字串內部引號、跳脫符號與 URL 中的雙斜線
+func stripJSONC(src []byte) []byte {
+	var out bytes.Buffer
+	inString := false
+	escaped := false
+	i := 0
+	n := len(src)
+
+	for i < n {
+		c := src[i]
+
+		if inString {
+			out.WriteByte(c)
+			if escaped {
+				escaped = false
+			} else if c == '\\' {
+				escaped = true
+			} else if c == '"' {
+				inString = false
+			}
+			i++
+			continue
+		}
+
+		if c == '"' {
+			inString = true
+			escaped = false
+			out.WriteByte(c)
+			i++
+			continue
+		}
+
+		// 處理單行註解 //
+		if c == '/' && i+1 < n && src[i+1] == '/' {
+			i += 2
+			for i < n && src[i] != '\n' {
+				i++
+			}
+			continue
+		}
+
+		// 處理區塊註解 /* ... */
+		if c == '/' && i+1 < n && src[i+1] == '*' {
+			i += 2
+			for i+1 < n && !(src[i] == '*' && src[i+1] == '/') {
+				i++
+			}
+			if i+1 < n {
+				i += 2
+			}
+			continue
+		}
+
+		// 處理尾隨逗號 (trailing comma before } or ])
+		if c == ',' {
+			j := i + 1
+			isTrailing := false
+			for j < n {
+				b := src[j]
+				if b == ' ' || b == '\t' || b == '\r' || b == '\n' {
+					j++
+					continue
+				}
+				if b == '/' && j+1 < n && src[j+1] == '/' {
+					j += 2
+					for j < n && src[j] != '\n' {
+						j++
+					}
+					continue
+				}
+				if b == '/' && j+1 < n && src[j+1] == '*' {
+					j += 2
+					for j+1 < n && !(src[j] == '*' && src[j+1] == '/') {
+						j++
+					}
+					if j+1 < n {
+						j += 2
+					}
+					continue
+				}
+				if b == '}' || b == ']' {
+					isTrailing = true
+				}
+				break
+			}
+			if isTrailing {
+				i++
+				continue
+			}
+		}
+
+		out.WriteByte(c)
+		i++
+	}
+
+	return out.Bytes()
+}
+
+// hasNPMField 遞迴檢查資料結構是否包含任意 "npm" 欄位宣告（表示外部可執行 package）
+func hasNPMField(v any) bool {
+	switch val := v.(type) {
+	case map[string]any:
+		for k, child := range val {
+			if strings.EqualFold(k, "npm") {
+				return true
+			}
+			if hasNPMField(child) {
+				return true
+			}
+		}
+	case []any:
+		for _, item := range val {
+			if hasNPMField(item) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// isModelUsingProvider 檢查指定模型是否依賴特定 provider 名稱
+func isModelUsingProvider(selectedModel, providerName string) bool {
+	if selectedModel == "" || providerName == "" {
+		return false
+	}
+	if selectedModel == providerName {
+		return true
+	}
+	return strings.HasPrefix(selectedModel, providerName+"/")
+}
+
+// sanitizeProviderConfig 檢查並清洗 provider 設定：
+// 1. 若 provider 含有 "npm"，代表為 custom executable provider。
+// 2. 若 selectedModel 依賴該 executable provider，遵循 Fail-Closed 原則，拒絕啟動並回傳錯誤。
+// 3. 若 selectedModel 未使用該 provider，則從配置中排除，不複製進唯讀隔離環境。
+// 4. 確保複製進唯讀配置之 provider 僅為純資料屬性，杜絕任意代碼執行風險。
+func sanitizeProviderConfig(rawProvider any, selectedModel string) (map[string]any, error) {
+	if rawProvider == nil {
+		return nil, nil
+	}
+	provMap, ok := rawProvider.(map[string]any)
+	if !ok {
+		return nil, nil
+	}
+
+	cleanProviders := make(map[string]any)
+
+	for name, v := range provMap {
+		if hasNPMField(v) {
+			if isModelUsingProvider(selectedModel, name) {
+				return nil, fmt.Errorf("custom executable provider %q with npm package is not allowed in read-only runtime", name)
+			}
+			// 未使用的 custom executable provider，不複製進隔離配置
+			continue
+		}
+		cleanProviders[name] = v
+	}
+
+	return cleanProviders, nil
+}
+

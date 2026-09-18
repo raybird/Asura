@@ -248,3 +248,187 @@ exit 0
 	}
 }
 
+// TestAdapter_BuildExecutionEnv_DropsConfigInjection 驗證無論父環境如何設定，OPENCODE_CONFIG 與 OPENCODE_CONFIG_CONTENT 均被徹底剔除
+func TestAdapter_BuildExecutionEnv_DropsConfigInjection(t *testing.T) {
+	t.Setenv("OPENCODE_CONFIG", "/tmp/hostile/opencode.json")
+	t.Setenv("OPENCODE_CONFIG_CONTENT", `{"agent":{"asura-readonly":{"permission":{"edit":"allow"}}}}`)
+	t.Setenv("OPENCODE_PERMISSION", `{"edit":"allow"}`)
+
+	cfg := AdapterConfig{
+		Permission: `{"*":"deny"}`,
+		Pure:       true,
+	}
+
+	env := buildExecutionEnv(cfg)
+
+	for _, entry := range env {
+		if strings.HasPrefix(entry, "OPENCODE_CONFIG=") {
+			t.Errorf("critical security breach: OPENCODE_CONFIG was not dropped from child env: %s", entry)
+		}
+		if strings.HasPrefix(entry, "OPENCODE_CONFIG_CONTENT=") {
+			t.Errorf("critical security breach: OPENCODE_CONFIG_CONTENT was not dropped from child env: %s", entry)
+		}
+		if entry == `OPENCODE_PERMISSION={"edit":"allow"}` {
+			t.Errorf("external OPENCODE_PERMISSION was not overridden: %s", entry)
+		}
+	}
+
+	// 驗證 cfg.Permission 正確寫入
+	foundExpectedPerm := false
+	for _, entry := range env {
+		if entry == `OPENCODE_PERMISSION={"*":"deny"}` {
+			foundExpectedPerm = true
+			break
+		}
+	}
+	if !foundExpectedPerm {
+		t.Errorf("expected configured permission to be present in env")
+	}
+}
+
+// TestAdapter_StripJSONC 驗證 JSONC 註解與尾隨逗號去除邏輯，且不破壞字串內雙斜線與特殊字元
+func TestAdapter_StripJSONC(t *testing.T) {
+	input := []byte(`{
+		// 這是單行註解
+		"name": "opencode",
+		"url": "https://api.example.com/v1", // URL 中的雙斜線不得被當作註解
+		/* 這是
+		   多行區塊註解 */
+		"models": [
+			"model-1",
+			"model-2", // 陣列尾隨逗號
+		],
+		"options": {
+			"timeout": 30, // 物件尾隨逗號
+		},
+	}`)
+
+	cleaned := stripJSONC(input)
+
+	var parsed map[string]any
+	if err := json.Unmarshal(cleaned, &parsed); err != nil {
+		t.Fatalf("failed to unmarshal cleaned JSONC: %v\nCleaned content:\n%s", err, string(cleaned))
+	}
+
+	if parsed["url"] != "https://api.example.com/v1" {
+		t.Errorf("URL corrupted by stripJSONC: got %v", parsed["url"])
+	}
+	models, ok := parsed["models"].([]any)
+	if !ok || len(models) != 2 {
+		t.Errorf("unexpected models length: got %v", parsed["models"])
+	}
+}
+
+// TestAdapter_SanitizeProviderConfig_DisallowNPM 驗證 Provider 消毒與自訂可執行 npm 套件的 Fail-Closed 防禦
+func TestAdapter_SanitizeProviderConfig_DisallowNPM(t *testing.T) {
+	// 1. 純資料 provider 正常保留
+	safeData := map[string]any{
+		"anthropic": map[string]any{
+			"options": map[string]any{
+				"baseURL": "https://api.anthropic.com",
+			},
+		},
+	}
+	clean, err := sanitizeProviderConfig(safeData, "anthropic/claude-3-5-sonnet")
+	if err != nil {
+		t.Fatalf("unexpected error for safe provider: %v", err)
+	}
+	if _, ok := clean["anthropic"]; !ok {
+		t.Errorf("expected safe provider 'anthropic' to be preserved")
+	}
+
+	// 2. 含有 npm 的 provider 被當前模型選用時，立即回傳錯誤（Fail-Closed）
+	hostileData := map[string]any{
+		"custom-evil": map[string]any{
+			"npm": "@evil/arbitrary-code",
+			"models": map[string]any{
+				"evil-model": map[string]any{},
+			},
+		},
+		"anthropic": map[string]any{
+			"options": map[string]any{"baseURL": "https://api.anthropic.com"},
+		},
+	}
+	_, err = sanitizeProviderConfig(hostileData, "custom-evil/evil-model")
+	if err == nil {
+		t.Fatalf("expected error when selected model relies on npm executable provider, got nil")
+	}
+	if !strings.Contains(err.Error(), "custom executable provider \"custom-evil\" with npm package is not allowed") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+
+	// 3. 含有 npm 的 provider 未被當前模型選用時，該 provider 被排除，不進入唯讀隔離環境
+	cleanUnused, err := sanitizeProviderConfig(hostileData, "anthropic/claude-3-5-sonnet")
+	if err != nil {
+		t.Fatalf("unexpected error when hostile provider is unused: %v", err)
+	}
+	if _, ok := cleanUnused["custom-evil"]; ok {
+		t.Errorf("expected unused hostile provider with npm to be dropped, but it was present")
+	}
+	if _, ok := cleanUnused["anthropic"]; !ok {
+		t.Errorf("expected safe provider to be preserved")
+	}
+}
+
+// TestAdapter_CreateIsolatedReadOnlyConfigDir_SupportsJSONCAndSanitizesNPM 驗證全域包含 jsonc 與 npm provider 時之整體防禦
+func TestAdapter_CreateIsolatedReadOnlyConfigDir_SupportsJSONCAndSanitizesNPM(t *testing.T) {
+	tmpGlobalDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpGlobalDir)
+
+	opencodeDir := filepath.Join(tmpGlobalDir, "opencode")
+	if err := os.MkdirAll(opencodeDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	// 建立含有註解、尾隨逗號與未使用 npm provider 的 opencode.jsonc
+	jsoncContent := `// 全域設定檔
+{
+	"model": "anthropic/claude-3-5-sonnet",
+	"provider": {
+		"anthropic": {
+			"options": {
+				"baseURL": "https://api.anthropic.com",
+			},
+		},
+		"hostile-npm": {
+			"npm": "@hacker/payload", // 危險套件
+		},
+	},
+}
+`
+	if err := os.WriteFile(filepath.Join(opencodeDir, "opencode.jsonc"), []byte(jsoncContent), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	dir, cleanup, err := CreateIsolatedReadOnlyConfigDir()
+	if err != nil {
+		t.Fatalf("CreateIsolatedReadOnlyConfigDir failed: %v", err)
+	}
+	defer cleanup()
+
+	// 讀取生成的唯讀 opencode.json
+	cfgData, err := os.ReadFile(filepath.Join(dir, "opencode", "opencode.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var parsed struct {
+		Model    string         `json:"model"`
+		Provider map[string]any `json:"provider"`
+	}
+	if err := json.Unmarshal(cfgData, &parsed); err != nil {
+		t.Fatalf("failed to unmarshal isolated opencode.json: %v", err)
+	}
+
+	if parsed.Model != "anthropic/claude-3-5-sonnet" {
+		t.Errorf("expected model 'anthropic/claude-3-5-sonnet', got %q", parsed.Model)
+	}
+	if _, ok := parsed.Provider["anthropic"]; !ok {
+		t.Errorf("expected provider 'anthropic' to be imported")
+	}
+	if _, ok := parsed.Provider["hostile-npm"]; ok {
+		t.Errorf("critical security breach: hostile-npm provider was imported into isolated config!")
+	}
+}
+
+
