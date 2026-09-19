@@ -44,45 +44,90 @@ func TestAdapter_BackendInterface(t *testing.T) {
 	}
 }
 
-// TestAdapter_VersionMismatch_FailClosed 驗證版本不符時 fail-closed 拒絕執行且 0 execution process (MUST FIX 4)
+func TestNormalizeCodexVersion(t *testing.T) {
+	cases := []struct {
+		input    string
+		expected string
+	}{
+		{"codex-cli 0.155.0", "0.155.0"},
+		{"  codex-cli 0.155.0  \n", "0.155.0"},
+		{"0.155.0", "0.155.0"},
+		{"codex-cli 0.155.0-beta", "0.155.0-beta"},
+	}
+
+	for _, tc := range cases {
+		got := NormalizeCodexVersion(tc.input)
+		if got != tc.expected {
+			t.Errorf("NormalizeCodexVersion(%q) = %q, expected %q", tc.input, got, tc.expected)
+		}
+	}
+}
+
+// TestAdapter_VersionMismatch_FailClosed 驗證版本不符時 fail-closed 拒絕執行且 0 execution process (MUST FIX 1)
 func TestAdapter_VersionMismatch_FailClosed(t *testing.T) {
-	tmpDir := t.TempDir()
-	fakeScript := filepath.Join(tmpDir, "fake-codex.sh")
-	scriptContent := `#!/bin/sh
+	testCases := []struct {
+		name        string
+		versionOut  string
+		expectPass  bool
+	}{
+		{"exact valid full prefix", "codex-cli 0.155.0", true},
+		{"exact valid bare version", "0.155.0", true},
+		{"older version", "codex-cli 0.154.0", false},
+		{"substring trailing digit", "codex-cli 0.155.01", false},
+		{"substring beta suffix", "codex-cli 0.155.0-beta", false},
+		{"substring custom suffix", "codex-cli 0.155.0-custom", false},
+		{"substring prefix number", "codex-cli 10.155.0", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			fakeScript := filepath.Join(tmpDir, "fake-codex.sh")
+			scriptContent := `#!/bin/sh
 if [ "$1" = "--version" ]; then
-    echo "codex-cli 0.154.0"
+    echo "` + tc.versionOut + `"
+    exit 0
+fi
+if [ "$tc_expect_pass" = "true" ]; then
+    echo '{"type":"turn.completed","usage":{}}'
     exit 0
 fi
 echo "EXECUTION_PROCESS_CALLED" >&2
 exit 1
 `
-	if err := os.WriteFile(fakeScript, []byte(scriptContent), 0755); err != nil {
-		t.Fatalf("failed to write fake script: %v", err)
-	}
+			if err := os.WriteFile(fakeScript, []byte(scriptContent), 0755); err != nil {
+				t.Fatalf("failed to write fake script: %v", err)
+			}
 
-	adapter := NewAdapter(AdapterConfig{
-		BinaryPath:      fakeScript,
-		ExpectedVersion: "0.155.0",
-	})
+			adapter := NewAdapter(AdapterConfig{
+				BinaryPath:      fakeScript,
+				ExpectedVersion: "0.155.0",
+			})
 
-	ctx := context.Background()
-	req := &backend.ExecutionRequest{
-		Role:      backend.RoleStriker,
-		Workspace: tmpDir,
-		Prompt:    "Echo something",
-	}
+			ctx := context.Background()
+			req := &backend.ExecutionRequest{
+				Role:      backend.RoleStriker,
+				Workspace: tmpDir,
+				Prompt:    "Echo something",
+			}
 
-	res, err := adapter.Run(ctx, req)
-	if err == nil {
-		t.Fatalf("expected error on version mismatch, got nil")
-	}
-
-	if !errors.Is(err, ErrVersionMismatch) {
-		t.Errorf("expected ErrVersionMismatch, got %v", err)
-	}
-
-	if res == nil || res.FailureClass != backend.FailureUnavailable {
-		t.Errorf("expected FailureUnavailable result, got %+v", res)
+			res, err := adapter.Run(ctx, req)
+			if tc.expectPass {
+				if err != nil && errors.Is(err, ErrVersionMismatch) {
+					t.Fatalf("expected version to pass validation, but got ErrVersionMismatch: %v", err)
+				}
+			} else {
+				if err == nil {
+					t.Fatalf("expected error on version mismatch, got nil")
+				}
+				if !errors.Is(err, ErrVersionMismatch) {
+					t.Errorf("expected ErrVersionMismatch, got %v", err)
+				}
+				if res == nil || res.FailureClass != backend.FailureUnavailable {
+					t.Errorf("expected FailureUnavailable result, got %+v", res)
+				}
+			}
+		})
 	}
 }
 

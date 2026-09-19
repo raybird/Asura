@@ -69,4 +69,11 @@ func TestRoleRoutingBackend_RoutesByRole(t *testing.T) {
 	if ro.calls != 2 {
 		t.Errorf("expected readonly adapter not called, got %d", ro.calls)
 	}
+
+	// 4. Unknown role -> fail-closed
+	_, err = logical.Run(ctx, &backend.ExecutionRequest{Role: backend.Role("unknown_role"), Prompt: "p4"})
+	if err == nil {
+		t.Fatalf("expected error on unknown role, got nil")
+	}
 }
+

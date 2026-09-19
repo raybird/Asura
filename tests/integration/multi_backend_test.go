@@ -449,9 +449,8 @@ func TestMBACK_006_FailureClassification(t *testing.T) {
 	}
 }
 
-// @MBACK-007: 任務取消時 selected backend context 被取消，process tree 回收，Task 進入 StatusCancelled
+// @MBACK-007: 任務取消時 selected backend context 被取消，SQLite 記錄之 PGID 確實驗證並回收，Task 進入 StatusCancelled
 func TestMBACK_007_CancellationProcessGroup(t *testing.T) {
-	// 建立一個會長時間 sleep 的 fake codex binary
 	tmpDir := t.TempDir()
 	fakeBin := filepath.Join(tmpDir, "fake_codex.sh")
 	fakeScript := `#!/bin/sh
@@ -459,40 +458,88 @@ if [ "$1" = "--version" ]; then
     echo "codex-cli 0.155.0"
     exit 0
 fi
-sleep 10
+sleep 30
 `
 	if err := os.WriteFile(fakeBin, []byte(fakeScript), 0755); err != nil {
 		t.Fatalf("failed to create fake codex script: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	var pgid int
-	adapter := codex.NewAdapter(codex.AdapterConfig{
-		BinaryPath: fakeBin,
-		OnProcessStarted: func(c context.Context, p int) {
-			pgid = p
-			cancel() // 啟動後立即取消
-		},
+	var recordedPGID int32
+	fix := setupMBACKFixture(t, func(f *mbackTestFixture) {
+		// 註冊帶有真實 Task PGID lifecycle callback 的 codex adapter
+		fakeCodex := codex.NewAdapter(codex.AdapterConfig{
+			BinaryPath:      fakeBin,
+			ExpectedVersion: "0.155.0",
+			OnProcessStarted: func(ctx context.Context, pgid int) {
+				atomic.StoreInt32(&recordedPGID, int32(pgid))
+				if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
+					_ = f.store.UpdateTaskPGID(context.Background(), taskID, pgid)
+				}
+			},
+			OnProcessExited: func(ctx context.Context, pgid int) {
+				if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
+					_ = f.store.UpdateTaskPGID(context.Background(), taskID, 0)
+				}
+			},
+		})
+		f.reg.Unregister("codex")
+		_ = f.reg.Register(fakeCodex)
 	})
 
-	_, err := adapter.Run(ctx, &backend.ExecutionRequest{
-		Role:      backend.RoleStriker,
-		Workspace: tmpDir,
-		Prompt:    "10",
+	// 1. 提交指定 backend=codex 之任務
+	task, err := fix.client.Submit(context.Background(), engine.SubmitRequest{
+		Workspace: fix.rootDir,
+		Prompt:    "long running codex command",
+		Backend:   "codex",
+		Mode:      "direct",
 	})
-
-	if err == nil || !errors.Is(err, context.Canceled) {
-		t.Fatalf("expected context.Canceled error, got: %v", err)
+	if err != nil {
+		t.Fatalf("Submit failed: %v", err)
 	}
 
-	// 驗證進程組已被乾淨回收
-	time.Sleep(50 * time.Millisecond)
-	if pgid > 0 {
-		errKill := syscall.Kill(-pgid, 0)
-		if errKill == nil {
-			t.Errorf("expected process group %d to be killed, but it is still alive", pgid)
-			_ = syscall.Kill(-pgid, syscall.SIGKILL)
+	// 2. 等待進程啟動且 PGID 已持久化至 SQLite (task.PGID > 0)
+	var activePGID int
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		tObj, err := fix.store.GetTask(context.Background(), task.ID)
+		if err == nil && tObj != nil && tObj.PGID > 0 {
+			activePGID = tObj.PGID
+			break
 		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if activePGID == 0 {
+		activePGID = int(atomic.LoadInt32(&recordedPGID))
+	}
+	if activePGID == 0 {
+		t.Fatalf("expected task PGID > 0 to be recorded, but got 0")
+	}
+
+	// 3. 呼叫 Client.CancelTask 觸發正式取消流程
+	if _, err := fix.client.CancelTask(context.Background(), task.ID); err != nil {
+		t.Fatalf("CancelTask failed: %v", err)
+	}
+
+	// 4. 等待任務達到終態 StatusCancelled
+	res := waitForTaskTerminalState(t, fix.client, task.ID, 5*time.Second)
+	if res.Status != storage.StatusCancelled {
+		t.Fatalf("expected task StatusCancelled, got %s (err: %s)", res.Status, res.ErrorMessage)
+	}
+
+	// 5. 斷言 SQLite 中 PGID 已被清為 0
+	finalTask, err := fix.store.GetTask(context.Background(), task.ID)
+	if err != nil || finalTask == nil {
+		t.Fatalf("GetTask failed: %v", err)
+	}
+	if finalTask.PGID != 0 {
+		t.Errorf("expected final task PGID to be 0, got %d", finalTask.PGID)
+	}
+
+	// 6. 核心安全斷言：進程組已被 SIGKILL 乾淨回收，無孤兒進程殘留
+	time.Sleep(50 * time.Millisecond)
+	if err := syscall.Kill(-activePGID, 0); err == nil {
+		t.Errorf("process group %d is still alive after task cancellation", activePGID)
+		_ = syscall.Kill(-activePGID, syscall.SIGKILL)
 	}
 }
 

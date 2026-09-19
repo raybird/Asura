@@ -212,7 +212,18 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 		_ = reg.Register(opencodeLogicalBackend)
 		if codexPath, err := exec.LookPath("codex"); err == nil && codexPath != "" {
 			_ = reg.Register(codex.NewAdapter(codex.AdapterConfig{
-				BinaryPath: codexPath,
+				BinaryPath:      codexPath,
+				ExpectedVersion: "0.155.0",
+				OnProcessStarted: func(ctx context.Context, pgid int) {
+					if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
+						_ = store.UpdateTaskPGID(context.Background(), taskID, pgid)
+					}
+				},
+				OnProcessExited: func(ctx context.Context, pgid int) {
+					if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
+						_ = store.UpdateTaskPGID(context.Background(), taskID, 0)
+					}
+				},
 			}))
 		}
 
@@ -273,14 +284,16 @@ func (d *Daemon) dispatchCronTask(ctx context.Context, cronID, workspace, prompt
 	fp := fmt.Sprintf("%x", sha256.Sum256([]byte(workspace+":"+prompt)))
 
 	initialTask := &storage.Task{
-		ID:          taskID,
-		Fingerprint: fp,
-		Prompt:      prompt,
-		Workspace:   workspace,
-		Status:      storage.StatusPending,
-		Class:       string(TaskClassCron),
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:            taskID,
+		Fingerprint:   fp,
+		Prompt:        prompt,
+		Workspace:     workspace,
+		Backend:       "opencode",
+		ExecutionMode: "direct",
+		Status:        storage.StatusPending,
+		Class:         string(TaskClassCron),
+		CreatedAt:     now,
+		UpdatedAt:     now,
 	}
 
 	if err := d.store.CreateTask(ctx, initialTask); err != nil {

@@ -75,14 +75,23 @@ func (a *Adapter) Version(ctx context.Context) (string, error) {
 	return ver, nil
 }
 
-// ValidateVersion 嚴格校驗目前 Codex binary 版本是否符合 ExpectedVersion 契約
+// NormalizeCodexVersion 正規化 Codex 版本字串，去除前綴 "codex-cli " 與前後空白
+func NormalizeCodexVersion(raw string) string {
+	raw = strings.TrimSpace(raw)
+	raw = strings.TrimPrefix(raw, "codex-cli ")
+	return strings.TrimSpace(raw)
+}
+
+// ValidateVersion 嚴格校驗目前 Codex binary 版本是否符合 ExpectedVersion 契約 (Exact Match)
 func (a *Adapter) ValidateVersion(ctx context.Context) error {
-	ver, err := a.Version(ctx)
+	raw, err := a.Version(ctx)
 	if err != nil {
 		return err
 	}
-	if a.cfg.ExpectedVersion != "" && !strings.Contains(ver, a.cfg.ExpectedVersion) {
-		return fmt.Errorf("%w: expected %s, got %s", ErrVersionMismatch, a.cfg.ExpectedVersion, ver)
+	actual := NormalizeCodexVersion(raw)
+	expected := NormalizeCodexVersion(a.cfg.ExpectedVersion)
+	if expected != "" && actual != expected {
+		return fmt.Errorf("%w: expected %s, got %s", ErrVersionMismatch, expected, actual)
 	}
 	return nil
 }

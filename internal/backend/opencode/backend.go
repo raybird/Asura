@@ -3,6 +3,7 @@ package opencode
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"asura/internal/backend"
 )
@@ -78,10 +79,6 @@ func (b *RoleRoutingBackend) Run(ctx context.Context, req *backend.ExecutionRequ
 		}
 		return nil, errors.New("striker adapter not configured for striker role")
 	default:
-		// 未指定 Role 預設以 Striker (workspace-write) 執行
-		if b.striker != nil {
-			return b.striker.Run(ctx, req)
-		}
-		return nil, errors.New("striker adapter not configured")
+		return nil, fmt.Errorf("unsupported backend role: %q", req.Role)
 	}
 }

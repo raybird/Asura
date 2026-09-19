@@ -131,13 +131,25 @@ func TestCodexProbe_ReadOnlySandbox(t *testing.T) {
 	)
 
 	out, err := cmd.CombinedOutput()
-	t.Logf("read-only output: %s", string(out))
+	outStr := string(out)
+	t.Logf("read-only output: %s", outStr)
 
 	if ctx.Err() != nil {
 		t.Fatalf("command timed out: %v", ctx.Err())
 	}
 	if len(out) == 0 && err != nil {
 		t.Fatalf("codex process failed to produce output: %v", err)
+	}
+
+	// 若環境缺少有效憑證或未登入，優雅 Skip，杜絕因認證失敗檔案未建立而導致的 false-green
+	if strings.Contains(outStr, "auth_error") || strings.Contains(outStr, "unauthorized") ||
+		strings.Contains(outStr, "Invalid API token") || strings.Contains(outStr, "not logged in") {
+		t.Skip("live credentials unavailable, skipping live read-only sandbox model evaluation")
+	}
+
+	// 驗證確實啟動且跑過模型對話回合
+	if !strings.Contains(outStr, "thread.started") && !strings.Contains(outStr, "turn.started") {
+		t.Fatalf("expected codex to produce turn events, but raw output was: %s", outStr)
 	}
 
 	// 驗證目標檔案絕對不可被建立
@@ -166,8 +178,13 @@ func TestCodexProbe_WorkspaceWriteSandbox(t *testing.T) {
 	)
 
 	out, err := cmd.CombinedOutput()
+	outStr := string(out)
+	if strings.Contains(outStr, "auth_error") || strings.Contains(outStr, "unauthorized") ||
+		strings.Contains(outStr, "Invalid API token") || strings.Contains(outStr, "not logged in") {
+		t.Skip("live credentials unavailable, skipping live workspace write sandbox probe")
+	}
 	if err != nil {
-		t.Fatalf("workspace write failed: %v, output: %s", err, string(out))
+		t.Fatalf("workspace write failed: %v, output: %s", err, outStr)
 	}
 
 	content, err := os.ReadFile(targetFile)
