@@ -265,6 +265,9 @@ func NewAdapter(cfg AdapterConfig) *Adapter {
 	return &Adapter{cfg: cfg}
 }
 
+// maxScanCapacity 限制單行 JSONL 之掃描容量（4MB 支援大型代碼/工具事件串流輸出，比照 Codex parser）
+const maxScanCapacity = 4 * 1024 * 1024
+
 // ExtractResultFromEvents 從 JSON 事件串流中解析並萃取最終回答文字或錯誤
 func (a *Adapter) ExtractResultFromEvents(output string) (string, error) {
 	trimmed := strings.TrimSpace(output)
@@ -277,6 +280,7 @@ func (a *Adapter) ExtractResultFromEvents(output string) (string, error) {
 	hasEvents := false
 
 	scanner := bufio.NewScanner(strings.NewReader(trimmed))
+	scanner.Buffer(make([]byte, 64*1024), maxScanCapacity)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
@@ -302,6 +306,10 @@ func (a *Adapter) ExtractResultFromEvents(output string) (string, error) {
 		if evt.Type == "error" && evt.ErrorMessage != "" {
 			lastErr = evt.ErrorMessage
 		}
+	}
+
+	if scanErr := scanner.Err(); scanErr != nil && lastErr == "" {
+		lastErr = fmt.Sprintf("stdout scanner error: %v", scanErr)
 	}
 
 	result := strings.TrimSpace(sb.String())
@@ -492,6 +500,7 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 	hasEvents := false
 
 	scanner := bufio.NewScanner(strings.NewReader(rawStdout))
+	scanner.Buffer(make([]byte, 64*1024), maxScanCapacity)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
@@ -568,6 +577,10 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 				hasAuthError = true
 			}
 		}
+	}
+
+	if scanErr := scanner.Err(); scanErr != nil && lastErr == "" {
+		lastErr = fmt.Sprintf("stdout scanner error: %v", scanErr)
 	}
 
 	extractedText := strings.TrimSpace(sb.String())

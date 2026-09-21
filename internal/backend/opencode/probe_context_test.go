@@ -135,6 +135,7 @@ func TestOpenCodeProbe_Live(t *testing.T) {
 	}
 
 	scanner := bufio.NewScanner(strings.NewReader(string(cmdOutput)))
+	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
 	foundStepFinish := false
 	foundTokens := false
 	modelFoundInJSONL := false
@@ -158,6 +159,9 @@ func TestOpenCodeProbe_Live(t *testing.T) {
 				modelFoundInJSONL = true
 			}
 		}
+	}
+	if scanErr := scanner.Err(); scanErr != nil {
+		t.Errorf("live opencode probe scanner error: %v", scanErr)
 	}
 
 	if !foundStepFinish {

@@ -154,6 +154,7 @@ Stage 介面拆成準備 request 與執行已準備 request：準備步驟只組
     2. Codex parser 與 adapter 支援 `turn.completed` usage 抽取；Codex 未提供 `total_tokens` 保持為 nil，不人為拼湊；通過 `TestExtractResultAndEvents_Success`、`TestExtractResultAndEvents_FailurePreservesUsage` 與 `TestAdapter_Run_UsagePreservedOnSuccessAndFailure` 驗證成功與失敗下 usage 均精確回傳。
     3. OpenCode parser 與 adapter 支援多步驟 `step_finish` tokens 聚合（含 `cache.read` 至 `CachedTokens`），通過 `TestParseEventLine_StepFinishWithCache` 與 `TestAdapter_Run_UsagePreservedOnSuccessAndFailure` 驗證 fake CLI 成功與失敗下 usage 均被保留且標記為 `ProvenanceExact`。
     4. 回歸套件 `MBACK-001` ～ `MBACK-012` 全部通過（PASS）。
+    5. OpenCode adapter 配置 4MB Scanner buffer 並顯式檢查 `scanner.Err()`，杜絕 >64 KiB 大型工具事件中斷掃描導致後續 `step_finish` 用量遺失之漏洞；超大事件（>4MB）顯式回傳 `backend.FailureExecution` 錯誤，不靜默偽造成功（通過 `TestAdapter_Run_LargeJSONLEvent_PreservesUsage` 與 `TestAdapter_Run_OversizedJSONLEvent_ReturnsScannerError`）。
 
 ### Phase 2：Context 預算、估算器與模型目錄核心套件
 - ✅ **Task 2.1**（對應 CTXWIN-002, CTXWIN-005）：沿用 Task 1.2 用量契約，定義 `internal/contextwin` 核心型別（`ModelWindowInfo`, `StageEstimate`, `StageAdmission`）。

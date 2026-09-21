@@ -3,6 +3,7 @@ package opencode
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1073,3 +1074,139 @@ exit 0
 		}
 	})
 }
+
+// TestAdapter_Run_LargeJSONLEvent_PreservesUsage 驗證大於 64 KiB（例如 75 KiB 工具輸出）之合法事件能完整解析，後續 step_finish 不遺失且 usage 精確保留
+func TestAdapter_Run_LargeJSONLEvent_PreservesUsage(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake-opencode-large.sh")
+
+	// 生成 > 64 KiB（約 75 KiB）的工具輸出字串
+	largeOutput := strings.Repeat("A", 75000)
+
+	scriptContent := fmt.Sprintf(`#!/usr/bin/env bash
+if [ "$1" = "--version" ]; then
+    echo "1.18.31"
+    exit 0
+fi
+
+# 第 1 行：正常 text event
+echo '{"type":"step_start","timestamp":100,"sessionID":"ses_large","part":{"type":"step-start"}}'
+echo '{"type":"text","timestamp":110,"sessionID":"ses_large","part":{"type":"text","text":"OK"}}'
+# 第 2 行：大於 64 KiB 的合法 tool event
+echo '{"type":"tool_use","timestamp":120,"sessionID":"ses_large","part":{"type":"tool","tool":"bash","state":{"status":"completed","output":"%s"}}}'
+# 第 3 行：step_finish，內含完整 token usage
+echo '{"type":"step_finish","timestamp":130,"sessionID":"ses_large","part":{"reason":"stop","type":"step-finish","tokens":{"total":250,"input":200,"output":50,"reasoning":10,"cache":{"read":100,"write":0}}}}'
+exit 0
+`, largeOutput)
+
+	if err := os.WriteFile(fakeScript, []byte(scriptContent), 0755); err != nil {
+		t.Fatalf("failed to write fake script: %v", err)
+	}
+
+	adapter := NewAdapter(AdapterConfig{
+		BinaryPath:      fakeScript,
+		ExpectedVersion: "1.18.31",
+	})
+	ctx := context.Background()
+
+	res, err := adapter.Run(ctx, &backend.ExecutionRequest{
+		Role:      backend.RoleStriker,
+		Workspace: tmpDir,
+		Prompt:    "test large event",
+	})
+	if err != nil {
+		t.Fatalf("Run failed on large event: %v", err)
+	}
+	if res.Output != "OK" {
+		t.Errorf("expected Output 'OK', got %q", res.Output)
+	}
+	if res.Usage == nil {
+		t.Fatalf("expected non-nil usage when large event is followed by step_finish")
+	}
+	if res.Usage.TotalTokens == nil || *res.Usage.TotalTokens != 250 {
+		t.Errorf("expected TotalTokens 250, got %v", res.Usage.TotalTokens)
+	}
+	if res.Usage.InputTokens == nil || *res.Usage.InputTokens != 200 {
+		t.Errorf("expected InputTokens 200, got %v", res.Usage.InputTokens)
+	}
+	if res.Usage.OutputTokens == nil || *res.Usage.OutputTokens != 50 {
+		t.Errorf("expected OutputTokens 50, got %v", res.Usage.OutputTokens)
+	}
+	if res.Usage.CachedTokens == nil || *res.Usage.CachedTokens != 100 {
+		t.Errorf("expected CachedTokens 100, got %v", res.Usage.CachedTokens)
+	}
+	if res.UsageSource != backend.ProvenanceExact {
+		t.Errorf("expected UsageSource exact, got %s", res.UsageSource)
+	}
+}
+
+// TestAdapter_Run_OversizedJSONLEvent_ReturnsScannerError 驗證若事件超過 4MB 上限，必須明確回傳 scanner error，不得靜默假成功
+func TestAdapter_Run_OversizedJSONLEvent_ReturnsScannerError(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake-opencode-oversized.sh")
+
+	// 生成 > 4 MiB（約 4.5 MiB）的超大事件行
+	oversizedOutput := strings.Repeat("B", 4600000)
+
+	scriptContent := fmt.Sprintf(`#!/usr/bin/env bash
+if [ "$1" = "--version" ]; then
+    echo "1.18.31"
+    exit 0
+fi
+
+echo '{"type":"step_start","timestamp":100,"sessionID":"ses_over","part":{"type":"step-start"}}'
+echo '{"type":"text","timestamp":110,"sessionID":"ses_over","part":{"type":"text","text":"Partial Text"}}'
+echo '{"type":"tool_use","timestamp":120,"sessionID":"ses_over","part":{"type":"tool","tool":"bash","state":{"status":"completed","output":"%s"}}}'
+echo '{"type":"step_finish","timestamp":130,"sessionID":"ses_over","part":{"reason":"stop","type":"step-finish","tokens":{"total":250,"input":200,"output":50,"cache":{"read":100,"write":0}}}}'
+exit 0
+`, oversizedOutput)
+
+	if err := os.WriteFile(fakeScript, []byte(scriptContent), 0755); err != nil {
+		t.Fatalf("failed to write fake script: %v", err)
+	}
+
+	adapter := NewAdapter(AdapterConfig{
+		BinaryPath:      fakeScript,
+		ExpectedVersion: "1.18.31",
+	})
+	ctx := context.Background()
+
+	res, err := adapter.Run(ctx, &backend.ExecutionRequest{
+		Role:      backend.RoleStriker,
+		Workspace: tmpDir,
+		Prompt:    "test oversized event",
+	})
+	if err == nil {
+		t.Fatalf("expected error on oversized event (> 4MB), got nil (silent success forbidden)")
+	}
+	if res == nil {
+		t.Fatalf("expected non-nil ExecutionResult even on scanner failure")
+	}
+	if res.FailureClass != backend.FailureExecution {
+		t.Errorf("expected FailureClass FailureExecution, got %s", res.FailureClass)
+	}
+	if !strings.Contains(err.Error(), "stdout scanner error") {
+		t.Errorf("expected 'stdout scanner error' in error message, got %v", err)
+	}
+	if res.PartialOutput != "Partial Text" {
+		t.Errorf("expected PartialOutput 'Partial Text', got %q", res.PartialOutput)
+	}
+}
+
+// TestAdapter_ExtractResultFromEvents_LargeOutput 驗證 ExtractResultFromEvents 支援 > 64 KiB 之大事件
+func TestAdapter_ExtractResultFromEvents_LargeOutput(t *testing.T) {
+	largeText := strings.Repeat("Hello World! ", 6000) // ~78 KiB
+	jsonl := fmt.Sprintf(`{"type":"text","part":{"text":"Start: "}}
+{"type":"tool_use","part":{"tool":"bash","state":{"output":"%s"}}}
+{"type":"text","part":{"text":"End"}}`, largeText)
+
+	adapter := NewAdapter(AdapterConfig{})
+	res, err := adapter.ExtractResultFromEvents(jsonl)
+	if err != nil {
+		t.Fatalf("unexpected error for large events in ExtractResultFromEvents: %v", err)
+	}
+	if !strings.Contains(res, "Start:") || !strings.Contains(res, "End") {
+		t.Errorf("unexpected extracted result: %q", res)
+	}
+}
+
