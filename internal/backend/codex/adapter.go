@@ -161,12 +161,14 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 		args = append(args, "-C", req.Workspace)
 	}
 
-	// 依角色設定沙箱邊界：Oracle / Critic 嚴格唯讀，Striker 允許 workspace-write
-	if req.Role == backend.RoleOracle || req.Role == backend.RoleCritic {
+	// 依角色設定沙箱邊界：Oracle / Critic 嚴格唯讀，Striker 允許 workspace-write，未知角色 fail-closed
+	switch req.Role {
+	case backend.RoleOracle, backend.RoleCritic:
 		args = append(args, "-s", "read-only")
-	} else {
-		// Striker 或 Direct 模式使用 --approve-for-me 啟用自動審批的 workspace 寫入沙箱
+	case backend.RoleStriker:
 		args = append(args, "--approve-for-me")
+	default:
+		return nil, fmt.Errorf("unsupported backend role: %q", req.Role)
 	}
 
 	args = append(args, req.Prompt)

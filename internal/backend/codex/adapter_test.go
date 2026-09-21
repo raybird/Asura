@@ -131,6 +131,43 @@ exit 1
 	}
 }
 
+// TestAdapter_UnknownRole_FailClosed 驗證未知 Role 立即 fail-closed 拒絕執行且 0 execution process
+func TestAdapter_UnknownRole_FailClosed(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake-codex.sh")
+	scriptContent := `#!/bin/sh
+if [ "$1" = "--version" ]; then
+    echo "codex-cli 0.155.0"
+    exit 0
+fi
+echo "EXECUTION_PROCESS_CALLED" >&2
+exit 1
+`
+	if err := os.WriteFile(fakeScript, []byte(scriptContent), 0755); err != nil {
+		t.Fatalf("failed to write fake script: %v", err)
+	}
+
+	adapter := NewAdapter(AdapterConfig{
+		BinaryPath:      fakeScript,
+		ExpectedVersion: "0.155.0",
+	})
+
+	ctx := context.Background()
+	req := &backend.ExecutionRequest{
+		Role:      backend.Role("unknown_role"),
+		Workspace: tmpDir,
+		Prompt:    "Echo something",
+	}
+
+	_, err := adapter.Run(ctx, req)
+	if err == nil {
+		t.Fatalf("expected error on unknown role, got nil")
+	}
+	if !strings.Contains(err.Error(), "unsupported backend role") {
+		t.Errorf("expected error message to mention unsupported backend role, got: %v", err)
+	}
+}
+
 // TestAdapter_Run_Cancellation 驗證進程取消與回收 (hermetic fake script，不依賴 live codex) (MBACK-007, MUST FIX 5)
 func TestAdapter_Run_Cancellation(t *testing.T) {
 	tmpDir := t.TempDir()
