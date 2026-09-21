@@ -178,19 +178,19 @@ Feature: Context Window Management Foundation (Capability Probe, Budget and Obse
 
 ## Gherkin 核准紀錄
 
-- **核准 commit**: 待提交
-- **核准來源**: 待核准
+- **核准 commit**: 1049dc5
+- **核准來源**: 使用者於 2026-09-21 對話明確核准（原話：「1 核准\n2 無」）
 
 | Scenario | 核准日期 | 狀態 |
 |----------|---------|------|
-| CTXWIN-001 | - | 待核准 |
-| CTXWIN-002 | - | 待核准 |
-| CTXWIN-003 | - | 待核准 |
-| CTXWIN-004 | - | 待核准 |
-| CTXWIN-005 | - | 待核准 |
-| CTXWIN-006 | - | 待核准 |
-| CTXWIN-007 | - | 待核准 |
-| CTXWIN-008 | - | 待核准 |
+| CTXWIN-001 | 2026-09-21 | 已核准 |
+| CTXWIN-002 | 2026-09-21 | 已核准 |
+| CTXWIN-003 | 2026-09-21 | 已核准 |
+| CTXWIN-004 | 2026-09-21 | 已核准 |
+| CTXWIN-005 | 2026-09-21 | 已核准 |
+| CTXWIN-006 | 2026-09-21 | 已核准 |
+| CTXWIN-007 | 2026-09-21 | 已核准 |
+| CTXWIN-008 | 2026-09-21 | 已核准 |
 
 ## 重構步驟概要
 
@@ -220,13 +220,14 @@ Feature: Context Window Management Foundation (Capability Probe, Budget and Obse
 
 | 編號 | 事項 | 狀態 | 影響 |
 |------|------|------|------|
-| TBD-1 | Gherkin CTXWIN-001 ～ CTXWIN-008 劇本確認與核准 | 待確認 | 阻礙實作啟動，需使用者核准後方可開始 Phase 1 ~ 6 實作；關聯全數 Scenario |
-| TBD-2 | 預設 Context 超量政策之門檻數值與處置策略（觀測審計 vs 阻擋） | 待確認 | 關聯 CTXWIN-004，2026-09-21 提案已明列程序級設定入口及 observe／reject 行為；仍待核准未設定 policy 的預設值與輸出保留比例 |
+| TBD-1 | Gherkin CTXWIN-001 ～ CTXWIN-008 劇本確認與核准 | 已解決 | 使用者於 2026-09-21 明確核准全數 Gherkin 劇本 |
+| TBD-2 | 預設 Context 超量政策之門檻數值與處置策略（觀測審計 vs 阻擋） | 已解決 | 使用者於 2026-09-21 確認無特殊調整，採建議預設 observe 政策與 20% 輸出保留空間 |
 
 ## Timeline
 
 | 日期 | 異動 | 負責人 |
 |------|------|--------|
+| 2026-09-21 | 使用者核准 CTXWIN-001 ～ CTXWIN-008 全數驗收劇本並確認預設政策採 observe 與 20% 輸出保留空間 | - |
 | 2026-09-21 | 依使用者要求修訂審查缺口：nullable 用量、Stage／adapter 資料流、設定與模型來源、live 證據；授權僅限文件修訂與提交，全數 Scenario 保持待核准 | - |
 | 2026-09-21 | 建立 Issue 17 初始架構規範、需求分析、技術分析與實作計畫初稿 | - |
 
@@ -234,4 +235,4 @@ Feature: Context Window Management Foundation (Capability Probe, Budget and Obse
 **建立日期**: 2026-09-21  
 **分級**: Large  
 **風險**: High  
-**狀態**: 待核准
+**狀態**: 實作中
