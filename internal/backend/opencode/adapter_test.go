@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"asura/internal/backend"
 )
@@ -924,6 +925,151 @@ exit 0
 	}
 }
 
+func TestAdapter_Run_UsageNullablePresenceCases(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
+	tmpDir := t.TempDir()
 
+	t.Run("Case 1: 原生事件完全沒有 cache 欄位", func(t *testing.T) {
+		fakeBin := filepath.Join(tmpDir, "fake_opencode_no_cache")
+		script := `#!/bin/sh
+if [ "$1" = "--version" ]; then
+    echo "1.18.23"
+    exit 0
+fi
+echo '{"type":"step_finish","part":{"type":"step-finish","tokens":{"total":1500,"input":1450,"output":50,"reasoning":0}}}'
+echo '{"type":"text","part":{"type":"text","text":"Done"}}'
+exit 0
+`
+		if err := os.WriteFile(fakeBin, []byte(script), 0755); err != nil {
+			t.Fatalf("write fake binary failed: %v", err)
+		}
 
+		adapter := NewAdapter(AdapterConfig{
+			BinaryPath:      fakeBin,
+			ExpectedVersion: "1.18.23",
+			Role:            RoleStriker,
+		})
+
+		res, err := adapter.Run(ctx, &backend.ExecutionRequest{
+			Role:      backend.RoleStriker,
+			Workspace: tmpDir,
+			Prompt:    "test no cache",
+		})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if res.Usage == nil {
+			t.Fatalf("expected non-nil usage")
+		}
+		if res.Usage.InputTokens == nil || *res.Usage.InputTokens != 1450 {
+			t.Errorf("expected InputTokens 1450, got %v", res.Usage.InputTokens)
+		}
+		if res.Usage.OutputTokens == nil || *res.Usage.OutputTokens != 50 {
+			t.Errorf("expected OutputTokens 50, got %v", res.Usage.OutputTokens)
+		}
+		if res.Usage.TotalTokens == nil || *res.Usage.TotalTokens != 1500 {
+			t.Errorf("expected TotalTokens 1500, got %v", res.Usage.TotalTokens)
+		}
+		if res.Usage.ReasoningTokens == nil || *res.Usage.ReasoningTokens != 0 {
+			t.Errorf("expected ReasoningTokens 0, got %v", res.Usage.ReasoningTokens)
+		}
+		// 關鍵驗證：Cache 未提供時必須為 nil，絕不可偽造為 &0
+		if res.Usage.CachedTokens != nil {
+			t.Errorf("expected CachedTokens to be nil when omitted in events, got %v", *res.Usage.CachedTokens)
+		}
+	})
+
+	t.Run("Case 2: 原生事件明確回報 input 為 0", func(t *testing.T) {
+		fakeBin := filepath.Join(tmpDir, "fake_opencode_zero_input")
+		script := `#!/bin/sh
+if [ "$1" = "--version" ]; then
+    echo "1.18.23"
+    exit 0
+fi
+echo '{"type":"step_finish","part":{"type":"step-finish","tokens":{"total":10,"input":0,"output":10,"reasoning":0}}}'
+echo '{"type":"text","part":{"type":"text","text":"Done"}}'
+exit 0
+`
+		if err := os.WriteFile(fakeBin, []byte(script), 0755); err != nil {
+			t.Fatalf("write fake binary failed: %v", err)
+		}
+
+		adapter := NewAdapter(AdapterConfig{
+			BinaryPath:      fakeBin,
+			ExpectedVersion: "1.18.23",
+			Role:            RoleStriker,
+		})
+
+		res, err := adapter.Run(ctx, &backend.ExecutionRequest{
+			Role:      backend.RoleStriker,
+			Workspace: tmpDir,
+			Prompt:    "test zero input",
+		})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if res.Usage == nil {
+			t.Fatalf("expected non-nil usage even when input is 0")
+		}
+		// 關鍵驗證：input: 0 必須保留為 &0，不可誤認成缺失 nil
+		if res.Usage.InputTokens == nil {
+			t.Fatalf("expected non-nil InputTokens when explicitly reported 0")
+		}
+		if *res.Usage.InputTokens != 0 {
+			t.Errorf("expected InputTokens 0, got %d", *res.Usage.InputTokens)
+		}
+	})
+
+	t.Run("Case 3: 多個 step 只有部分 step 回報 cache 欄位", func(t *testing.T) {
+		fakeBin := filepath.Join(tmpDir, "fake_opencode_partial_cache")
+		script := `#!/bin/sh
+if [ "$1" = "--version" ]; then
+    echo "1.18.23"
+    exit 0
+fi
+# step 1: 無 cache 欄位
+echo '{"type":"step_finish","part":{"type":"step-finish","tokens":{"total":100,"input":90,"output":10,"reasoning":0}}}'
+# step 2: 有 cache 欄位
+echo '{"type":"step_finish","part":{"type":"step-finish","tokens":{"total":200,"input":180,"output":20,"reasoning":0,"cache":{"write":0,"read":50}}}}'
+echo '{"type":"text","part":{"type":"text","text":"Done"}}'
+exit 0
+`
+		if err := os.WriteFile(fakeBin, []byte(script), 0755); err != nil {
+			t.Fatalf("write fake binary failed: %v", err)
+		}
+
+		adapter := NewAdapter(AdapterConfig{
+			BinaryPath:      fakeBin,
+			ExpectedVersion: "1.18.23",
+			Role:            RoleStriker,
+		})
+
+		res, err := adapter.Run(ctx, &backend.ExecutionRequest{
+			Role:      backend.RoleStriker,
+			Workspace: tmpDir,
+			Prompt:    "test partial cache",
+		})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if res.Usage == nil {
+			t.Fatalf("expected non-nil usage")
+		}
+		// 兩個 step 均有 input, output, total, reasoning -> 累加
+		if res.Usage.InputTokens == nil || *res.Usage.InputTokens != 270 {
+			t.Errorf("expected total InputTokens 270, got %v", res.Usage.InputTokens)
+		}
+		if res.Usage.OutputTokens == nil || *res.Usage.OutputTokens != 30 {
+			t.Errorf("expected total OutputTokens 30, got %v", res.Usage.OutputTokens)
+		}
+		if res.Usage.TotalTokens == nil || *res.Usage.TotalTokens != 300 {
+			t.Errorf("expected total TotalTokens 300, got %v", res.Usage.TotalTokens)
+		}
+		// 關鍵驗證：cache 在 step 1 缺失，不可把 step 2 的 50 當作整個 Stage 的完整 exact 總量，必須為 nil (unknown)
+		if res.Usage.CachedTokens != nil {
+			t.Errorf("expected CachedTokens to be nil when partially missing across steps, got %v", *res.Usage.CachedTokens)
+		}
+	})
+}

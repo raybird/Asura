@@ -10,71 +10,7 @@ import (
 	"time"
 )
 
-// CodexContextCapabilityMatrix 記錄 Codex CLI 在指定版本下的 Context 與 Token 觀測/控制能力
-type CodexContextCapabilityMatrix struct {
-	BackendID                   string            `json:"backend_id"`
-	TargetVersion               string            `json:"target_version"`
-	InstalledVersion            string            `json:"installed_version,omitempty"`
-	ProbeDate                   string            `json:"probe_date"`
-	Status                      string            `json:"status"` // verified_installed, unverified_not_installed
-	HasTokenUsage               bool              `json:"has_token_usage"`
-	TokenFields                 []string          `json:"token_fields"`
-	MissingTokenFields          []string          `json:"missing_token_fields"`
-	HasCachedTokens             bool              `json:"has_cached_tokens"`
-	HasReasoningTokens          bool              `json:"has_reasoning_tokens"`
-	TokenReportingGranularity   string            `json:"token_reporting_granularity"` // per_turn
-	UsagePreservedOnToolFailure bool              `json:"usage_preserved_on_tool_failure"`
-	PreflightModelIdentifiable  bool              `json:"preflight_model_identifiable"` // 自 stdout JSONL 能否識別模型
-	UnsupportedCapabilities     map[string]string `json:"unsupported_capabilities"`
-}
 
-// GetCodex01551Matrix 回傳針對 Codex CLI 0.155.1 之能力矩陣
-func GetCodex01551Matrix() CodexContextCapabilityMatrix {
-	return CodexContextCapabilityMatrix{
-		BackendID:                 "codex",
-		TargetVersion:             "0.155.1",
-		ProbeDate:                 "2026-09-21",
-		Status:                    "verified_installed",
-		HasTokenUsage:             true,
-		TokenFields:               []string{"input_tokens", "cached_input_tokens", "cache_write_input_tokens", "output_tokens", "reasoning_output_tokens"},
-		MissingTokenFields:        []string{"total_tokens"}, // Codex CLI 0.155.1 明确不提供 total_tokens
-		HasCachedTokens:           true,
-		HasReasoningTokens:        true,
-		TokenReportingGranularity: "per_turn",
-		UsagePreservedOnToolFailure: true,
-		PreflightModelIdentifiable:  false,
-		UnsupportedCapabilities: map[string]string{
-			"tool_output_interception": "Codex CLI exec 模式沙箱由內部 bwrap/環境控制，無法在送入模型前攔截過濾工具輸出",
-			"history_dynamic_rewrite":  "單次 CLI invocation 無法動態替換歷史上下文",
-			"context_limit_query":      "CLI 未提供查詢目前模型 Context Window 上限之指令",
-			"stdout_model_identity":    "stdout JSONL 事件流未包含使用的具體 model 名稱",
-		},
-	}
-}
-
-// GetCodex01550Matrix 回傳針對 Codex CLI 0.155.0 之能力矩陣（標記未安裝驗證）
-func GetCodex01550Matrix() CodexContextCapabilityMatrix {
-	return CodexContextCapabilityMatrix{
-		BackendID:                 "codex",
-		TargetVersion:             "0.155.0",
-		ProbeDate:                 "2026-09-21",
-		Status:                    "unverified_not_installed",
-		HasTokenUsage:             true,
-		TokenFields:               []string{"input_tokens", "cached_input_tokens", "output_tokens"},
-		MissingTokenFields:        []string{"total_tokens"},
-		HasCachedTokens:           true,
-		HasReasoningTokens:        false,
-		TokenReportingGranularity: "per_turn",
-		UsagePreservedOnToolFailure: true,
-		PreflightModelIdentifiable:  false,
-		UnsupportedCapabilities: map[string]string{
-			"tool_output_interception": "Codex 0.155.0 無法在送入模型前攔截過濾工具輸出",
-			"history_dynamic_rewrite":  "0.155.0 無動態歷史替換 API",
-			"context_limit_query":      "0.155.0 CLI 未提供查詢 Context Window 上限指令",
-			"stdout_model_identity":    "0.155.0 JSONL 事件未包含 model 欄位",
-		},
-	}
-}
 
 // 靜態去敏樣本：Codex 0.155.1 單回合成功
 const CodexFixture_0_155_1_SingleTurn = `{"type":"thread.started","thread_id":"01a0c294-a4d4-7181-b605-5672057326e3"}
@@ -91,11 +27,20 @@ const CodexFixture_0_155_1_ToolFailure = `{"type":"thread.started","thread_id":"
 {"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"Error: exit 42 failed"}}
 {"type":"turn.completed","usage":{"input_tokens":34359,"cached_input_tokens":29184,"cache_write_input_tokens":0,"output_tokens":70,"reasoning_output_tokens":0}}`
 
-// 靜態去敏樣本：Codex 0.155.0 歷史樣本
-const CodexFixture_0_155_0_Legacy = `{"type":"thread.started","thread_id":"mock-thread-001"}
+// 靜態去敏樣本：Codex 0.155.0 真實探測單回合成功
+const CodexFixture_0_155_0_SingleTurn = `{"type":"thread.started","thread_id":"01a0c2d9-5b16-7de3-a30e-41cec6b1319d"}
 {"type":"turn.started"}
-{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Legacy PONG"}}
-{"type":"turn.completed","usage":{"input_tokens":15000,"cached_input_tokens":10000,"output_tokens":15}}`
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"PONG"}}
+{"type":"turn.completed","usage":{"input_tokens":17224,"cached_input_tokens":7424,"cache_write_input_tokens":0,"output_tokens":6,"reasoning_output_tokens":0}}`
+
+// 靜態去敏樣本：Codex 0.155.0 真實探測工具失敗（仍完整回報 token 用量）
+const CodexFixture_0_155_0_ToolFailure = `{"type":"thread.started","thread_id":"01a0c2d9-8a88-7990-adc8-b38ebf8f6eb4"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’ll run false."}}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc false"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","exit_code":1,"status":"failed"}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"false failed"}}
+{"type":"turn.completed","usage":{"input_tokens":34352,"cached_input_tokens":33792,"cache_write_input_tokens":0,"output_tokens":68,"reasoning_output_tokens":0}}`
 
 // TestCodexProbe_HermeticFixtures 驗證 Codex 雙版本之去敏樣本解析與能力矩陣（離線可重現）
 func TestCodexProbe_HermeticFixtures(t *testing.T) {
@@ -135,13 +80,29 @@ func TestCodexProbe_HermeticFixtures(t *testing.T) {
 		}
 	}
 	if failUsage == nil {
-		t.Fatalf("expected usage in tool failure fixture")
+		t.Fatalf("expected usage on 0.155.1 tool failure fixture")
 	}
 	if inTok, ok := failUsage["input_tokens"].(float64); !ok || inTok != 34359 {
 		t.Errorf("expected input_tokens 34359 on tool failure, got %v", failUsage["input_tokens"])
 	}
 
-	// 3. 驗證能力矩陣之 missing fields 與 unsupported 項目
+	// 3. 驗證 0.155.0 真實 probe 樣本解析
+	s3 := bufio.NewScanner(strings.NewReader(CodexFixture_0_155_0_SingleTurn))
+	var u0 map[string]interface{}
+	for s3.Scan() {
+		evt, err := ParseJSONLLine(s3.Text())
+		if err != nil {
+			t.Fatalf("parse error on 0.155.0 fixture: %v", err)
+		}
+		if evt != nil && evt.Type == "turn.completed" {
+			u0 = evt.Usage
+		}
+	}
+	if u0 == nil || u0["input_tokens"].(float64) != 17224 || u0["output_tokens"].(float64) != 6 {
+		t.Errorf("unexpected usage on 0.155.0: %+v", u0)
+	}
+
+	// 4. 驗證能力矩陣之 missing fields 與 unsupported 項目
 	m1551 := GetCodex01551Matrix()
 	if len(m1551.MissingTokenFields) == 0 || m1551.MissingTokenFields[0] != "total_tokens" {
 		t.Errorf("expected total_tokens in MissingTokenFields")
@@ -150,10 +111,13 @@ func TestCodexProbe_HermeticFixtures(t *testing.T) {
 		t.Errorf("expected preflight model to be unidentifiable from stdout")
 	}
 
-	// 4. 驗證 0.155.0 未安裝狀態明確標註
+	// 5. 驗證 0.155.0 探測狀態與矩陣
 	m1550 := GetCodex01550Matrix()
-	if m1550.Status != "unverified_not_installed" {
-		t.Errorf("expected 0.155.0 to be marked unverified_not_installed, got %q", m1550.Status)
+	if m1550.Status != "verified_probe_artifact" {
+		t.Errorf("expected 0.155.0 to be marked verified_probe_artifact, got %q", m1550.Status)
+	}
+	if len(m1550.MissingTokenFields) == 0 || m1550.MissingTokenFields[0] != "total_tokens" {
+		t.Errorf("expected total_tokens to be missing in 0.155.0")
 	}
 }
 
@@ -171,10 +135,9 @@ func TestCodexProbe_Live(t *testing.T) {
 	verStr := strings.TrimSpace(string(out))
 	t.Logf("installed codex version: %s", verStr)
 
-	// 若非 0.155.1，記錄版本差異
-	if !strings.Contains(verStr, "0.155.1") {
-		t.Logf("installed version %q differs from target 0.155.1; skipping live assertion", verStr)
-		return
+	// 支援驗證 0.155.0 (pinned) 與 0.155.1
+	if !strings.Contains(verStr, "0.155.0") && !strings.Contains(verStr, "0.155.1") {
+		t.Skipf("installed version %q is neither 0.155.0 nor 0.155.1; skipping live assertion", verStr)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)

@@ -227,6 +227,7 @@ Feature: Context Window Management Foundation (Capability Probe, Budget and Obse
 
 | 日期 | 異動 | 負責人 |
 |------|------|--------|
+| 2026-09-21 | 解決 PR #18 獨立審查回饋：修復 NaN 繞過、OpenCode nullable 聚合契約、live probe 產物與跳過語意、模型目錄與輸出保留空間基準釐清 | - |
 | 2026-09-21 | 完成 Phase 1 至 Phase 6 全部實作，CTXWIN-001 ～ CTXWIN-008 與全系統回歸測試 100% 通過（全綠），更新文件待審查 | - |
 | 2026-09-21 | 使用者核准 CTXWIN-001 ～ CTXWIN-008 全數驗收劇本並確認預設政策採 observe 與 20% 輸出保留空間 | - |
 | 2026-09-21 | 依使用者要求修訂審查缺口：nullable 用量、Stage／adapter 資料流、設定與模型來源、live 證據；授權僅限文件修訂與提交，全數 Scenario 保持待核准 | - |

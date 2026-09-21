@@ -1,6 +1,7 @@
 package contextwin_test
 
 import (
+	"math"
 	"testing"
 
 	"asura/internal/backend"
@@ -99,5 +100,31 @@ func TestHeuristicEstimator_CustomReserveRatio(t *testing.T) {
 	expectedReserve := int64(float64(res.EstimatedPromptTokens)*0.50 + 0.999999)
 	if res.ReservedOutputTokens != expectedReserve {
 		t.Errorf("custom reserve mismatch: got %d, want %d", res.ReservedOutputTokens, expectedReserve)
+	}
+}
+
+func TestHeuristicEstimator_NaNAndInfDefense(t *testing.T) {
+	est := contextwin.NewHeuristicEstimator(0.20)
+	prompt := "Defense prompt for NaN and Inf"
+
+	badRatios := []float64{
+		math.NaN(),
+		math.Inf(1),
+		math.Inf(-1),
+		-0.5,
+		0.0,
+		1.0,
+		2.5,
+	}
+
+	for _, bad := range badRatios {
+		res := est.EstimateWithReserve("striker", prompt, bad)
+		if res.ReservedOutputTokens <= 0 {
+			t.Errorf("expected positive reserved tokens for ratio %v, got %d", bad, res.ReservedOutputTokens)
+		}
+		if res.TotalEstimatedTokens <= res.EstimatedPromptTokens {
+			t.Errorf("expected total tokens > prompt tokens for ratio %v, got total=%d, prompt=%d",
+				bad, res.TotalEstimatedTokens, res.EstimatedPromptTokens)
+		}
 	}
 }

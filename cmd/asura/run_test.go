@@ -573,6 +573,28 @@ func TestHandleRun_ContextLimitReject_PreflightFailClosed(t *testing.T) {
 	}
 }
 
+func TestHandleRun_ContextLimitReject_NaNReserveRatio_StartupRejection(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "asura.db")
 
+	t.Setenv("ASURA_CONTEXT_LIMIT", "10")
+	t.Setenv("ASURA_CONTEXT_POLICY", "reject")
+	t.Setenv("ASURA_CONTEXT_RESERVE_RATIO", "NaN")
 
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
 
+	args := []string{
+		"-db", dbPath,
+		"-workspace", tmpDir,
+		"a test prompt",
+	}
+
+	code := handleRun(args, stdout, stderr)
+	if code == 0 {
+		t.Fatalf("expected non-zero exit code on ASURA_CONTEXT_RESERVE_RATIO=NaN, got 0")
+	}
+	if !strings.Contains(stderr.String(), "invalid context configuration") {
+		t.Errorf("expected 'invalid context configuration' in stderr, got: %s", stderr.String())
+	}
+}

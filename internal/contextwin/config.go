@@ -2,6 +2,7 @@ package contextwin
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -63,7 +64,7 @@ func LoadConfigWithLookup(lookup func(string) (string, bool)) (Config, error) {
 	if val, ok := lookup(EnvContextReserveRatio); ok && strings.TrimSpace(val) != "" {
 		trimmed := strings.TrimSpace(val)
 		ratio, err := strconv.ParseFloat(trimmed, 64)
-		if err != nil || ratio <= 0 || ratio >= 1.0 {
+		if err != nil || math.IsNaN(ratio) || math.IsInf(ratio, 0) || ratio <= 0 || ratio >= 1.0 {
 			return Config{}, fmt.Errorf("invalid %s=%q: must be a float between 0.0 and 1.0", EnvContextReserveRatio, val)
 		}
 		cfg.ReserveRatio = ratio

@@ -27,8 +27,18 @@ func TestCTXWIN001_BackendContextCapabilityProbe(t *testing.T) {
 		if err != nil || evt == nil {
 			t.Fatalf("unexpected error parsing opencode event: %v", err)
 		}
-		if evt.Tokens.Total != 1200 || evt.Tokens.Input != 1000 || evt.Tokens.Output != 200 || evt.Tokens.Cache.Read != 500 {
+		if evt.Tokens == nil || *evt.Tokens.Total != 1200 || *evt.Tokens.Input != 1000 || *evt.Tokens.Output != 200 || evt.Tokens.Cache == nil || *evt.Tokens.Cache.Read != 500 {
 			t.Errorf("unexpected tokens parsed: %+v", evt.Tokens)
+		}
+
+		// 驗證 1.18.23 與 1.18.31 能力矩陣均具備真實 probe artifact 證實
+		m23 := opencode.GetOpenCode11823Matrix()
+		if m23.Status != "verified_probe_artifact" || len(m23.UnsupportedCapabilities) == 0 {
+			t.Errorf("expected 1.18.23 matrix verified with unsupported capabilities, got %+v", m23)
+		}
+		m31 := opencode.GetOpenCode11831Matrix()
+		if m31.Status != "verified_installed" || len(m31.UnsupportedCapabilities) == 0 {
+			t.Errorf("expected 1.18.31 matrix verified with unsupported capabilities, got %+v", m31)
 		}
 	})
 
@@ -46,6 +56,16 @@ func TestCTXWIN001_BackendContextCapabilityProbe(t *testing.T) {
 		}
 		if usage.TotalTokens != nil {
 			t.Errorf("Codex probe invariant violation: total_tokens must be nil (not synthesized), got %v", *usage.TotalTokens)
+		}
+
+		// 驗證 0.155.0 與 0.155.1 能力矩陣均具備真實 probe artifact 證實
+		m0 := codex.GetCodex01550Matrix()
+		if m0.Status != "verified_probe_artifact" || len(m0.MissingTokenFields) == 0 {
+			t.Errorf("expected 0.155.0 matrix verified with missing total_tokens, got %+v", m0)
+		}
+		m1 := codex.GetCodex01551Matrix()
+		if m1.Status != "verified_installed" || len(m1.MissingTokenFields) == 0 {
+			t.Errorf("expected 0.155.1 matrix verified with missing total_tokens, got %+v", m1)
 		}
 	})
 }

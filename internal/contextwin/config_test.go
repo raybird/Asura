@@ -84,3 +84,21 @@ func TestLoadConfig_InvalidPolicy(t *testing.T) {
 		t.Errorf("expected error for invalid policy, got nil")
 	}
 }
+
+func TestLoadConfig_InvalidReserveRatio(t *testing.T) {
+	badRatios := []string{"NaN", "nan", "NAN", "Inf", "+Inf", "-Inf", "-0.1", "0.0", "1.0", "1.5", "abc"}
+	for _, bad := range badRatios {
+		envMap := map[string]string{
+			"ASURA_CONTEXT_RESERVE_RATIO": bad,
+		}
+		lookup := func(key string) (string, bool) {
+			val, ok := envMap[key]
+			return val, ok
+		}
+
+		_, err := contextwin.LoadConfigWithLookup(lookup)
+		if err == nil {
+			t.Errorf("expected error for invalid reserve ratio %q, got nil", bad)
+		}
+	}
+}

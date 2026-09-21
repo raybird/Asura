@@ -85,13 +85,21 @@ type StageAdmission struct {
 }
 ```
 
-### 2. 設定與模型來源契約（2026-09-21 修訂提案，待核准）
+### 2. 設定與模型來源契約（2026-09-21 修訂定案）
 
-- 首版由執行程序啟動時讀取 `ASURA_CONTEXT_LIMIT`（正整數 token 數）及 `ASURA_CONTEXT_POLICY`（`observe` 或 `reject`），經 `contextwin.LoadConfig` 驗證後，以不可變設定注入 Orchestrator。空值表示未配置；非整數、非正值、溢位或未知 policy 在啟動時報錯，不靜默降級。未設定 policy 的預設值及輸出保留比例仍由 TBD-2 核准後定案。
-- `cmd/asura/run.go` 的本機路徑與 `cmd/asura/daemon.go` → `daemon.Config` → `internal/daemon/daemon.go` 均須串接；送到 daemon 的任務使用 daemon 的啟動設定，首版不加入逐任務覆蓋或新的 Request Metadata。
-- 顯式 limit 優先於 catalog，對該程序所有 stage 生效，代表管理者設定的預算上限，不宣稱是模型原生容量。Admission 保存 policy、limit、來源與實際輸出保留值；相同 Request ID 重送讀取既有決策，不重新套用設定。
-- 首版不猜測 CLI 預設模型，也不另外重建 CLI 設定解析器。Task 1.1 逐 backend／role 確認是否能在呼叫前可靠識別實際模型；若有證據才由 adapter 的請求準備路徑提供識別，否則 model 為 unknown。未知模型仍套用顯式 limit；沒有顯式 limit 且無可靠 catalog 命中時才 bypass。執行後才取得的模型資訊不能回填成執行前已知。
-- catalog 僅接受已驗證的完整模型識別及有來源的上限，不以 BackendID 或模糊名稱推測。`observe` 超量產生 warning 並繼續，`reject` 超量才拒絕；等於上限可通過。未知上限的 bypass 與觀測模式的 warning 分別記錄。
+- **環境變數與驗證防禦（MUST FIX 1 修復）**：
+  - 首版由執行程序啟動時讀取 `ASURA_CONTEXT_LIMIT`（正整數 token 數）、`ASURA_CONTEXT_POLICY`（`observe` 或 `reject`）及 `ASURA_CONTEXT_RESERVE_RATIO`（浮點數比例，預設 0.20），經 `contextwin.LoadConfig` 驗證後，以不可變設定注入 Orchestrator。
+  - 嚴格防禦 IEEE 754 浮點數異常：針對 `ASURA_CONTEXT_RESERVE_RATIO` 顯式使用 `math.IsNaN(ratio) || math.IsInf(ratio, 0) || ratio <= 0 || ratio >= 1.0` 進行阻絕。若傳入 `NaN` 或 `Inf`，啟動時立即報錯拒絕，防範浮點數轉整數下溢（`-9223372036854775808`）導致預算檢核被繞過的 Fail-Open 漏洞。
+  - `cmd/asura/run.go` 的本機路徑與 `cmd/asura/daemon.go` → `daemon.Config` → `internal/daemon/daemon.go` 均須串接；送到 daemon 的任務使用 daemon 的啟動設定，首版不加入逐任務覆蓋或新的 Request Metadata。
+- **輸出保留空間基準釐清（SHOULD FIX 2 修復）**：
+  - 輸出保留空間（Reserved Output Tokens）之計算基準為「**Prompt 估算量的 20%**」，即公式為 `ceil(estimatedPromptTokens * reserveRatio)`，而非模型 Context Window 上限（`maxTokens`）的 20%。
+  - 理由：Prompt 愈長通常需要合理的相應輸出空間，依 Prompt 等比保留可避免在巨大窗口（如 1M tokens）下無端扣留過大固定額度，且能確保總估算量（Prompt + Reserved Output）始終與實際輸入長度等比例增長。
+- **靜態模型目錄來源與正式路徑邊界（SHOULD FIX 1 修復）**：
+  - 顯式 limit 優先於 catalog，對該程序所有 stage 生效，代表管理者設定的預算上限，不宣稱是模型原生容量。Admission 保存 policy、limit、來源與實際輸出保留值；相同 Request ID 重送讀取既有決策，不重新套用設定。
+  - 正式 Pipeline 執行路徑中，Stage `Prepare()` 目前維持 `req.Model == ""`，因為 CLI 後端在呼叫前無法可靠辨識底層實際使用的 Model（stdout JSONL 事件流亦不含 model 欄位）。因此，靜態模型目錄（`Catalog`）在正式路徑作為預留擴充能力；正式路徑上的 Preflight 准入約束完全來自管理者顯式設定之 `ASURA_CONTEXT_LIMIT`（`LimitSourceConfig`）。
+  - 若未設定 `ASURA_CONTEXT_LIMIT`，則因模型未知（`req.Model == ""`）且目錄無匹配，准入判定為 `VerdictBypassed`；若有設定顯式 limit，則一律受顯式上限約束。未列模型或未知模型在無顯式上限時 bypass，執行後才取得的模型資訊絕不回填為執行前已知。
+- **政策判定與能力邊界**：
+  - `observe` 超量產生 warning 並繼續執行，`reject` 超量判定為 `VerdictRejected` 並以 0 後端調用中斷管線；剛好等於上限判定為可通過（Admitted）。未知上限的 bypass 與觀測模式的 warning 分別記錄。
 
 ### 3. Orchestrator Stage-Aware Admission 流程設計
 
@@ -134,9 +142,10 @@ Stage 介面拆成準備 request 與執行已準備 request：準備步驟只組
   - 產出：[`internal/backend/opencode/probe_context_test.go`](file:///home/kevin/Documents/RCodes/Asura/internal/backend/opencode/probe_context_test.go)、[`internal/backend/codex/probe_context_test.go`](file:///home/kevin/Documents/RCodes/Asura/internal/backend/codex/probe_context_test.go)
   - 完成判準：四個指定版本各保存實際版本、命令、日期、退出碼、去敏原始 JSONL、fixture 與能力矩陣；確認欄位 presence、增量／累計語意及失敗後的 usage。逐 backend／role 記錄 preflight 模型識別是否可用。未安裝或無憑證為未驗證，不算 PASS；unsupported 需對應版本契約證據，不能只憑 stdout 沒有欄位推定。先完成此證據再設計聚合及模型來源實作。
   - 完成證據（2026-09-21）：
-    1. OpenCode 1.18.31（本機已安裝）live probe 通過（`TestOpenCodeProbe_Live`，耗時 8.78s），確認 `tokens.total`、`tokens.input`、`tokens.output`、`tokens.cache.read` 存在，多步驟累計且工具失敗後仍保留用量；OpenCode 1.18.23 標示為 `unverified_not_installed` 並附離線 fixture 驗證（`TestOpenCodeProbe_HermeticFixtures`）。
-    2. Codex CLI 0.155.1（本機已安裝）live probe 通過（`TestCodexProbe_Live`，耗時 10.27s），確認 `turn.completed` 提供 `input_tokens`、`output_tokens`、`cached_input_tokens`，且明確證實 `total_tokens` 缺失（absent/nil），工具失敗後仍保留用量；Codex 0.155.0 標示為 `unverified_not_installed` 並附離線 fixture 驗證（`TestCodexProbe_HermeticFixtures`）。
-    3. 雙後端 live 探測均證實 stdout JSONL 事件未包含 model 欄位，preflight 模型動態辨識為 unsupported。
+    1. OpenCode 1.18.31（本機安裝）live probe 通過（`TestOpenCodeProbe_Live`），確認 `tokens.total`、`tokens.input`、`tokens.output`、`tokens.cache.read` 存在，多步驟累計且工具失敗後仍保留用量；OpenCode 1.18.23 透過 `npx -y opencode-ai@1.18.23` 成功完成真實 probe 執行，取得真實 raw JSONL 產物並納入 fixture，標示為 `verified_probe_artifact`。
+    2. Codex CLI 0.155.1（本機安裝）live probe 通過（`TestCodexProbe_Live`），確認 `turn.completed` 提供 `input_tokens`、`output_tokens`、`cached_input_tokens`，且明確證實 `total_tokens` 缺失（absent/nil），工具失敗後仍保留用量；Codex 0.155.0 透過 `npx -y @openai/codex@0.155.0` 成功完成真實 probe 執行，取得真實 raw JSONL 產物並納入 fixture，標示為 `verified_probe_artifact`。
+    3. 修正 live probe 測試語意：本機版本不符合目標時以 `t.Skipf` 誠實跳過，杜絕直接 `return` 造成的假 PASS。
+    4. 雙後端真實探測均證實 stdout JSONL 事件未包含 model 欄位，preflight 模型動態辨識確認為 unsupported。
 - ✅ **Task 1.2**（對應 CTXWIN-001, CTXWIN-002）：先定義 `backend.TokenUsage`／`DataProvenance` 與 ExecutionResult 欄位，再串接雙後端 parser 與 adapter 的聚合及回傳。
   - 產出：[`internal/backend/usage.go`](file:///home/kevin/Documents/RCodes/Asura/internal/backend/usage.go)、[`internal/backend/usage_test.go`](file:///home/kevin/Documents/RCodes/Asura/internal/backend/usage_test.go)、[`internal/backend/backend.go`](file:///home/kevin/Documents/RCodes/Asura/internal/backend/backend.go)、雙後端 `parser.go`／`parser_test.go`／`adapter.go`／`adapter_test.go`
   - 完成判準：部分缺失與真實零值可區分；依 probe 語意聚合，不補造 total；fake CLI 事件經 adapter.Run 回傳 usage，成功與失敗皆保留可取得數據。

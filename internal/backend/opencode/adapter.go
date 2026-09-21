@@ -474,13 +474,18 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 	events := make([]backend.Event, 0)
 	var sb strings.Builder
 	var lastErr string
+	type tokenFieldAcc struct {
+		sum          int64
+		seenCount    int
+		missingCount int
+	}
 	var (
-		totalInput     int64
-		totalOutput    int64
-		totalTokens    int64
-		totalCached    int64
-		totalReasoning int64
-		hasTokenUsage  = false
+		inputAcc        tokenFieldAcc
+		outputAcc       tokenFieldAcc
+		totalAcc        tokenFieldAcc
+		cachedAcc       tokenFieldAcc
+		reasoningAcc    tokenFieldAcc
+		stepTokensCount = 0
 	)
 	hasRateLimit := false
 	hasAuthError := false
@@ -508,14 +513,42 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 		if evt.Tool != "" {
 			events = append(events, backend.NewToolEvent(evt.Tool, evt.ToolStatus))
 		}
-		if !evt.Tokens.IsZero() {
-			hasTokenUsage = true
-			totalInput += int64(evt.Tokens.Input)
-			totalOutput += int64(evt.Tokens.Output)
-			totalTokens += int64(evt.Tokens.Total)
-			totalReasoning += int64(evt.Tokens.Reasoning)
-			if evt.Tokens.Cache != nil {
-				totalCached += int64(evt.Tokens.Cache.Read)
+		if evt.Tokens != nil {
+			stepTokensCount++
+
+			if evt.Tokens.Input != nil {
+				inputAcc.seenCount++
+				inputAcc.sum += *evt.Tokens.Input
+			} else {
+				inputAcc.missingCount++
+			}
+
+			if evt.Tokens.Output != nil {
+				outputAcc.seenCount++
+				outputAcc.sum += *evt.Tokens.Output
+			} else {
+				outputAcc.missingCount++
+			}
+
+			if evt.Tokens.Total != nil {
+				totalAcc.seenCount++
+				totalAcc.sum += *evt.Tokens.Total
+			} else {
+				totalAcc.missingCount++
+			}
+
+			if evt.Tokens.Reasoning != nil {
+				reasoningAcc.seenCount++
+				reasoningAcc.sum += *evt.Tokens.Reasoning
+			} else {
+				reasoningAcc.missingCount++
+			}
+
+			if evt.Tokens.Cache != nil && evt.Tokens.Cache.Read != nil {
+				cachedAcc.seenCount++
+				cachedAcc.sum += *evt.Tokens.Cache.Read
+			} else {
+				cachedAcc.missingCount++
 			}
 		}
 		if evt.IsRateLimit {
@@ -544,15 +577,25 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 
 	var usage *backend.TokenUsage
 	usageSource := backend.ProvenanceUnknown
-	if hasTokenUsage {
-		usage = &backend.TokenUsage{
-			InputTokens:     backend.Int64Ptr(totalInput),
-			OutputTokens:    backend.Int64Ptr(totalOutput),
-			TotalTokens:     backend.Int64Ptr(totalTokens),
-			CachedTokens:    backend.Int64Ptr(totalCached),
-			ReasoningTokens: backend.Int64Ptr(totalReasoning),
-		}
+	if stepTokensCount > 0 {
+		usage = &backend.TokenUsage{}
 		usageSource = backend.ProvenanceExact
+
+		if inputAcc.seenCount > 0 && inputAcc.missingCount == 0 {
+			usage.InputTokens = backend.Int64Ptr(inputAcc.sum)
+		}
+		if outputAcc.seenCount > 0 && outputAcc.missingCount == 0 {
+			usage.OutputTokens = backend.Int64Ptr(outputAcc.sum)
+		}
+		if totalAcc.seenCount > 0 && totalAcc.missingCount == 0 {
+			usage.TotalTokens = backend.Int64Ptr(totalAcc.sum)
+		}
+		if cachedAcc.seenCount > 0 && cachedAcc.missingCount == 0 {
+			usage.CachedTokens = backend.Int64Ptr(cachedAcc.sum)
+		}
+		if reasoningAcc.seenCount > 0 && reasoningAcc.missingCount == 0 {
+			usage.ReasoningTokens = backend.Int64Ptr(reasoningAcc.sum)
+		}
 	}
 
 	ver, _ := a.Version(ctx)

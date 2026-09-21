@@ -30,12 +30,10 @@ type HeuristicEstimator struct {
 
 // NewHeuristicEstimator 建立具有指定預設保留比例之估算器
 func NewHeuristicEstimator(defaultReserveRatio float64) *HeuristicEstimator {
-	if defaultReserveRatio <= 0 {
+	if defaultReserveRatio <= 0 || defaultReserveRatio >= 1.0 || math.IsNaN(defaultReserveRatio) || math.IsInf(defaultReserveRatio, 0) {
 		defaultReserveRatio = DefaultReserveRatio
 	}
-	return &HeuristicEstimator{
-		defaultReserveRatio: defaultReserveRatio,
-	}
+	return &HeuristicEstimator{defaultReserveRatio: defaultReserveRatio}
 }
 
 // Estimate 使用預設輸出空間保留比例估算 Stage Context
@@ -56,7 +54,7 @@ func (e *HeuristicEstimator) EstimateWithReserve(stage string, prompt string, re
 		}
 	}
 
-	if reserveRatio <= 0 {
+	if reserveRatio <= 0 || reserveRatio >= 1.0 || math.IsNaN(reserveRatio) || math.IsInf(reserveRatio, 0) {
 		reserveRatio = e.defaultReserveRatio
 	}
 
@@ -81,6 +79,9 @@ func (e *HeuristicEstimator) EstimateWithReserve(stage string, prompt string, re
 
 	// 保留輸出空間（保守取 ceil）
 	reservedTokens := int64(math.Ceil(float64(promptTokens) * reserveRatio))
+	if reservedTokens < 0 {
+		reservedTokens = int64(math.Ceil(float64(promptTokens) * DefaultReserveRatio))
+	}
 	totalTokens := promptTokens + reservedTokens
 
 	return StageEstimate{

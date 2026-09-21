@@ -2,6 +2,7 @@ package contextwin
 
 import (
 	"fmt"
+	"math"
 )
 
 // AdmissionEngine 負責在 Stage 執行前進行 Context 預算評估與准入判定
@@ -27,7 +28,7 @@ func NewAdmissionEngine(catalog Catalog, estimator Estimator) *AdmissionEngine {
 // EvaluateStage 評估單一 Stage 之 Context 需求並產出 StageAdmission
 func (e *AdmissionEngine) EvaluateStage(stage, prompt, model string, cfg Config) StageAdmission {
 	reserveRatio := cfg.ReserveRatio
-	if reserveRatio <= 0 {
+	if reserveRatio <= 0 || reserveRatio >= 1.0 || math.IsNaN(reserveRatio) || math.IsInf(reserveRatio, 0) {
 		reserveRatio = DefaultReserveRatio
 	}
 
