@@ -137,9 +137,14 @@ Stage 介面拆成準備 request 與執行已準備 request：準備步驟只組
     1. OpenCode 1.18.31（本機已安裝）live probe 通過（`TestOpenCodeProbe_Live`，耗時 8.78s），確認 `tokens.total`、`tokens.input`、`tokens.output`、`tokens.cache.read` 存在，多步驟累計且工具失敗後仍保留用量；OpenCode 1.18.23 標示為 `unverified_not_installed` 並附離線 fixture 驗證（`TestOpenCodeProbe_HermeticFixtures`）。
     2. Codex CLI 0.155.1（本機已安裝）live probe 通過（`TestCodexProbe_Live`，耗時 10.27s），確認 `turn.completed` 提供 `input_tokens`、`output_tokens`、`cached_input_tokens`，且明確證實 `total_tokens` 缺失（absent/nil），工具失敗後仍保留用量；Codex 0.155.0 標示為 `unverified_not_installed` 並附離線 fixture 驗證（`TestCodexProbe_HermeticFixtures`）。
     3. 雙後端 live 探測均證實 stdout JSONL 事件未包含 model 欄位，preflight 模型動態辨識為 unsupported。
-- 📝 **Task 1.2**（對應 CTXWIN-001, CTXWIN-002）：先定義 `backend.TokenUsage`／`DataProvenance` 與 ExecutionResult 欄位，再串接雙後端 parser 與 adapter 的聚合及回傳。
-  - 產出：`internal/backend/usage.go`、`usage_test.go`、`backend.go`、雙後端 `parser.go`／`parser_test.go`／`adapter.go`／`adapter_test.go`
+- ✅ **Task 1.2**（對應 CTXWIN-001, CTXWIN-002）：先定義 `backend.TokenUsage`／`DataProvenance` 與 ExecutionResult 欄位，再串接雙後端 parser 與 adapter 的聚合及回傳。
+  - 產出：[`internal/backend/usage.go`](file:///home/kevin/Documents/RCodes/Asura/internal/backend/usage.go)、[`internal/backend/usage_test.go`](file:///home/kevin/Documents/RCodes/Asura/internal/backend/usage_test.go)、[`internal/backend/backend.go`](file:///home/kevin/Documents/RCodes/Asura/internal/backend/backend.go)、雙後端 `parser.go`／`parser_test.go`／`adapter.go`／`adapter_test.go`
   - 完成判準：部分缺失與真實零值可區分；依 probe 語意聚合，不補造 total；fake CLI 事件經 adapter.Run 回傳 usage，成功與失敗皆保留可取得數據。
+  - 完成證據（2026-09-21）：
+    1. `backend.TokenUsage` 定義 nullable `*int64` 欄位（`InputTokens`, `OutputTokens`, `TotalTokens`, `CachedTokens`, `ReasoningTokens`），通過 `TestTokenUsage_NullablePresence` 驗證缺失（nil/unknown）與明確 0 可精確區分，不捏造 0。
+    2. Codex parser 與 adapter 支援 `turn.completed` usage 抽取；Codex 未提供 `total_tokens` 保持為 nil，不人為拼湊；通過 `TestExtractResultAndEvents_Success`、`TestExtractResultAndEvents_FailurePreservesUsage` 與 `TestAdapter_Run_UsagePreservedOnSuccessAndFailure` 驗證成功與失敗下 usage 均精確回傳。
+    3. OpenCode parser 與 adapter 支援多步驟 `step_finish` tokens 聚合（含 `cache.read` 至 `CachedTokens`），通過 `TestParseEventLine_StepFinishWithCache` 與 `TestAdapter_Run_UsagePreservedOnSuccessAndFailure` 驗證 fake CLI 成功與失敗下 usage 均被保留且標記為 `ProvenanceExact`。
+    4. 回歸套件 `MBACK-001` ～ `MBACK-012` 全部通過（PASS）。
 
 ### Phase 2：Context 預算、估算器與模型目錄核心套件
 - 📝 **Task 2.1**（對應 CTXWIN-002, CTXWIN-005）：沿用 Task 1.2 用量契約，定義 `internal/contextwin` 核心型別（`ModelWindowInfo`, `StageEstimate`, `StageAdmission`）。

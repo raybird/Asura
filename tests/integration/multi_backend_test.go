@@ -422,7 +422,7 @@ func TestMBACK_005_SameBackendRedelivery(t *testing.T) {
 func TestMBACK_006_FailureClassification(t *testing.T) {
 	// 驗證 Codex Parser 精確將事件錯誤分類
 	rawAuth := `{"type":"turn.completed","usage":{},"error":{"type":"auth_error","message":"Invalid API token provided"}}`
-	_, _, _, failClassAuth, errAuth := codex.ExtractResultAndEvents(rawAuth, "")
+	_, _, _, failClassAuth, _, errAuth := codex.ExtractResultAndEvents(rawAuth, "")
 	if errAuth == nil {
 		t.Fatal("expected error for auth_error")
 	}
@@ -431,7 +431,7 @@ func TestMBACK_006_FailureClassification(t *testing.T) {
 	}
 
 	rawRL := `{"type":"turn.completed","usage":{},"error":{"type":"rate_limit_error","message":"Quota exceeded, retry in 20s"}}`
-	_, _, _, failClassRL, errRL := codex.ExtractResultAndEvents(rawRL, "")
+	_, _, _, failClassRL, _, errRL := codex.ExtractResultAndEvents(rawRL, "")
 	if errRL == nil {
 		t.Fatal("expected error for rate_limit_error")
 	}
@@ -440,7 +440,7 @@ func TestMBACK_006_FailureClassification(t *testing.T) {
 	}
 
 	rawEmpty := `{"type":"turn.completed","usage":{}}`
-	_, _, _, failClassEmpty, errEmpty := codex.ExtractResultAndEvents(rawEmpty, "")
+	_, _, _, failClassEmpty, _, errEmpty := codex.ExtractResultAndEvents(rawEmpty, "")
 	if errEmpty == nil {
 		t.Fatal("expected error for empty result")
 	}
@@ -734,7 +734,7 @@ func TestMBACK_011_EventNormalization(t *testing.T) {
 		`{"type":"turn.completed","usage":{"total_tokens":42}}`,
 	}, "\n")
 
-	output, _, events, _, err := codex.ExtractResultAndEvents(codexJSONL, "")
+	output, _, events, _, _, err := codex.ExtractResultAndEvents(codexJSONL, "")
 	if err != nil {
 		t.Fatalf("codex ExtractResultAndEvents failed: %v", err)
 	}

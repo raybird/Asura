@@ -5,11 +5,21 @@ import (
 	"strings"
 )
 
+type TokenCache struct {
+	Write int `json:"write"`
+	Read  int `json:"read"`
+}
+
 type TokenUsage struct {
-	Total     int `json:"total"`
-	Input     int `json:"input"`
-	Output    int `json:"output"`
-	Reasoning int `json:"reasoning,omitempty"`
+	Total     int         `json:"total"`
+	Input     int         `json:"input"`
+	Output    int         `json:"output"`
+	Reasoning int         `json:"reasoning,omitempty"`
+	Cache     *TokenCache `json:"cache,omitempty"`
+}
+
+func (tu TokenUsage) IsZero() bool {
+	return tu.Total == 0 && tu.Input == 0 && tu.Output == 0 && tu.Reasoning == 0 && tu.Cache == nil
 }
 
 type Event struct {
@@ -81,7 +91,7 @@ func ParseEventLine(line string) (*Event, error) {
 		if raw.Part.State != nil && raw.Part.State.Status != "" {
 			evt.ToolStatus = raw.Part.State.Status
 		}
-		if raw.Part.Tokens.Total > 0 {
+		if !raw.Part.Tokens.IsZero() {
 			evt.Tokens = raw.Part.Tokens
 		}
 	}

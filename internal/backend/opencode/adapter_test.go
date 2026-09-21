@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"asura/internal/backend"
 )
 
 // TestINT001Unit 驗證 Adapter 對 OpenCode 輸出之事件串流解析與文字抽取能力 (INT-001 內迴圈)
@@ -824,6 +826,104 @@ func TestAdapter_CreateIsolatedReadOnlyConfigDir_SanitizesAndPersistsAuthJSON(t 
 		t.Errorf("critical security breach: 'evil' wellknown credential was not dropped from isolated auth.json")
 	}
 }
+
+func TestAdapter_Run_UsagePreservedOnSuccessAndFailure(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake-opencode.sh")
+	scriptContent := `#!/bin/sh
+if [ "$1" = "--version" ]; then
+    echo "1.18.31"
+    exit 0
+fi
+
+if grep -q "FAIL_TRIGGER" <<EOF
+$*
+EOF
+then
+    echo '{"type":"step_start","timestamp":100,"sessionID":"ses_fail","part":{"type":"step-start"}}'
+    echo '{"type":"step_finish","timestamp":150,"sessionID":"ses_fail","part":{"reason":"stop","type":"step-finish","tokens":{"total":300,"input":250,"output":50,"reasoning":0,"cache":{"read":100,"write":0}}}}'
+    echo "something broke" >&2
+    exit 1
+fi
+
+echo '{"type":"step_start","timestamp":100,"sessionID":"ses_succ","part":{"type":"step-start"}}'
+echo '{"type":"text","timestamp":120,"sessionID":"ses_succ","part":{"type":"text","text":"Success response"}}'
+echo '{"type":"step_finish","timestamp":150,"sessionID":"ses_succ","part":{"reason":"stop","type":"step-finish","tokens":{"total":200,"input":180,"output":20,"reasoning":5,"cache":{"read":50,"write":0}}}}'
+exit 0
+`
+	if err := os.WriteFile(fakeScript, []byte(scriptContent), 0755); err != nil {
+		t.Fatalf("failed to write fake script: %v", err)
+	}
+
+	adapter := NewAdapter(AdapterConfig{
+		BinaryPath:      fakeScript,
+		ExpectedVersion: "1.18.31",
+	})
+	ctx := context.Background()
+
+	// 1. 成功路徑
+	resSuccess, err := adapter.Run(ctx, &backend.ExecutionRequest{
+		Role:      backend.RoleStriker,
+		Workspace: tmpDir,
+		Prompt:    "normal prompt",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error on success: %v", err)
+	}
+	if resSuccess.Usage == nil {
+		t.Fatalf("expected usage on success")
+	}
+	if resSuccess.Usage.InputTokens == nil || *resSuccess.Usage.InputTokens != 180 {
+		t.Errorf("expected InputTokens 180, got %v", resSuccess.Usage.InputTokens)
+	}
+	if resSuccess.Usage.OutputTokens == nil || *resSuccess.Usage.OutputTokens != 20 {
+		t.Errorf("expected OutputTokens 20, got %v", resSuccess.Usage.OutputTokens)
+	}
+	if resSuccess.Usage.TotalTokens == nil || *resSuccess.Usage.TotalTokens != 200 {
+		t.Errorf("expected TotalTokens 200, got %v", resSuccess.Usage.TotalTokens)
+	}
+	if resSuccess.Usage.CachedTokens == nil || *resSuccess.Usage.CachedTokens != 50 {
+		t.Errorf("expected CachedTokens 50, got %v", resSuccess.Usage.CachedTokens)
+	}
+	if resSuccess.Usage.ReasoningTokens == nil || *resSuccess.Usage.ReasoningTokens != 5 {
+		t.Errorf("expected ReasoningTokens 5, got %v", resSuccess.Usage.ReasoningTokens)
+	}
+	if resSuccess.UsageSource != backend.ProvenanceExact {
+		t.Errorf("expected UsageSource exact, got %s", resSuccess.UsageSource)
+	}
+
+	// 2. 失敗路徑 (FAIL_TRIGGER)
+	resFail, errFail := adapter.Run(ctx, &backend.ExecutionRequest{
+		Role:      backend.RoleStriker,
+		Workspace: tmpDir,
+		Prompt:    "FAIL_TRIGGER prompt",
+	})
+	if errFail == nil {
+		t.Fatalf("expected error on failure trigger, got nil")
+	}
+	if resFail == nil {
+		t.Fatalf("expected non-nil ExecutionResult even on failure")
+	}
+	if resFail.Usage == nil {
+		t.Fatalf("expected usage to be preserved even on execution failure")
+	}
+	if resFail.Usage.InputTokens == nil || *resFail.Usage.InputTokens != 250 {
+		t.Errorf("expected InputTokens 250 on failure, got %v", resFail.Usage.InputTokens)
+	}
+	if resFail.Usage.OutputTokens == nil || *resFail.Usage.OutputTokens != 50 {
+		t.Errorf("expected OutputTokens 50 on failure, got %v", resFail.Usage.OutputTokens)
+	}
+	if resFail.Usage.TotalTokens == nil || *resFail.Usage.TotalTokens != 300 {
+		t.Errorf("expected TotalTokens 300 on failure, got %v", resFail.Usage.TotalTokens)
+	}
+	if resFail.Usage.CachedTokens == nil || *resFail.Usage.CachedTokens != 100 {
+		t.Errorf("expected CachedTokens 100 on failure, got %v", resFail.Usage.CachedTokens)
+	}
+	if resFail.UsageSource != backend.ProvenanceExact {
+		t.Errorf("expected UsageSource exact on failure, got %s", resFail.UsageSource)
+	}
+}
+
 
 
 

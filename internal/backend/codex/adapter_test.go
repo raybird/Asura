@@ -257,3 +257,98 @@ func TestAdapter_Run_Live(t *testing.T) {
 		t.Errorf("expected events to be populated, got 0")
 	}
 }
+
+func TestAdapter_Run_UsagePreservedOnSuccessAndFailure(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake-codex.sh")
+	scriptContent := `#!/bin/sh
+if [ "$1" = "--version" ]; then
+    echo "codex-cli 0.155.0"
+    exit 0
+fi
+
+if grep -q "FAIL_TRIGGER" <<EOF
+$*
+EOF
+then
+    echo '{"type":"thread.started","thread_id":"t-fail"}'
+    echo '{"type":"turn.started"}'
+    echo '{"type":"item.completed","item":{"id":"1","type":"agent_message","text":"Partial failed text"}}'
+    echo '{"type":"error","message":"command failed with exit code 42"}'
+    echo '{"type":"turn.completed","usage":{"input_tokens":555,"output_tokens":22,"cached_input_tokens":111}}'
+    exit 1
+fi
+
+echo '{"type":"thread.started","thread_id":"t-success"}'
+echo '{"type":"turn.started"}'
+echo '{"type":"item.completed","item":{"id":"1","type":"agent_message","text":"Success response"}}'
+echo '{"type":"turn.completed","usage":{"input_tokens":120,"output_tokens":15,"cached_input_tokens":30}}'
+exit 0
+`
+	if err := os.WriteFile(fakeScript, []byte(scriptContent), 0755); err != nil {
+		t.Fatalf("failed to write fake script: %v", err)
+	}
+
+	adapter := NewAdapter(AdapterConfig{
+		BinaryPath:      fakeScript,
+		ExpectedVersion: "0.155.0",
+	})
+	ctx := context.Background()
+
+	// 1. 成功路徑
+	resSuccess, err := adapter.Run(ctx, &backend.ExecutionRequest{
+		Role:      backend.RoleStriker,
+		Workspace: tmpDir,
+		Prompt:    "normal prompt",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error on success: %v", err)
+	}
+	if resSuccess.Usage == nil {
+		t.Fatalf("expected usage on success")
+	}
+	if resSuccess.Usage.InputTokens == nil || *resSuccess.Usage.InputTokens != 120 {
+		t.Errorf("expected InputTokens 120, got %v", resSuccess.Usage.InputTokens)
+	}
+	if resSuccess.Usage.OutputTokens == nil || *resSuccess.Usage.OutputTokens != 15 {
+		t.Errorf("expected OutputTokens 15, got %v", resSuccess.Usage.OutputTokens)
+	}
+	if resSuccess.Usage.CachedTokens == nil || *resSuccess.Usage.CachedTokens != 30 {
+		t.Errorf("expected CachedTokens 30, got %v", resSuccess.Usage.CachedTokens)
+	}
+	if resSuccess.Usage.TotalTokens != nil {
+		t.Errorf("expected TotalTokens to be nil for Codex, got %v", *resSuccess.Usage.TotalTokens)
+	}
+	if resSuccess.UsageSource != backend.ProvenanceExact {
+		t.Errorf("expected UsageSource exact, got %s", resSuccess.UsageSource)
+	}
+
+	// 2. 失敗路徑 (FAIL_TRIGGER)
+	resFail, errFail := adapter.Run(ctx, &backend.ExecutionRequest{
+		Role:      backend.RoleStriker,
+		Workspace: tmpDir,
+		Prompt:    "FAIL_TRIGGER prompt",
+	})
+	if errFail == nil {
+		t.Fatalf("expected error on failure trigger, got nil")
+	}
+	if resFail == nil {
+		t.Fatalf("expected non-nil ExecutionResult even on failure")
+	}
+	if resFail.Usage == nil {
+		t.Fatalf("expected usage to be preserved even on execution failure")
+	}
+	if resFail.Usage.InputTokens == nil || *resFail.Usage.InputTokens != 555 {
+		t.Errorf("expected InputTokens 555 on failure, got %v", resFail.Usage.InputTokens)
+	}
+	if resFail.Usage.OutputTokens == nil || *resFail.Usage.OutputTokens != 22 {
+		t.Errorf("expected OutputTokens 22 on failure, got %v", resFail.Usage.OutputTokens)
+	}
+	if resFail.Usage.CachedTokens == nil || *resFail.Usage.CachedTokens != 111 {
+		t.Errorf("expected CachedTokens 111 on failure, got %v", resFail.Usage.CachedTokens)
+	}
+	if resFail.UsageSource != backend.ProvenanceExact {
+		t.Errorf("expected UsageSource exact on failure, got %s", resFail.UsageSource)
+	}
+}
+

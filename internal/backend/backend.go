@@ -58,6 +58,8 @@ type ExecutionResult struct {
 	PartialOutput  string                `json:"partial_output,omitempty"`
 	Events         []Event               `json:"events,omitempty"`
 	FailureClass   FailureClassification `json:"failure_class,omitempty"`
+	Usage          *TokenUsage           `json:"usage,omitempty"`
+	UsageSource    DataProvenance        `json:"usage_source,omitempty"`
 	StartedAt      time.Time             `json:"started_at"`
 	CompletedAt    time.Time             `json:"completed_at"`
 }

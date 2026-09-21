@@ -474,6 +474,14 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 	events := make([]backend.Event, 0)
 	var sb strings.Builder
 	var lastErr string
+	var (
+		totalInput     int64
+		totalOutput    int64
+		totalTokens    int64
+		totalCached    int64
+		totalReasoning int64
+		hasTokenUsage  = false
+	)
 	hasRateLimit := false
 	hasAuthError := false
 	hasEvents := false
@@ -500,6 +508,16 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 		if evt.Tool != "" {
 			events = append(events, backend.NewToolEvent(evt.Tool, evt.ToolStatus))
 		}
+		if !evt.Tokens.IsZero() {
+			hasTokenUsage = true
+			totalInput += int64(evt.Tokens.Input)
+			totalOutput += int64(evt.Tokens.Output)
+			totalTokens += int64(evt.Tokens.Total)
+			totalReasoning += int64(evt.Tokens.Reasoning)
+			if evt.Tokens.Cache != nil {
+				totalCached += int64(evt.Tokens.Cache.Read)
+			}
+		}
 		if evt.IsRateLimit {
 			hasRateLimit = true
 			lastErr = "rate limit exceeded"
@@ -524,6 +542,19 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 		extractedText = strings.TrimSpace(rawStdout)
 	}
 
+	var usage *backend.TokenUsage
+	usageSource := backend.ProvenanceUnknown
+	if hasTokenUsage {
+		usage = &backend.TokenUsage{
+			InputTokens:     backend.Int64Ptr(totalInput),
+			OutputTokens:    backend.Int64Ptr(totalOutput),
+			TotalTokens:     backend.Int64Ptr(totalTokens),
+			CachedTokens:    backend.Int64Ptr(totalCached),
+			ReasoningTokens: backend.Int64Ptr(totalReasoning),
+		}
+		usageSource = backend.ProvenanceExact
+	}
+
 	ver, _ := a.Version(ctx)
 	result := &backend.ExecutionResult{
 		BackendID:      "opencode",
@@ -532,6 +563,8 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 		PartialOutput:  extractedText,
 		Events:         events,
 		FailureClass:   backend.FailureNone,
+		Usage:          usage,
+		UsageSource:    usageSource,
 		StartedAt:      startedAt,
 		CompletedAt:    completedAt,
 	}

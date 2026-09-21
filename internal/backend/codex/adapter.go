@@ -223,7 +223,12 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 	completedAt := time.Now()
 
 	ver, _ := a.Version(ctx)
-	output, partialOutput, events, failureClass, parseErr := ExtractResultAndEvents(rawStdout, rawStderr)
+	output, partialOutput, events, failureClass, usage, parseErr := ExtractResultAndEvents(rawStdout, rawStderr)
+
+	usageSource := backend.ProvenanceUnknown
+	if usage != nil {
+		usageSource = backend.ProvenanceExact
+	}
 
 	result := &backend.ExecutionResult{
 		BackendID:      "codex",
@@ -232,6 +237,8 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 		PartialOutput:  partialOutput,
 		Events:         events,
 		FailureClass:   failureClass,
+		Usage:          usage,
+		UsageSource:    usageSource,
 		StartedAt:      startedAt,
 		CompletedAt:    completedAt,
 	}

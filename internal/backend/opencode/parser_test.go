@@ -78,3 +78,21 @@ func TestParseEventLine_Invalid(t *testing.T) {
 		t.Fatalf("expected nil event for non-json line, got %+v", event)
 	}
 }
+
+func TestParseEventLine_StepFinishWithCache(t *testing.T) {
+	line := `{"type":"step_finish","timestamp":1789970938158,"sessionID":"ses_123","part":{"id":"prt_3","reason":"stop","type":"step-finish","tokens":{"total":21522,"input":4937,"output":28,"reasoning":10,"cache":{"write":0,"read":16585}},"cost":0}}`
+	event, err := opencode.ParseEventLine(line)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event == nil {
+		t.Fatalf("expected event, got nil")
+	}
+	if event.Tokens.Total != 21522 || event.Tokens.Input != 4937 || event.Tokens.Output != 28 || event.Tokens.Reasoning != 10 {
+		t.Errorf("unexpected tokens: %+v", event.Tokens)
+	}
+	if event.Tokens.Cache == nil || event.Tokens.Cache.Read != 16585 {
+		t.Errorf("expected Cache.Read 16585, got %+v", event.Tokens.Cache)
+	}
+}
+

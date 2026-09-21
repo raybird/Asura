@@ -194,7 +194,7 @@ Feature: Context Window Management Foundation (Capability Probe, Budget and Obse
 
 ## 重構步驟概要
 
-1. 📝 **Phase 1** - 雙後端 Context 能力探測與 Token 正規化
+1. ✅ **Phase 1** - 雙後端 Context 能力探測與 Token 正規化
 2. 📝 **Phase 2** - Context 預算、估算器與模型目錄核心套件
 3. 📝 **Phase 3** - Stage-Aware Prompt 組裝與准入引擎
 4. 📝 **Phase 4** - Orchestrator 整合與 Fail-Closed 防禦

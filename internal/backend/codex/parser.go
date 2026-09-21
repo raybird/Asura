@@ -33,11 +33,12 @@ func ParseJSONLLine(line string) (*RawEvent, error) {
 	return &evt, nil
 }
 
-// ExtractResultAndEvents 從 Codex 輸出的 stdout 與 stderr 中解析出結構化事件、最終回答與錯誤分類
-func ExtractResultAndEvents(rawStdout, rawStderr string) (output string, partialOutput string, events []backend.Event, failureClass backend.FailureClassification, err error) {
+// ExtractResultAndEvents 從 Codex 輸出的 stdout 與 stderr 中解析出結構化事件、最終回答、錯誤分類與 Token 用量
+func ExtractResultAndEvents(rawStdout, rawStderr string) (output string, partialOutput string, events []backend.Event, failureClass backend.FailureClassification, usage *backend.TokenUsage, err error) {
 	events = make([]backend.Event, 0)
 	var sb strings.Builder
 	var lastErr string
+	var parsedUsage *backend.TokenUsage
 	hasAuth := false
 	hasRateLimit := false
 
@@ -70,6 +71,10 @@ func ExtractResultAndEvents(rawStdout, rawStderr string) (output string, partial
 		}
 
 		switch evt.Type {
+		case "turn.completed":
+			if evt.Usage != nil {
+				parsedUsage = parseCodexUsage(evt.Usage)
+			}
 		case "item.completed", "item.started":
 			if item := evt.Item; item != nil {
 				itemType, _ := item["type"].(string)
@@ -120,30 +125,78 @@ func ExtractResultAndEvents(rawStdout, rawStderr string) (output string, partial
 	if hasRateLimit {
 		failureClass = backend.FailureRateLimit
 		err = errors.New("backend error: rate limit exceeded")
-		return "", partialOutput, events, failureClass, err
+		return "", partialOutput, events, failureClass, parsedUsage, err
 	}
 
 	if hasAuth {
 		failureClass = backend.FailureAuth
 		err = errors.New("backend error: authentication failed")
-		return "", partialOutput, events, failureClass, err
+		return "", partialOutput, events, failureClass, parsedUsage, err
 	}
 
 	if lastErr != "" {
 		failureClass = backend.FailureExecution
 		err = fmt.Errorf("backend error: %s", lastErr)
-		return "", partialOutput, events, failureClass, err
+		return "", partialOutput, events, failureClass, parsedUsage, err
 	}
 
 	if extracted == "" {
 		failureClass = backend.FailureEmptyResult
 		err = errors.New("codex produced empty result")
-		return "", "", events, failureClass, err
+		return "", "", events, failureClass, parsedUsage, err
 	}
 
 	output = extracted
 	failureClass = backend.FailureNone
-	return output, partialOutput, events, failureClass, nil
+	return output, partialOutput, events, failureClass, parsedUsage, nil
+}
+
+func parseCodexUsage(raw map[string]interface{}) *backend.TokenUsage {
+	if raw == nil {
+		return nil
+	}
+	u := &backend.TokenUsage{}
+	hasAny := false
+	if v, ok := getInt64(raw, "input_tokens"); ok {
+		u.InputTokens = &v
+		hasAny = true
+	}
+	if v, ok := getInt64(raw, "output_tokens"); ok {
+		u.OutputTokens = &v
+		hasAny = true
+	}
+	if v, ok := getInt64(raw, "cached_input_tokens"); ok {
+		u.CachedTokens = &v
+		hasAny = true
+	}
+	if v, ok := getInt64(raw, "reasoning_output_tokens"); ok {
+		u.ReasoningTokens = &v
+		hasAny = true
+	}
+	if v, ok := getInt64(raw, "total_tokens"); ok {
+		u.TotalTokens = &v
+		hasAny = true
+	}
+	if !hasAny {
+		return nil
+	}
+	return u
+}
+
+func getInt64(m map[string]interface{}, key string) (int64, bool) {
+	val, ok := m[key]
+	if !ok || val == nil {
+		return 0, false
+	}
+	switch n := val.(type) {
+	case float64:
+		return int64(n), true
+	case int64:
+		return n, true
+	case int:
+		return int64(n), true
+	}
+	return 0, false
 }
 
 func checkErrorLine(line string, hasAuth, hasRateLimit *bool, lastErr *string) {
