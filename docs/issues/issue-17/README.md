@@ -17,6 +17,7 @@
 - [requirement-analysis.md](./requirement-analysis.md)
 - [technical-analysis.md](./technical-analysis.md)
 - [implementation-plan.md](./implementation-plan.md)
+- [原提交審查報告](./review-405580c.md)（僅適用 `405580c`，修訂後未宣稱重新審查通過）
 
 ## 快速導覽
 
@@ -52,14 +53,20 @@ internal/
 │   ├── usage.go             # 新增：TokenUsage、DataProvenance 定義
 │   ├── usage_test.go        # 新增：TokenUsage 與 Provenance 測試
 │   ├── opencode/
+│   │   ├── adapter.go       # 可改：聚合 usage 並寫入 ExecutionResult，失敗仍保留
+│   │   ├── adapter_test.go  # 可改：fake CLI 到 ExecutionResult 驗證
 │   │   ├── parser.go        # 可改：自 JSONL 事件萃取 TokenUsage
 │   │   ├── parser_test.go   # 可改：驗證 OpenCode Token 抽取
 │   │   └── probe_context_test.go # 新增：OpenCode Context Contract Probe
 │   └── codex/
+│       ├── adapter.go       # 可改：回傳 parser usage，失敗仍保留
+│       ├── adapter_test.go  # 可改：fake CLI 到 ExecutionResult 驗證
 │       ├── parser.go        # 可改：自 JSONL 事件萃取 TokenUsage
 │       ├── parser_test.go   # 可改：驗證 Codex Token 抽取
 │       └── probe_context_test.go # 新增：Codex Context Contract Probe
 ├── contextwin/              # 新增：Context Window Management 模組
+│   ├── config.go            # 新增：程序級環境設定解析及驗證
+│   ├── config_test.go       # 新增：設定有效值與錯誤路徑
 │   ├── types.go             # 新增：ModelWindowInfo, StageEstimate, StageAdmission 型別
 │   ├── catalog.go           # 新增：靜態模型目錄與未知降級政策
 │   ├── catalog_test.go      # 新增：模型目錄單元測試
@@ -67,7 +74,14 @@ internal/
 │   ├── estimator_test.go    # 新增：Token 估算器單元測試
 │   ├── admission.go         # 新增：Stage 准入引擎與決策判定
 │   └── admission_test.go    # 新增：准入判定單元測試
+├── daemon/
+│   ├── daemon.go            # 可改：預算設定注入正式 Orchestrator
+│   └── daemon_test.go       # 可改：正式入口准入驗證
 ├── pipeline/
+│   ├── stage_oracle.go      # 可改：Prepare／ExecutePrepared，回傳後端結果
+│   ├── stage_striker.go     # 可改：共用已準備 request，保留 partial result
+│   ├── stage_critic.go      # 可改：解析失敗仍回傳 usage
+│   ├── stage_*_test.go      # 可改：prompt 相等、usage 及失敗路徑
 │   ├── types.go             # 可改：StageTrace 擴充 Admission 與 Usage 欄位
 │   ├── types_test.go        # 可改：StageTrace 序列化測試
 │   ├── orchestrator.go      # 可改：整合 Stage-aware Admission 與 Trace 紀錄
@@ -79,6 +93,8 @@ internal/
     ├── sqlite.go            # 可改：Task 與 Trace 向後相容持久化
     └── sqlite_test.go       # 可改：歷史任務讀取相容性測試
 ```
+
+其他必要檔案：`cmd/asura/run.go`／`run_test.go`、`cmd/asura/daemon.go`（讀取設定並注入）、`tests/integration/context_window_test.go`（跨層驗收）。交付前更新根目錄 `README.md` 與 `docs/superpowers/specs/2026-09-11-asura-architecture-design.md`；責任歸 Task 6.2。
 
 ## Gherkin 驗收劇本
 
@@ -92,6 +108,7 @@ Feature: Context Window Management Foundation (Capability Probe, Budget and Obse
     Then 系統產出雙後端 Context 能力矩陣
     And 明確標示可觀測之 token usage 來源與原生限制
     And 未支援能力（如模型前工具輸出攔截、動態會話歷史替換）明確記錄為 unsupported
+    And 四個指定版本各有真實 probe artifact，未驗證不標為 unsupported 或 PASS
     And 測試結構清楚分層為 hermetic parser 測試與 live probe 測試
 
   @CTXWIN-002
@@ -100,7 +117,8 @@ Feature: Context Window Management Foundation (Capability Probe, Budget and Obse
     When 模型、窗口限制或 token 用量未有精確後端回報數據
     Then 系統將其資料來源明確標示為 estimated 或 unknown
     And 絕不將字元換算之估算值標記為 backend 實測 token
-    And 數值缺失時標示為 unknown 且不以 0 假冒
+    And 每個用量欄位可區分缺失 unknown 與後端明確回報的 0
+    And 部分缺失、真實零值經 JSON 與 SQLite 往返後語意不變
 
   @CTXWIN-003
   Scenario: Dynamic stage-aware prompt evaluation
@@ -110,6 +128,7 @@ Feature: Context Window Management Foundation (Capability Probe, Budget and Obse
     And Striker 依原始 Context 與實際產出之 OraclePlan 組合進行估算
     And Critic 依原始 Context、OraclePlan 與實際產出之 StrikerOutput 組合進行估算
     And 各 Stage 獨立執行准入檢查判斷
+    And 估算輸入與 Backend.Run 實際收到的 request.Prompt 完全相同
 
   @CTXWIN-004
   Scenario: Preflight admission rejection
@@ -119,6 +138,9 @@ Feature: Context Window Management Foundation (Capability Probe, Budget and Obse
     And 該 Stage 之後端進程與模型呼叫次數為 0
     And 若 Striker 或 Critic 階段超量拒絕，已完成之 Stage Trace 與結果完整保留
     And 絕不自動更換 Backend 亦不重跑已完成之 Stage
+    And 正式本機 run 與 daemon 入口皆可注入顯式上限及 reject 政策
+    And 未知模型仍受顯式上限約束，observe 超量只警示，無可用上限才 bypass
+    And 非法上限或政策在執行程序啟動時報錯
 
   @CTXWIN-005
   Scenario: Sealed context immutability
@@ -133,6 +155,7 @@ Feature: Context Window Management Foundation (Capability Probe, Budget and Obse
     Given 任務執行完成或在某 Stage 終止
     When 查詢 Task 與 PipelineTrace 審計資料
     Then 每個 Stage 均記錄獨立的估算值、實際觀測 usage 與資料來源
+    And backend 失敗或 Oracle／Critic 結果解析失敗仍保留已取得的 usage
     And 歷史舊任務無 usage 欄位時保持相容可讀且不標為 0
     And 既有 SQLite 資料表與查詢保持向前向後相容
 
@@ -142,6 +165,7 @@ Feature: Context Window Management Foundation (Capability Probe, Budget and Obse
     When 呼叫端以相同 Request ID 重送請求
     Then 系統返回既有任務資訊與決策結果
     And 不重跑估算或引發二次後端執行
+    And 程序預算設定改變不覆寫已保存的 Admission 決策
     And 保持原密封上下文與 BackendID 不變
 
   @CTXWIN-008
@@ -197,12 +221,13 @@ Feature: Context Window Management Foundation (Capability Probe, Budget and Obse
 | 編號 | 事項 | 狀態 | 影響 |
 |------|------|------|------|
 | TBD-1 | Gherkin CTXWIN-001 ～ CTXWIN-008 劇本確認與核准 | 待確認 | 阻礙實作啟動，需使用者核准後方可開始 Phase 1 ~ 6 實作；關聯全數 Scenario |
-| TBD-2 | 預設 Context 超量政策之門檻數值與處置策略（觀測審計 vs 阻擋） | 待確認 | 關聯 CTXWIN-004，第一版預設以觀測與顯式配置為主，待核准確定預設行為 |
+| TBD-2 | 預設 Context 超量政策之門檻數值與處置策略（觀測審計 vs 阻擋） | 待確認 | 關聯 CTXWIN-004，2026-09-21 提案已明列程序級設定入口及 observe／reject 行為；仍待核准未設定 policy 的預設值與輸出保留比例 |
 
 ## Timeline
 
 | 日期 | 異動 | 負責人 |
 |------|------|--------|
+| 2026-09-21 | 依使用者要求修訂審查缺口：nullable 用量、Stage／adapter 資料流、設定與模型來源、live 證據；授權僅限文件修訂與提交，全數 Scenario 保持待核准 | - |
 | 2026-09-21 | 建立 Issue 17 初始架構規範、需求分析、技術分析與實作計畫初稿 | - |
 
 ---

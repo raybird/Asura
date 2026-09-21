@@ -55,3 +55,10 @@ Asura 目前的調度邏輯尚未具備 Context Window 的預先感知與後驗�
 3. **Usage Observation & Provenance**：定義標準化的 `UsageObservation` 與 `ContextBudget`，明確區分 `Exact`（後端實測）、`Estimated`（估算）與 `Unknown`（未知），嚴禁虛報 0。
 4. **Trace 審計與向前相容**：將預算估算與實測用量納入 `StageTrace`，確保既有資料庫與查詢相容。
 5. **安全與不變性保障**：維持 Sealed Context 不變性，超量時不擅自竄改 prompt 或丟棄 memory；維持 No Automatic Failover 與重送冪等性。
+
+## 審查後補充（2026-09-21）
+
+- 用量可能只回報部分欄位，資料契約需逐欄位區分 unknown 與真實零值，不能只以整筆 UsageSource 表示。
+- 實際 prompt 組裝與 Backend.Run 位於三個 Stage，ExecutionResult 建立於雙後端 adapter；計畫須涵蓋這些邊界才能將原生用量送到 Trace，並保留失敗後已取得的用量。
+- 現有 SubmitRequest／ExecutionContext 沒有模型與預算設定欄位，BackendID 也不等於模型。首版提案以程序級環境設定注入本機 run 與 daemon，模型識別依 probe 證據，無法辨識時保留 unknown，不猜測模型。
+- 修訂僅補齊規劃；固定版本能力結論尚待 live probe，預設政策與驗收仍待核准。

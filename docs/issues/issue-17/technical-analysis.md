@@ -1,5 +1,7 @@
 # Issue 17 - Phase 3E：Context Window Management Foundation 技術分析
 
+> NOTE（2026-09-21）：下列 CLI 欄位及控制能力敘述是待 Task 1.1 驗證的假設清單，不是已完成的能力探測結論；不以此直接判定 exact 或 unsupported。固定版本的 live artifact 與離線 fixture 必須分開保存。
+
 ## 技術可行性分析
 
 ### 1. OpenCode (1.18.23 / 1.18.31) Context 與 Token 觀測能力
@@ -55,9 +57,11 @@
 
 | 優先序 | 來源 | 說明 |
 |---|---|---|
-| **Priority 1** | **顯式配置覆蓋 (Config / Task Metadata)** | 呼叫端或環境變數明確指定的 `context_limit` |
-| **Priority 2** | **靜態模型目錄 (Static Model Catalog)** | 內建常見主流模型（如 Claude 3.5 Sonnet: 200k, GPT-4o: 128k, o3-mini: 200k 等）之安全窗口大小 |
+| **Priority 1** | **程序級顯式配置** | `ASURA_CONTEXT_LIMIT`；啟動時驗證並注入，首版不新增逐任務 Metadata |
+| **Priority 2** | **靜態模型目錄 (Static Model Catalog)** | 僅對 Task 1.1 證實可在執行前可靠識別的實際模型查表；目錄項目附來源，不依 BackendID 猜測模型 |
 | **Priority 3** | **未知降級政策 (Unknown / Unbounded Fallback)** | 若模型未列於目錄且未配置，標記為 `LimitUnknown`。在此狀態下，僅記錄估算數值，不進行強制阻擋，除非管理者配置了全域安全上限 |
+
+詳細設定、role 模型來源、unknown、policy 及入口串接契約以 [實作計畫第 2 節](implementation-plan.md) 為準；預設 policy 與保留比例仍待 TBD-2 核准。
 
 ### 方案三：Context 超量處理政策（Overflow Policy）
 
@@ -86,11 +90,11 @@
 ```go
 // TokenUsage 代表標準化之 Token 用量觀測
 type TokenUsage struct {
-    InputTokens     int64 `json:"input_tokens,omitempty"`
-    OutputTokens    int64 `json:"output_tokens,omitempty"`
-    TotalTokens     int64 `json:"total_tokens,omitempty"`
-    CachedTokens    int64 `json:"cached_tokens,omitempty"`
-    ReasoningTokens int64 `json:"reasoning_tokens,omitempty"`
+    InputTokens     *int64 `json:"input_tokens,omitempty"`
+    OutputTokens    *int64 `json:"output_tokens,omitempty"`
+    TotalTokens     *int64 `json:"total_tokens,omitempty"`
+    CachedTokens    *int64 `json:"cached_tokens,omitempty"`
+    ReasoningTokens *int64 `json:"reasoning_tokens,omitempty"`
 }
 
 // DataProvenance 標示數據來源與可信度
@@ -110,13 +114,17 @@ type ExecutionResult struct {
 }
 ```
 
+nullable 欄位各自保存 presence：nil 為 unknown，指向 0 為 exact zero；整筆來源只描述已知欄位。首版不衍生 total；按 probe 證實的事件語意聚合，缺回合欄位不冒充完整總量。雙後端 adapter 將 parser 結果寫入 ExecutionResult，即使執行失敗仍保留。
+
 ### 2. `internal/pipeline` Stage Admission 與 Orchestrator 流程
 - 新增 `ContextBudget` 與 `StageAdmission` 資料結構。
 - Orchestrator 在調用每個 Stage（Oracle, Striker, Critic）之前：
-  1. 組合出該 Stage **即將真正送入後端的完整 Prompt**。
+  1. 呼叫 Stage.Prepare 組裝唯一的 request；估算與 ExecutePrepared 共用同一 request.Prompt，不在 contextwin 複製 Stage 組裝邏輯。
   2. 呼叫 `contextwin.Estimator` 計算該 Stage 的上下文預算與預估 Token 需求。
   3. 驗證是否在容許窗口與 Headroom 內。
   4. 若超量且啟用了阻擋政策，立即記錄該 Stage 為 `StageFailed`（原因為 context limit exceeded），後續調用次數為 0，返回 partial output 與已完成 trace。
+
+Stage 回傳業務產物、ExecutionResult 與 error；Orchestrator 保存用量後處理成功／失敗。Oracle／Critic 非法 JSON 與 backend error 均不可丟棄已消耗用量。runner 無用量時為 unknown。
 
 ### 3. `internal/storage` 資料持久化
 - `StageTrace` 擴充 `Usage` 與 `Admission` 欄位。
