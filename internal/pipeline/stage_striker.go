@@ -36,8 +36,8 @@ func (s *DefaultStrikerStage) WithRegistry(reg backend.Registry) *DefaultStriker
 	return s
 }
 
-// Execute 執行 Striker 工作並產生輸出結果
-func (s *DefaultStrikerStage) Execute(ctx context.Context, execCtx *engine.ExecutionContext, plan *OraclePlan) (string, error) {
+// Prepare 組裝 Striker 的唯一 ExecutionRequest
+func (s *DefaultStrikerStage) Prepare(execCtx *engine.ExecutionContext, plan *OraclePlan) (*backend.ExecutionRequest, error) {
 	workspace := ""
 	basePrompt := ""
 	if execCtx != nil {
@@ -72,6 +72,19 @@ func (s *DefaultStrikerStage) Execute(ctx context.Context, execCtx *engine.Execu
 		finalPrompt = sb.String()
 	}
 
+	return &backend.ExecutionRequest{
+		Role:      backend.RoleStriker,
+		Workspace: workspace,
+		Prompt:    finalPrompt,
+	}, nil
+}
+
+// ExecutePrepared 執行已準備之 ExecutionRequest 並回傳輸出與 ExecutionResult
+func (s *DefaultStrikerStage) ExecutePrepared(ctx context.Context, execCtx *engine.ExecutionContext, req *backend.ExecutionRequest) (string, *backend.ExecutionResult, error) {
+	if req == nil {
+		return "", nil, errors.New("execution request is nil")
+	}
+
 	var activeBackend = s.backend
 	if s.registry != nil && execCtx != nil && execCtx.Backend != "" {
 		if b, err := s.registry.Get(execCtx.Backend); err == nil && b != nil {
@@ -80,23 +93,30 @@ func (s *DefaultStrikerStage) Execute(ctx context.Context, execCtx *engine.Execu
 	}
 
 	if activeBackend != nil {
-		res, err := activeBackend.Run(ctx, &backend.ExecutionRequest{
-			Role:      backend.RoleStriker,
-			Workspace: workspace,
-			Prompt:    finalPrompt,
-		})
+		res, err := activeBackend.Run(ctx, req)
 		if err != nil {
 			if res != nil && res.PartialOutput != "" {
-				return res.PartialOutput, err
+				return res.PartialOutput, res, err
 			}
-			return "", err
+			return "", res, err
 		}
-		return res.Output, nil
+		return res.Output, res, nil
 	}
 
 	if s.runner == nil {
-		return "", errors.New("striker runner is nil")
+		return "", nil, errors.New("striker runner is nil")
 	}
 
-	return s.runner(ctx, workspace, finalPrompt)
+	out, err := s.runner(ctx, req.Workspace, req.Prompt)
+	return out, nil, err
+}
+
+// Execute 執行 Striker 工作並產生輸出結果（向後相容入口）
+func (s *DefaultStrikerStage) Execute(ctx context.Context, execCtx *engine.ExecutionContext, plan *OraclePlan) (string, error) {
+	req, err := s.Prepare(execCtx, plan)
+	if err != nil {
+		return "", err
+	}
+	out, _, err := s.ExecutePrepared(ctx, execCtx, req)
+	return out, err
 }

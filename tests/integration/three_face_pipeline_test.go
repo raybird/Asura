@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"asura/internal/auth"
+	"asura/internal/backend"
 	"asura/internal/daemon"
 	"asura/internal/engine"
 	"asura/internal/pipeline"
@@ -158,12 +159,46 @@ type mockOracleStage struct {
 	fixture *pipelineTestFixture
 }
 
+func (m *mockOracleStage) Prepare(execCtx *engine.ExecutionContext) (*backend.ExecutionRequest, error) {
+	p := ""
+	if execCtx != nil {
+		p = execCtx.OriginalPrompt
+	}
+	return &backend.ExecutionRequest{Role: backend.RoleOracle, Prompt: p}, nil
+}
+
+func (m *mockOracleStage) ExecutePrepared(ctx context.Context, execCtx *engine.ExecutionContext, req *backend.ExecutionRequest) (*pipeline.OraclePlan, *backend.ExecutionResult, error) {
+	plan, err := m.Execute(ctx, execCtx)
+	return plan, nil, err
+}
+
 func (m *mockOracleStage) Execute(ctx context.Context, execCtx *engine.ExecutionContext) (*pipeline.OraclePlan, error) {
 	return m.fixture.oracleFunc(ctx, execCtx)
 }
 
 type mockStrikerStage struct {
-	fixture *pipelineTestFixture
+	fixture  *pipelineTestFixture
+	mu       sync.Mutex
+	lastPlan *pipeline.OraclePlan
+}
+
+func (m *mockStrikerStage) Prepare(execCtx *engine.ExecutionContext, plan *pipeline.OraclePlan) (*backend.ExecutionRequest, error) {
+	m.mu.Lock()
+	m.lastPlan = plan
+	m.mu.Unlock()
+	p := ""
+	if execCtx != nil {
+		p = execCtx.OriginalPrompt
+	}
+	return &backend.ExecutionRequest{Role: backend.RoleStriker, Prompt: p}, nil
+}
+
+func (m *mockStrikerStage) ExecutePrepared(ctx context.Context, execCtx *engine.ExecutionContext, req *backend.ExecutionRequest) (string, *backend.ExecutionResult, error) {
+	m.mu.Lock()
+	plan := m.lastPlan
+	m.mu.Unlock()
+	out, err := m.Execute(ctx, execCtx, plan)
+	return out, nil, err
 }
 
 func (m *mockStrikerStage) Execute(ctx context.Context, execCtx *engine.ExecutionContext, plan *pipeline.OraclePlan) (string, error) {
@@ -171,7 +206,31 @@ func (m *mockStrikerStage) Execute(ctx context.Context, execCtx *engine.Executio
 }
 
 type mockCriticStage struct {
-	fixture *pipelineTestFixture
+	fixture        *pipelineTestFixture
+	mu             sync.Mutex
+	lastPlan       *pipeline.OraclePlan
+	lastStrikerOut string
+}
+
+func (m *mockCriticStage) Prepare(execCtx *engine.ExecutionContext, plan *pipeline.OraclePlan, strikerOutput string) (*backend.ExecutionRequest, error) {
+	m.mu.Lock()
+	m.lastPlan = plan
+	m.lastStrikerOut = strikerOutput
+	m.mu.Unlock()
+	p := ""
+	if execCtx != nil {
+		p = execCtx.OriginalPrompt
+	}
+	return &backend.ExecutionRequest{Role: backend.RoleCritic, Prompt: p}, nil
+}
+
+func (m *mockCriticStage) ExecutePrepared(ctx context.Context, execCtx *engine.ExecutionContext, req *backend.ExecutionRequest) (*pipeline.CriticReview, *backend.ExecutionResult, error) {
+	m.mu.Lock()
+	plan := m.lastPlan
+	strikerOut := m.lastStrikerOut
+	m.mu.Unlock()
+	rev, err := m.Execute(ctx, execCtx, plan, strikerOut)
+	return rev, nil, err
 }
 
 func (m *mockCriticStage) Execute(ctx context.Context, execCtx *engine.ExecutionContext, plan *pipeline.OraclePlan, strikerOutput string) (*pipeline.CriticReview, error) {

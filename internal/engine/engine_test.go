@@ -1428,4 +1428,76 @@ func TestEngine_SubmitTask_BackendConflictRejected(t *testing.T) {
 	}
 }
 
+// CTXWIN-005 & CTXWIN-007: 驗證相同 Request ID 重送時，Context 不變性與 Admission 結果一致性
+func TestEngine_SubmitTask_IdempotentAdmissionAndContextPreserved(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	var runnerCalls int32
+
+	runner := func(ctx context.Context, ws, p string) (string, error) {
+		atomic.AddInt32(&runnerCalls, 1)
+		return "initial result", nil
+	}
+
+	eng1 := NewEngine(store, policy, WithRunner(runner))
+	ctx := context.Background()
+
+	req := SubmitRequest{
+		ID:        "req-idempotent-ctxwin-001",
+		Workspace: tmpDir,
+		Prompt:    "analyze and report",
+		Mode:      "direct",
+	}
+
+	// 1. 第一次提交
+	task1, err := eng1.SubmitTask(ctx, req)
+	if err != nil {
+		t.Fatalf("first submit failed: %v", err)
+	}
+	if atomic.LoadInt32(&runnerCalls) != 1 {
+		t.Fatalf("expected runner called once, got %d", atomic.LoadInt32(&runnerCalls))
+	}
+	if task1.Status != storage.StatusCompleted {
+		t.Errorf("expected status completed, got %s", task1.Status)
+	}
+
+	// 2. 模擬程序重啟或設定變更，建立第二個 Engine 實例
+	eng2 := NewEngine(store, policy, WithRunner(runner))
+
+	// 3. 相同 Request ID 再次提交相同請求
+	task2, err := eng2.SubmitTask(ctx, req)
+	if err != nil {
+		t.Fatalf("second submit with same request ID failed: %v", err)
+	}
+
+	// 驗證未重跑後端或估算（runner 呼叫次數保持 1）
+	if atomic.LoadInt32(&runnerCalls) != 1 {
+		t.Errorf("idempotency violation: runner was called %d times, expected 1", atomic.LoadInt32(&runnerCalls))
+	}
+
+	// 驗證任務 ID 與結果一致
+	if task2.ID != task1.ID {
+		t.Errorf("task ID mismatch: got %s, want %s", task2.ID, task1.ID)
+	}
+	if task2.Result != task1.Result {
+		t.Errorf("result mismatch: got %q, want %q", task2.Result, task1.Result)
+	}
+
+	// 驗證 Sealed Context 與 Resolved Context 不變性
+	if task2.ResolvedContext != task1.ResolvedContext {
+		t.Errorf("ResolvedContext mismatch: got %q, want %q", task2.ResolvedContext, task1.ResolvedContext)
+	}
+	if task2.PipelineTrace != task1.PipelineTrace {
+		t.Errorf("PipelineTrace mismatch: got %q, want %q", task2.PipelineTrace, task1.PipelineTrace)
+	}
+}
+
+
 

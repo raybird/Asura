@@ -36,8 +36,8 @@ func (s *DefaultCriticStage) WithRegistry(reg backend.Registry) *DefaultCriticSt
 	return s
 }
 
-// Execute 執行 Critic 審查並產出結構化審查報告
-func (s *DefaultCriticStage) Execute(ctx context.Context, execCtx *engine.ExecutionContext, plan *OraclePlan, strikerOutput string) (*CriticReview, error) {
+// Prepare 組裝 Critic 的唯一 ExecutionRequest
+func (s *DefaultCriticStage) Prepare(execCtx *engine.ExecutionContext, plan *OraclePlan, strikerOutput string) (*backend.ExecutionRequest, error) {
 	workspace := ""
 	prompt := ""
 	if execCtx != nil {
@@ -50,6 +50,19 @@ func (s *DefaultCriticStage) Execute(ctx context.Context, execCtx *engine.Execut
 	criticPrompt := fmt.Sprintf("%s\n\nOriginal Prompt:\n%s\n\nOracle Plan:\n%s\n\nStriker Output:\n%s",
 		systemInstruction, prompt, string(planJSON), strikerOutput)
 
+	return &backend.ExecutionRequest{
+		Role:      backend.RoleCritic,
+		Workspace: workspace,
+		Prompt:    criticPrompt,
+	}, nil
+}
+
+// ExecutePrepared 執行已準備之 ExecutionRequest 並解析 CriticReview，即使失敗亦回傳 ExecutionResult
+func (s *DefaultCriticStage) ExecutePrepared(ctx context.Context, execCtx *engine.ExecutionContext, req *backend.ExecutionRequest) (*CriticReview, *backend.ExecutionResult, error) {
+	if req == nil {
+		return nil, nil, errors.New("execution request is nil")
+	}
+
 	var activeBackend = s.backend
 	if s.registry != nil && execCtx != nil && execCtx.Backend != "" {
 		if b, err := s.registry.Get(execCtx.Backend); err == nil && b != nil {
@@ -58,39 +71,39 @@ func (s *DefaultCriticStage) Execute(ctx context.Context, execCtx *engine.Execut
 	}
 
 	var rawOutput string
+	var execRes *backend.ExecutionResult
 	if activeBackend != nil {
-		res, err := activeBackend.Run(ctx, &backend.ExecutionRequest{
-			Role:      backend.RoleCritic,
-			Workspace: workspace,
-			Prompt:    criticPrompt,
-		})
+		res, err := activeBackend.Run(ctx, req)
+		execRes = res
 		if err != nil {
-			return nil, fmt.Errorf("critic backend error: %w", err)
+			return nil, execRes, fmt.Errorf("critic backend error: %w", err)
 		}
-		rawOutput = res.Output
+		if res != nil {
+			rawOutput = res.Output
+		}
 	} else if s.runner != nil {
-		out, err := s.runner(ctx, workspace, criticPrompt)
+		out, err := s.runner(ctx, req.Workspace, req.Prompt)
 		if err != nil {
-			return nil, fmt.Errorf("critic runner error: %w", err)
+			return nil, nil, fmt.Errorf("critic runner error: %w", err)
 		}
 		rawOutput = out
 	} else {
-		return nil, errors.New("critic runner is nil")
+		return nil, nil, errors.New("critic runner is nil")
 	}
 
 	jsonStr := extractJSON(rawOutput)
 	var review CriticReview
 	if err := json.Unmarshal([]byte(jsonStr), &review); err != nil {
-		return nil, fmt.Errorf("critic output invalid json: %w", err)
+		return nil, execRes, fmt.Errorf("critic output invalid json: %w", err)
 	}
 
 	switch review.Verdict {
 	case VerdictPass, VerdictNeedsAttention, VerdictFailed:
 		// 合法審查結論
 	case "":
-		return nil, errors.New("critic review missing verdict")
+		return nil, execRes, errors.New("critic review missing verdict")
 	default:
-		return nil, fmt.Errorf("critic review invalid verdict: %q", review.Verdict)
+		return nil, execRes, fmt.Errorf("critic review invalid verdict: %q", review.Verdict)
 	}
 
 	if review.Metadata == nil {
@@ -98,5 +111,15 @@ func (s *DefaultCriticStage) Execute(ctx context.Context, execCtx *engine.Execut
 	}
 	review.Metadata["stage"] = "critic"
 
-	return &review, nil
+	return &review, execRes, nil
+}
+
+// Execute 執行 Critic 審查並產出結構化審查報告（向後相容入口）
+func (s *DefaultCriticStage) Execute(ctx context.Context, execCtx *engine.ExecutionContext, plan *OraclePlan, strikerOutput string) (*CriticReview, error) {
+	req, err := s.Prepare(execCtx, plan, strikerOutput)
+	if err != nil {
+		return nil, err
+	}
+	rev, _, err := s.ExecutePrepared(ctx, execCtx, req)
+	return rev, err
 }

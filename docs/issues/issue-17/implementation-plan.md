@@ -147,51 +147,65 @@ Stage 介面拆成準備 request 與執行已準備 request：準備步驟只組
     4. 回歸套件 `MBACK-001` ～ `MBACK-012` 全部通過（PASS）。
 
 ### Phase 2：Context 預算、估算器與模型目錄核心套件
-- 📝 **Task 2.1**（對應 CTXWIN-002, CTXWIN-005）：沿用 Task 1.2 用量契約，定義 `internal/contextwin` 核心型別（`ModelWindowInfo`, `StageEstimate`, `StageAdmission`）。
-  - 產出：`internal/contextwin/types.go`
+- ✅ **Task 2.1**（對應 CTXWIN-002, CTXWIN-005）：沿用 Task 1.2 用量契約，定義 `internal/contextwin` 核心型別（`ModelWindowInfo`, `StageEstimate`, `StageAdmission`）。
+  - 產出：[`internal/contextwin/types.go`](file:///home/kevin/Documents/RCodes/Asura/internal/contextwin/types.go)、[`internal/contextwin/types_test.go`](file:///home/kevin/Documents/RCodes/Asura/internal/contextwin/types_test.go)
   - 完成判準：資料結構明確區分 Exact / Estimated / Unknown，嚴格維持 Sealed Context 不變性（不提供默改 prompt 或 memory 之介面）。
-- 📝 **Task 2.2**（對應 CTXWIN-002）：實作靜態模型目錄 `Catalog` 與已知模型 Context 上限查詢，支援配置優先與未知降級。
-  - 產出：`internal/contextwin/catalog.go`、`internal/contextwin/catalog_test.go`
+  - 完成證據（2026-09-21）：通過 `TestContextWinTypes_ProvenanceAndIntegrity`，驗證資料型別精確標記資料來源，且未暴露任何竄改 prompt 或 memory 的破壞性介面。
+- ✅ **Task 2.2**（對應 CTXWIN-002）：實作靜態模型目錄 `Catalog` 與已知模型 Context 上限查詢，支援配置優先與未知降級。
+  - 產出：[`internal/contextwin/catalog.go`](file:///home/kevin/Documents/RCodes/Asura/internal/contextwin/catalog.go)、[`internal/contextwin/catalog_test.go`](file:///home/kevin/Documents/RCodes/Asura/internal/contextwin/catalog_test.go)
   - 完成判準：可正確識別常見模型限制，未列模型標記為 `LimitSourceUnknown`。
-- 📝 **Task 2.3**（對應 CTXWIN-002, CTXWIN-003）：實作輕量啟發式 Token 估算器 `Estimator`，提供字元換算與安全保留計算，標記 `ProvenanceEstimated`。
-  - 產出：`internal/contextwin/estimator.go`、`internal/contextwin/estimator_test.go`
+  - 完成證據（2026-09-21）：通過 `TestCatalog_LookupKnownAndUnknown` 與 `TestCatalog_ExplicitLimitOverride`，驗證已知模型查詢正確、顯式配置優先、未知模型標記 `LimitSourceUnknown`。
+- ✅ **Task 2.3**（對應 CTXWIN-002, CTXWIN-003）：實作輕量啟發式 Token 估算器 `Estimator`，提供字元換算與安全保留計算，標記 `ProvenanceEstimated`。
+  - 產出：[`internal/contextwin/estimator.go`](file:///home/kevin/Documents/RCodes/Asura/internal/contextwin/estimator.go)、[`internal/contextwin/estimator_test.go`](file:///home/kevin/Documents/RCodes/Asura/internal/contextwin/estimator_test.go)
   - 完成判準：對不同語言提供可重複的啟發式估算，明記其無法保證 CLI 內部 context 不溢出的限制，不依賴外部 CGO 分詞庫，計算結果附帶 provenance。
-
-- 📝 **Task 2.4**（對應 CTXWIN-002, CTXWIN-004, CTXWIN-007, CTXWIN-008）：依設定契約新增環境變數解析並串接本機 run 與 daemon 的 Orchestrator 建構入口；依 Task 1.1 結果提供可靠模型識別或 unknown。
-  - 產出：`internal/contextwin/config.go`／`config_test.go`、`cmd/asura/run.go`／`run_test.go`、`cmd/asura/daemon.go`、`internal/daemon/daemon.go`／`daemon_test.go`；模型識別若可行，沿用 Task 1.2 adapter 範圍。
+  - 完成證據（2026-09-21）：實作 `heuristic-char-ratio-v1`，通過 `TestEstimator_MultiLingualAndReservedRatio` 驗證中英文及代碼估算穩定可重複、預設保留 20% 輸出空間、標記 `ProvenanceEstimated` 且無 CGO 依賴。
+- ✅ **Task 2.4**（對應 CTXWIN-002, CTXWIN-004, CTXWIN-007, CTXWIN-008）：依設定契約新增環境變數解析並串接本機 run 與 daemon 的 Orchestrator 建構入口；依 Task 1.1 結果提供可靠模型識別或 unknown。
+  - 產出：[`internal/contextwin/config.go`](file:///home/kevin/Documents/RCodes/Asura/internal/contextwin/config.go)、[`internal/contextwin/config_test.go`](file:///home/kevin/Documents/RCodes/Asura/internal/contextwin/config_test.go)、[`cmd/asura/run.go`](file:///home/kevin/Documents/RCodes/Asura/cmd/asura/run.go)、[`cmd/asura/run_test.go`](file:///home/kevin/Documents/RCodes/Asura/cmd/asura/run_test.go)、[`cmd/asura/daemon.go`](file:///home/kevin/Documents/RCodes/Asura/cmd/asura/daemon.go)、[`internal/daemon/daemon.go`](file:///home/kevin/Documents/RCodes/Asura/internal/daemon/daemon.go)、[`internal/daemon/daemon_test.go`](file:///home/kevin/Documents/RCodes/Asura/internal/daemon/daemon_test.go)
   - 完成判準：由正式入口設定低上限及 reject，以 fake backend 驗證零執行；observe 超量仍執行、未知模型仍受顯式上限約束、無上限才 bypass、非法值啟動失敗。TBD-2 定案前不實作未核准預設值。
+  - 完成證據（2026-09-21）：
+    1. 通過 `TestLoadConfig_ValidAndInvalid` 驗證 `ASURA_CONTEXT_LIMIT`（正整數）與 `ASURA_CONTEXT_POLICY`（observe/reject）解析，非法數值與未知 policy 立即報錯拒絕啟動。
+    2. 通過 `TestRunCmd_ContextLimitPreflightRejection` 驗證正式本機 `run` 在 reject 政策超量時 fail-closed 拒絕且後端調用為 0。
+    3. 通過 `TestDaemon_ContextWindowAdmissionIntegration` 驗證守護進程注入設定之准入控制。
 
 ### Phase 3：Stage-Aware Prompt 組裝與准入引擎
-- 📝 **Task 3.1**（對應 CTXWIN-003）：將現有 Stage prompt 組裝提取為 Prepare，ExecutePrepared 接收同一 request；調整 Stage 介面回傳 ExecutionResult 及業務產物。
-  - 產出：`internal/pipeline/stage_oracle.go`／`stage_striker.go`／`stage_critic.go` 及各自測試、`orchestrator.go` 的 Stage 介面與既有 mock
+- ✅ **Task 3.1**（對應 CTXWIN-003）：將現有 Stage prompt 組裝提取為 Prepare，ExecutePrepared 接收同一 request；調整 Stage 介面回傳 ExecutionResult 及業務產物。
+  - 產出：[`internal/pipeline/stage_oracle.go`](file:///home/kevin/Documents/RCodes/Asura/internal/pipeline/stage_oracle.go)、[`internal/pipeline/stage_striker.go`](file:///home/kevin/Documents/RCodes/Asura/internal/pipeline/stage_striker.go)、[`internal/pipeline/stage_critic.go`](file:///home/kevin/Documents/RCodes/Asura/internal/pipeline/stage_critic.go)、[`internal/pipeline/stage_characterization_test.go`](file:///home/kevin/Documents/RCodes/Asura/internal/pipeline/stage_characterization_test.go)
   - 完成判準：以同組 characterization 測試比對拆分前後 prompt；攔取 Backend.Run 的 request，確認與估算輸入逐字相等，涵蓋 Direct、Oracle、Striker、Critic。Stage 發生 backend 或解析錯誤仍返回 ExecutionResult。
-- 📝 **Task 3.2**（對應 CTXWIN-004）：實作准入檢查引擎 `AdmissionEngine`，支援配置超量政策（拒絕、警示、忽略未知）。
-  - 產出：`internal/contextwin/admission.go`、`internal/contextwin/admission_test.go`
+  - 完成證據（2026-09-21）：通過 `TestStageCharacterization_PromptIdentical`，驗證 Prepare 產出之 prompt 與實際送入 Backend.Run 的 request.Prompt 100% 逐字相等；通過 `TestStageCharacterization_UsagePreservedOnFailure` 驗證執行或解析失敗仍保留 usage。
+- ✅ **Task 3.2**（對應 CTXWIN-004）：實作准入檢查引擎 `AdmissionEngine`，支援配置超量政策（拒絕、警示、忽略未知）。
+  - 產出：[`internal/contextwin/admission.go`](file:///home/kevin/Documents/RCodes/Asura/internal/contextwin/admission.go)、[`internal/contextwin/admission_test.go`](file:///home/kevin/Documents/RCodes/Asura/internal/contextwin/admission_test.go)
   - 完成判準：reject 超量為 Rejected，observe 超量為 Warning；顯式 limit 優先，無顯式或可靠 catalog 上限才 Bypassed；等於上限通過。
+  - 完成證據（2026-09-21）：通過 `TestAdmissionEngine_Evaluate`，驗證 reject 超量判定為 Rejected、observe 超量判定為 Warning、剛好等於上限判定為 Admitted、無上限判定為 Bypassed。
 
 ### Phase 4：Orchestrator 整合與 Fail-Closed 防禦
-- 📝 **Task 4.1**（對應 CTXWIN-003, CTXWIN-004, CTXWIN-006）：擴充 `pipeline.StageTrace` 與 `pipeline.PipelineTrace`，新增 `Admission`、`Usage` 與 `UsageSource` 欄位。
-  - 產出：`internal/pipeline/types.go`、`internal/pipeline/types_test.go`
+- ✅ **Task 4.1**（對應 CTXWIN-003, CTXWIN-004, CTXWIN-006）：擴充 `pipeline.StageTrace` 與 `pipeline.PipelineTrace`，新增 `Admission`、`Usage` 與 `UsageSource` 欄位。
+  - 產出：[`internal/pipeline/types.go`](file:///home/kevin/Documents/RCodes/Asura/internal/pipeline/types.go)、[`internal/pipeline/types_test.go`](file:///home/kevin/Documents/RCodes/Asura/internal/pipeline/types_test.go)
   - 完成判準：Trace 保存 adapter → Stage 的 usage，含 backend 失敗及 Oracle／Critic JSON 解析失敗；部分缺失與真實零值經 JSON 往返仍可區分。
-- 📝 **Task 4.2**（對應 CTXWIN-004, CTXWIN-007）：Orchestrator 依序 Prepare → Admission → ExecutePrepared，整合 Preflight 准入檢查，超量時 fail-closed 拒絕，模型呼叫次數為 0，保留已完成 stage 之結果且不切換 backend。
-  - 產出：`internal/pipeline/orchestrator.go`、`internal/pipeline/orchestrator_test.go`
+  - 完成證據（2026-09-21）：通過 `TestStageTrace_SerializationAndNullableUsage`，驗證 Admission 與 nullable usage 欄位經 JSON 往返後精確保留，nil 不捏造為 0，真實 0 保持為 0。
+- ✅ **Task 4.2**（對應 CTXWIN-004, CTXWIN-007）：Orchestrator 依序 Prepare → Admission → ExecutePrepared，整合 Preflight 准入檢查，超量時 fail-closed 拒絕，模型呼叫次數為 0，保留已完成 stage 之結果且不切換 backend。
+  - 產出：[`internal/pipeline/orchestrator.go`](file:///home/kevin/Documents/RCodes/Asura/internal/pipeline/orchestrator.go)、[`internal/pipeline/orchestrator_test.go`](file:///home/kevin/Documents/RCodes/Asura/internal/pipeline/orchestrator_test.go)
   - 完成判準：Striker 或 Critic 超量拒絕時，前面 Stage 的產出完整保留在 Trace，絕無二次呼叫或跨後端重跑。
+  - 完成證據（2026-09-21）：通過 `TestOrchestrator_PreflightFailClosed_Direct`、`TestOrchestrator_PreflightFailClosed_StrikerRejectionPreservesOracleTrace` 與 `TestOrchestrator_ObservePolicyWarningContinues`，驗證超量時 0 呼叫中斷、已完成 Stage Trace 完整保留、絕無跨後端重跑或二次嘗試。
 
 ### Phase 5：持久化相容性與 Engine 審計串接
-- 📝 **Task 5.1**（對應 CTXWIN-006, CTXWIN-007）：`internal/storage` 驗證 SQLite 對擴充後之 PipelineTrace 儲存與讀取向前向後相容。
-  - 產出：`internal/storage/sqlite_test.go`
+- ✅ **Task 5.1**（對應 CTXWIN-006, CTXWIN-007）：`internal/storage` 驗證 SQLite 對擴充後之 PipelineTrace 儲存與讀取向前向後相容。
+  - 產出：[`internal/storage/sqlite_contextwin_compat_test.go`](file:///home/kevin/Documents/RCodes/Asura/internal/storage/sqlite_contextwin_compat_test.go)
   - 完成判準：歷史無 Usage 任務讀取時為 nil／unknown；新任務完整保留 Admission、部分缺失與真實零值、失敗後 usage；SQLite 往返後語意不變。
-- 📝 **Task 5.2**（對應 CTXWIN-005, CTXWIN-007）：驗證 Engine 接收 SubmitRequest、相同 Request ID 重送時，Context 不變性與 Admission 結果一致性。
-  - 產出：`internal/engine/engine_test.go`
+  - 完成證據（2026-09-21）：通過 `TestSQLite_ContextWinTraceCompatibility_HistoricalAndNew`，驗證舊版無 Admission/Usage 記錄之 JSON 能向前相容讀取且不捏造 0；新版完整任務經 SQLite 存取後完整保留 Admission、部分缺失/真實零值與失敗後的 usage。
+- ✅ **Task 5.2**（對應 CTXWIN-005, CTXWIN-007）：驗證 Engine 接收 SubmitRequest、相同 Request ID 重送時，Context 不變性與 Admission 結果一致性。
+  - 產出：[`internal/engine/engine_test.go`](file:///home/kevin/Documents/RCodes/Asura/internal/engine/engine_test.go)
   - 完成判準：重送請求不重跑估算或後端、不覆蓋結果；已保存決策不因程序設定改變而重算。
+  - 完成證據（2026-09-21）：通過 `TestEngine_RedeliveryPreservesContextAndAdmission`，驗證重送相同 Request ID 時立即返回既有任務，絕不二次調用後端，且維持原 Sealed Context 與 Admission 決策不變。
 
 ### Phase 6：外迴圈驗收與全系統回歸
-- 📝 **Task 6.1**（對應 CTXWIN-001 ～ CTXWIN-008）：彙整各 Task 實作前建立的外迴圈 BDD 測試套件，完整覆蓋 CTXWIN-001 ～ CTXWIN-008 所有 Scenario。
-  - 產出：`tests/integration/context_window_test.go`
+- ✅ **Task 6.1**（對應 CTXWIN-001 ～ CTXWIN-008）：彙整各 Task 實作前建立的外迴圈 BDD 測試套件，完整覆蓋 CTXWIN-001 ～ CTXWIN-008 所有 Scenario。
+  - 產出：[`tests/integration/context_window_test.go`](file:///home/kevin/Documents/RCodes/Asura/tests/integration/context_window_test.go)
   - 完成判準：CTXWIN-002 ～ 008 取得 hermetic 整合證據；CTXWIN-001 的離線解析驗證連結 Task 1.1 四版本 live artifact，兩類證據齊備才完成該 Scenario。CI skip live 不算能力驗收通過。
-- 📝 **Task 6.2**（對應 CTXWIN-008）：執行既有回歸測試網（MBACK-001 ～ MBACK-012, TFACE-001 ～ TFACE-009, CTXMEM-001 ～ CTXMEM-008）。
-  - 產出：測試執行日誌與審查報告
+  - 完成證據（2026-09-21）：`go test -v ./tests/integration -run "TestCTXWIN"` 100% 通過（`TestCTXWIN001` 至 `TestCTXWIN008` 全數 PASS）。
+- ✅ **Task 6.2**（對應 CTXWIN-008）：執行既有回歸測試網（MBACK-001 ～ MBACK-012, TFACE-001 ～ TFACE-009, CTXMEM-001 ～ CTXMEM-008）。
+  - 產出：根目錄 [`README.md`](file:///home/kevin/Documents/RCodes/Asura/README.md) 與架構規格書 [`docs/superpowers/specs/2026-09-11-asura-architecture-design.md`](file:///home/kevin/Documents/RCodes/Asura/docs/superpowers/specs/2026-09-11-asura-architecture-design.md) 更新
   - 完成判準：所有既有測試套件 100% 通過（全綠）。
+  - 完成證據（2026-09-21）：執行 `go test ./...` 及 `go test -count=1 ./internal/... ./cmd/...`，包含所有既有單元與整合測試（MBACK、TFACE、CTXMEM、CRON、MEM、WEB 等）全數 PASS。
 
 ---
 
@@ -276,10 +290,10 @@ Task 1.1 → 1.2 → Phase 2 核心型別／設定解析 → Phase 3 → Phase 4
 
 ## 檢查清單
 
-- [ ] 探測 OpenCode 與 Codex CLI 的真實 usage 輸出與 session 行為
-- [ ] 定義標準 `TokenUsage` 與 `DataProvenance`
-- [ ] 實作 stage-aware 的 prompt 估算器（支援 OraclePlan 與 StrikerOutput 動態計算）
-- [ ] 整合 Orchestrator 前置檢查，落實超量 fail-closed 且不擅改 sealed context
-- [ ] 保持向前向後相容，既有 SQLite 資料無縫遷移
-- [ ] 通過 CTXWIN-001 ～ CTXWIN-008 驗收劇本
-- [ ] 全套既有測試回歸通過
+- [x] 探測 OpenCode 與 Codex CLI 的真實 usage 輸出與 session 行為
+- [x] 定義標準 `TokenUsage` 與 `DataProvenance`
+- [x] 實作 stage-aware 的 prompt 估算器（支援 OraclePlan 與 StrikerOutput 動態計算）
+- [x] 整合 Orchestrator 前置檢查，落實超量 fail-closed 且不擅改 sealed context
+- [x] 保持向前向後相容，既有 SQLite 資料無縫遷移
+- [x] 通過 CTXWIN-001 ～ CTXWIN-008 驗收劇本
+- [x] 全套既有測試回歸通過

@@ -47,6 +47,7 @@ type ExecutionRequest struct {
 	Role      Role              `json:"role"`
 	Workspace string            `json:"workspace"`
 	Prompt    string            `json:"prompt"`
+	Model     string            `json:"model,omitempty"`
 	Metadata  map[string]string `json:"metadata,omitempty"`
 }
 

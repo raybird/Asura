@@ -1,5 +1,10 @@
 package pipeline
 
+import (
+	"asura/internal/backend"
+	"asura/internal/contextwin"
+)
+
 // ExecutionMode 定義任務執行管線的運作模式
 type ExecutionMode string
 
@@ -54,13 +59,16 @@ const (
 
 // StageTrace 代表單一 Stage 的執行歷程與耗時
 type StageTrace struct {
-	Name           string      `json:"name"`
-	Status         StageStatus `json:"status"`
-	DurationMs     int64       `json:"duration_ms"`
-	BackendID      string      `json:"backend_id,omitempty"`
-	BackendVersion string      `json:"backend_version,omitempty"`
-	Error          string      `json:"error,omitempty"`
-	Output         string      `json:"output,omitempty"`
+	Name           string                     `json:"name"`
+	Status         StageStatus                `json:"status"`
+	DurationMs     int64                      `json:"duration_ms"`
+	BackendID      string                     `json:"backend_id,omitempty"`
+	BackendVersion string                     `json:"backend_version,omitempty"`
+	Admission      *contextwin.StageAdmission `json:"admission,omitempty"`
+	Usage          *backend.TokenUsage        `json:"usage,omitempty"`
+	UsageSource    backend.DataProvenance     `json:"usage_source,omitempty"`
+	Error          string                     `json:"error,omitempty"`
+	Output         string                     `json:"output,omitempty"`
 }
 
 // PipelineTrace 代表完整任務執行管線的審計歷程

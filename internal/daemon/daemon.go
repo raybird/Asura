@@ -23,6 +23,7 @@ import (
 	"asura/internal/backend"
 	"asura/internal/backend/codex"
 	"asura/internal/backend/opencode"
+	"asura/internal/contextwin"
 	"asura/internal/cron"
 	"asura/internal/engine"
 	"asura/internal/pipeline"
@@ -59,6 +60,7 @@ type Config struct {
 	MaxCronWorkers int
 	MaxQueue       int
 	OpenCodeConfig OpenCodeRuntimeConfig
+	ContextConfig  contextwin.Config
 }
 
 // Daemon 實作單一守護進程中樞
@@ -230,7 +232,9 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 		oracleStage := pipeline.NewOracleStageWithBackend(readOnlyAdapter)
 		strikerStage := pipeline.NewStrikerStageWithBackend(strikerAdapter)
 		criticStage := pipeline.NewCriticStageWithBackend(readOnlyAdapter)
-		orc := pipeline.NewOrchestrator(oracleStage, strikerStage, criticStage).WithRegistry(reg)
+		orc := pipeline.NewOrchestrator(oracleStage, strikerStage, criticStage).
+			WithRegistry(reg).
+			WithContextBudget(d.cfg.ContextConfig)
 
 		strikerRunner := func(ctx context.Context, ws, prompt string) (string, error) {
 			backendID := "opencode"

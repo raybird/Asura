@@ -195,11 +195,11 @@ Feature: Context Window Management Foundation (Capability Probe, Budget and Obse
 ## 重構步驟概要
 
 1. ✅ **Phase 1** - 雙後端 Context 能力探測與 Token 正規化
-2. 📝 **Phase 2** - Context 預算、估算器與模型目錄核心套件
-3. 📝 **Phase 3** - Stage-Aware Prompt 組裝與准入引擎
-4. 📝 **Phase 4** - Orchestrator 整合與 Fail-Closed 防禦
-5. 📝 **Phase 5** - 持久化相容性與 Engine 審計串接
-6. 📝 **Phase 6** - 外迴圈驗收與全系統回歸
+2. ✅ **Phase 2** - Context 預算、估算器與模型目錄核心套件
+3. ✅ **Phase 3** - Stage-Aware Prompt 組裝與准入引擎
+4. ✅ **Phase 4** - Orchestrator 整合與 Fail-Closed 防禦
+5. ✅ **Phase 5** - 持久化相容性與 Engine 審計串接
+6. ✅ **Phase 6** - 外迴圈驗收與全系統回歸
 
 ## 風險與首要驗證
 
@@ -227,6 +227,7 @@ Feature: Context Window Management Foundation (Capability Probe, Budget and Obse
 
 | 日期 | 異動 | 負責人 |
 |------|------|--------|
+| 2026-09-21 | 完成 Phase 1 至 Phase 6 全部實作，CTXWIN-001 ～ CTXWIN-008 與全系統回歸測試 100% 通過（全綠），更新文件待審查 | - |
 | 2026-09-21 | 使用者核准 CTXWIN-001 ～ CTXWIN-008 全數驗收劇本並確認預設政策採 observe 與 20% 輸出保留空間 | - |
 | 2026-09-21 | 依使用者要求修訂審查缺口：nullable 用量、Stage／adapter 資料流、設定與模型來源、live 證據；授權僅限文件修訂與提交，全數 Scenario 保持待核准 | - |
 | 2026-09-21 | 建立 Issue 17 初始架構規範、需求分析、技術分析與實作計畫初稿 | - |
@@ -235,4 +236,4 @@ Feature: Context Window Management Foundation (Capability Probe, Budget and Obse
 **建立日期**: 2026-09-21  
 **分級**: Large  
 **風險**: High  
-**狀態**: 實作中
+**狀態**: 待審查

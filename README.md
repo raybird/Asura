@@ -188,6 +188,17 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web \
 - **審計與成本追蹤**：所有任務持久化 `ExecutionMode` 與 `PipelineTrace`（包含各 Stage 狀態、DurationMs、呼叫次數與結構化 Plan/Review），支援 CLI `status` 格式化檢視。
 - **Redelivery 冪等防禦**：請求指紋計算納入 `Mode` 參數；相同 Request ID 與相同 Payload 重送時立即回傳既有 Task，絕不重複觸發三角色執行。
 
+#### 上下文窗口管理與 Token 審計 (Context Window Management & Audit)
+2026-09-21：
+- **能力探測優先與真實邊界**：固定版本 OpenCode 與 Codex CLI 經過 Contract Probe 驗證，明確標記 unsupported 能力，不推測或假裝擁有模型內部 Context 編輯權。
+- **動態 Stage-Aware 預估與准入 (Admission)**：
+  - Oracle、Striker（帶入動態 OraclePlan）與 Critic（帶入 OraclePlan + StrikerOutput）各自進行執行前（Preflight）獨立上下文預估。
+  - 透過環境變數 `ASURA_CONTEXT_LIMIT`（正整數 Token）與 `ASURA_CONTEXT_POLICY`（`observe` 觀測警示 或 `reject` 拒絕）進行程序級預算控制。
+- **Fail-Closed 阻擋防禦**：在 `reject` 政策下，超量 Stage 於調用後端前直接拒絕，模型呼叫次數為 0，且絕不自動更換 Backend，前面已完成之 Stage 產物與 Trace 完整保留。
+- **數據來源可信度 (Provenance) 與不可變性**：
+  - 嚴格區分 `exact`（後端實測）、`estimated`（啟發式估算）與 `unknown`（缺失），絕不將未回報數值捏造為 0。
+  - 預算檢查維持 Sealed Context 不變性，絕不私自刪剪記憶或 Prompt。
+
 ---
 
 ## 架構設計與議題文件
@@ -200,6 +211,7 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web \
   - [Issue 6 定時排程與容量調度 (Phase 2B)](docs/issues/issue-6/README.md) 與 [實作計畫拆解](docs/issues/issue-6/implementation-plan-decomposition.md)
   - [Issue 9 專案級基礎記憶 (Phase 3A)](docs/issues/issue-9/README.md) 與 [實作計畫](docs/issues/issue-9/implementation-plan.md)
   - [Issue 13 Three-Face Fixed Pipeline (Phase 3C)](docs/issues/issue-13/README.md) 與 [實作計畫](docs/issues/issue-13/implementation-plan.md)
+  - [Issue 17 Context Window Management Foundation (Phase 3E)](docs/issues/issue-17/README.md) 與 [實作計畫](docs/issues/issue-17/implementation-plan.md)
 
 ---
 
@@ -225,6 +237,7 @@ Asura/
 ├── internal/
 │   ├── auth/              # 工作目錄與授權政策 (Policy)
 │   ├── backend/           # 執行後端整合 (opencode process, parser)
+│   ├── contextwin/        # 上下文窗口管理、預算、估算器與准入引擎
 │   ├── cron/              # 定時排程器與日曆計算
 │   ├── daemon/            # 守護進程服務中樞
 │   ├── engine/            # 任務狀態引擎 (Engine, Worker Pool)
@@ -232,7 +245,7 @@ Asura/
 │   ├── storage/           # SQLite 持久化儲存層
 │   └── web/               # 單人 Web 遠端入口 (SPA 控制台與同源 API)
 ├── tests/
-│   └── integration/       # 端到端整合測試 (SCN, CRON, MEM, TFACE 驗收)
+│   └── integration/       # 端到端整合測試 (SCN, CRON, MEM, TFACE, CTXWIN 驗收)
 └── docs/                  # 專案技術文件與議題紀錄
     ├── AGENTS.md          # docs/ 目錄規範與開發閉環指引
     ├── superpowers/       # 架構設計規格書 (Architecture Spec)
@@ -251,4 +264,4 @@ new-issue ──► decompose (僅 Large) ──► execute-task (BDD + TDD) ─
 
 ---
 
-*最新更新日期：2026-09-17*
+*最新更新日期：2026-09-21*

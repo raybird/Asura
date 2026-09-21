@@ -19,6 +19,7 @@ import (
 
 	"asura/internal/auth"
 	"asura/internal/backend/opencode"
+	"asura/internal/contextwin"
 	"asura/internal/engine"
 	"asura/internal/pipeline"
 	"asura/internal/storage"
@@ -116,6 +117,12 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 
 	if !pipeline.IsValidExecutionMode(pipeline.ExecutionMode(*mode)) {
 		fmt.Fprintf(stderr, "error: invalid mode %q (must be direct or three-face)\n", *mode)
+		return 1
+	}
+
+	contextCfg, err := contextwin.LoadConfig()
+	if err != nil {
+		fmt.Fprintf(stderr, "error: invalid context configuration: %v\n", err)
 		return 1
 	}
 
@@ -281,7 +288,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 	oracleStage := pipeline.NewOracleStage(runner)
 	strikerStage := pipeline.NewStrikerStage(runner)
 	criticStage := pipeline.NewCriticStage(runner)
-	orc := pipeline.NewOrchestrator(oracleStage, strikerStage, criticStage)
+	orc := pipeline.NewOrchestrator(oracleStage, strikerStage, criticStage).WithContextBudget(contextCfg)
 
 	eng := engine.NewEngine(store, policy,
 		engine.WithRunner(runner),
