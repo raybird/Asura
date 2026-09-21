@@ -130,9 +130,13 @@ Stage 介面拆成準備 request 與執行已準備 request：準備步驟只組
 ## 實作步驟
 
 ### Phase 1：雙後端 Context 能力探測與 Token 正規化
-- 📝 **Task 1.1**（對應 CTXWIN-001）：編寫 OpenCode 1.18.23 / 1.18.31 與 Codex CLI 0.155.0 / 0.155.1 的 Context Contract Probe 測試與樣本解析，產出有證據的能力矩陣，未驗證與 unsupported 分開標記。
-  - 產出：`internal/backend/opencode/probe_context_test.go`、`internal/backend/codex/probe_context_test.go`
+- ✅ **Task 1.1**（對應 CTXWIN-001）：編寫 OpenCode 1.18.23 / 1.18.31 與 Codex CLI 0.155.0 / 0.155.1 的 Context Contract Probe 測試與樣本解析，產出有證據的能力矩陣，未驗證與 unsupported 分開標記。
+  - 產出：[`internal/backend/opencode/probe_context_test.go`](file:///home/kevin/Documents/RCodes/Asura/internal/backend/opencode/probe_context_test.go)、[`internal/backend/codex/probe_context_test.go`](file:///home/kevin/Documents/RCodes/Asura/internal/backend/codex/probe_context_test.go)
   - 完成判準：四個指定版本各保存實際版本、命令、日期、退出碼、去敏原始 JSONL、fixture 與能力矩陣；確認欄位 presence、增量／累計語意及失敗後的 usage。逐 backend／role 記錄 preflight 模型識別是否可用。未安裝或無憑證為未驗證，不算 PASS；unsupported 需對應版本契約證據，不能只憑 stdout 沒有欄位推定。先完成此證據再設計聚合及模型來源實作。
+  - 完成證據（2026-09-21）：
+    1. OpenCode 1.18.31（本機已安裝）live probe 通過（`TestOpenCodeProbe_Live`，耗時 8.78s），確認 `tokens.total`、`tokens.input`、`tokens.output`、`tokens.cache.read` 存在，多步驟累計且工具失敗後仍保留用量；OpenCode 1.18.23 標示為 `unverified_not_installed` 並附離線 fixture 驗證（`TestOpenCodeProbe_HermeticFixtures`）。
+    2. Codex CLI 0.155.1（本機已安裝）live probe 通過（`TestCodexProbe_Live`，耗時 10.27s），確認 `turn.completed` 提供 `input_tokens`、`output_tokens`、`cached_input_tokens`，且明確證實 `total_tokens` 缺失（absent/nil），工具失敗後仍保留用量；Codex 0.155.0 標示為 `unverified_not_installed` 並附離線 fixture 驗證（`TestCodexProbe_HermeticFixtures`）。
+    3. 雙後端 live 探測均證實 stdout JSONL 事件未包含 model 欄位，preflight 模型動態辨識為 unsupported。
 - 📝 **Task 1.2**（對應 CTXWIN-001, CTXWIN-002）：先定義 `backend.TokenUsage`／`DataProvenance` 與 ExecutionResult 欄位，再串接雙後端 parser 與 adapter 的聚合及回傳。
   - 產出：`internal/backend/usage.go`、`usage_test.go`、`backend.go`、雙後端 `parser.go`／`parser_test.go`／`adapter.go`／`adapter_test.go`
   - 完成判準：部分缺失與真實零值可區分；依 probe 語意聚合，不補造 total；fake CLI 事件經 adapter.Run 回傳 usage，成功與失敗皆保留可取得數據。
