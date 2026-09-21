@@ -30,7 +30,7 @@ func TestINT001Unit(t *testing.T) {
 		t.Skip("skipping live adapter.Run test: no model credentials configured in this environment")
 	}
 	ctx := context.Background()
-	out, err := adapter.Run(ctx, "/tmp", "test prompt")
+	out, err := adapter.RunPrompt(ctx, "/tmp", "test prompt")
 	if err != nil {
 		t.Fatalf("adapter.Run unexpected error: %v", err)
 	}
@@ -93,7 +93,7 @@ exit 0
 		ExpectedVersion: "1.18.23",
 	})
 
-	out, err := adapter.Run(context.Background(), tmpDir, "test error propagation")
+	out, err := adapter.RunPrompt(context.Background(), tmpDir, "test error propagation")
 	if err == nil {
 		t.Fatalf("expected error from adapter.Run when event stream contains error, got nil (out: %q)", out)
 	}
@@ -226,7 +226,7 @@ exit 0
 		DisableProjectConfig: true,
 	})
 
-	out, err := adapter.Run(context.Background(), tmpDir, "read file")
+	out, err := adapter.RunPrompt(context.Background(), tmpDir, "read file")
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}

@@ -79,6 +79,15 @@ func setupPipelineTestFixture(t *testing.T) *pipelineTestFixture {
 	}
 
 	f.strikerFunc = func(ctx context.Context, execCtx *engine.ExecutionContext, plan *pipeline.OraclePlan) (string, error) {
+		if plan == nil {
+			prompt := ""
+			workspace := ""
+			if execCtx != nil {
+				workspace = execCtx.Workspace
+				prompt = engine.ComposePrompt(execCtx.OriginalPrompt, execCtx)
+			}
+			return f.directRunnerFunc(ctx, workspace, prompt)
+		}
 		f.mu.Lock()
 		f.callHistory = append(f.callHistory, "striker")
 		f.mu.Unlock()

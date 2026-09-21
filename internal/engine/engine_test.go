@@ -1325,3 +1325,107 @@ func TestEngine_PipelineTracePersistenceError_ErrorsJoin(t *testing.T) {
 	}
 }
 
+// MBACK-001: 驗證 SubmitRequest 未指定 Backend 時預設為 opencode，指定 codex 時正確設定
+func TestEngine_SubmitTask_BackendDefaultAndOverride(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	eng := NewEngine(store, policy, WithRunner(func(ctx context.Context, ws, p string) (string, error) {
+		return "ok", nil
+	}))
+	ctx := context.Background()
+
+	// 1. 未指定 Backend 預設為 opencode
+	task1, err := eng.SubmitTask(ctx, SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "task-default-backend",
+	})
+	if err != nil {
+		t.Fatalf("SubmitTask failed: %v", err)
+	}
+	if task1.Backend != "opencode" {
+		t.Errorf("expected default backend 'opencode', got %q", task1.Backend)
+	}
+
+	saved1, err := store.GetTask(ctx, task1.ID)
+	if err != nil {
+		t.Fatalf("GetTask failed: %v", err)
+	}
+	if saved1.Backend != "opencode" {
+		t.Errorf("expected saved backend 'opencode', got %q", saved1.Backend)
+	}
+
+	// 2. 指定 Backend 為 codex
+	task2, err := eng.SubmitTask(ctx, SubmitRequest{
+		Workspace: tmpDir,
+		Prompt:    "task-codex-backend",
+		Backend:   "codex",
+	})
+	if err != nil {
+		t.Fatalf("SubmitTask codex failed: %v", err)
+	}
+	if task2.Backend != "codex" {
+		t.Errorf("expected backend 'codex', got %q", task2.Backend)
+	}
+
+	saved2, err := store.GetTask(ctx, task2.ID)
+	if err != nil {
+		t.Fatalf("GetTask failed: %v", err)
+	}
+	if saved2.Backend != "codex" {
+		t.Errorf("expected saved backend 'codex', got %q", saved2.Backend)
+	}
+}
+
+// MBACK-004: 同 Request ID 帶不同 Backend 被 engine.SubmitTask 拒絕
+func TestEngine_SubmitTask_BackendConflictRejected(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "asura.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	eng := NewEngine(store, policy, WithRunner(func(ctx context.Context, ws, p string) (string, error) {
+		return "ok", nil
+	}))
+	ctx := context.Background()
+
+	// 1. 首次以 opencode 提交
+	task1, err := eng.SubmitTask(ctx, SubmitRequest{
+		ID:        "req-backend-conflict-engine",
+		Workspace: tmpDir,
+		Prompt:    "first submit",
+		Backend:   "opencode",
+	})
+	if err != nil {
+		t.Fatalf("first SubmitTask failed: %v", err)
+	}
+	if task1.Backend != "opencode" {
+		t.Errorf("expected backend 'opencode', got %q", task1.Backend)
+	}
+
+	// 2. 相同 Request ID 以不同 Backend (codex) 提交，必須被拒絕
+	_, err = eng.SubmitTask(ctx, SubmitRequest{
+		ID:        "req-backend-conflict-engine",
+		Workspace: tmpDir,
+		Prompt:    "first submit",
+		Backend:   "codex",
+	})
+	if err == nil {
+		t.Fatalf("expected error on different backend reuse, got nil")
+	}
+	if !strings.Contains(err.Error(), "reused with different backend") {
+		t.Errorf("expected error mentioning different backend reuse, got: %v", err)
+	}
+}
+
+

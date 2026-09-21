@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -19,6 +20,8 @@ import (
 	"time"
 
 	"asura/internal/auth"
+	"asura/internal/backend"
+	"asura/internal/backend/codex"
 	"asura/internal/backend/opencode"
 	"asura/internal/cron"
 	"asura/internal/engine"
@@ -204,12 +207,58 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 				}
 			},
 		})
-		oracleStage := pipeline.NewOracleStage(readOnlyAdapter.Run)
-		strikerStage := pipeline.NewStrikerStage(strikerAdapter.Run)
-		criticStage := pipeline.NewCriticStage(readOnlyAdapter.Run)
-		orc := pipeline.NewOrchestrator(oracleStage, strikerStage, criticStage)
+		opencodeLogicalBackend := opencode.NewRoleRoutingBackend(readOnlyAdapter, strikerAdapter)
+		reg := backend.NewRegistry()
+		_ = reg.Register(opencodeLogicalBackend)
+		if codexPath, err := exec.LookPath("codex"); err == nil && codexPath != "" {
+			_ = reg.Register(codex.NewAdapter(codex.AdapterConfig{
+				BinaryPath:      codexPath,
+				ExpectedVersion: "0.155.0",
+				OnProcessStarted: func(ctx context.Context, pgid int) {
+					if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
+						_ = store.UpdateTaskPGID(context.Background(), taskID, pgid)
+					}
+				},
+				OnProcessExited: func(ctx context.Context, pgid int) {
+					if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
+						_ = store.UpdateTaskPGID(context.Background(), taskID, 0)
+					}
+				},
+			}))
+		}
+
+		oracleStage := pipeline.NewOracleStageWithBackend(readOnlyAdapter)
+		strikerStage := pipeline.NewStrikerStageWithBackend(strikerAdapter)
+		criticStage := pipeline.NewCriticStageWithBackend(readOnlyAdapter)
+		orc := pipeline.NewOrchestrator(oracleStage, strikerStage, criticStage).WithRegistry(reg)
+
+		strikerRunner := func(ctx context.Context, ws, prompt string) (string, error) {
+			backendID := "opencode"
+			if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
+				if t, err := store.GetTask(context.Background(), taskID); err == nil && t != nil && t.Backend != "" {
+					backendID = t.Backend
+				}
+			}
+			activeBackend, err := reg.Get(backendID)
+			if err != nil {
+				return "", fmt.Errorf("backend preflight failed: %w", err)
+			}
+			res, err := activeBackend.Run(ctx, &backend.ExecutionRequest{
+				Role:      backend.RoleStriker,
+				Workspace: ws,
+				Prompt:    prompt,
+			})
+			if err != nil {
+				if res != nil && res.PartialOutput != "" {
+					return res.PartialOutput, err
+				}
+				return "", err
+			}
+			return res.Output, nil
+		}
+
 		d.engine = engine.NewEngine(store, policy,
-			engine.WithRunner(strikerAdapter.Run),
+			engine.WithRunner(strikerRunner),
 			engine.WithPipelineRunner(orc),
 		)
 	}
@@ -235,14 +284,16 @@ func (d *Daemon) dispatchCronTask(ctx context.Context, cronID, workspace, prompt
 	fp := fmt.Sprintf("%x", sha256.Sum256([]byte(workspace+":"+prompt)))
 
 	initialTask := &storage.Task{
-		ID:          taskID,
-		Fingerprint: fp,
-		Prompt:      prompt,
-		Workspace:   workspace,
-		Status:      storage.StatusPending,
-		Class:       string(TaskClassCron),
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:            taskID,
+		Fingerprint:   fp,
+		Prompt:        prompt,
+		Workspace:     workspace,
+		Backend:       "opencode",
+		ExecutionMode: "direct",
+		Status:        storage.StatusPending,
+		Class:         string(TaskClassCron),
+		CreatedAt:     now,
+		UpdatedAt:     now,
 	}
 
 	if err := d.store.CreateTask(ctx, initialTask); err != nil {
@@ -399,6 +450,7 @@ type IPCRequest struct {
 	Content    string          `json:"content,omitempty"`
 	MemoryIDs  []string        `json:"memory_ids,omitempty"`
 	Mode       string          `json:"mode,omitempty"`
+	Backend    string          `json:"backend,omitempty"`
 }
 
 // IPCResponse 定義傳回用戶端之結果
@@ -524,9 +576,14 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				continue
 			}
 
-			// 計算請求 Fingerprint 確保同 Request ID 之 payload 一致性（防止撞 PK 或錯置，CTXMEM-004, TFACE-009）
+			backendID := req.Backend
+			if backendID == "" {
+				backendID = "opencode"
+			}
+
+			// 計算請求 Fingerprint 確保同 Request ID 之 payload 一致性（防止撞 PK 或錯置，CTXMEM-004, TFACE-009, MBACK-004）
 			// 遵循 MUST FIX 1：使用 canonicalWs 作為 fingerprint workspace
-			fp := calculateTaskFingerprint(canonicalWs, req.Prompt, reqMode, req.MemoryIDs)
+			fp := calculateTaskFingerprint(canonicalWs, req.Prompt, reqMode, req.MemoryIDs, backendID)
 
 			// 遵循 INT-004-REDELIVERY 與 CTXMEM-004：同 RequestID 且非 Cancelled 任務時直接回傳既有密封任務，不重新查詢底層記憶
 			if req.RequestID != "" {
@@ -593,6 +650,7 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				execCtx = &engine.ExecutionContext{
 					OriginalPrompt:  req.Prompt,
 					Workspace:       canonicalWs,
+					Backend:         backendID,
 					ProjectMemories: snapshots,
 					MemoryRefs:      req.MemoryIDs,
 					CreatedAt:       now,
@@ -604,6 +662,13 @@ func (d *Daemon) handleConn(conn net.Conn) {
 					continue
 				}
 				resolvedCtxJSON = string(raw)
+			} else {
+				execCtx = &engine.ExecutionContext{
+					OriginalPrompt: req.Prompt,
+					Workspace:      canonicalWs,
+					Backend:        backendID,
+					CreatedAt:      now,
+				}
 			}
 
 			initialTask := &storage.Task{
@@ -615,6 +680,7 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				Status:          storage.StatusPending,
 				Class:           string(taskClass),
 				ExecutionMode:   reqMode,
+				Backend:         backendID,
 				MemoryRefs:      req.MemoryIDs,
 				ResolvedContext: resolvedCtxJSON,
 				CreatedAt:       now,
@@ -946,8 +1012,12 @@ func (d *Daemon) dispatchTask(taskID, workspace, prompt string, class TaskClass,
 
 func (d *Daemon) dispatchTaskWithMode(taskID, workspace, prompt string, class TaskClass, mode string, optCtx ...*engine.ExecutionContext) error {
 	var execCtx *engine.ExecutionContext
-	if len(optCtx) > 0 {
+	backendID := "opencode"
+	if len(optCtx) > 0 && optCtx[0] != nil {
 		execCtx = optCtx[0]
+		if execCtx.Backend != "" {
+			backendID = execCtx.Backend
+		}
 	}
 	wsKey := d.canonicalWorkspace(workspace)
 	_, err := d.pool.SubmitAsyncClassifiedWithDone(context.Background(), class, func() error {
@@ -956,6 +1026,7 @@ func (d *Daemon) dispatchTaskWithMode(taskID, workspace, prompt string, class Ta
 			Workspace:       workspace,
 			Prompt:          prompt,
 			Mode:            mode,
+			Backend:         backendID,
 			ResolvedContext: execCtx,
 		})
 		return runErr
@@ -972,13 +1043,18 @@ func (d *Daemon) dispatchTaskWithMode(taskID, workspace, prompt string, class Ta
 	return err
 }
 
-func (d *Daemon) dispatchQueuedTask(taskID, workspace, prompt string, class TaskClass, mode string, wsKey string) error {
+func (d *Daemon) dispatchQueuedTask(taskID, workspace, prompt string, class TaskClass, mode string, wsKey string, optBackend ...string) error {
+	backendID := "opencode"
+	if len(optBackend) > 0 && optBackend[0] != "" {
+		backendID = optBackend[0]
+	}
 	_, err := d.pool.SubmitEnqueuedClassifiedWithDone(context.Background(), class, func() error {
 		_, runErr := d.engine.SubmitTask(context.Background(), engine.SubmitRequest{
 			ID:        taskID,
 			Workspace: workspace,
 			Prompt:    prompt,
 			Mode:      mode,
+			Backend:   backendID,
 		})
 		return runErr
 	}, func() {
@@ -1013,8 +1089,13 @@ func (d *Daemon) wakeQueuedTask(taskID, wsKey string) {
 		taskClass = TaskClassInteractive
 	}
 
+	taskBackend := task.Backend
+	if taskBackend == "" {
+		taskBackend = "opencode"
+	}
+
 	// 遵循 MUST FIX 2：被喚醒任務使用 dispatchQueuedTask，不受 pool.maxQueue 二次拋棄
-	err = d.dispatchQueuedTask(task.ID, task.Workspace, task.Prompt, taskClass, task.ExecutionMode, wsKey)
+	err = d.dispatchQueuedTask(task.ID, task.Workspace, task.Prompt, taskClass, task.ExecutionMode, wsKey, taskBackend)
 	if err != nil {
 		d.releaseCapacity()
 		_ = d.store.UpdateTaskStatus(context.Background(), task.ID, storage.StatusFailed, "", err.Error())
@@ -1090,6 +1171,7 @@ func (c *Client) Submit(ctx context.Context, req engine.SubmitRequest) (*storage
 		Workspace: req.Workspace,
 		Prompt:    req.Prompt,
 		Mode:      req.Mode,
+		Backend:   req.Backend,
 		MemoryIDs: req.MemoryIDs,
 	}); err != nil {
 		return nil, fmt.Errorf("encode request: %w", err)
@@ -1437,12 +1519,16 @@ func (c *Client) Close() error {
 	return nil
 }
 
-// calculateTaskFingerprint 計算任務請求指紋，包含 Mode 與排序後的 MemoryIDs 以確保 payload 一致性 (CTXMEM-004, TFACE-009)
-func calculateTaskFingerprint(workspace, prompt, mode string, memoryIDs []string) string {
+// calculateTaskFingerprint 計算任務請求指紋，包含 Backend、Mode 與排序後的 MemoryIDs 以確保 payload 一致性 (CTXMEM-004, TFACE-009, MBACK-004)
+func calculateTaskFingerprint(workspace, prompt, mode string, memoryIDs []string, backendID string) string {
 	fpPayload := workspace + ":" + prompt
 	if mode != "" && mode != "direct" {
 		fpPayload += ":mode=" + mode
 	}
+	if backendID == "" {
+		backendID = "opencode"
+	}
+	fpPayload += ":backend=" + backendID
 	if len(memoryIDs) > 0 {
 		sortedIDs := make([]string, len(memoryIDs))
 		copy(sortedIDs, memoryIDs)

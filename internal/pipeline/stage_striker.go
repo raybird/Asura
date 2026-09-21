@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"asura/internal/backend"
 	"asura/internal/engine"
 )
 
@@ -14,7 +15,9 @@ type StrikerRunnerFunc func(ctx context.Context, workspace string, prompt string
 
 // DefaultStrikerStage 實作 Striker 階段
 type DefaultStrikerStage struct {
-	runner StrikerRunnerFunc
+	runner   StrikerRunnerFunc
+	backend  backend.Backend
+	registry backend.Registry
 }
 
 // NewStrikerStage 建立 Striker 階段實例
@@ -22,12 +25,19 @@ func NewStrikerStage(runner StrikerRunnerFunc) *DefaultStrikerStage {
 	return &DefaultStrikerStage{runner: runner}
 }
 
+// NewStrikerStageWithBackend 建立基於共同 Backend 契約之 Striker 階段實例
+func NewStrikerStageWithBackend(b backend.Backend) *DefaultStrikerStage {
+	return &DefaultStrikerStage{backend: b}
+}
+
+// WithRegistry 注入後端註冊表以支援依任務動態解析後端
+func (s *DefaultStrikerStage) WithRegistry(reg backend.Registry) *DefaultStrikerStage {
+	s.registry = reg
+	return s
+}
+
 // Execute 執行 Striker 工作並產生輸出結果
 func (s *DefaultStrikerStage) Execute(ctx context.Context, execCtx *engine.ExecutionContext, plan *OraclePlan) (string, error) {
-	if s.runner == nil {
-		return "", errors.New("striker runner is nil")
-	}
-
 	workspace := ""
 	basePrompt := ""
 	if execCtx != nil {
@@ -60,6 +70,32 @@ func (s *DefaultStrikerStage) Execute(ctx context.Context, execCtx *engine.Execu
 		sb.WriteString("\n")
 		sb.WriteString(basePrompt)
 		finalPrompt = sb.String()
+	}
+
+	var activeBackend = s.backend
+	if s.registry != nil && execCtx != nil && execCtx.Backend != "" {
+		if b, err := s.registry.Get(execCtx.Backend); err == nil && b != nil {
+			activeBackend = b
+		}
+	}
+
+	if activeBackend != nil {
+		res, err := activeBackend.Run(ctx, &backend.ExecutionRequest{
+			Role:      backend.RoleStriker,
+			Workspace: workspace,
+			Prompt:    finalPrompt,
+		})
+		if err != nil {
+			if res != nil && res.PartialOutput != "" {
+				return res.PartialOutput, err
+			}
+			return "", err
+		}
+		return res.Output, nil
+	}
+
+	if s.runner == nil {
+		return "", errors.New("striker runner is nil")
 	}
 
 	return s.runner(ctx, workspace, finalPrompt)

@@ -13,6 +13,9 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
+
+	"asura/internal/backend"
 )
 
 var (
@@ -252,7 +255,7 @@ func ResolveOpenCodeBinary(preferredPath string, expectedVersion string) (string
 // NewAdapter 建立新的 OpenCode Adapter 實例
 func NewAdapter(cfg AdapterConfig) *Adapter {
 	if cfg.ExpectedVersion == "" {
-		cfg.ExpectedVersion = "1.18.23"
+		cfg.ExpectedVersion = "1.18"
 	}
 	if cfg.BinaryPath == "" {
 		if resolved, err := ResolveOpenCodeBinary("", cfg.ExpectedVersion); err == nil {
@@ -319,45 +322,120 @@ func (a *Adapter) ExtractResultFromEvents(output string) (string, error) {
 	return "", ErrEmptyResult
 }
 
-// Run 執行自然語言任務，解析事件串流並回傳文字結果 (INT-001, INT-007)
-// 自然語言 prompt 直接作為參數傳入，不經過 shell 解譯。
-func (a *Adapter) Run(ctx context.Context, workspace string, prompt string) (string, error) {
+// ID 回傳後端唯一標識
+func (a *Adapter) ID() string {
+	return "opencode"
+}
+
+// Version 回傳目前 OpenCode 版本
+func (a *Adapter) Version(ctx context.Context) (string, error) {
 	expectedVer := a.cfg.ExpectedVersion
 	if expectedVer == "" {
-		expectedVer = "1.18.23"
+		expectedVer = "1.18"
 	}
-
 	binPath, err := ResolveOpenCodeBinary(a.cfg.BinaryPath, expectedVer)
 	if err != nil {
 		return "", err
 	}
+	out, err := exec.CommandContext(ctx, binPath, "--version").Output()
+	if err != nil {
+		return "", fmt.Errorf("execute opencode --version: %w", err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
 
-	args := []string{"run", "--format", "json", "--dir", workspace}
-	if a.cfg.Pure {
+// Capabilities 回傳 OpenCode 支援的能力清單
+func (a *Adapter) Capabilities() []backend.Capability {
+	return []backend.Capability{
+		backend.CapReadOnlySandbox,
+		backend.CapWorkspaceWrite,
+		backend.CapStructuredEvents,
+		backend.CapProcessCancellation,
+	}
+}
+
+// HasCapability 檢查後端是否具備指定能力
+func (a *Adapter) HasCapability(cap backend.Capability) bool {
+	for _, c := range a.Capabilities() {
+		if c == cap {
+			return true
+		}
+	}
+	return false
+}
+
+// Run 實作 backend.Backend 介面，執行任務並回傳結構化結果與標準化事件
+func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*backend.ExecutionResult, error) {
+	if req == nil {
+		return nil, errors.New("execution request cannot be nil")
+	}
+
+	startedAt := time.Now()
+	cfg := a.cfg
+	if cfg.ExpectedVersion == "" {
+		cfg.ExpectedVersion = "1.18"
+	}
+
+	// 依角色配置安全邊界：Oracle 與 Critic 必須啟用唯讀隔離沙盒 (MBACK-008)
+	var cleanupReadOnly func()
+	if req.Role == backend.RoleOracle || req.Role == backend.RoleCritic {
+		if cfg.Role != RoleOracle && cfg.Role != RoleCritic {
+			cfg.Role = RoleOracle
+		}
+		if cfg.ConfigDir == "" && !cfg.Isolated {
+			dir, cleanup, err := CreateIsolatedReadOnlyConfigDir()
+			if err != nil {
+				return nil, fmt.Errorf("create isolated config for role %s: %w", req.Role, err)
+			}
+			cfg.ConfigDir = dir
+			cfg.Isolated = true
+			cleanupReadOnly = cleanup
+		}
+	} else if req.Role == backend.RoleStriker {
+		cfg.Role = RoleStriker
+	}
+
+	if cleanupReadOnly != nil {
+		defer cleanupReadOnly()
+	}
+
+	binPath, err := ResolveOpenCodeBinary(cfg.BinaryPath, cfg.ExpectedVersion)
+	if err != nil {
+		return &backend.ExecutionResult{
+			BackendID:    "opencode",
+			FailureClass: backend.FailureUnavailable,
+			StartedAt:    startedAt,
+			CompletedAt:  time.Now(),
+		}, backend.NewExecutionError("opencode", backend.FailureUnavailable, err, "")
+	}
+
+	args := []string{"run", "--format", "json", "--dir", req.Workspace}
+	if cfg.Pure {
 		args = append(args, "--pure")
 	}
-	if a.cfg.Agent != "" {
-		args = append(args, "--agent", a.cfg.Agent)
+	if cfg.Agent != "" {
+		args = append(args, "--agent", cfg.Agent)
 	}
-	if !a.cfg.DisableAuto {
-		// 依 Phase 1 探測與核准決策：在核准專案內允許自動修改/建置/測試
+	if !cfg.DisableAuto {
 		args = append(args, "--auto")
 	}
-	// 自然語言 prompt 作為獨立參數傳遞，絕對不經由 sh -c
-	args = append(args, prompt)
+	args = append(args, req.Prompt)
 
 	cmd := exec.CommandContext(ctx, binPath, args...)
 	ConfigureProcessGroup(cmd)
-
-	// 配置環境變數，落實權限控制、Configuration Namespace 隔離並徹底消除外部配置注入
-	cmd.Env = buildExecutionEnv(a.cfg)
+	cmd.Env = buildExecutionEnv(cfg)
 
 	var stdoutBuf, stderrBuf bytes.Buffer
 	cmd.Stdout = &stdoutBuf
 	cmd.Stderr = &stderrBuf
 
 	if err := cmd.Start(); err != nil {
-		return "", fmt.Errorf("start opencode process: %w", err)
+		return &backend.ExecutionResult{
+			BackendID:    "opencode",
+			FailureClass: backend.FailureExecution,
+			StartedAt:    startedAt,
+			CompletedAt:  time.Now(),
+		}, backend.NewExecutionError("opencode", backend.FailureExecution, fmt.Errorf("start process: %w", err), "")
 	}
 
 	pgid, err := syscall.Getpgid(cmd.Process.Pid)
@@ -365,11 +443,10 @@ func (a *Adapter) Run(ctx context.Context, workspace string, prompt string) (str
 		pgid = cmd.Process.Pid
 	}
 
-	if a.cfg.OnProcessStarted != nil {
-		a.cfg.OnProcessStarted(ctx, pgid)
+	if cfg.OnProcessStarted != nil {
+		cfg.OnProcessStarted(ctx, pgid)
 	}
 
-	// 支援 Context 取消時發送信號並清理進程組
 	doneChan := make(chan struct{})
 	var closeOnce sync.Once
 	defer closeOnce.Do(func() { close(doneChan) })
@@ -385,44 +462,132 @@ func (a *Adapter) Run(ctx context.Context, workspace string, prompt string) (str
 	waitErr := cmd.Wait()
 	closeOnce.Do(func() { close(doneChan) })
 
-	if a.cfg.OnProcessExited != nil {
-		a.cfg.OnProcessExited(ctx, pgid)
+	if cfg.OnProcessExited != nil {
+		cfg.OnProcessExited(ctx, pgid)
 	}
 
 	rawStdout := stdoutBuf.String()
-	extracted, extractErr := a.ExtractResultFromEvents(rawStdout)
+	rawStderr := stderrBuf.String()
+	completedAt := time.Now()
 
-	if waitErr != nil {
-		if errors.Is(ctx.Err(), context.Canceled) {
-			return extracted, ctx.Err()
+	// 解析事件與萃取文字 (MBACK-006, MBACK-011)
+	events := make([]backend.Event, 0)
+	var sb strings.Builder
+	var lastErr string
+	hasRateLimit := false
+	hasAuthError := false
+	hasEvents := false
+
+	scanner := bufio.NewScanner(strings.NewReader(rawStdout))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
 		}
-		// 若已有部分抽取文字，保留之，同時回傳錯誤
-		if extracted != "" {
-			return extracted, fmt.Errorf("%w: %v", ErrExecutionFailed, waitErr)
+		evt, pErr := ParseEventLine(line)
+		if pErr != nil || evt == nil {
+			continue
 		}
-		errMsg := strings.TrimSpace(stderrBuf.String())
-		if errMsg == "" {
-			if trimmedOut := strings.TrimSpace(rawStdout); trimmedOut != "" {
-				errMsg = fmt.Sprintf("%v (stdout: %s)", waitErr, trimmedOut)
-			} else {
-				errMsg = waitErr.Error()
+		hasEvents = true
+
+		if evt.Text != "" {
+			if sb.Len() > 0 && !strings.HasSuffix(sb.String(), "\n") {
+				sb.WriteString("\n")
+			}
+			sb.WriteString(evt.Text)
+			events = append(events, backend.NewTextEvent(evt.Text))
+		}
+		if evt.Tool != "" {
+			events = append(events, backend.NewToolEvent(evt.Tool, evt.ToolStatus))
+		}
+		if evt.IsRateLimit {
+			hasRateLimit = true
+			lastErr = "rate limit exceeded"
+			events = append(events, backend.Event{
+				Type:      backend.EventTypeRateLimit,
+				Error:     "rate limit exceeded",
+				Timestamp: time.Now(),
+			})
+		}
+		if evt.Type == "error" && evt.ErrorMessage != "" {
+			lastErr = evt.ErrorMessage
+			events = append(events, backend.NewErrorEvent(evt.ErrorMessage))
+			lowerErr := strings.ToLower(evt.ErrorMessage)
+			if strings.Contains(lowerErr, "unauthorized") || strings.Contains(lowerErr, "auth") || strings.Contains(lowerErr, "api key") {
+				hasAuthError = true
 			}
 		}
-		return "", fmt.Errorf("%w: %s", ErrExecutionFailed, errMsg)
 	}
 
-	if extractErr != nil {
-		// 若抽取失敗或包含後端錯誤，保留部分抽取文字或原始輸出，但必須回傳錯誤
-		if extracted != "" {
-			return extracted, extractErr
-		}
-		if rawStdout != "" {
-			return rawStdout, extractErr
-		}
-		return "", extractErr
+	extractedText := strings.TrimSpace(sb.String())
+	if !hasEvents && extractedText == "" {
+		extractedText = strings.TrimSpace(rawStdout)
 	}
 
-	return extracted, nil
+	ver, _ := a.Version(ctx)
+	result := &backend.ExecutionResult{
+		BackendID:      "opencode",
+		BackendVersion: ver,
+		Output:         extractedText,
+		PartialOutput:  extractedText,
+		Events:         events,
+		FailureClass:   backend.FailureNone,
+		StartedAt:      startedAt,
+		CompletedAt:    completedAt,
+	}
+
+	// 判定錯誤分類
+	if errors.Is(ctx.Err(), context.Canceled) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		result.FailureClass = backend.FailureCancelled
+		return result, backend.NewExecutionError("opencode", backend.FailureCancelled, ctx.Err(), extractedText)
+	}
+
+	if hasRateLimit {
+		result.FailureClass = backend.FailureRateLimit
+		return result, backend.NewExecutionError("opencode", backend.FailureRateLimit, errors.New("backend error: rate limit exceeded"), extractedText)
+	}
+
+	if hasAuthError {
+		result.FailureClass = backend.FailureAuth
+		return result, backend.NewExecutionError("opencode", backend.FailureAuth, errors.New("backend error: authentication failed"), extractedText)
+	}
+
+	if waitErr != nil {
+		result.FailureClass = backend.FailureExecution
+		errMsg := strings.TrimSpace(rawStderr)
+		if errMsg == "" {
+			errMsg = waitErr.Error()
+		}
+		return result, backend.NewExecutionError("opencode", backend.FailureExecution, fmt.Errorf("%w: %s", ErrExecutionFailed, errMsg), extractedText)
+	}
+
+	if lastErr != "" {
+		result.FailureClass = backend.FailureExecution
+		return result, backend.NewExecutionError("opencode", backend.FailureExecution, fmt.Errorf("backend error: %s", lastErr), extractedText)
+	}
+
+	if strings.TrimSpace(extractedText) == "" {
+		result.FailureClass = backend.FailureEmptyResult
+		return result, backend.NewExecutionError("opencode", backend.FailureEmptyResult, ErrEmptyResult, "")
+	}
+
+	return result, nil
+}
+
+// RunPrompt 保持相容舊版 (ctx, workspace, prompt) 呼叫簽名
+func (a *Adapter) RunPrompt(ctx context.Context, workspace string, prompt string) (string, error) {
+	req := &backend.ExecutionRequest{
+		Workspace: workspace,
+		Prompt:    prompt,
+	}
+	res, err := a.Run(ctx, req)
+	if err != nil {
+		if res != nil && res.PartialOutput != "" {
+			return res.PartialOutput, err
+		}
+		return "", err
+	}
+	return res.Output, nil
 }
 
 // setOrUpdateEnv 更新或追加環境變數切片中的鍵值，避免重複設定

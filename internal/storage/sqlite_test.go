@@ -859,5 +859,59 @@ func TestTaskPipelineTraceStorage(t *testing.T) {
 	}
 }
 
+func TestTaskBackendStorage(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test_backend.db")
+	store, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
 
+	ctx := context.Background()
 
+	// 1. 建立指定 codex backend 的任務
+	taskCodex := &Task{
+		ID:        "task-backend-codex",
+		RequestID: "req-backend-codex",
+		Prompt:    "run with codex",
+		Workspace: "/tmp/ws",
+		Status:    StatusPending,
+		Backend:   "codex",
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+	if err := store.CreateTask(ctx, taskCodex); err != nil {
+		t.Fatalf("CreateTask codex failed: %v", err)
+	}
+
+	// 2. 建立未指定 backend 的任務（應預設為 opencode）
+	taskDefault := &Task{
+		ID:        "task-backend-default",
+		RequestID: "req-backend-default",
+		Prompt:    "run with default",
+		Workspace: "/tmp/ws",
+		Status:    StatusPending,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+	if err := store.CreateTask(ctx, taskDefault); err != nil {
+		t.Fatalf("CreateTask default failed: %v", err)
+	}
+
+	// 3. 查回並斷言 backend 欄位
+	gotCodex, err := store.GetTask(ctx, taskCodex.ID)
+	if err != nil {
+		t.Fatalf("GetTask codex failed: %v", err)
+	}
+	if gotCodex.Backend != "codex" {
+		t.Errorf("expected Backend 'codex', got %q", gotCodex.Backend)
+	}
+
+	gotDefault, err := store.GetTask(ctx, taskDefault.ID)
+	if err != nil {
+		t.Fatalf("GetTask default failed: %v", err)
+	}
+	if gotDefault.Backend != "opencode" {
+		t.Errorf("expected Backend 'opencode', got %q", gotDefault.Backend)
+	}
+}
