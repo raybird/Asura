@@ -14,6 +14,7 @@
 - [探測證據](evidence/probe-results.md)
 - [實作驗證](evidence/verification.md)
 - [獨立審查](review-a4831a1.md)
+- [MUST FIX 修復審查](review-5a24115.md)
 - [PR #20](https://github.com/raybird/Asura/pull/20)
 
 ## 關鍵差異
@@ -179,6 +180,7 @@ Feature: 明確啟用且有界的專案記憶召回
 
 | 日期 | 異動 | 負責人 |
 |---|---|---|
+| 2026-09-22 | bounded explicit ID canonicalization 修復完成；最新產品 HEAD 獨立 review PASS，等待合併 | Codex |
 | 2026-09-22 | PR #20 review 發現 bounded explicit ID 空白正規化不一致；完成紅綠修復與全套回歸，等待新 HEAD 獨立審查 | Codex |
 | 2026-09-22 | 實作與驗證完成；獨立 review PASS，建立 PR #20，等待合併 | Codex |
 | 2026-09-22 | 使用者核准 D1–D5 與全部十個 Scenario | 使用者 |
@@ -188,4 +190,4 @@ Feature: 明確啟用且有界的專案記憶召回
 **建立日期**: 2026-09-22  
 **分級**: Large — 涉及儲存、Daemon、CLI 與 execution context 邊界  
 **風險**: High — 資料隔離、成本及冪等性  
-**狀態**: 審查補件中
+**狀態**: 等待合併

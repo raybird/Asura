@@ -36,4 +36,4 @@
 
 2026-09-22 reviewer 指出 bounded IPC 的 explicit ID 解析會 `TrimSpace`，但 selector 去重仍使用原字串，可能讓同一記憶同時成為 explicit 與 auto。新增 `TestRECALL_BoundedCanonicalExplicitIDs` 先重現兩份相同 snapshot，再修正 bounded 模式在 fingerprint 前建立唯一的 trimmed explicit ID 集合。
 
-測試確認 `ProjectMemories`、`Recall.ExplicitIDs`、`MemoryRefs` 與 fingerprint／redelivery 使用同一 canonical ID，`AutoIDs` 不再含該記憶；off 模式仍走原本未修剪的 fingerprint 路徑。修復後目標回歸、全套 race、vet 與 build 通過，原獨立 review 因產品 HEAD 改變而不再作為最新 PASS，須重新審查。
+測試確認 `ProjectMemories`、`Recall.ExplicitIDs`、`MemoryRefs` 與 fingerprint／redelivery 使用同一 canonical ID，`AutoIDs` 不再含該記憶；off 模式仍走原本未修剪的 fingerprint 路徑。修復後目標回歸、全套 race、vet 與 build 通過。最新產品 HEAD 的[獨立 review](../review-5a24115.md)已 PASS，沒有 MUST FIX 或 SHOULD FIX。
