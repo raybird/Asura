@@ -5,24 +5,30 @@ import (
 	"strings"
 )
 
+type TokenCache struct {
+	Write *int64 `json:"write,omitempty"`
+	Read  *int64 `json:"read,omitempty"`
+}
+
 type TokenUsage struct {
-	Total     int `json:"total"`
-	Input     int `json:"input"`
-	Output    int `json:"output"`
-	Reasoning int `json:"reasoning,omitempty"`
+	Total     *int64      `json:"total,omitempty"`
+	Input     *int64      `json:"input,omitempty"`
+	Output    *int64      `json:"output,omitempty"`
+	Reasoning *int64      `json:"reasoning,omitempty"`
+	Cache     *TokenCache `json:"cache,omitempty"`
 }
 
 type Event struct {
-	Type         string     `json:"type"`
-	Timestamp    int64      `json:"timestamp"`
-	SessionID    string     `json:"sessionID"`
-	Text         string     `json:"text,omitempty"`
-	Tool         string     `json:"tool,omitempty"`
-	ToolStatus   string     `json:"tool_status,omitempty"`
-	Tokens       TokenUsage `json:"tokens,omitempty"`
-	IsRateLimit  bool       `json:"is_rate_limit,omitempty"`
-	ErrorMessage string     `json:"error_message,omitempty"`
-	RawJSON      string     `json:"-"`
+	Type         string      `json:"type"`
+	Timestamp    int64       `json:"timestamp"`
+	SessionID    string      `json:"sessionID"`
+	Text         string      `json:"text,omitempty"`
+	Tool         string      `json:"tool,omitempty"`
+	ToolStatus   string      `json:"tool_status,omitempty"`
+	Tokens       *TokenUsage `json:"tokens,omitempty"`
+	IsRateLimit  bool        `json:"is_rate_limit,omitempty"`
+	ErrorMessage string      `json:"error_message,omitempty"`
+	RawJSON      string      `json:"-"`
 }
 
 type rawEvent struct {
@@ -30,11 +36,11 @@ type rawEvent struct {
 	Timestamp int64  `json:"timestamp"`
 	SessionID string `json:"sessionID"`
 	Part      *struct {
-		Type   string     `json:"type"`
-		Text   string     `json:"text,omitempty"`
-		Tool   string     `json:"tool,omitempty"`
-		Reason string     `json:"reason,omitempty"`
-		Tokens TokenUsage `json:"tokens,omitempty"`
+		Type   string      `json:"type"`
+		Text   string      `json:"text,omitempty"`
+		Tool   string      `json:"tool,omitempty"`
+		Reason string      `json:"reason,omitempty"`
+		Tokens *TokenUsage `json:"tokens,omitempty"`
 		State  *struct {
 			Status string `json:"status,omitempty"`
 			Output string `json:"output,omitempty"`
@@ -81,7 +87,7 @@ func ParseEventLine(line string) (*Event, error) {
 		if raw.Part.State != nil && raw.Part.State.Status != "" {
 			evt.ToolStatus = raw.Part.State.Status
 		}
-		if raw.Part.Tokens.Total > 0 {
+		if raw.Part.Tokens != nil {
 			evt.Tokens = raw.Part.Tokens
 		}
 	}

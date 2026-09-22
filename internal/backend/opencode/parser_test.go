@@ -52,8 +52,11 @@ func TestParseEventLine_StepFinish(t *testing.T) {
 	if event.Type != "step_finish" {
 		t.Fatalf("expected type step_finish, got %s", event.Type)
 	}
-	if event.Tokens.Total != 24185 || event.Tokens.Input != 24180 || event.Tokens.Output != 5 {
+	if event.Tokens == nil || *event.Tokens.Total != 24185 || *event.Tokens.Input != 24180 || *event.Tokens.Output != 5 {
 		t.Fatalf("unexpected token counts: %+v", event.Tokens)
+	}
+	if event.Tokens.Cache != nil {
+		t.Fatalf("expected Cache=nil when omitted in json, got %+v", event.Tokens.Cache)
 	}
 }
 
@@ -78,3 +81,21 @@ func TestParseEventLine_Invalid(t *testing.T) {
 		t.Fatalf("expected nil event for non-json line, got %+v", event)
 	}
 }
+
+func TestParseEventLine_StepFinishWithCache(t *testing.T) {
+	line := `{"type":"step_finish","timestamp":1789970938158,"sessionID":"ses_123","part":{"id":"prt_3","reason":"stop","type":"step-finish","tokens":{"total":21522,"input":4937,"output":28,"reasoning":10,"cache":{"write":0,"read":16585}},"cost":0}}`
+	event, err := opencode.ParseEventLine(line)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event == nil {
+		t.Fatalf("expected event, got nil")
+	}
+	if event.Tokens == nil || *event.Tokens.Total != 21522 || *event.Tokens.Input != 4937 || *event.Tokens.Output != 28 || *event.Tokens.Reasoning != 10 {
+		t.Errorf("unexpected tokens: %+v", event.Tokens)
+	}
+	if event.Tokens.Cache == nil || *event.Tokens.Cache.Read != 16585 {
+		t.Errorf("expected Cache.Read 16585, got %+v", event.Tokens.Cache)
+	}
+}
+

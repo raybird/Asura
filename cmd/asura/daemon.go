@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"asura/internal/auth"
+	"asura/internal/contextwin"
 	"asura/internal/daemon"
 	"asura/internal/storage"
 )
@@ -27,6 +28,12 @@ func handleDaemon(args []string, stdout, stderr io.Writer) int {
 	permission := fs.String("permission", "", "override OPENCODE_PERMISSION JSON policy")
 
 	if err := fs.Parse(args); err != nil {
+		return 1
+	}
+
+	contextCfg, err := contextwin.LoadConfig()
+	if err != nil {
+		fmt.Fprintf(stderr, "error: invalid context configuration: %v\n", err)
 		return 1
 	}
 
@@ -62,9 +69,10 @@ func handleDaemon(args []string, stdout, stderr io.Writer) int {
 	defer store.Close()
 
 	cfg := daemon.Config{
-		SocketPath: *sockPath,
-		MaxWorkers: *workers,
-		MaxQueue:   *queue,
+		SocketPath:    *sockPath,
+		MaxWorkers:    *workers,
+		MaxQueue:      *queue,
+		ContextConfig: contextCfg,
 	}
 	if *permission != "" {
 		cfg.OpenCodeConfig.Permission = *permission

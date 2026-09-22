@@ -491,4 +491,110 @@ func TestHandleStatus_PipelineTrace(t *testing.T) {
 	}
 }
 
+func TestHandleRun_InvalidContextConfig(t *testing.T) {
+	t.Setenv("ASURA_CONTEXT_LIMIT", "-50")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	code := handleRun([]string{"test prompt"}, stdout, stderr)
+	if code == 0 {
+		t.Fatalf("expected non-zero exit code on invalid ASURA_CONTEXT_LIMIT, got 0")
+	}
+	if !strings.Contains(stderr.String(), "invalid context configuration") {
+		t.Errorf("expected 'invalid context configuration' in stderr, got: %s", stderr.String())
+	}
+}
 
+func TestHandleDaemon_InvalidContextConfig(t *testing.T) {
+	t.Setenv("ASURA_CONTEXT_POLICY", "invalid_policy")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	code := handleDaemon([]string{}, stdout, stderr)
+	if code == 0 {
+		t.Fatalf("expected non-zero exit code on invalid ASURA_CONTEXT_POLICY, got 0")
+	}
+	if !strings.Contains(stderr.String(), "invalid context configuration") {
+		t.Errorf("expected 'invalid context configuration' in stderr, got: %s", stderr.String())
+	}
+}
+
+func TestHandleRun_ContextLimitReject_PreflightFailClosed(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "asura.db")
+
+	t.Setenv("ASURA_CONTEXT_LIMIT", "5")
+	t.Setenv("ASURA_CONTEXT_POLICY", "reject")
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	args := []string{
+		"-db", dbPath,
+		"-workspace", tmpDir,
+		"this prompt definitely exceeds 5 tokens limit",
+	}
+
+	code := handleRun(args, stdout, stderr)
+	if code != 1 {
+		t.Fatalf("expected code 1 on context limit reject, got %d. stderr: %s", code, stderr.String())
+	}
+
+	outStr := stdout.String()
+	errStr := stderr.String()
+	combined := outStr + "\n" + errStr
+	if !strings.Contains(combined, "context limit exceeded") {
+		t.Errorf("expected 'context limit exceeded' in output, got:\n%s", combined)
+	}
+
+	// 檢查資料庫中儲存的 Task 狀態為 failed
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open test db: %v", err)
+	}
+	defer store.Close()
+
+	lines := strings.Split(stdout.String(), "\n")
+	var taskID string
+	for _, l := range lines {
+		if strings.HasPrefix(l, "Task ID: ") {
+			taskID = strings.TrimPrefix(l, "Task ID: ")
+			break
+		}
+	}
+	if taskID == "" {
+		t.Fatalf("task ID not found in stdout: %s", stdout.String())
+	}
+
+	task, err := store.GetTask(context.Background(), taskID)
+	if err != nil {
+		t.Fatalf("failed to get task %s: %v", taskID, err)
+	}
+	if task.Status != storage.StatusFailed {
+		t.Errorf("expected task status failed, got %s", task.Status)
+	}
+}
+
+func TestHandleRun_ContextLimitReject_NaNReserveRatio_StartupRejection(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "asura.db")
+
+	t.Setenv("ASURA_CONTEXT_LIMIT", "10")
+	t.Setenv("ASURA_CONTEXT_POLICY", "reject")
+	t.Setenv("ASURA_CONTEXT_RESERVE_RATIO", "NaN")
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	args := []string{
+		"-db", dbPath,
+		"-workspace", tmpDir,
+		"a test prompt",
+	}
+
+	code := handleRun(args, stdout, stderr)
+	if code == 0 {
+		t.Fatalf("expected non-zero exit code on ASURA_CONTEXT_RESERVE_RATIO=NaN, got 0")
+	}
+	if !strings.Contains(stderr.String(), "invalid context configuration") {
+		t.Errorf("expected 'invalid context configuration' in stderr, got: %s", stderr.String())
+	}
+}

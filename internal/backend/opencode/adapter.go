@@ -265,6 +265,9 @@ func NewAdapter(cfg AdapterConfig) *Adapter {
 	return &Adapter{cfg: cfg}
 }
 
+// maxScanCapacity 限制單行 JSONL 之掃描容量（4MB 支援大型代碼/工具事件串流輸出，比照 Codex parser）
+const maxScanCapacity = 4 * 1024 * 1024
+
 // ExtractResultFromEvents 從 JSON 事件串流中解析並萃取最終回答文字或錯誤
 func (a *Adapter) ExtractResultFromEvents(output string) (string, error) {
 	trimmed := strings.TrimSpace(output)
@@ -277,6 +280,7 @@ func (a *Adapter) ExtractResultFromEvents(output string) (string, error) {
 	hasEvents := false
 
 	scanner := bufio.NewScanner(strings.NewReader(trimmed))
+	scanner.Buffer(make([]byte, 64*1024), maxScanCapacity)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
@@ -302,6 +306,10 @@ func (a *Adapter) ExtractResultFromEvents(output string) (string, error) {
 		if evt.Type == "error" && evt.ErrorMessage != "" {
 			lastErr = evt.ErrorMessage
 		}
+	}
+
+	if scanErr := scanner.Err(); scanErr != nil && lastErr == "" {
+		lastErr = fmt.Sprintf("stdout scanner error: %v", scanErr)
 	}
 
 	result := strings.TrimSpace(sb.String())
@@ -474,11 +482,25 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 	events := make([]backend.Event, 0)
 	var sb strings.Builder
 	var lastErr string
+	type tokenFieldAcc struct {
+		sum          int64
+		seenCount    int
+		missingCount int
+	}
+	var (
+		inputAcc        tokenFieldAcc
+		outputAcc       tokenFieldAcc
+		totalAcc        tokenFieldAcc
+		cachedAcc       tokenFieldAcc
+		reasoningAcc    tokenFieldAcc
+		stepTokensCount = 0
+	)
 	hasRateLimit := false
 	hasAuthError := false
 	hasEvents := false
 
 	scanner := bufio.NewScanner(strings.NewReader(rawStdout))
+	scanner.Buffer(make([]byte, 64*1024), maxScanCapacity)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
@@ -500,6 +522,44 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 		if evt.Tool != "" {
 			events = append(events, backend.NewToolEvent(evt.Tool, evt.ToolStatus))
 		}
+		if evt.Tokens != nil {
+			stepTokensCount++
+
+			if evt.Tokens.Input != nil {
+				inputAcc.seenCount++
+				inputAcc.sum += *evt.Tokens.Input
+			} else {
+				inputAcc.missingCount++
+			}
+
+			if evt.Tokens.Output != nil {
+				outputAcc.seenCount++
+				outputAcc.sum += *evt.Tokens.Output
+			} else {
+				outputAcc.missingCount++
+			}
+
+			if evt.Tokens.Total != nil {
+				totalAcc.seenCount++
+				totalAcc.sum += *evt.Tokens.Total
+			} else {
+				totalAcc.missingCount++
+			}
+
+			if evt.Tokens.Reasoning != nil {
+				reasoningAcc.seenCount++
+				reasoningAcc.sum += *evt.Tokens.Reasoning
+			} else {
+				reasoningAcc.missingCount++
+			}
+
+			if evt.Tokens.Cache != nil && evt.Tokens.Cache.Read != nil {
+				cachedAcc.seenCount++
+				cachedAcc.sum += *evt.Tokens.Cache.Read
+			} else {
+				cachedAcc.missingCount++
+			}
+		}
 		if evt.IsRateLimit {
 			hasRateLimit = true
 			lastErr = "rate limit exceeded"
@@ -519,9 +579,36 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 		}
 	}
 
+	if scanErr := scanner.Err(); scanErr != nil && lastErr == "" {
+		lastErr = fmt.Sprintf("stdout scanner error: %v", scanErr)
+	}
+
 	extractedText := strings.TrimSpace(sb.String())
 	if !hasEvents && extractedText == "" {
 		extractedText = strings.TrimSpace(rawStdout)
+	}
+
+	var usage *backend.TokenUsage
+	usageSource := backend.ProvenanceUnknown
+	if stepTokensCount > 0 {
+		usage = &backend.TokenUsage{}
+		usageSource = backend.ProvenanceExact
+
+		if inputAcc.seenCount > 0 && inputAcc.missingCount == 0 {
+			usage.InputTokens = backend.Int64Ptr(inputAcc.sum)
+		}
+		if outputAcc.seenCount > 0 && outputAcc.missingCount == 0 {
+			usage.OutputTokens = backend.Int64Ptr(outputAcc.sum)
+		}
+		if totalAcc.seenCount > 0 && totalAcc.missingCount == 0 {
+			usage.TotalTokens = backend.Int64Ptr(totalAcc.sum)
+		}
+		if cachedAcc.seenCount > 0 && cachedAcc.missingCount == 0 {
+			usage.CachedTokens = backend.Int64Ptr(cachedAcc.sum)
+		}
+		if reasoningAcc.seenCount > 0 && reasoningAcc.missingCount == 0 {
+			usage.ReasoningTokens = backend.Int64Ptr(reasoningAcc.sum)
+		}
 	}
 
 	ver, _ := a.Version(ctx)
@@ -532,6 +619,8 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 		PartialOutput:  extractedText,
 		Events:         events,
 		FailureClass:   backend.FailureNone,
+		Usage:          usage,
+		UsageSource:    usageSource,
 		StartedAt:      startedAt,
 		CompletedAt:    completedAt,
 	}

@@ -37,8 +37,8 @@ func (s *DefaultOracleStage) WithRegistry(reg backend.Registry) *DefaultOracleSt
 	return s
 }
 
-// Execute 執行 Oracle 分析並產出結構化計畫
-func (s *DefaultOracleStage) Execute(ctx context.Context, execCtx *engine.ExecutionContext) (*OraclePlan, error) {
+// Prepare 組裝 Oracle 的唯一 ExecutionRequest
+func (s *DefaultOracleStage) Prepare(execCtx *engine.ExecutionContext) (*backend.ExecutionRequest, error) {
 	workspace := ""
 	prompt := ""
 	if execCtx != nil {
@@ -49,6 +49,19 @@ func (s *DefaultOracleStage) Execute(ctx context.Context, execCtx *engine.Execut
 	systemInstruction := "You are Oracle, an AI architecture planner. Analyze the execution context and produce a JSON plan matching the schema: {\"goal\":\"...\",\"constraints\":[...],\"steps\":[...],\"expected_outcome\":\"...\"}.\nReturn ONLY the JSON or a json markdown code block."
 	oraclePrompt := fmt.Sprintf("%s\n\nTask Context and Requirements:\n%s", systemInstruction, prompt)
 
+	return &backend.ExecutionRequest{
+		Role:      backend.RoleOracle,
+		Workspace: workspace,
+		Prompt:    oraclePrompt,
+	}, nil
+}
+
+// ExecutePrepared 執行已準備之 ExecutionRequest 並解析 OraclePlan，即使失敗亦回傳 ExecutionResult
+func (s *DefaultOracleStage) ExecutePrepared(ctx context.Context, execCtx *engine.ExecutionContext, req *backend.ExecutionRequest) (*OraclePlan, *backend.ExecutionResult, error) {
+	if req == nil {
+		return nil, nil, errors.New("execution request is nil")
+	}
+
 	var activeBackend = s.backend
 	if s.registry != nil && execCtx != nil && execCtx.Backend != "" {
 		if b, err := s.registry.Get(execCtx.Backend); err == nil && b != nil {
@@ -57,41 +70,41 @@ func (s *DefaultOracleStage) Execute(ctx context.Context, execCtx *engine.Execut
 	}
 
 	var rawOutput string
+	var execRes *backend.ExecutionResult
 	if activeBackend != nil {
-		res, err := activeBackend.Run(ctx, &backend.ExecutionRequest{
-			Role:      backend.RoleOracle,
-			Workspace: workspace,
-			Prompt:    oraclePrompt,
-		})
+		res, err := activeBackend.Run(ctx, req)
+		execRes = res
 		if err != nil {
-			return nil, fmt.Errorf("oracle backend error: %w", err)
+			return nil, execRes, fmt.Errorf("oracle backend error: %w", err)
 		}
-		rawOutput = res.Output
+		if res != nil {
+			rawOutput = res.Output
+		}
 	} else if s.runner != nil {
-		out, err := s.runner(ctx, workspace, oraclePrompt)
+		out, err := s.runner(ctx, req.Workspace, req.Prompt)
 		if err != nil {
-			return nil, fmt.Errorf("oracle runner error: %w", err)
+			return nil, nil, fmt.Errorf("oracle runner error: %w", err)
 		}
 		rawOutput = out
 	} else {
-		return nil, errors.New("oracle runner is nil")
+		return nil, nil, errors.New("oracle runner is nil")
 	}
 
 	jsonStr := extractJSON(rawOutput)
 	var plan OraclePlan
 	if err := json.Unmarshal([]byte(jsonStr), &plan); err != nil {
-		return nil, fmt.Errorf("oracle output invalid json: %w", err)
+		return nil, execRes, fmt.Errorf("oracle output invalid json: %w", err)
 	}
 
 	if strings.TrimSpace(plan.Goal) == "" {
-		return nil, errors.New("oracle plan missing goal")
+		return nil, execRes, errors.New("oracle plan missing goal")
 	}
 	if len(plan.Steps) == 0 {
-		return nil, errors.New("oracle plan steps cannot be empty")
+		return nil, execRes, errors.New("oracle plan steps cannot be empty")
 	}
 	for i, step := range plan.Steps {
 		if strings.TrimSpace(step) == "" {
-			return nil, fmt.Errorf("oracle plan step %d is empty", i+1)
+			return nil, execRes, fmt.Errorf("oracle plan step %d is empty", i+1)
 		}
 	}
 
@@ -100,7 +113,17 @@ func (s *DefaultOracleStage) Execute(ctx context.Context, execCtx *engine.Execut
 	}
 	plan.Metadata["stage"] = "oracle"
 
-	return &plan, nil
+	return &plan, execRes, nil
+}
+
+// Execute 執行 Oracle 分析並產出結構化計畫（向後相容入口）
+func (s *DefaultOracleStage) Execute(ctx context.Context, execCtx *engine.ExecutionContext) (*OraclePlan, error) {
+	req, err := s.Prepare(execCtx)
+	if err != nil {
+		return nil, err
+	}
+	plan, _, err := s.ExecutePrepared(ctx, execCtx, req)
+	return plan, err
 }
 
 // extractJSON 嘗試從輸出中抽取 JSON 內容

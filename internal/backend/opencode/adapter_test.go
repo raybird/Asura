@@ -3,10 +3,14 @@ package opencode
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"asura/internal/backend"
 )
 
 // TestINT001Unit 驗證 Adapter 對 OpenCode 輸出之事件串流解析與文字抽取能力 (INT-001 內迴圈)
@@ -825,5 +829,384 @@ func TestAdapter_CreateIsolatedReadOnlyConfigDir_SanitizesAndPersistsAuthJSON(t 
 	}
 }
 
+func TestAdapter_Run_UsagePreservedOnSuccessAndFailure(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake-opencode.sh")
+	scriptContent := `#!/bin/sh
+if [ "$1" = "--version" ]; then
+    echo "1.18.31"
+    exit 0
+fi
 
+if grep -q "FAIL_TRIGGER" <<EOF
+$*
+EOF
+then
+    echo '{"type":"step_start","timestamp":100,"sessionID":"ses_fail","part":{"type":"step-start"}}'
+    echo '{"type":"step_finish","timestamp":150,"sessionID":"ses_fail","part":{"reason":"stop","type":"step-finish","tokens":{"total":300,"input":250,"output":50,"reasoning":0,"cache":{"read":100,"write":0}}}}'
+    echo "something broke" >&2
+    exit 1
+fi
+
+echo '{"type":"step_start","timestamp":100,"sessionID":"ses_succ","part":{"type":"step-start"}}'
+echo '{"type":"text","timestamp":120,"sessionID":"ses_succ","part":{"type":"text","text":"Success response"}}'
+echo '{"type":"step_finish","timestamp":150,"sessionID":"ses_succ","part":{"reason":"stop","type":"step-finish","tokens":{"total":200,"input":180,"output":20,"reasoning":5,"cache":{"read":50,"write":0}}}}'
+exit 0
+`
+	if err := os.WriteFile(fakeScript, []byte(scriptContent), 0755); err != nil {
+		t.Fatalf("failed to write fake script: %v", err)
+	}
+
+	adapter := NewAdapter(AdapterConfig{
+		BinaryPath:      fakeScript,
+		ExpectedVersion: "1.18.31",
+	})
+	ctx := context.Background()
+
+	// 1. 成功路徑
+	resSuccess, err := adapter.Run(ctx, &backend.ExecutionRequest{
+		Role:      backend.RoleStriker,
+		Workspace: tmpDir,
+		Prompt:    "normal prompt",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error on success: %v", err)
+	}
+	if resSuccess.Usage == nil {
+		t.Fatalf("expected usage on success")
+	}
+	if resSuccess.Usage.InputTokens == nil || *resSuccess.Usage.InputTokens != 180 {
+		t.Errorf("expected InputTokens 180, got %v", resSuccess.Usage.InputTokens)
+	}
+	if resSuccess.Usage.OutputTokens == nil || *resSuccess.Usage.OutputTokens != 20 {
+		t.Errorf("expected OutputTokens 20, got %v", resSuccess.Usage.OutputTokens)
+	}
+	if resSuccess.Usage.TotalTokens == nil || *resSuccess.Usage.TotalTokens != 200 {
+		t.Errorf("expected TotalTokens 200, got %v", resSuccess.Usage.TotalTokens)
+	}
+	if resSuccess.Usage.CachedTokens == nil || *resSuccess.Usage.CachedTokens != 50 {
+		t.Errorf("expected CachedTokens 50, got %v", resSuccess.Usage.CachedTokens)
+	}
+	if resSuccess.Usage.ReasoningTokens == nil || *resSuccess.Usage.ReasoningTokens != 5 {
+		t.Errorf("expected ReasoningTokens 5, got %v", resSuccess.Usage.ReasoningTokens)
+	}
+	if resSuccess.UsageSource != backend.ProvenanceExact {
+		t.Errorf("expected UsageSource exact, got %s", resSuccess.UsageSource)
+	}
+
+	// 2. 失敗路徑 (FAIL_TRIGGER)
+	resFail, errFail := adapter.Run(ctx, &backend.ExecutionRequest{
+		Role:      backend.RoleStriker,
+		Workspace: tmpDir,
+		Prompt:    "FAIL_TRIGGER prompt",
+	})
+	if errFail == nil {
+		t.Fatalf("expected error on failure trigger, got nil")
+	}
+	if resFail == nil {
+		t.Fatalf("expected non-nil ExecutionResult even on failure")
+	}
+	if resFail.Usage == nil {
+		t.Fatalf("expected usage to be preserved even on execution failure")
+	}
+	if resFail.Usage.InputTokens == nil || *resFail.Usage.InputTokens != 250 {
+		t.Errorf("expected InputTokens 250 on failure, got %v", resFail.Usage.InputTokens)
+	}
+	if resFail.Usage.OutputTokens == nil || *resFail.Usage.OutputTokens != 50 {
+		t.Errorf("expected OutputTokens 50 on failure, got %v", resFail.Usage.OutputTokens)
+	}
+	if resFail.Usage.TotalTokens == nil || *resFail.Usage.TotalTokens != 300 {
+		t.Errorf("expected TotalTokens 300 on failure, got %v", resFail.Usage.TotalTokens)
+	}
+	if resFail.Usage.CachedTokens == nil || *resFail.Usage.CachedTokens != 100 {
+		t.Errorf("expected CachedTokens 100 on failure, got %v", resFail.Usage.CachedTokens)
+	}
+	if resFail.UsageSource != backend.ProvenanceExact {
+		t.Errorf("expected UsageSource exact on failure, got %s", resFail.UsageSource)
+	}
+}
+
+func TestAdapter_Run_UsageNullablePresenceCases(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	tmpDir := t.TempDir()
+
+	t.Run("Case 1: 原生事件完全沒有 cache 欄位", func(t *testing.T) {
+		fakeBin := filepath.Join(tmpDir, "fake_opencode_no_cache")
+		script := `#!/bin/sh
+if [ "$1" = "--version" ]; then
+    echo "1.18.23"
+    exit 0
+fi
+echo '{"type":"step_finish","part":{"type":"step-finish","tokens":{"total":1500,"input":1450,"output":50,"reasoning":0}}}'
+echo '{"type":"text","part":{"type":"text","text":"Done"}}'
+exit 0
+`
+		if err := os.WriteFile(fakeBin, []byte(script), 0755); err != nil {
+			t.Fatalf("write fake binary failed: %v", err)
+		}
+
+		adapter := NewAdapter(AdapterConfig{
+			BinaryPath:      fakeBin,
+			ExpectedVersion: "1.18.23",
+			Role:            RoleStriker,
+		})
+
+		res, err := adapter.Run(ctx, &backend.ExecutionRequest{
+			Role:      backend.RoleStriker,
+			Workspace: tmpDir,
+			Prompt:    "test no cache",
+		})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if res.Usage == nil {
+			t.Fatalf("expected non-nil usage")
+		}
+		if res.Usage.InputTokens == nil || *res.Usage.InputTokens != 1450 {
+			t.Errorf("expected InputTokens 1450, got %v", res.Usage.InputTokens)
+		}
+		if res.Usage.OutputTokens == nil || *res.Usage.OutputTokens != 50 {
+			t.Errorf("expected OutputTokens 50, got %v", res.Usage.OutputTokens)
+		}
+		if res.Usage.TotalTokens == nil || *res.Usage.TotalTokens != 1500 {
+			t.Errorf("expected TotalTokens 1500, got %v", res.Usage.TotalTokens)
+		}
+		if res.Usage.ReasoningTokens == nil || *res.Usage.ReasoningTokens != 0 {
+			t.Errorf("expected ReasoningTokens 0, got %v", res.Usage.ReasoningTokens)
+		}
+		// 關鍵驗證：Cache 未提供時必須為 nil，絕不可偽造為 &0
+		if res.Usage.CachedTokens != nil {
+			t.Errorf("expected CachedTokens to be nil when omitted in events, got %v", *res.Usage.CachedTokens)
+		}
+	})
+
+	t.Run("Case 2: 原生事件明確回報 input 為 0", func(t *testing.T) {
+		fakeBin := filepath.Join(tmpDir, "fake_opencode_zero_input")
+		script := `#!/bin/sh
+if [ "$1" = "--version" ]; then
+    echo "1.18.23"
+    exit 0
+fi
+echo '{"type":"step_finish","part":{"type":"step-finish","tokens":{"total":10,"input":0,"output":10,"reasoning":0}}}'
+echo '{"type":"text","part":{"type":"text","text":"Done"}}'
+exit 0
+`
+		if err := os.WriteFile(fakeBin, []byte(script), 0755); err != nil {
+			t.Fatalf("write fake binary failed: %v", err)
+		}
+
+		adapter := NewAdapter(AdapterConfig{
+			BinaryPath:      fakeBin,
+			ExpectedVersion: "1.18.23",
+			Role:            RoleStriker,
+		})
+
+		res, err := adapter.Run(ctx, &backend.ExecutionRequest{
+			Role:      backend.RoleStriker,
+			Workspace: tmpDir,
+			Prompt:    "test zero input",
+		})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if res.Usage == nil {
+			t.Fatalf("expected non-nil usage even when input is 0")
+		}
+		// 關鍵驗證：input: 0 必須保留為 &0，不可誤認成缺失 nil
+		if res.Usage.InputTokens == nil {
+			t.Fatalf("expected non-nil InputTokens when explicitly reported 0")
+		}
+		if *res.Usage.InputTokens != 0 {
+			t.Errorf("expected InputTokens 0, got %d", *res.Usage.InputTokens)
+		}
+	})
+
+	t.Run("Case 3: 多個 step 只有部分 step 回報 cache 欄位", func(t *testing.T) {
+		fakeBin := filepath.Join(tmpDir, "fake_opencode_partial_cache")
+		script := `#!/bin/sh
+if [ "$1" = "--version" ]; then
+    echo "1.18.23"
+    exit 0
+fi
+# step 1: 無 cache 欄位
+echo '{"type":"step_finish","part":{"type":"step-finish","tokens":{"total":100,"input":90,"output":10,"reasoning":0}}}'
+# step 2: 有 cache 欄位
+echo '{"type":"step_finish","part":{"type":"step-finish","tokens":{"total":200,"input":180,"output":20,"reasoning":0,"cache":{"write":0,"read":50}}}}'
+echo '{"type":"text","part":{"type":"text","text":"Done"}}'
+exit 0
+`
+		if err := os.WriteFile(fakeBin, []byte(script), 0755); err != nil {
+			t.Fatalf("write fake binary failed: %v", err)
+		}
+
+		adapter := NewAdapter(AdapterConfig{
+			BinaryPath:      fakeBin,
+			ExpectedVersion: "1.18.23",
+			Role:            RoleStriker,
+		})
+
+		res, err := adapter.Run(ctx, &backend.ExecutionRequest{
+			Role:      backend.RoleStriker,
+			Workspace: tmpDir,
+			Prompt:    "test partial cache",
+		})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if res.Usage == nil {
+			t.Fatalf("expected non-nil usage")
+		}
+		// 兩個 step 均有 input, output, total, reasoning -> 累加
+		if res.Usage.InputTokens == nil || *res.Usage.InputTokens != 270 {
+			t.Errorf("expected total InputTokens 270, got %v", res.Usage.InputTokens)
+		}
+		if res.Usage.OutputTokens == nil || *res.Usage.OutputTokens != 30 {
+			t.Errorf("expected total OutputTokens 30, got %v", res.Usage.OutputTokens)
+		}
+		if res.Usage.TotalTokens == nil || *res.Usage.TotalTokens != 300 {
+			t.Errorf("expected total TotalTokens 300, got %v", res.Usage.TotalTokens)
+		}
+		// 關鍵驗證：cache 在 step 1 缺失，不可把 step 2 的 50 當作整個 Stage 的完整 exact 總量，必須為 nil (unknown)
+		if res.Usage.CachedTokens != nil {
+			t.Errorf("expected CachedTokens to be nil when partially missing across steps, got %v", *res.Usage.CachedTokens)
+		}
+	})
+}
+
+// TestAdapter_Run_LargeJSONLEvent_PreservesUsage 驗證大於 64 KiB（例如 75 KiB 工具輸出）之合法事件能完整解析，後續 step_finish 不遺失且 usage 精確保留
+func TestAdapter_Run_LargeJSONLEvent_PreservesUsage(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake-opencode-large.sh")
+
+	// 生成 > 64 KiB（約 75 KiB）的工具輸出字串
+	largeOutput := strings.Repeat("A", 75000)
+
+	scriptContent := fmt.Sprintf(`#!/usr/bin/env bash
+if [ "$1" = "--version" ]; then
+    echo "1.18.31"
+    exit 0
+fi
+
+# 第 1 行：正常 text event
+echo '{"type":"step_start","timestamp":100,"sessionID":"ses_large","part":{"type":"step-start"}}'
+echo '{"type":"text","timestamp":110,"sessionID":"ses_large","part":{"type":"text","text":"OK"}}'
+# 第 2 行：大於 64 KiB 的合法 tool event
+echo '{"type":"tool_use","timestamp":120,"sessionID":"ses_large","part":{"type":"tool","tool":"bash","state":{"status":"completed","output":"%s"}}}'
+# 第 3 行：step_finish，內含完整 token usage
+echo '{"type":"step_finish","timestamp":130,"sessionID":"ses_large","part":{"reason":"stop","type":"step-finish","tokens":{"total":250,"input":200,"output":50,"reasoning":10,"cache":{"read":100,"write":0}}}}'
+exit 0
+`, largeOutput)
+
+	if err := os.WriteFile(fakeScript, []byte(scriptContent), 0755); err != nil {
+		t.Fatalf("failed to write fake script: %v", err)
+	}
+
+	adapter := NewAdapter(AdapterConfig{
+		BinaryPath:      fakeScript,
+		ExpectedVersion: "1.18.31",
+	})
+	ctx := context.Background()
+
+	res, err := adapter.Run(ctx, &backend.ExecutionRequest{
+		Role:      backend.RoleStriker,
+		Workspace: tmpDir,
+		Prompt:    "test large event",
+	})
+	if err != nil {
+		t.Fatalf("Run failed on large event: %v", err)
+	}
+	if res.Output != "OK" {
+		t.Errorf("expected Output 'OK', got %q", res.Output)
+	}
+	if res.Usage == nil {
+		t.Fatalf("expected non-nil usage when large event is followed by step_finish")
+	}
+	if res.Usage.TotalTokens == nil || *res.Usage.TotalTokens != 250 {
+		t.Errorf("expected TotalTokens 250, got %v", res.Usage.TotalTokens)
+	}
+	if res.Usage.InputTokens == nil || *res.Usage.InputTokens != 200 {
+		t.Errorf("expected InputTokens 200, got %v", res.Usage.InputTokens)
+	}
+	if res.Usage.OutputTokens == nil || *res.Usage.OutputTokens != 50 {
+		t.Errorf("expected OutputTokens 50, got %v", res.Usage.OutputTokens)
+	}
+	if res.Usage.CachedTokens == nil || *res.Usage.CachedTokens != 100 {
+		t.Errorf("expected CachedTokens 100, got %v", res.Usage.CachedTokens)
+	}
+	if res.UsageSource != backend.ProvenanceExact {
+		t.Errorf("expected UsageSource exact, got %s", res.UsageSource)
+	}
+}
+
+// TestAdapter_Run_OversizedJSONLEvent_ReturnsScannerError 驗證若事件超過 4MB 上限，必須明確回傳 scanner error，不得靜默假成功
+func TestAdapter_Run_OversizedJSONLEvent_ReturnsScannerError(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake-opencode-oversized.sh")
+
+	// 生成 > 4 MiB（約 4.5 MiB）的超大事件行
+	oversizedOutput := strings.Repeat("B", 4600000)
+
+	scriptContent := fmt.Sprintf(`#!/usr/bin/env bash
+if [ "$1" = "--version" ]; then
+    echo "1.18.31"
+    exit 0
+fi
+
+echo '{"type":"step_start","timestamp":100,"sessionID":"ses_over","part":{"type":"step-start"}}'
+echo '{"type":"text","timestamp":110,"sessionID":"ses_over","part":{"type":"text","text":"Partial Text"}}'
+echo '{"type":"tool_use","timestamp":120,"sessionID":"ses_over","part":{"type":"tool","tool":"bash","state":{"status":"completed","output":"%s"}}}'
+echo '{"type":"step_finish","timestamp":130,"sessionID":"ses_over","part":{"reason":"stop","type":"step-finish","tokens":{"total":250,"input":200,"output":50,"cache":{"read":100,"write":0}}}}'
+exit 0
+`, oversizedOutput)
+
+	if err := os.WriteFile(fakeScript, []byte(scriptContent), 0755); err != nil {
+		t.Fatalf("failed to write fake script: %v", err)
+	}
+
+	adapter := NewAdapter(AdapterConfig{
+		BinaryPath:      fakeScript,
+		ExpectedVersion: "1.18.31",
+	})
+	ctx := context.Background()
+
+	res, err := adapter.Run(ctx, &backend.ExecutionRequest{
+		Role:      backend.RoleStriker,
+		Workspace: tmpDir,
+		Prompt:    "test oversized event",
+	})
+	if err == nil {
+		t.Fatalf("expected error on oversized event (> 4MB), got nil (silent success forbidden)")
+	}
+	if res == nil {
+		t.Fatalf("expected non-nil ExecutionResult even on scanner failure")
+	}
+	if res.FailureClass != backend.FailureExecution {
+		t.Errorf("expected FailureClass FailureExecution, got %s", res.FailureClass)
+	}
+	if !strings.Contains(err.Error(), "stdout scanner error") {
+		t.Errorf("expected 'stdout scanner error' in error message, got %v", err)
+	}
+	if res.PartialOutput != "Partial Text" {
+		t.Errorf("expected PartialOutput 'Partial Text', got %q", res.PartialOutput)
+	}
+}
+
+// TestAdapter_ExtractResultFromEvents_LargeOutput 驗證 ExtractResultFromEvents 支援 > 64 KiB 之大事件
+func TestAdapter_ExtractResultFromEvents_LargeOutput(t *testing.T) {
+	largeText := strings.Repeat("Hello World! ", 6000) // ~78 KiB
+	jsonl := fmt.Sprintf(`{"type":"text","part":{"text":"Start: "}}
+{"type":"tool_use","part":{"tool":"bash","state":{"output":"%s"}}}
+{"type":"text","part":{"text":"End"}}`, largeText)
+
+	adapter := NewAdapter(AdapterConfig{})
+	res, err := adapter.ExtractResultFromEvents(jsonl)
+	if err != nil {
+		t.Fatalf("unexpected error for large events in ExtractResultFromEvents: %v", err)
+	}
+	if !strings.Contains(res, "Start:") || !strings.Contains(res, "End") {
+		t.Errorf("unexpected extracted result: %q", res)
+	}
+}
 

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"asura/internal/backend"
+	"asura/internal/contextwin"
 	"asura/internal/engine"
 )
 
@@ -13,6 +15,19 @@ type mockOracleStage struct {
 	err       error
 	callCount int
 	onCall    func()
+}
+
+func (m *mockOracleStage) Prepare(execCtx *engine.ExecutionContext) (*backend.ExecutionRequest, error) {
+	p := ""
+	if execCtx != nil {
+		p = execCtx.OriginalPrompt
+	}
+	return &backend.ExecutionRequest{Role: backend.RoleOracle, Prompt: p}, nil
+}
+
+func (m *mockOracleStage) ExecutePrepared(ctx context.Context, execCtx *engine.ExecutionContext, req *backend.ExecutionRequest) (*OraclePlan, *backend.ExecutionResult, error) {
+	plan, err := m.Execute(ctx, execCtx)
+	return plan, nil, err
 }
 
 func (m *mockOracleStage) Execute(ctx context.Context, execCtx *engine.ExecutionContext) (*OraclePlan, error) {
@@ -27,10 +42,27 @@ func (m *mockOracleStage) Execute(ctx context.Context, execCtx *engine.Execution
 }
 
 type mockStrikerStage struct {
-	output    string
-	err       error
-	callCount int
-	onCall    func()
+	output      string
+	err         error
+	callCount   int
+	onCall      func()
+	PrepareFunc func(execCtx *engine.ExecutionContext, plan *OraclePlan) (*backend.ExecutionRequest, error)
+}
+
+func (m *mockStrikerStage) Prepare(execCtx *engine.ExecutionContext, plan *OraclePlan) (*backend.ExecutionRequest, error) {
+	if m.PrepareFunc != nil {
+		return m.PrepareFunc(execCtx, plan)
+	}
+	p := ""
+	if execCtx != nil {
+		p = execCtx.OriginalPrompt
+	}
+	return &backend.ExecutionRequest{Role: backend.RoleStriker, Prompt: p}, nil
+}
+
+func (m *mockStrikerStage) ExecutePrepared(ctx context.Context, execCtx *engine.ExecutionContext, req *backend.ExecutionRequest) (string, *backend.ExecutionResult, error) {
+	out, err := m.Execute(ctx, execCtx, nil)
+	return out, nil, err
 }
 
 func (m *mockStrikerStage) Execute(ctx context.Context, execCtx *engine.ExecutionContext, plan *OraclePlan) (string, error) {
@@ -49,6 +81,19 @@ type mockCriticStage struct {
 	err       error
 	callCount int
 	onCall    func()
+}
+
+func (m *mockCriticStage) Prepare(execCtx *engine.ExecutionContext, plan *OraclePlan, strikerOutput string) (*backend.ExecutionRequest, error) {
+	p := ""
+	if execCtx != nil {
+		p = execCtx.OriginalPrompt
+	}
+	return &backend.ExecutionRequest{Role: backend.RoleCritic, Prompt: p}, nil
+}
+
+func (m *mockCriticStage) ExecutePrepared(ctx context.Context, execCtx *engine.ExecutionContext, req *backend.ExecutionRequest) (*CriticReview, *backend.ExecutionResult, error) {
+	rev, err := m.Execute(ctx, execCtx, nil, "")
+	return rev, nil, err
 }
 
 func (m *mockCriticStage) Execute(ctx context.Context, execCtx *engine.ExecutionContext, plan *OraclePlan, strikerOutput string) (*CriticReview, error) {
@@ -279,3 +324,129 @@ func TestOrchestrator_DirectMode(t *testing.T) {
 		t.Errorf("expected 1 model call in direct mode, got %d", trace.ModelCalls)
 	}
 }
+
+func TestOrchestrator_ContextBudget_RejectFailClosed(t *testing.T) {
+	oracle := &mockOracleStage{plan: &OraclePlan{Goal: "Refactor"}}
+	striker := &mockStrikerStage{output: "direct output"}
+	critic := &mockCriticStage{review: &CriticReview{Verdict: VerdictPass}}
+
+	orc := NewOrchestrator(oracle, striker, critic).WithContextBudget(contextwin.Config{
+		ContextLimit: 5, // 極低上限，必超量
+		Policy:       contextwin.PolicyReject,
+	})
+
+	execCtx := &engine.ExecutionContext{OriginalPrompt: "this is a relatively long prompt to exceed 5 tokens limit"}
+
+	output, trace, err := orc.Execute(context.Background(), ModeDirect, execCtx)
+	if err == nil {
+		t.Fatalf("expected context limit exceeded error, got nil")
+	}
+	if output != "" {
+		t.Errorf("expected empty output on reject, got %q", output)
+	}
+	if striker.callCount != 0 {
+		t.Errorf("fail-closed violation: striker was called %d times, expected 0", striker.callCount)
+	}
+	if trace == nil {
+		t.Fatalf("expected trace to be returned")
+	}
+	if trace.ModelCalls != 0 {
+		t.Errorf("expected ModelCalls=0 on preflight reject, got %d", trace.ModelCalls)
+	}
+	if len(trace.Stages) != 1 {
+		t.Fatalf("expected 1 stage trace, got %d", len(trace.Stages))
+	}
+	st := trace.Stages[0]
+	if st.Status != StageFailed {
+		t.Errorf("expected stage status failed, got %s", st.Status)
+	}
+	if st.Admission == nil || st.Admission.Verdict != contextwin.VerdictRejected {
+		t.Errorf("expected admission verdict rejected, got %+v", st.Admission)
+	}
+}
+
+func TestOrchestrator_ThreeFace_StrikerRejectPreservesOracle(t *testing.T) {
+	oracle := &mockOracleStage{
+		plan: &OraclePlan{Goal: "Analyze architecture"},
+	}
+	striker := &mockStrikerStage{output: "striker output"}
+	critic := &mockCriticStage{review: &CriticReview{Verdict: VerdictPass}}
+
+	// 客製准入引擎：oracle 准入通過，striker 准入拒絕
+	cat := contextwin.NewStaticCatalog()
+	est := contextwin.NewHeuristicEstimator(0.20)
+	admEngine := contextwin.NewAdmissionEngine(cat, est)
+
+	orc := NewOrchestrator(oracle, striker, critic).
+		WithAdmissionEngine(admEngine).
+		WithContextBudget(contextwin.Config{
+			ContextLimit: 10, // 讓 2 tokens 的 oracle 通過，長 prompt 在 striker 超量
+			Policy:       contextwin.PolicyReject,
+		})
+
+	execCtx := &engine.ExecutionContext{
+		OriginalPrompt: "A", // 很短，~2 tokens，小於 limit 10
+	}
+
+	// 覆寫 striker mock 的 Prepare 讓其產生超長 Prompt (約 100+ tokens，遠大於 limit 10)
+	striker.PrepareFunc = func(execCtx *engine.ExecutionContext, plan *OraclePlan) (*backend.ExecutionRequest, error) {
+		return &backend.ExecutionRequest{
+			Role:   backend.RoleStriker,
+			Prompt: "This is a very long striker prompt designed to definitely exceed the context limit of 10 tokens by having plenty of characters in English text.",
+		}, nil
+	}
+
+	output, trace, err := orc.Execute(context.Background(), ModeThreeFace, execCtx)
+	if err == nil {
+		t.Fatalf("expected context limit exceeded error, got nil")
+	}
+	if output != "" {
+		t.Errorf("expected empty striker output, got %q", output)
+	}
+	if oracle.callCount != 1 {
+		t.Errorf("expected oracle called exactly once, got %d", oracle.callCount)
+	}
+	if striker.callCount != 0 {
+		t.Errorf("fail-closed violation: striker called %d times on reject, expected 0", striker.callCount)
+	}
+	if critic.callCount != 0 {
+		t.Errorf("critic should not be called when striker is rejected, got %d", critic.callCount)
+	}
+	if trace == nil {
+		t.Fatalf("expected trace to be preserved")
+	}
+	if trace.OraclePlan == nil || trace.OraclePlan.Goal != "Analyze architecture" {
+		t.Errorf("expected oracle plan to be preserved in trace, got %+v", trace.OraclePlan)
+	}
+	if trace.ModelCalls != 1 {
+		t.Errorf("expected ModelCalls=1 (only oracle), got %d", trace.ModelCalls)
+	}
+}
+
+func TestOrchestrator_ContextBudget_ObserveWarningContinues(t *testing.T) {
+	oracle := &mockOracleStage{plan: &OraclePlan{Goal: "Refactor"}}
+	striker := &mockStrikerStage{output: "observed output"}
+	critic := &mockCriticStage{review: &CriticReview{Verdict: VerdictPass}}
+
+	orc := NewOrchestrator(oracle, striker, critic).WithContextBudget(contextwin.Config{
+		ContextLimit: 5, // 超量
+		Policy:       contextwin.PolicyObserve, // observe 模式不中斷
+	})
+
+	execCtx := &engine.ExecutionContext{OriginalPrompt: "this is a prompt that exceeds 5 tokens"}
+
+	output, trace, err := orc.Execute(context.Background(), ModeDirect, execCtx)
+	if err != nil {
+		t.Fatalf("unexpected error in observe mode: %v", err)
+	}
+	if output != "observed output" {
+		t.Errorf("expected 'observed output', got %q", output)
+	}
+	if striker.callCount != 1 {
+		t.Errorf("expected striker called once, got %d", striker.callCount)
+	}
+	if trace.Stages[0].Admission == nil || trace.Stages[0].Admission.Verdict != contextwin.VerdictWarning {
+		t.Errorf("expected warning verdict, got %+v", trace.Stages[0].Admission)
+	}
+}
+
