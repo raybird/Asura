@@ -30,4 +30,4 @@
 - benchmark 是固定合成資料的單機結果，非 worst-case／線上 SLA；SQL 回傳量受限不代表底層磁碟 I/O 完全固定。
 - restart 沿用既有 failed-on-interruption，不新增自動重新執行。測試以持久化 queued fixture 模擬中斷後真實 Start，未強制 kill 測試主程序。
 - query deadline 用真實 SQLite 遞迴 view 造成慢查詢，不 mock 選取或儲存；成功後同一 store 可執行 off 任務。
-- 獨立 review 尚待持久化；本紀錄不是獨立審查報告。
+- 2026-09-22 [獨立 review PASS](../review-a4831a1.md) 已持久化；本紀錄仍僅為實作驗證證據。

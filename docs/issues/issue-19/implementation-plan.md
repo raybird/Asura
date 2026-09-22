@@ -30,15 +30,15 @@
 - 純格式化共用重構：前後相同 characterization tests；產品行為新增先 red，再實作、green、code-simplify/no-op。
 - 壓力：固定 10001 筆、1 MiB 單筆、最大 metadata、最大 query；記錄資料量、SQL、bytes、elapsed、配置、環境與結果。deadline 注入可控制取消條件，驗證後續查詢成功；不把極短 wall-time 偶然成功當 timeout 測試。
 - 交付命令：`go vet ./...`、`go test -count=1 -race ./...`、`go build -o /tmp/asura-issue19 ./cmd/asura`。涵蓋既有 CTXMEM／CTXWIN／TFACE／MBACK／CRON／WEB、PGID cancel 與 redelivery。
-- 2026-09-22：產品紅綠及交付命令證據見下方 Task；獨立 review 尚待完成。
+- 2026-09-22：產品紅綠及交付命令證據見下方 Task；獨立 review 已 PASS。
 
 ## 檢查清單
 
 - [x] 已依 Large/High 分別評估；四份文件各有實際用途。
-- [x] 涉及檔案與風險僅在 README 維護；待核准表覆蓋全部十個 Scenario。
-- [x] 探測已持久化命令、環境、結果與限制；無 production code 變更。
+- [x] 涉及檔案與風險僅在 README 維護；核准表覆蓋全部十個 Scenario。
+- [x] 探測已持久化命令、環境、結果與限制；後續產品實作證據另見各 Task。
 - [x] TBD-1～5 於 2026-09-22 核准；基線 aeaa652。
-- [ ] decompose、紅綠驗證、精煉、提交、PR 與獨立 review。
+- [x] decompose、紅綠驗證、精煉、提交、PR 與獨立 review；2026-09-22 等待合併。
 
 ## Phase 1 — 有界儲存與安全刻畫
 ### Task 1.1 — 候選查詢
@@ -77,5 +77,5 @@
 - 責任驗收：RECALL-008、010。
 - 完成判準：動態 overrun 保留 trace、無額外呼叫、vet/race/build、code-simplify 與獨立 review。
 - 驗證：真實 orchestrator＋recording backend；全套回歸；文件靜態檢查。
-- 狀態：⏳ 實作／驗證／文件完成；待 PR 與獨立 review。
+- 狀態：✅ 已完成；2026-09-22 [PR #20](https://github.com/raybird/Asura/pull/20) 已建立，[獨立審查 PASS](review-a4831a1.md)。文件收尾新提交另核對 review 有效性。
 - 證據：2026-09-22 [交付驗證](evidence/verification.md) 與 [命令紀錄](evidence/implementation.log)。

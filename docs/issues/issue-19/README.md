@@ -13,6 +13,8 @@
 - [權威實作計畫](implementation-plan.md)
 - [探測證據](evidence/probe-results.md)
 - [實作驗證](evidence/verification.md)
+- [獨立審查](review-a4831a1.md)
+- [PR #20](https://github.com/raybird/Asura/pull/20)
 
 ## 關鍵差異
 
@@ -177,6 +179,7 @@ Feature: 明確啟用且有界的專案記憶召回
 
 | 日期 | 異動 | 負責人 |
 |---|---|---|
+| 2026-09-22 | 實作與驗證完成；獨立 review PASS，建立 PR #20，等待合併 | Codex |
 | 2026-09-22 | 使用者核准 D1–D5 與全部十個 Scenario | 使用者 |
 | 2026-09-22 | 依 #19 授權建立現況分析、探測及待核准規格；尚未授權產品實作 | Codex |
 
@@ -184,4 +187,4 @@ Feature: 明確啟用且有界的專案記憶召回
 **建立日期**: 2026-09-22  
 **分級**: Large — 涉及儲存、Daemon、CLI 與 execution context 邊界  
 **風險**: High — 資料隔離、成本及冪等性  
-**狀態**: 實作中
+**狀態**: 等待合併
