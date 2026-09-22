@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"asura/internal/daemon"
+	"asura/internal/engine"
 	"asura/internal/pipeline"
 	"asura/internal/storage"
 )
@@ -67,6 +68,13 @@ func handleStatus(args []string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintf(stdout, "Workspace: %s\n", task.Workspace)
 	fmt.Fprintf(stdout, "Prompt:    %s\n", task.Prompt)
+	if task.ResolvedContext != "" {
+		var sealed engine.ExecutionContext
+		if err := json.Unmarshal([]byte(task.ResolvedContext), &sealed); err == nil && sealed.Recall != nil {
+			encoded, _ := json.Marshal(sealed.Recall)
+			fmt.Fprintf(stdout, "Recall:    %s\n", encoded)
+		}
+	}
 	if task.PipelineTrace != "" {
 		var trace pipeline.PipelineTrace
 		if err := json.Unmarshal([]byte(task.PipelineTrace), &trace); err == nil && len(trace.Stages) > 0 {

@@ -25,3 +25,5 @@
 資料模型沒有 embedding、importance、更新時間；不得假設存在。分析文件建立原因：現況授權、指紋、sealed context 與預算組裝須讀程式才能確認；技術分析另有文字排序與索引方案的實質取捨。
 
 涉及檔案與風險唯一來源見 [README](README.md)。
+
+2026-09-22 補充確認：Daemon.Start 會透過 RecoverInterruptedTasks 將 pending／queued／running／cancelling 遺留任務標為 failed，保留 resolved_context，不自動重跑。本期 RECALL-007 沿用此既有恢復流程。

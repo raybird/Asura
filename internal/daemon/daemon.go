@@ -27,6 +27,7 @@ import (
 	"asura/internal/cron"
 	"asura/internal/engine"
 	"asura/internal/pipeline"
+	"asura/internal/recall"
 	"asura/internal/storage"
 )
 
@@ -441,20 +442,21 @@ type CronAddRequest struct {
 
 // IPCRequest 定義用戶端提交之請求
 type IPCRequest struct {
-	Action     string          `json:"action,omitempty"`
-	RequestID  string          `json:"request_id,omitempty"`
-	TaskID     string          `json:"task_id,omitempty"`
-	Workspace  string          `json:"workspace,omitempty"`
-	Prompt     string          `json:"prompt,omitempty"`
-	Class      TaskClass       `json:"class,omitempty"`
-	CronID     string          `json:"cron_id,omitempty"`
-	CronAddReq *CronAddRequest `json:"cron_add_req,omitempty"`
-	Limit      int             `json:"limit,omitempty"`
-	MemoryID   string          `json:"memory_id,omitempty"`
-	Content    string          `json:"content,omitempty"`
-	MemoryIDs  []string        `json:"memory_ids,omitempty"`
-	Mode       string          `json:"mode,omitempty"`
-	Backend    string          `json:"backend,omitempty"`
+	MemoryRecall string          `json:"memory_recall,omitempty"`
+	Action       string          `json:"action,omitempty"`
+	RequestID    string          `json:"request_id,omitempty"`
+	TaskID       string          `json:"task_id,omitempty"`
+	Workspace    string          `json:"workspace,omitempty"`
+	Prompt       string          `json:"prompt,omitempty"`
+	Class        TaskClass       `json:"class,omitempty"`
+	CronID       string          `json:"cron_id,omitempty"`
+	CronAddReq   *CronAddRequest `json:"cron_add_req,omitempty"`
+	Limit        int             `json:"limit,omitempty"`
+	MemoryID     string          `json:"memory_id,omitempty"`
+	Content      string          `json:"content,omitempty"`
+	MemoryIDs    []string        `json:"memory_ids,omitempty"`
+	Mode         string          `json:"mode,omitempty"`
+	Backend      string          `json:"backend,omitempty"`
 }
 
 // IPCResponse 定義傳回用戶端之結果
@@ -566,6 +568,14 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				canonicalWs = d.canonicalWorkspace(req.Workspace)
 			}
 
+			if req.MemoryRecall == "off" {
+				req.MemoryRecall = ""
+			}
+			if req.MemoryRecall != "" && req.MemoryRecall != "bounded" {
+				_ = encoder.Encode(IPCResponse{Error: "invalid memory recall mode"})
+				continue
+			}
+
 			// 記憶 ID 去重並排序，定義 Set 語意，確保 fingerprint、解析、snapshot 與 Prompt 順序 100% 一致 (MUST FIX 2)
 			if len(req.MemoryIDs) > 0 {
 				req.MemoryIDs = normalizeMemoryIDs(req.MemoryIDs)
@@ -588,6 +598,9 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			// 計算請求 Fingerprint 確保同 Request ID 之 payload 一致性（防止撞 PK 或錯置，CTXMEM-004, TFACE-009, MBACK-004）
 			// 遵循 MUST FIX 1：使用 canonicalWs 作為 fingerprint workspace
 			fp := calculateTaskFingerprint(canonicalWs, req.Prompt, reqMode, req.MemoryIDs, backendID)
+			if req.MemoryRecall == "bounded" {
+				fp = recallFingerprint(canonicalWs, req.Prompt, reqMode, req.MemoryIDs, backendID)
+			}
 
 			// 遵循 INT-004-REDELIVERY 與 CTXMEM-004：同 RequestID 且非 Cancelled 任務時直接回傳既有密封任務，不重新查詢底層記憶
 			if req.RequestID != "" {
@@ -624,6 +637,19 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				}
 			}
 
+			var recallDecision *recall.Decision
+			memoryRefs := req.MemoryIDs
+			if req.MemoryRecall == "bounded" {
+				selected, err := d.recallMemories(canonicalWs, req.Prompt, reqMode, req.MemoryIDs, resolvedMemories)
+				if err != nil {
+					_ = encoder.Encode(IPCResponse{Error: "memory recall unavailable"})
+					continue
+				}
+				recallDecision = &selected.Decision
+				resolvedMemories = append(resolvedMemories, selected.Memories...)
+				memoryRefs = append(append([]string{}, req.MemoryIDs...), selected.Decision.AutoIDs...)
+			}
+
 			// 遵循 SCN-004 與 INT-003：檢查全域容量上限（Worker 執行槽位 + 佇列排隊槽位）
 			if !d.tryAcquireCapacity() {
 				_ = encoder.Encode(IPCResponse{Error: ErrCapacityExceeded.Error()})
@@ -640,7 +666,7 @@ func (d *Daemon) handleConn(conn net.Conn) {
 
 			var execCtx *engine.ExecutionContext
 			var resolvedCtxJSON string
-			if len(resolvedMemories) > 0 {
+			if len(resolvedMemories) > 0 || recallDecision != nil {
 				snapshots := make([]engine.ProjectMemorySnapshot, 0, len(resolvedMemories))
 				for _, m := range resolvedMemories {
 					snapshots = append(snapshots, engine.ProjectMemorySnapshot{
@@ -656,7 +682,8 @@ func (d *Daemon) handleConn(conn net.Conn) {
 					Workspace:       canonicalWs,
 					Backend:         backendID,
 					ProjectMemories: snapshots,
-					MemoryRefs:      req.MemoryIDs,
+					Recall:          recallDecision,
+					MemoryRefs:      memoryRefs,
 					CreatedAt:       now,
 				}
 				raw, err := json.Marshal(execCtx)
@@ -685,7 +712,7 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				Class:           string(taskClass),
 				ExecutionMode:   reqMode,
 				Backend:         backendID,
-				MemoryRefs:      req.MemoryIDs,
+				MemoryRefs:      memoryRefs,
 				ResolvedContext: resolvedCtxJSON,
 				CreatedAt:       now,
 				UpdatedAt:       now,
@@ -1170,13 +1197,14 @@ func (c *Client) Submit(ctx context.Context, req engine.SubmitRequest) (*storage
 	decoder := json.NewDecoder(c.conn)
 
 	if err := encoder.Encode(IPCRequest{
-		Action:    "submit",
-		RequestID: req.ID,
-		Workspace: req.Workspace,
-		Prompt:    req.Prompt,
-		Mode:      req.Mode,
-		Backend:   req.Backend,
-		MemoryIDs: req.MemoryIDs,
+		Action:       "submit",
+		RequestID:    req.ID,
+		Workspace:    req.Workspace,
+		Prompt:       req.Prompt,
+		Mode:         req.Mode,
+		Backend:      req.Backend,
+		MemoryIDs:    req.MemoryIDs,
+		MemoryRecall: req.MemoryRecall,
 	}); err != nil {
 		return nil, fmt.Errorf("encode request: %w", err)
 	}

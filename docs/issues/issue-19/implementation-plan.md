@@ -30,14 +30,14 @@
 - 純格式化共用重構：前後相同 characterization tests；產品行為新增先 red，再實作、green、code-simplify/no-op。
 - 壓力：固定 10001 筆、1 MiB 單筆、最大 metadata、最大 query；記錄資料量、SQL、bytes、elapsed、配置、環境與結果。deadline 注入可控制取消條件，驗證後續查詢成功；不把極短 wall-time 偶然成功當 timeout 測試。
 - 交付命令：`go vet ./...`、`go test -count=1 -race ./...`、`go build -o /tmp/asura-issue19 ./cmd/asura`。涵蓋既有 CTXMEM／CTXWIN／TFACE／MBACK／CRON／WEB、PGID cancel 與 redelivery。
-- 本階段只有規劃與探測，沒有產品紅綠或獨立 review；不宣稱上述交付命令已執行。
+- 2026-09-22：產品紅綠及交付命令證據見下方 Task；獨立 review 尚待完成。
 
 ## 檢查清單
 
 - [x] 已依 Large/High 分別評估；四份文件各有實際用途。
 - [x] 涉及檔案與風險僅在 README 維護；待核准表覆蓋全部十個 Scenario。
 - [x] 探測已持久化命令、環境、結果與限制；無 production code 變更。
-- [ ] TBD-1～5 核准與來源記錄，建立核准 commit。
+- [x] TBD-1～5 於 2026-09-22 核准；基線 aeaa652。
 - [ ] decompose、紅綠驗證、精煉、提交、PR 與獨立 review。
 
 ## Phase 1 — 有界儲存與安全刻畫
@@ -47,7 +47,8 @@
 - 責任驗收：RECALL-002、004；支援 010。
 - 完成判準：同 scope、257 哨兵、metadata/content limits、取消釋放連線與索引計畫證據。
 - 驗證：真實 SQLite 單元＋真實 Daemon IPC 外層，兩層失敗面不同。
-- 狀態：📝 待實作
+- 狀態：✅ 已完成
+- 證據：2026-09-22 [交付驗證](evidence/verification.md) 與 [命令紀錄](evidence/implementation.log)。
 
 ## Phase 2 — 選取與預算
 ### Task 2.1 — 確定性 selector
@@ -56,7 +57,8 @@
 - 責任驗收：RECALL-003、005。
 - 完成判準：中英、無匹配、tie、大小邊界、explicit 保留、窗口 unknown/observe/reject 測試通過。
 - 驗證：selector 單元紅綠與 IPC 外層；Oracle prompt 共用既有 Prepare，不需改動其字串。
-- 狀態：📝 待實作
+- 狀態：✅ 已完成
+- 證據：2026-09-22 [交付驗證](evidence/verification.md) 與 [命令紀錄](evidence/implementation.log)。
 
 ## Phase 3 — 密封與介面
 ### Task 3.1 — 接受時召回
@@ -65,7 +67,8 @@
 - 責任驗收：RECALL-001、006、007、009；完成 Task 1.1/2.1 外層整合。
 - 完成判準：default-off、unknown rejection、0-added、指紋衝突、重送 0 query、競態唯一任務、重啟與 audit 通過。
 - 驗證：CLI 單元、Daemon 真實 IPC、SQLite sealed JSON 及 integration 紅綠。
-- 狀態：📝 待實作
+- 狀態：✅ 已完成
+- 證據：2026-09-22 [交付驗證](evidence/verification.md) 與 [命令紀錄](evidence/implementation.log)。
 
 ## Phase 4 — 交付
 ### Task 4.1 — 動態 stage、效能與完整回歸
@@ -74,4 +77,5 @@
 - 責任驗收：RECALL-008、010。
 - 完成判準：動態 overrun 保留 trace、無額外呼叫、vet/race/build、code-simplify 與獨立 review。
 - 驗證：真實 orchestrator＋recording backend；全套回歸；文件靜態檢查。
-- 狀態：📝 待實作
+- 狀態：⏳ 實作／驗證／文件完成；待 PR 與獨立 review。
+- 證據：2026-09-22 [交付驗證](evidence/verification.md) 與 [命令紀錄](evidence/implementation.log)。

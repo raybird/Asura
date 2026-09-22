@@ -12,6 +12,7 @@
 - [技術提案與取捨](technical-analysis.md)
 - [權威實作計畫](implementation-plan.md)
 - [探測證據](evidence/probe-results.md)
+- [實作驗證](evidence/verification.md)
 
 ## 關鍵差異
 
@@ -28,7 +29,7 @@
 
 ```text
 cmd/asura/ask.go、status.go          # opt-in 與稽核顯示
-internal/daemon/daemon.go           # IPC、指紋、接受與密封
+internal/daemon/daemon.go、recall.go # IPC、指紋、接受與密封
 internal/storage/sqlite.go          # workspace,id 複合索引
 internal/storage/sqlite_memory.go   # 有界候選查詢
 internal/engine/engine.go           # 可選 recall 決策結構、舊 JSON 相容
@@ -138,7 +139,7 @@ Feature: 明確啟用且有界的專案記憶召回
 
 2026-09-22 對話來源：在完整 D1–D5 與 RECALL-001～010 提案送審後，使用者明確回覆「核准」。下列 issue 原文保留為立項歷史，後續對話核准已解除該 gate。
 
-- **核准 commit**: 待提交
+- **核准 commit**: aeaa652
 - **核准來源**: 2026-09-22 issue 原文：「這個 issue 授權需求／技術規劃與必要的可重現檢索探測；不代表 RECALL-001～010、任何自動注入預設值、排序權重、token 配額或 production code 行為已核准。」
 
 | Scenario | 核准日期 | 狀態 |
