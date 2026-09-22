@@ -235,6 +235,49 @@ func TestRECALL_BoundedAndExplicit(t *testing.T) {
 	}
 }
 
+func TestRECALL_BoundedCanonicalExplicitIDs(t *testing.T) {
+	f := setupMemoryFixture(t)
+	ctx := context.Background()
+	memory, err := f.client.AddMemory(ctx, f.projA, "SQLite workspace isolation")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	task, msg := recallSubmit(t, f.sockPath, f.projA, "canonical-explicit", "bounded", "SQLite workspace", []string{" " + memory.ID + " ", memory.ID})
+	if msg != "" {
+		t.Fatal(msg)
+	}
+	done := waitForTaskCompletion(t, f, task.ID)
+
+	var sealed engine.ExecutionContext
+	if err = json.Unmarshal([]byte(done.ResolvedContext), &sealed); err != nil {
+		t.Fatal(err)
+	}
+	if len(sealed.ProjectMemories) != 1 || sealed.ProjectMemories[0].ID != memory.ID {
+		t.Fatalf("expected one canonical explicit memory, got %+v", sealed.ProjectMemories)
+	}
+	if sealed.Recall == nil || len(sealed.Recall.ExplicitIDs) != 1 || sealed.Recall.ExplicitIDs[0] != memory.ID {
+		t.Fatalf("expected canonical explicit provenance, got %+v", sealed.Recall)
+	}
+	if len(sealed.Recall.AutoIDs) != 0 || len(done.MemoryRefs) != 1 || done.MemoryRefs[0] != memory.ID {
+		t.Fatalf("explicit memory was also auto-selected: recall=%+v refs=%v", sealed.Recall, done.MemoryRefs)
+	}
+
+	redelivered, msg := recallSubmit(t, f.sockPath, f.projA, "canonical-explicit", "bounded", "SQLite workspace", []string{memory.ID})
+	if msg != "" || redelivered.ID != done.ID || redelivered.Fingerprint != done.Fingerprint {
+		t.Fatalf("canonical redelivery identity changed: message=%q task=%+v", msg, redelivered)
+	}
+
+	off, msg := recallSubmit(t, f.sockPath, f.projA, "off-whitespace-identity", "off", "legacy", []string{" " + memory.ID + " "})
+	if msg != "" {
+		t.Fatal(msg)
+	}
+	waitForTaskCompletion(t, f, off.ID)
+	if _, msg = recallSubmit(t, f.sockPath, f.projA, "off-whitespace-identity", "off", "legacy", []string{memory.ID}); msg != "request ID reused with different payload" {
+		t.Fatalf("off fingerprint whitespace semantics changed: %q", msg)
+	}
+}
+
 func recallFixture(t *testing.T, cfg contextwin.Config, runner engine.RunnerFunc, pr engine.PipelineRunner) *memoryFixture {
 	t.Helper()
 	root := t.TempDir()

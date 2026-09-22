@@ -576,9 +576,14 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				continue
 			}
 
-			// 記憶 ID 去重並排序，定義 Set 語意，確保 fingerprint、解析、snapshot 與 Prompt 順序 100% 一致 (MUST FIX 2)
+			// bounded recall 在 fingerprint、解析、去重與稽核前先建立共用的 canonical explicit ID 集合。
+			// off 模式維持既有原字串 fingerprint 語意，避免改變舊請求的 redelivery identity。
 			if len(req.MemoryIDs) > 0 {
-				req.MemoryIDs = normalizeMemoryIDs(req.MemoryIDs)
+				if req.MemoryRecall == "bounded" {
+					req.MemoryIDs = normalizeBoundedMemoryIDs(req.MemoryIDs)
+				} else {
+					req.MemoryIDs = normalizeMemoryIDs(req.MemoryIDs)
+				}
 			}
 
 			reqMode := req.Mode
@@ -1587,4 +1592,10 @@ func normalizeMemoryIDs(items []string) []string {
 	return result
 }
 
-
+func normalizeBoundedMemoryIDs(items []string) []string {
+	canonical := make([]string, len(items))
+	for i, item := range items {
+		canonical[i] = strings.TrimSpace(item)
+	}
+	return normalizeMemoryIDs(canonical)
+}

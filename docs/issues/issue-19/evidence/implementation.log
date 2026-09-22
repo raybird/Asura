@@ -54,3 +54,39 @@ $ go vet ./...
 exit=0 (no output)
 $ go build -o /tmp/asura-issue19 ./cmd/asura
 exit=0 (no output)
+
+$ go test -count=1 ./tests/integration -run TestRECALL_BoundedCanonicalExplicitIDs
+exit=0
+ok asura/tests/integration 0.052s（同時確認 bounded canonical redelivery 與 off 舊空白 fingerprint 語意）
+
+2026-09-22 PR #20 review remediation（bounded explicit ID canonicalization）：
+$ go test -count=1 ./tests/integration -run TestRECALL_BoundedCanonicalExplicitIDs
+exit=1
+expected one canonical explicit memory；同一記憶以帶空白 explicit ID 與 auto candidate 身分重複出現
+
+$ go test -count=1 ./tests/integration -run 'TestRECALL_BoundedCanonicalExplicitIDs|TestRECALL_OffScopeExplicitAndNoRequery|TestRECALL_BoundedAndExplicit'
+exit=0
+ok asura/tests/integration 0.146s
+
+$ go test -count=1 -race ./...
+exit=0
+ok asura/cmd/asura 1.193s
+ok asura/docs/issues/issue-19/evidence 4.413s
+ok asura/internal/auth 1.020s
+ok asura/internal/backend 1.028s
+ok asura/internal/backend/codex 8.623s
+ok asura/internal/backend/opencode 25.371s
+ok asura/internal/contextwin 1.030s
+ok asura/internal/cron 1.263s
+ok asura/internal/daemon 13.975s
+ok asura/internal/engine 4.804s
+ok asura/internal/pipeline 1.022s
+ok asura/internal/recall 1.020s
+ok asura/internal/storage 10.591s
+ok asura/internal/web 1.097s
+ok asura/tests/integration 41.447s
+
+$ go vet ./...
+exit=0 (no output)
+$ go build -o /tmp/asura-issue19 ./cmd/asura
+exit=0 (no output)

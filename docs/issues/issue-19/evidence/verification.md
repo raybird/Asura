@@ -30,4 +30,10 @@
 - benchmark 是固定合成資料的單機結果，非 worst-case／線上 SLA；SQL 回傳量受限不代表底層磁碟 I/O 完全固定。
 - restart 沿用既有 failed-on-interruption，不新增自動重新執行。測試以持久化 queued fixture 模擬中斷後真實 Start，未強制 kill 測試主程序。
 - query deadline 用真實 SQLite 遞迴 view 造成慢查詢，不 mock 選取或儲存；成功後同一 store 可執行 off 任務。
-- 2026-09-22 [獨立 review PASS](../review-a4831a1.md) 已持久化；本紀錄仍僅為實作驗證證據。
+- 2026-09-22 原產品 HEAD 的[獨立 review PASS](../review-a4831a1.md)已持久化；本次產品修復後只保留為歷史證據，最新 HEAD 需重新審查。
+
+## PR #20 審查補件
+
+2026-09-22 reviewer 指出 bounded IPC 的 explicit ID 解析會 `TrimSpace`，但 selector 去重仍使用原字串，可能讓同一記憶同時成為 explicit 與 auto。新增 `TestRECALL_BoundedCanonicalExplicitIDs` 先重現兩份相同 snapshot，再修正 bounded 模式在 fingerprint 前建立唯一的 trimmed explicit ID 集合。
+
+測試確認 `ProjectMemories`、`Recall.ExplicitIDs`、`MemoryRefs` 與 fingerprint／redelivery 使用同一 canonical ID，`AutoIDs` 不再含該記憶；off 模式仍走原本未修剪的 fingerprint 路徑。修復後目標回歸、全套 race、vet 與 build 通過，原獨立 review 因產品 HEAD 改變而不再作為最新 PASS，須重新審查。
