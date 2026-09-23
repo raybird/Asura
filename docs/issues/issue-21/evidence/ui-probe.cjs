@@ -1,4 +1,4 @@
-// 2026-09-23：以最小 DOM 探測 Web 記憶純文字、切換與同 ID 原 payload 重試。
+// 2026-09-24：以最小 DOM 探測 Web 記憶純文字、Task 競態與同 ID 原 payload 重試。
 const fs = require('node:fs');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
@@ -52,6 +52,9 @@ let delayTask = false;
 let taskReply;
 let expireNextPage = false;
 let submitStatus = 0;
+let taskRace = false;
+let slowTaskReply;
+let slowPageReply;
 const window = {
   crypto: { randomUUID: () => `request-${++requestCounter}` },
   confirm: () => { confirms++; return true; }
@@ -69,6 +72,11 @@ const fetch = async (url, options = {}) => {
     return { status: 200, ok: true, json: async () => ({ content: '<img src=x onerror=alert(1)>' }) };
   }
   if (url === '/api/memories' && options.method === 'POST') return { status: 201, ok: true, json: async () => ({ id: 'created' }) };
+  if (taskRace && String(url).startsWith('/api/tasks/')) {
+    if (String(url).includes('/result?')) return new Promise(resolve => { slowPageReply = resolve; });
+    if (url === '/api/tasks/a') return new Promise(resolve => { slowTaskReply = resolve; });
+    if (url === '/api/tasks/b') return { status: 200, ok: true, json: async () => ({ id: 'b', status: 'completed', result: 'B result', resolved_context: JSON.stringify({ memory_refs: ['b-memory'] }) }) };
+  }
   if (String(url).startsWith('/api/tasks/') && queryTask) {
     if (delayTask) return new Promise(resolve => { taskReply = resolve; });
     return { status: 200, ok: true, json: async () => queryTask };
@@ -76,6 +84,7 @@ const fetch = async (url, options = {}) => {
   if (url === '/api/tasks') {
     const body = options.body;
     submitted.push({ body, shownID: el('request-id-display').textContent });
+    if (submitStatus === 202) return { status: 202, ok: true, json: async () => ({ id: 'a', status: 'pending' }) };
     if (submitStatus === 503) return { status: 503, ok: false, text: async () => 'daemon unavailable' };
     throw new Error('response lost');
   }
@@ -91,6 +100,12 @@ const fetch = async (url, options = {}) => {
     el('query-btn').click();
     await tick();
     assert.equal(el('memory-audit').textContent, '舊任務：未提供記憶與召回資料');
+    queryTask = { id: 'queued', status: 'queued', result: '', resolved_context: JSON.stringify({ recall: { mode: 'bounded', budget: { estimated_prompt_tokens: 12, estimation_method: 'heuristic', first_stage: { stage: 'striker', verdict: 'admitted', max_tokens: 100, estimate: { total_estimated_tokens: 18, provenance: 'estimated' } } } } }) };
+    el('task-id').value = 'queued';
+    el('query-btn').click();
+    await tick();
+    assert.match(el('memory-audit').textContent, /接受時預估：Stage striker；准入 admitted；context window 100；18 tokens（estimated）/);
+    assert.match(el('memory-audit').textContent, /Stage trace：未提供/);
     return;
   }
   if (process.argv[2] === 'retry' || process.argv[2] === 'retry503') {
@@ -116,6 +131,52 @@ const fetch = async (url, options = {}) => {
     taskReply({ status: 200, ok: true, json: async () => queryTask });
     await tick();
     assert.equal(el('task-status').textContent, '-');
+    return;
+  }
+  if (process.argv[2] === 'taskRace') {
+    taskRace = true;
+    el('task-id').value = 'a';
+    el('query-btn').click();
+    el('task-id').value = 'b';
+    el('query-btn').click();
+    await tick();
+    assert.equal(el('task-status').textContent, 'completed');
+    assert.equal(el('task-result').textContent, 'B result');
+    slowTaskReply({ status: 200, ok: true, json: async () => ({ id: 'a', status: 'failed', result: 'A result', resolved_context: JSON.stringify({ memory_refs: ['a-memory'] }) }) });
+    await tick();
+    assert.equal(el('task-status').textContent, 'completed');
+    assert.equal(el('task-result').textContent, 'B result');
+    assert.equal(el('memory-audit').textContent.includes('a-memory'), false);
+    assert.equal(el('memory-audit').textContent.includes('b-memory'), true);
+
+    el('task-id').value = 'a';
+    el('query-btn').click();
+    slowTaskReply({ status: 200, ok: true, json: async () => ({ id: 'a', status: 'completed', result: 'A'.repeat(501), resolved_context: JSON.stringify({ memory_refs: ['a-memory'] }) }) });
+    await tick();
+    assert.equal(typeof slowPageReply, 'function');
+    el('task-id').value = 'b';
+    el('query-btn').click();
+    await tick();
+    slowPageReply({ status: 200, ok: true, json: async () => ({ data: 'A page', has_more: false }) });
+    await tick();
+    assert.equal(el('task-result').textContent, 'B result');
+    assert.equal(el('memory-audit').textContent.includes('a-memory'), false);
+
+    submitStatus = 202;
+    el('prompt').value = 'new task';
+    el('submit-btn').click();
+    assert.equal(el('task-status').textContent, '-');
+    assert.equal(el('memory-audit').textContent, '(尚未查詢任務)');
+    await tick();
+    assert.equal(typeof slowTaskReply, 'function');
+    el('task-id').value = 'b';
+    el('query-btn').click();
+    await tick();
+    slowTaskReply({ status: 200, ok: true, json: async () => ({ id: 'a', status: 'running', result: 'A polling', resolved_context: JSON.stringify({ memory_refs: ['a-memory'] }) }) });
+    await tick();
+    assert.equal(el('task-status').textContent, 'completed');
+    assert.equal(el('task-result').textContent, 'B result');
+    assert.equal(el('memory-audit').textContent.includes('a-memory'), false);
     return;
   }
   assert.equal(el('memory-list').children.length, 1);

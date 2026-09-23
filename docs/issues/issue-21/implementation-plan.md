@@ -94,6 +94,7 @@
 - 完成判準：刪除記憶後歷史 explicit／auto IDs、policy、score、skip reason、stage trace 仍與保存快照相同；legacy、off、0 auto、unknown／estimated 清楚區分。
 - 驗證：先用舊 JSON／trace 與刪除後 Task fixture 取得 UI 行為紅燈；完成後比對持久化 Task，不從現存記憶推導預期值。
 - 狀態：✅ 已完成（2026-09-23）。紅燈：固定基線 `db6c847` 執行 `node docs/issues/issue-21/evidence/ui-probe.cjs audit` exit 1，legacy 稽核欄空白。綠燈：現行 audit 與完整 probe exit 0，檢查 legacy/off/explicit-only/bounded 0 auto、policy、score、skip、stage admission 與 estimated；`TestWEBMEMRedelivery` 對照刪除後持久化 Task 的快照。介面只讀 Task status 保存資料，不查即時 memory；保留 G5 已核准的既有 status 大小限制。UI 顯示與儲存快照分層驗證；精煉檢查單一 render 函式已足夠，no-op。
+- 2026-09-24 審查補強：queued Task 的已保存 `recall.budget.first_stage` 與執行後 `pipeline_trace` 分開顯示。`node docs/issues/issue-21/evidence/ui-probe.cjs audit` 先因缺少「接受時預估」斷言失敗，最小修正後 exit 0；沒有重新查即時記憶。
 
 ### Task 4.2 — 純文字顯示與切換清除
 - 產出與最小範圍：UI 對記憶及稽核內容使用純文字節點；以 session／workspace generation 丟棄遲到回應，切換或失效時清除內容、選取與待送 payload。
@@ -102,6 +103,7 @@
 - 完成判準：腳本樣式內容不執行；A 回應晚於 B 切換或登出到達仍不回填；下一任務送出的 ID 僅屬當前 workspace。
 - 驗證：先建立可控制回應順序的 UI 互動紅燈，完成後檢查 DOM、選取與真實 submit payload；session 失效分支單獨覆蓋。
 - 狀態：✅ 已完成（2026-09-23）。紅燈：固定基線 `db6c847` 執行 `node docs/issues/issue-21/evidence/ui-probe.cjs race` exit 1，A Task 遲到回應在切換 B 後寫回狀態。綠燈：現行 race 與完整 probe exit 0，script/img 樣式只作文字，A detail／Task 遲到回應不回填；切換清除選取、recall、Task 與待重送 payload，session 401 清空並隱藏 app。`TestWEBMEMHTTPBoundary` 另保障服務端 session 拒絕；UI 競態與 HTTP 授權不同層。精煉檢查移除重複清理並重跑 probe。
+- 2026-09-24 審查補強：同 workspace 查詢 A 後查 B，A 遲到覆寫 B 的 status、result 與稽核。`node docs/issues/issue-21/evidence/ui-probe.cjs taskRace` 先得 exit 1（實際 `failed`，預期 `completed`）；加入 Task 顯示世代後 exit 0，並覆蓋 A 長結果分頁及提交後 A 輪詢晚於 B；新提交立即清除前一任務狀態。此 UI 探測與 workspace `race`、HTTP 授權為不同失敗面；精煉檢查沿用單一世代變數與既有 generation guard。
 
 ### Task 4.3 — 全面回歸與交付文件
 - 產出與最小範圍：更新根 `README.md` 與既有架構文件的 Web 記憶資料流，整理各 Task 證據與資源邊界，準備 PR。
@@ -110,6 +112,7 @@
 - 完成判準：WEB／MEM／CTXMEM／RECALL／CTXWIN／TFACE／MBACK／CRON／PGID cancel／queue-redelivery 回歸及 `go vet ./...`、`go test -count=1 -race ./...`、`go build ./cmd/asura` 全綠；記錄傳輸上界與 query plan；文件與實作一致。PR 與獨立 review 由 dev-cycle 的交付 gate 處理。
 - 驗證：重用版本與環境一致的有效 Task 證據，執行完整回歸命令；文件以靜態對照程式與手動閱讀檢查。完成 Task 後固定 BASE／HEAD 供 PR 與獨立 reviewer 使用。
 - 狀態：✅ 已完成（2026-09-23）。證據：對固定提交 `0869a60`，`go vet ./...` exit 0；`go test -count=1 -race ./...` exit 0，涵蓋 `cmd/asura`、`internal/auth/backend/contextwin/cron/daemon/engine/pipeline/recall/storage/web` 與 `tests/integration`；`go build -o /tmp/asura_issue21_build ./cmd/asura` exit 0；`node docs/issues/issue-21/evidence/ui-probe.cjs` exit 0；`git diff --check` exit 0。獨立審查修正 HTTP 503 重試入口後，同組 vet、race 全套、build、完整 UI probe、`retry` 與 `retry503` probe、`git diff --check` 均再得 exit 0。根 README 與架構文件對照新 Web 路由、上限及資料流更新；UI probe 採最小 DOM 模擬，非真實瀏覽器驗證。query plan 與傳輸 bytes 的真實 fixture 證據分別在 Task 1.1、1.2 與 2.2。文件任務無產品紅燈，依程式對照與可重跑命令作等價證據；精煉檢查只修正受本功能影響的說明，no-op。
+- 2026-09-24 審查補強回歸：`go vet ./...`、`go test -count=1 -race ./...`、`go build -o /tmp/asura_issue21_task_race_build ./cmd/asura`、完整／`audit`／`taskRace`／`retry503` UI 探測及 `git diff --check` 均 exit 0。CI 新增四種 UI 探測命令，讓同 Task 競態、首次 Stage 預估及 5xx 重試持續受檢。精煉檢查未見可證明安全且改善清晰度的修改，no-op；Daemon SQLite 查詢取消傳遞屬建議改善，現有分頁／欄位界線與 Web IPC 期限仍保留，未在本次競態修復中改動 IPC 契約。
 
 ## 測試策略與驗收對應
 
