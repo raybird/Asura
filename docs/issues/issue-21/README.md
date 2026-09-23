@@ -122,7 +122,7 @@ Feature: 已登入 Web Console 的專案記憶與召回操作
 
 ## Gherkin 核准紀錄
 
-- **核准 commit**: 待提交；初次提交後回填承載本版規格的 commit
+- **核准 commit**: 21aafa8（承載 2026-09-23 已核准 Gherkin 的初次提交）
 - **核准來源**: 2026-09-23 本對話使用者「$dev-cycle 核准」，對應當時 [GitHub #21](https://github.com/raybird/Asura/issues/21) 的 WEBMEM-001～010 與本文件的 Gherkin。issue 原文保留具體上限及分頁協定須決議的條件；尚未定案數值見 G-TBD-1～5。
 
 | Scenario | 核准日期 | 狀態 |
