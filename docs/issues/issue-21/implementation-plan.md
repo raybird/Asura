@@ -49,7 +49,7 @@
 - 驗收編號：WEBMEM-001（責任）、WEBMEM-002（支援）。
 - 完成判準：未登入／登出請求、錯誤 Host、跨 Origin 變更均服務端拒絕且零記憶寫入／零 backend 呼叫；GET 不帶 Origin 可讀授權資料，跨站頁面無法讀取回應。
 - 驗證：先以真實 HTTP → IPC → SQLite 取得拒絕路徑與合法 GET 紅燈；Web 單元測試分辨 session／Host／Origin 規則。404 缺路由不得充當授權紅燈。
-- 狀態：📝 待實作。證據：待填。
+- 狀態：✅ 已完成（2026-09-23，Task 2.1）。證據：`c7ca120` 後工作區先執行 `go test ./tests/integration -run '^TestWEBMEMHTTPBoundary$' -count=1` exit 1，合法 GET 不帶 Origin 得 404，證明新路由缺失；同測試的未登入讀寫及跨 Origin 變更先保持拒絕。加入路由後相同測試 exit 0；`go test ./internal/web -count=1` exit 0、`go test ./tests/integration -count=1` exit 0。真實 HTTP → IPC → SQLite 證明 session／Host／Origin 共用入口、未登入及跨站變更不寫入且 backend 計數 0；已登入 GET 不帶 Origin 可讀。既有 cookie `SameSite=Strict` 與無 cookie GET 401 作瀏覽器跨站不可讀的服務端證據；直接帶有效 cookie 的不同 Origin GET 仍可讀，符合核准的服務端矩陣。外層整合與 Web 單元有不同失敗面，沿用既有 WEB-001／010 單元回歸。精煉檢查：新路由只在既有全域邊界後分派，無額外可安全簡化，no-op。
 
 ### Task 2.2 — 記憶 list/detail/add/delete
 - 產出與最小範圍：完成 G1 DTO、四個 Web 路由和 `page`／bounded detail IPC 呼叫，保持輸入上限、錯誤碼與顯示資訊一致；不建立第二套記憶儲存。
@@ -57,7 +57,7 @@
 - 驗收編號：WEBMEM-003、004（責任）。
 - 完成判準：真實 HTTP → IPC → SQLite 的分頁與明確 detail 在 10k／長內容 fixture 下符合 G2，超大 detail 於 IPC 前拒絕；手動新增／確認刪除／重啟持久化結果正確，舊 Task 快照未改寫。
 - 驗證：先取得 HTTP 外層紅燈與 DTO／IPC 錯誤映射內層紅燈；記錄實際 HTTP／IPC bytes、狀態碼、SQLite 值及 Task 快照。
-- 狀態：📝 待實作。證據：待填。
+- 狀態：🔄 實作中（2026-09-23）。證據：在 `c7ca120` 基線工作樹執行新整合測試 `go test ./tests/integration -run '^TestWEBMEMCRUDAndLimits$' -count=1` exit 1，手動新增得到 404；目前工作區 `go test ./tests/integration -run '^TestWEBMEM' -count=1` exit 0，10k HTTP 頁不超過 512 KiB、50 筆 keyset、detail 超限 413、CRUD 與跨 scope 拒絕通過；`go test ./tests/integration -count=1` exit 0。尚需完成 UI 的明確刪除確認及舊 Task 快照／重啟對照後才能標完成。
 
 ## Phase 3 — Web 召回與重送
 

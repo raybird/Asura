@@ -86,6 +86,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+	if r.URL.Path == "/api/memories" || strings.HasPrefix(r.URL.Path, "/api/memories/") {
+		s.handleMemories(w, r)
+		return
+	}
 	if r.URL.Path == "/api/projects" && r.Method == http.MethodGet {
 		resp, err := s.exchange(r.Context(), daemon.IPCRequest{Action: "projects"})
 		if err != nil {
@@ -185,14 +189,23 @@ func decode(w http.ResponseWriter, r *http.Request, value any) bool {
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(value); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+		writeDecodeError(w, err)
 		return false
 	}
 	if err := d.Decode(new(any)); err != io.EOF {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+		writeDecodeError(w, err)
 		return false
 	}
 	return true
+}
+
+func writeDecodeError(w http.ResponseWriter, err error) {
+	var tooLarge *http.MaxBytesError
+	if errors.As(err, &tooLarge) {
+		http.Error(w, "request too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+	http.Error(w, "invalid request", http.StatusBadRequest)
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
