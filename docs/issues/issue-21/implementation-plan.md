@@ -31,7 +31,7 @@
 - 驗收編號：WEBMEM-003、010（支援；責任 Task 為 2.2、4.3）。
 - 完成判準：10k／超大內容 fixture 在相同 timestamp 下完整、穩定分頁；Go 結果內容有界，超大 detail 不先回傳完整 BLOB；索引 query plan、cursor 錯誤與跨 scope 查詢可重複檢查。
 - 驗證：先以真實 SQLite fixture 取得目標行為紅燈；儲存測試檢查固定預期資料與 bytes，記錄 query plan。這一層沒有 HTTP 整合責任，外／內迴圈在儲存層合併，理由與證據於執行時記錄。
-- 狀態：📝 待實作。證據：待填。
+- 狀態：✅ 已完成（2026-09-23，Task 1.1）。證據：在 `fa41524` 後的工作區加入測試，`go test ./internal/storage -run '^TestMemoryPageBoundaries$' -count=1` exit 1，直接失敗於 `WEBMEM-003: bounded page/detail contract unavailable`；加入實作後 `go test ./internal/storage -run '^TestMemoryPage' -count=1 -timeout=60s` exit 0、`go test ./internal/storage -count=1` exit 0。測試以 10,000 筆真實 SQLite 資料確認 50+1 keyset、同時間戳的順序與索引計畫無 temp sort；另涵蓋 512 bytes UTF-8 截斷、65,536/65,537 bytes detail、跨 scope、過量頁與 legacy metadata。外／內迴圈合併於真實 SQLite 層，因本 Task 只交付 storage 查詢，HTTP／IPC 整合由後續 Task 各自負責。精煉檢查限於本次 storage diff：目前函式與 DTO 各有明確用途，無可證明安全的簡化，no-op，沿用同一綠燈。限制：此層只證明 Go 結果有界，不證明 SQLite 內部 BLOB I/O 或後續 IPC／HTTP bytes。
 
 ### Task 1.2 — Daemon 有界 IPC 與 canonical 授權
 - 產出與最小範圍：在 `internal/daemon` 增加 `memory_page`／`memory_detail_bounded`，重用每次 canonical workspace 授權；保留 CLI 全量 get/list；區分授權、缺 ID、超限與 legacy 錯誤。
