@@ -1,27 +1,115 @@
 # 初始實作計畫
 
-2026-09-23。Large issue 的唯一權威任務來源為本檔；風險與首要驗證見 [README](README.md#風險與首要驗證)。WEBMEM-001～010 已核准，G-TBD-1～5 的具體協定與上限仍待決議。決議後由 decompose 在本檔細化產品 Phase／Task；下列產品階段概要不是可執行 Task。
+2026-09-23。Large issue 的唯一權威任務來源為本檔；風險與首要驗證見 [README](README.md#風險與首要驗證)。WEBMEM-001～010 與 G-TBD-1～5 已核准；下列 Phase／Task 為實作與證據的唯一狀態清單。
 
 ## 設計方案
 
-提案見 [technical-analysis.md](technical-analysis.md)：Web 的獨立 DTO 經現有 session／Host 及變更方法的 Origin 入口送至 Daemon；Daemon 每次 canonical 授權；SQLite 以 keyset 及 SQL 欄位上界提供 `PageMemories` 與 Web 專用的有界 detail 查詢；Task submit 只轉送核准的 explicit IDs 與 recall mode；稽核只讀已保存 Task。具體函式簽名、cursor 編碼、錯誤映射、hard limits 在探測及 G-TBD-1～5 核准後固定。
+核准設計見 [technical-analysis.md](technical-analysis.md)：Web 的獨立 DTO 經現有 session／Host 及變更方法的 Origin 入口送至 Daemon；Daemon 每次 canonical 授權；SQLite 以 keyset 及 SQL 欄位上界提供 `PageMemories` 與 Web 專用的有界 detail 查詢；Task submit 只轉送 explicit IDs 與 recall mode；稽核只讀已保存 Task。
 
-使用方式對照：目前 Web 僅能選 workspace 並送 prompt，CLI 可操作記憶及 explicit／bounded；待核准後 Web 才增加記憶管理、選取及稽核操作。原 Web 未使用記憶的 request 保持 off。
+使用方式對照：目前 Web 僅能選 workspace 並送 prompt，CLI 可操作記憶及 explicit／bounded；實作後 Web 增加記憶管理、選取及稽核操作。原 Web 未使用記憶的 request 保持 off。
 
 ## 規劃與探測步驟（已授權）
 
 1. ✅ **P0-1：現況與安全邊界盤點** — 對應 WEBMEM-001、002、005、007、008；產出 [需求與現況](requirement-analysis.md)及[能力矩陣](technical-analysis.md#技術可行性與安全能力矩陣)。相依：無。完成判準：指出 Web 欄位丟失、Daemon 授權／密封順序、儲存讀取與前端 request-ID 現況；2026-09-23 已以原始碼靜態核對。此步不代表新功能驗收。
 2. ✅ **P0-2：隔離資料庫及現有邊界探測** — 對應 WEBMEM-001～003、010；相依 P0-1。產出不觸及產品資料的 10k／大內容 SQL、index plan、讀取列數與 bytes、現有 session／變更方法 Origin／workspace 拒絕基線。完成判準：記錄 fixture、查詢原文、環境、命令、exit code、實際數值與限制；以已知跨 scope／無 session 對照組驗證拒絕判準。2026-09-23 [初始探測](evidence/probe-results.md)及[可重跑 SQL](evidence/probe.sql)已記錄；新 HTTP 路徑、IPC bytes 與 Go driver 的新索引計畫列於 Phase 1 驗收，未被此步宣稱通過。
-3. ⏳ **P0-3：固定提案並取得決策** — 對應 G-TBD-1～5、WEBMEM-001～010；相依 P0-2。已核准 Gherkin 並提出具體 URL／DTO／錯誤碼、page/cursor/bytes、Web detail 上界、GET／變更方法權限矩陣、前端交互、request-ID 找回方式與稽核界線；尚需決議 G-TBD-1～5 並記錄核准來源。完成判準：README 的待確認項目有真實結論，核准表與所有現存 Scenario 一致；未核准決策不得轉為產品 Task。
+3. ✅ **P0-3：固定提案並取得決策** — 對應 G-TBD-1～5、WEBMEM-001～010；相依 P0-2。產出具體 URL／DTO／錯誤碼、page/cursor/bytes、Web detail 上界、GET／變更方法權限矩陣、前端交互、request-ID 找回方式與稽核界線。完成判準：2026-09-23 使用者核准十個 Scenario 與 G-TBD-1～5，來源與結論見 [README](README.md#待確認事項)。此步是規格證據，非產品測試。
 
-## 核准後階段概要
+## 產品階段概要
 
 | 階段 | 對應驗收 | 產出 | 相依 | 可檢查完成判準 |
 |---|---|---|---|---|
-| Phase 1：安全與有界儲存 | 001～004、010 | 目標失敗理由的 HTTP／IPC 拒絕紅燈、paged 與有界 detail SQLite／IPC、索引 | P0-3 核准及 decompose | 未授權 0 寫入／0 backend；10k 資料查詢與傳輸上界、穩定分頁；超大 detail 在 IPC 前拒絕，Go 查詢結果與 IPC 無全量內容 |
+| Phase 1：安全與有界儲存 | 支援 001～004、010 | 有界 SQLite／IPC、索引與授權拒絕證據 | P0-3 | 10k 查詢與傳輸上界、穩定分頁；超大 detail 在 IPC 前拒絕，Go 查詢結果與 IPC 無全量內容 |
 | Phase 2：記憶 HTTP API | 001～004 | list/detail/add/delete 路由、錯誤映射 | Phase 1 | 真實 HTTP → IPC → SQLite、撤權、父子、symlink、重啟與失敗結果通過 |
 | Phase 3：Web submit | 005～007、009 | explicit／bounded DTO、UI、request-ID 顯示與重送狀態 | Phase 2 | 預設 off、跨 scope 0 backend、密封快照、同 ID 原 payload 重送與衝突、未知結果依 ID 查詢通過 |
-| Phase 4：稽核與交付 | 004、008～010 | 歷史稽核 UI、隱私檢查、文件與回歸證據 | Phase 3 | legacy／off／0 auto 區分、純文字與狀態清除、全套 vet／race／build、獨立 review |
+| Phase 4：稽核與交付 | 008～010 | 歷史稽核 UI、隱私檢查、文件與回歸證據 | Phase 3 | legacy／off／0 auto 區分、純文字與狀態清除、全套 vet／race／build、獨立 review |
+
+## Phase 1 — 有界儲存與 Daemon 邊界
+
+### Task 1.1 — 有界 SQLite 記憶頁與 detail
+- 產出與最小範圍：在 `internal/storage` 加入 `(workspace,created_at,id)` 索引、keyset page 與 Web detail 專用查詢；保持既有 CLI `ListMemories`／`GetMemory` 契約。頁面與 detail 遵守 G2 的 bytes、列數、游標及 legacy 錯誤界線。
+- 相依：P0-3。
+- 驗收編號：WEBMEM-003、010（支援；責任 Task 為 2.2、4.3）。
+- 完成判準：10k／超大內容 fixture 在相同 timestamp 下完整、穩定分頁；Go 結果內容有界，超大 detail 不先回傳完整 BLOB；索引 query plan、cursor 錯誤與跨 scope 查詢可重複檢查。
+- 驗證：先以真實 SQLite fixture 取得目標行為紅燈；儲存測試檢查固定預期資料與 bytes，記錄 query plan。這一層沒有 HTTP 整合責任，外／內迴圈在儲存層合併，理由與證據於執行時記錄。
+- 狀態：📝 待實作。證據：待填。
+
+### Task 1.2 — Daemon 有界 IPC 與 canonical 授權
+- 產出與最小範圍：在 `internal/daemon` 增加 `memory_page`／`memory_detail_bounded`，重用每次 canonical workspace 授權；保留 CLI 全量 get/list；區分授權、缺 ID、超限與 legacy 錯誤。
+- 相依：Task 1.1。
+- 驗收編號：WEBMEM-002（責任）、WEBMEM-003（支援）。
+- 完成判準：A/B、父子、symlink、越界與撤權的真實 IPC 請求均只見精確 scope；跨 scope ID 與不存在 ID 同樣不可識別；page/detail IPC 回應遵守 G2 上界，拒絕路徑零寫入／零 backend 呼叫。
+- 驗證：先建立 IPC → Daemon → SQLite 的拒絕與容量紅燈，另用 Daemon 層測試辨識 canonical 授權失敗面；修復後比對實際 response bytes 與儲存狀態。
+- 狀態：📝 待實作。證據：待填。
+
+## Phase 2 — Web 記憶 HTTP API
+
+### Task 2.1 — Session 與同站邊界
+- 產出與最小範圍：在 `internal/web` 建立四個 G1 路由的入口防護與錯誤映射，沿用 session／Host／變更方法 Origin；GET 由既有瀏覽器同源機制保護，不額外要求 Origin。
+- 相依：Task 1.2。
+- 驗收編號：WEBMEM-001（責任）、WEBMEM-002（支援）。
+- 完成判準：未登入／登出請求、錯誤 Host、跨 Origin 變更均服務端拒絕且零記憶寫入／零 backend 呼叫；GET 不帶 Origin 可讀授權資料，跨站頁面無法讀取回應。
+- 驗證：先以真實 HTTP → IPC → SQLite 取得拒絕路徑與合法 GET 紅燈；Web 單元測試分辨 session／Host／Origin 規則。404 缺路由不得充當授權紅燈。
+- 狀態：📝 待實作。證據：待填。
+
+### Task 2.2 — 記憶 list/detail/add/delete
+- 產出與最小範圍：完成 G1 DTO、四個 Web 路由和 `page`／bounded detail IPC 呼叫，保持輸入上限、錯誤碼與顯示資訊一致；不建立第二套記憶儲存。
+- 相依：Task 2.1。
+- 驗收編號：WEBMEM-003、004（責任）。
+- 完成判準：真實 HTTP → IPC → SQLite 的分頁與明確 detail 在 10k／長內容 fixture 下符合 G2，超大 detail 於 IPC 前拒絕；手動新增／確認刪除／重啟持久化結果正確，舊 Task 快照未改寫。
+- 驗證：先取得 HTTP 外層紅燈與 DTO／IPC 錯誤映射內層紅燈；記錄實際 HTTP／IPC bytes、狀態碼、SQLite 值及 Task 快照。
+- 狀態：📝 待實作。證據：待填。
+
+## Phase 3 — Web 召回與重送
+
+### Task 3.1 — explicit IDs 提交契約
+- 產出與最小範圍：Web submit DTO 只轉送 G3 的 explicit IDs；由 Daemon 既有流程解析完整快照與指紋，不接收 client sealed context。ID 數及字串長度遵守 G2。
+- 相依：Task 2.2。
+- 驗收編號：WEBMEM-005（責任）、WEBMEM-007（支援）。
+- 完成判準：同 scope IDs 的完整快照進入保存 context；跨 scope、已刪除、超量或自行注入 context 在 backend 前拒絕，backend 呼叫數為零。
+- 驗證：真實 Web submit → Daemon → SQLite → recording backend 先紅後綠，內層 DTO allowlist／Daemon 解析測試分辨拒絕原因。
+- 狀態：📝 待實作。證據：待填。
+
+### Task 3.2 — bounded 召回與預設 off
+- 產出與最小範圍：Web submit 只增加 G3 的 recall mode 選項；不改 Daemon selector、額度、provenance 或 stage admission。
+- 相依：Task 3.1。
+- 驗收編號：WEBMEM-006（責任）。
+- 完成判準：舊請求與空選取維持 off；明確 bounded 的保存 context／trace 與同條件 CLI 的 Daemon 流程一致，無隱式召回。
+- 驗證：真實提交的 off／bounded 對照先紅後綠，另測 DTO 預設與模式驗證；以保存 Task 與 recording backend 為真相來源。
+- 狀態：📝 待實作。證據：待填。
+
+### Task 3.3 — UI 選取與同 ID 重送
+- 產出與最小範圍：Web UI 增加記憶多選、bounded 開關、提交前 Request ID、鎖定送出 payload、同 ID 原 payload 重試及依 ID 查詢未知結果；API 不替 client 重建 ID。
+- 相依：Task 3.2。
+- 驗收編號：WEBMEM-007（責任）、WEBMEM-009（支援）。
+- 完成判準：回應遺失後原 payload 一次執行且可找回同 Task，改 ID 順序仍按既有 fingerprint 語意，同 ID 改內容／模式為衝突；切換 workspace 或重新登入後仍可憑預先保存的 ID 查詢。
+- 驗證：記錄真實提交／中斷回應／重送的 backend 次數、保存 Task ID 與衝突；以 UI 互動測試檢查顯示與 payload 鎖定。
+- 狀態：📝 待實作。證據：待填。
+
+## Phase 4 — 稽核、隱私與交付
+
+### Task 4.1 — 保存 Task 的記憶稽核
+- 產出與最小範圍：Web 依既有 status 路徑呈現保存的 context／trace，依 G5 顯示 compact metadata；不重新查即時記憶，保留已核准的既有 status 大小限制。
+- 相依：Task 3.3。
+- 驗收編號：WEBMEM-008（責任）。
+- 完成判準：刪除記憶後歷史 explicit／auto IDs、policy、score、skip reason、stage trace 仍與保存快照相同；legacy、off、0 auto、unknown／estimated 清楚區分。
+- 驗證：先用舊 JSON／trace 與刪除後 Task fixture 取得 UI 行為紅燈；完成後比對持久化 Task，不從現存記憶推導預期值。
+- 狀態：📝 待實作。證據：待填。
+
+### Task 4.2 — 純文字顯示與切換清除
+- 產出與最小範圍：UI 對記憶及稽核內容使用純文字節點；以 session／workspace generation 丟棄遲到回應，切換或失效時清除內容、選取與待送 payload。
+- 相依：Task 4.1。
+- 驗收編號：WEBMEM-009（責任）。
+- 完成判準：腳本樣式內容不執行；A 回應晚於 B 切換或登出到達仍不回填；下一任務送出的 ID 僅屬當前 workspace。
+- 驗證：先建立可控制回應順序的 UI 互動紅燈，完成後檢查 DOM、選取與真實 submit payload；session 失效分支單獨覆蓋。
+- 狀態：📝 待實作。證據：待填。
+
+### Task 4.3 — 全面回歸與交付文件
+- 產出與最小範圍：更新根 `README.md` 與既有架構文件的 Web 記憶資料流，整理各 Task 證據、資源邊界與獨立 review，準備 PR。
+- 相依：Task 4.2。
+- 驗收編號：WEBMEM-010（責任）。
+- 完成判準：WEB／MEM／CTXMEM／RECALL／CTXWIN／TFACE／MBACK／CRON／PGID cancel／queue-redelivery 回歸及 `go vet ./...`、`go test -count=1 -race ./...`、`go build ./cmd/asura` 全綠；記錄傳輸上界與 query plan；文件與實作一致。
+- 驗證：重用版本與環境一致的有效 Task 證據，執行完整回歸命令；文件以靜態對照程式與手動閱讀檢查。交付前固定 BASE／HEAD 並由獨立 reviewer 審查。
+- 狀態：📝 待實作。證據：待填。
 
 ## 測試策略與驗收對應
 
@@ -39,7 +127,8 @@
 
 - [x] Large 與 High 分開判定；需求分析由程式現況觸發，技術分析由有界排序及重送方案取捨觸發。
 - [x] 最大風險先用授權刻畫與真實 SQL 探測，不預設 UI 切片能驗證資料邊界。
-- [x] 產品階段均有驗收、產出、相依與完成判準；未核准前不細化為可執行產品 Task。
+- [x] 已核准 Scenario 均由唯一 Task 負責；各 Task 有產出、最小範圍、相依、完成判準及驗證。
 - [x] P0-2 初始探測有可重跑的 fixture、查詢與既有邊界測試證據。
-- [ ] P0-3 決策完成，記錄核准來源；新功能驗證留給 Phase 1～4。
-- [ ] 核准後 decompose、紅綠驗證、常青文件更新及交付審查。
+- [x] P0-3 決策完成，記錄核准來源；新功能驗證留給 Phase 1～4。
+- [x] 核准後 decompose；無待核准 Scenario。
+- [ ] 依 Task 紅綠驗證、常青文件更新及交付審查。

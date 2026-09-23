@@ -2,7 +2,7 @@
 
 ## 概述
 
-在既有單人 Web Console 管理授權 workspace 的手動專案記憶，提交任務時選取 explicit IDs 或明確啟用 `bounded` 召回，並查看已保存任務的記憶與召回決策。來源為 [GitHub #21](https://github.com/raybird/Asura/issues/21)。2026-09-23 使用者以「$dev-cycle 核准」核准本文件的 WEBMEM-001～010 行為；HTTP／IPC 欄位與大小上限尚待 G-TBD-1～5 的具體決策，不以概括核准代填數值。
+在既有單人 Web Console 管理授權 workspace 的手動專案記憶，提交任務時選取 explicit IDs 或明確啟用 `bounded` 召回，並查看已保存任務的記憶與召回決策。來源為 [GitHub #21](https://github.com/raybird/Asura/issues/21)。2026-09-23 使用者先以「$dev-cycle 核准」核准 WEBMEM-001～010 行為，再明確回覆「核准 G-TBD-1～5 現行提案」，核准 [技術分析](technical-analysis.md)的具體協定與上限。
 
 ## 文件清單
 
@@ -41,7 +41,7 @@ CLI `memory list/get`、Phase 3F selector／額度、Runner、多後端與 Cron 
 
 ## Gherkin 驗收劇本
 
-以下依 #21 候選驗收整理的外部行為已於 2026-09-23 核准；具體 API、分頁與大小上限仍以 G-TBD-1～5 決議為準。
+以下依 #21 候選驗收整理的外部行為已於 2026-09-23 核准；具體 API、分頁與大小上限見同日核准的 [G1～G5](technical-analysis.md)。
 
 ```gherkin
 Feature: 已登入 Web Console 的專案記憶與召回操作
@@ -123,7 +123,7 @@ Feature: 已登入 Web Console 的專案記憶與召回操作
 ## Gherkin 核准紀錄
 
 - **核准 commit**: 21aafa8（承載 2026-09-23 已核准 Gherkin 的初次提交）
-- **核准來源**: 2026-09-23 本對話使用者「$dev-cycle 核准」，對應當時 [GitHub #21](https://github.com/raybird/Asura/issues/21) 的 WEBMEM-001～010 與本文件的 Gherkin。issue 原文保留具體上限及分頁協定須決議的條件；尚未定案數值見 G-TBD-1～5。
+- **核准來源**: 2026-09-23 本對話使用者「$dev-cycle 核准」，對應當時 [GitHub #21](https://github.com/raybird/Asura/issues/21) 的 WEBMEM-001～010 與本文件的 Gherkin；同日再回覆「核准 G-TBD-1～5 現行提案」，對應 [技術分析](technical-analysis.md)的數值與協定。
 
 | Scenario | 核准日期 | 狀態 |
 |---|---|---|
@@ -140,7 +140,7 @@ Feature: 已登入 Web Console 的專案記憶與召回操作
 
 ## 實作步驟概要
 
-權威任務與相依見 [implementation-plan.md](implementation-plan.md)。產品階段須先固定 G-TBD-1～5 的具體政策，再由 decompose 在同檔細化。
+權威任務與相依見 [implementation-plan.md](implementation-plan.md)。G-TBD-1～5 已定案，Large Task 在同檔細化。
 
 ## 風險與首要驗證
 
@@ -154,11 +154,11 @@ Feature: 已登入 Web Console 的專案記憶與召回操作
 
 | 編號 | 事項 | 狀態 | 影響 |
 |---|---|---|---|
-| G-TBD-1 | 核准 HTTP endpoint、IPC action、DTO、錯誤映射與 GET／變更方法的權限矩陣 | 待確認 | WEBMEM-001、002、004、005 |
-| G-TBD-2 | 核准穩定分頁、hard page-size、摘要／有界 detail／錯誤及傳輸大小上限；初始探測已記錄 | 待確認 | WEBMEM-003、010 |
-| G-TBD-3 | 核准 explicit 多選與 bounded 的交互、空選取及 workspace 切換規則 | 待確認 | WEBMEM-005、006、009 |
-| G-TBD-4 | 核准回應遺失、重試、表單改動與登入狀態變動時的 request-ID 顯示及找回策略 | 待確認 | WEBMEM-007、009 |
-| G-TBD-5 | 核准歷史稽核尺度、超大內容呈現與隱私界線 | 待確認 | WEBMEM-008、009 |
+| G-TBD-1 | 核准 HTTP endpoint、IPC action、DTO、錯誤映射與 GET／變更方法的權限矩陣 | 已解決（2026-09-23 使用者核准 G1 提案） | WEBMEM-001、002、004、005 |
+| G-TBD-2 | 核准穩定分頁、hard page-size、摘要／有界 detail／錯誤及傳輸大小上限 | 已解決（2026-09-23 使用者核准 G2 固定值與失敗行為） | WEBMEM-003、010 |
+| G-TBD-3 | 核准 explicit 多選與 bounded 的交互、空選取及 workspace 切換規則 | 已解決（2026-09-23 使用者核准 G3 提案） | WEBMEM-005、006、009 |
+| G-TBD-4 | 核准回應遺失、重試、表單改動與登入狀態變動時的 request-ID 顯示及找回策略 | 已解決（2026-09-23 使用者核准 G4 提案） | WEBMEM-007、009 |
+| G-TBD-5 | 核准歷史稽核尺度、超大內容呈現與隱私界線 | 已解決（2026-09-23 使用者核准 G5 沿用既有 status 路徑及其大小限制） | WEBMEM-008、009 |
 | G-TBD-6 | 核准 WEBMEM-001～010 的最終可觀察結果及必要驗證 | 已解決（2026-09-23 使用者以「$dev-cycle 核准」核准現行 Gherkin；具體上限仍由 G-TBD-1～5 管理） | 全部 Scenario |
 
 ## Timeline
@@ -169,9 +169,10 @@ Feature: 已登入 Web Console 的專案記憶與召回操作
 | 2026-09-23 | 建立現況分析、技術提案、待核准驗收與權威初始計畫 | Codex |
 | 2026-09-23 | 依獨立審查修訂 detail 上界、GET Origin 驗收與 UI 競態，補可重跑探測；規格仍待核准 | Codex |
 | 2026-09-23 | 使用者核准 WEBMEM-001～010 外部行為；G-TBD-1～5 的具體數值與協定待定案 | 使用者 |
+| 2026-09-23 | 使用者核准 G-TBD-1～5 的現行技術提案與固定上限 | 使用者 |
 
 ---
 **建立日期**: 2026-09-23
 **分級**: Large — Web、Daemon、SQLite 與 Task 稽核跨模組
 **風險**: High — 授權外洩、無界傳輸與重送副作用
-**狀態**: 驗收已核准，待具體設計定案
+**狀態**: 驗收與設計已核准，待實作
