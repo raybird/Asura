@@ -57,7 +57,7 @@
 - 驗收編號：WEBMEM-003、004（責任）。
 - 完成判準：真實 HTTP → IPC → SQLite 的分頁與明確 detail 在 10k／長內容 fixture 下符合 G2，超大 detail 於 IPC 前拒絕；手動新增／確認刪除／重啟持久化結果正確，舊 Task 快照未改寫。
 - 驗證：先取得 HTTP 外層紅燈與 DTO／IPC 錯誤映射內層紅燈；記錄實際 HTTP／IPC bytes、狀態碼、SQLite 值及 Task 快照。
-- 狀態：🔄 實作中（2026-09-23）。證據：在 `c7ca120` 基線工作樹執行新整合測試 `go test ./tests/integration -run '^TestWEBMEMCRUDAndLimits$' -count=1` exit 1，手動新增得到 404；目前工作區 `go test ./tests/integration -run '^TestWEBMEM' -count=1` exit 0，10k HTTP 頁不超過 512 KiB、50 筆 keyset、detail 超限 413、CRUD 與跨 scope 拒絕通過；`go test ./tests/integration -count=1` exit 0。尚需完成 UI 的明確刪除確認及舊 Task 快照／重啟對照後才能標完成。
+- 狀態：✅ 已完成（2026-09-23）。紅燈：在 `c7ca120` 基線執行 `go test ./tests/integration -run ^TestWEBMEMCRUDAndLimits$ -count=1` exit 1，新增回 404。綠燈：現行 `go test ./tests/integration -run ^TestWEBMEM -count=1` exit 0，10k HTTP 頁、預設 20／上限 50、detail 413、legacy metadata 422、Web body 413、CRUD 與跨 scope 拒絕；`node docs/issues/issue-21/evidence/ui-probe.cjs` exit 0，刪除前 confirm 且顯示結果。`go test ./internal/storage -run TestSQLiteStore_MemoryCRUD -count=1` 與 `go test ./internal/daemon -run TestDaemon_TaskContextSealedAndImmutable -count=1` 均 exit 0，分別覆蓋 SQLite 重啟與刪除後舊 Task 快照。真實 HTTP 整合與底層持久化各有獨立失敗面；精煉檢查無額外可安全簡化，no-op。
 
 ## Phase 3 — Web 召回與重送
 
@@ -67,7 +67,7 @@
 - 驗收編號：WEBMEM-005（責任）、WEBMEM-007（支援）。
 - 完成判準：同 scope IDs 的完整快照進入保存 context；跨 scope、已刪除、超量或自行注入 context 在 backend 前拒絕，backend 呼叫數為零。
 - 驗證：真實 Web submit → Daemon → SQLite → recording backend 先紅後綠，內層 DTO allowlist／Daemon 解析測試分辨拒絕原因。
-- 狀態：📝 待實作。證據：待填。
+- 狀態：✅ 已完成（2026-09-23）。紅燈：`go test ./tests/integration -run ^TestWEBMEMSubmitExplicitAndBounded$ -count=1` exit 1，舊 Web 遺失 `memory_ids`，保存 Task refs/context 為空。綠燈：同測試 exit 0，同 scope 完整快照保存；跨 scope、缺失、已刪除 ID 回 404 且 Task 不存在、backend 計數不增加；33 IDs 與 client 注入 `resolved_context/backend/mode` 回 400。沿用 Daemon 解析與密封；HTTP 保存 Task 及 backend 計數是外層真相，DTO allowlist 是獨立入口失敗面。精煉檢查 DTO 僅五欄，no-op。
 
 ### Task 3.2 — bounded 召回與預設 off
 - 產出與最小範圍：Web submit 只增加 G3 的 recall mode 選項；不改 Daemon selector、額度、provenance 或 stage admission。
@@ -75,7 +75,7 @@
 - 驗收編號：WEBMEM-006（責任）。
 - 完成判準：舊請求與空選取維持 off；明確 bounded 的保存 context／trace 與同條件 CLI 的 Daemon 流程一致，無隱式召回。
 - 驗證：真實提交的 off／bounded 對照先紅後綠，另測 DTO 預設與模式驗證；以保存 Task 與 recording backend 為真相來源。
-- 狀態：📝 待實作。證據：待填。
+- 狀態：✅ 已完成（2026-09-23）。紅燈：固定基線 `db6c847` 執行 `go test ./tests/integration -run ^TestWEBMEMBoundedOnly$ -count=1` exit 1，Task 無 recall context。綠燈：現行同命令 exit 0，保存 `bounded` 與 `lexical-v1`；`TestWEBMEMSubmitExplicitAndBounded` 比對原請求 off 的空 refs 與明確 bounded context。selector、額度、provenance 與 stage admission 沿用原 Daemon 路徑，未修改。外／內層均以真實 HTTP → Daemon 保存 context 觀察，合併紅燈；精煉檢查 no-op。
 
 ### Task 3.3 — UI 選取與同 ID 重送
 - 產出與最小範圍：Web UI 增加記憶多選、bounded 開關、提交前 Request ID、鎖定送出 payload、同 ID 原 payload 重試及依 ID 查詢未知結果；API 不替 client 重建 ID。
@@ -83,7 +83,7 @@
 - 驗收編號：WEBMEM-007（責任）、WEBMEM-009（支援）。
 - 完成判準：回應遺失後原 payload 一次執行且可找回同 Task，改 ID 順序仍按既有 fingerprint 語意，同 ID 改內容／模式為衝突；切換 workspace 或重新登入後仍可憑預先保存的 ID 查詢。
 - 驗證：記錄真實提交／中斷回應／重送的 backend 次數、保存 Task ID 與衝突；以 UI 互動測試檢查顯示與 payload 鎖定。
-- 狀態：📝 待實作。證據：待填。
+- 狀態：✅ 已完成（2026-09-23）。紅燈：固定基線 `db6c847` 執行 `node docs/issues/issue-21/evidence/ui-probe.cjs retry` exit 1，網路前未顯示 Request ID。綠燈：現行 retry 與完整 probe exit 0，表單改動後原請求重試仍送完全相同 JSON，新提交產生新 ID；`go test ./tests/integration -run ^TestWEBMEMRedelivery$ -count=1` exit 0，刪除後同 ID 原 payload／改順序回同 Task、保存快照不變，模式改動回 409，backend 計數僅 1。既有 `TestWEB006` 覆蓋重新登入依 ID 查詢。UI payload 與 Daemon 指紋是不同層級；精煉後移除重複清理呼叫，probe 再通過。
 
 ## Phase 4 — 稽核、隱私與交付
 
@@ -93,7 +93,7 @@
 - 驗收編號：WEBMEM-008（責任）。
 - 完成判準：刪除記憶後歷史 explicit／auto IDs、policy、score、skip reason、stage trace 仍與保存快照相同；legacy、off、0 auto、unknown／estimated 清楚區分。
 - 驗證：先用舊 JSON／trace 與刪除後 Task fixture 取得 UI 行為紅燈；完成後比對持久化 Task，不從現存記憶推導預期值。
-- 狀態：📝 待實作。證據：待填。
+- 狀態：✅ 已完成（2026-09-23）。紅燈：固定基線 `db6c847` 執行 `node docs/issues/issue-21/evidence/ui-probe.cjs audit` exit 1，legacy 稽核欄空白。綠燈：現行 audit 與完整 probe exit 0，檢查 legacy/off/explicit-only/bounded 0 auto、policy、score、skip、stage admission 與 estimated；`TestWEBMEMRedelivery` 對照刪除後持久化 Task 的快照。介面只讀 Task status 保存資料，不查即時 memory；保留 G5 已核准的既有 status 大小限制。UI 顯示與儲存快照分層驗證；精煉檢查單一 render 函式已足夠，no-op。
 
 ### Task 4.2 — 純文字顯示與切換清除
 - 產出與最小範圍：UI 對記憶及稽核內容使用純文字節點；以 session／workspace generation 丟棄遲到回應，切換或失效時清除內容、選取與待送 payload。
@@ -101,7 +101,7 @@
 - 驗收編號：WEBMEM-009（責任）。
 - 完成判準：腳本樣式內容不執行；A 回應晚於 B 切換或登出到達仍不回填；下一任務送出的 ID 僅屬當前 workspace。
 - 驗證：先建立可控制回應順序的 UI 互動紅燈，完成後檢查 DOM、選取與真實 submit payload；session 失效分支單獨覆蓋。
-- 狀態：📝 待實作。證據：待填。
+- 狀態：✅ 已完成（2026-09-23）。紅燈：固定基線 `db6c847` 執行 `node docs/issues/issue-21/evidence/ui-probe.cjs race` exit 1，A Task 遲到回應在切換 B 後寫回狀態。綠燈：現行 race 與完整 probe exit 0，script/img 樣式只作文字，A detail／Task 遲到回應不回填；切換清除選取、recall、Task 與待重送 payload，session 401 清空並隱藏 app。`TestWEBMEMHTTPBoundary` 另保障服務端 session 拒絕；UI 競態與 HTTP 授權不同層。精煉檢查移除重複清理並重跑 probe。
 
 ### Task 4.3 — 全面回歸與交付文件
 - 產出與最小範圍：更新根 `README.md` 與既有架構文件的 Web 記憶資料流，整理各 Task 證據、資源邊界與獨立 review，準備 PR。
@@ -109,7 +109,7 @@
 - 驗收編號：WEBMEM-010（責任）。
 - 完成判準：WEB／MEM／CTXMEM／RECALL／CTXWIN／TFACE／MBACK／CRON／PGID cancel／queue-redelivery 回歸及 `go vet ./...`、`go test -count=1 -race ./...`、`go build ./cmd/asura` 全綠；記錄傳輸上界與 query plan；文件與實作一致。
 - 驗證：重用版本與環境一致的有效 Task 證據，執行完整回歸命令；文件以靜態對照程式與手動閱讀檢查。交付前固定 BASE／HEAD 並由獨立 reviewer 審查。
-- 狀態：📝 待實作。證據：待填。
+- 狀態：🔄 待獨立審查（2026-09-23）。證據：在本次待提交的完整工作區，`go vet ./...` exit 0；`go test -count=1 -race ./...` exit 0，涵蓋 `cmd/asura`、`internal/auth/backend/contextwin/cron/daemon/engine/pipeline/recall/storage/web` 與 `tests/integration`；`go build ./cmd/asura` exit 0；`node docs/issues/issue-21/evidence/ui-probe.cjs` exit 0；`git diff --check` exit 0。根 README 與架構文件已對照新 Web 路由、上限與資料流更新；完整 UI probe 採最小 DOM 模擬，非真實瀏覽器驗證，將交由獨立 review 評估其限制。其餘完成判準待固定交付 HEAD、PR 及獨立 reviewer 報告。
 
 ## 測試策略與驗收對應
 

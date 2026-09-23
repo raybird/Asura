@@ -263,10 +263,10 @@ func TestWEB005Unit(t *testing.T) {
 	wLogin := request(s, "POST", "/api/login", `{"key":"`+secret+`"}`, origin, nil)
 	c := wLogin.Result().Cookies()[0]
 
-	// 1. 同識別異內容拒絕 400
+	// 1. 同識別異內容依 2026-09-23 核准的 G1 回傳 409
 	wDiff := request(s, "POST", "/api/tasks", `{"id":"dup-key","workspace":"/tmp","prompt":"different"}`, origin, c)
-	if wDiff.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 for different payload, got %d", wDiff.Code)
+	if wDiff.Code != http.StatusConflict {
+		t.Errorf("expected 409 for different payload, got %d", wDiff.Code)
 	}
 	if !strings.Contains(wDiff.Body.String(), "request ID reused with different payload") {
 		t.Errorf("expected conflict message in body, got %q", wDiff.Body.String())

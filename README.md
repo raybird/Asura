@@ -110,10 +110,14 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web \
 ```
 
 2026-09-13：
-- **存取安全**：單一存取密鑰換取 12 小時工作階段，強制 `HttpOnly` 與 `SameSite=Strict` Cookie，嚴格驗證 Host 與 Origin 標頭杜絕跨站偽造。
+- **存取安全**：單一存取密鑰換取 12 小時工作階段，強制 `HttpOnly` 與 `SameSite=Strict` Cookie，驗證所有請求的 Host 與變更方法的 Origin。
 - **中樞整合**：共用 Daemon 授權政策與容量限制，網頁端專案下拉選單來自服務端政策，支援輸入既有 CLI Task ID 查詢與共同取消。
 - **純文字分頁與恢復**：長輸出結果以 Unicode Rune 進行安全字元切片分頁（`GET /api/tasks/{id}/result`），以 `textContent` 渲染防止腳本執行；關閉頁面重開後登入仍可恢復查詢同一任務，唯讀輪詢不重跑副作用。
 - **外部 Tunnel 邊界**：若使用 Cloudflare Tunnel、Tailscale 等第三方工具臨時對外曝露，外部流量仍必須通過密鑰驗證與 Origin 防護；Asura 本體不內嵌 Tunnel 供應商 SDK 或自動管理穿透。
+
+2026-09-23：登入 Web Console 後可在授權專案下管理手動記憶：分頁列出摘要、按 ID 查看詳情、新增內容，以及確認後刪除。清單預設 20 筆、每頁最多 50 筆；摘要最多 512 UTF-8 bytes，Web 詳情最多 64 KiB，新增內容最多 32 KiB。超限或舊資料格式不支援時會明確回報，CLI 的完整記憶查詢仍可使用。
+
+提交任務時可選取最多 32 個同專案記憶 ID，或明確開啟 `bounded` 自動召回；未選取且未開啟時保持原本的 off 行為。送出前顯示 Request ID，回應遺失可用「原請求重試」送出相同內容；若關閉頁面，請使用先前保存的 ID 重新登入查詢。Task 查詢頁會顯示當次保存的記憶與召回決策，刪除現存記憶不會改寫舊 Task 快照。
 
 #### 定時排程管理 (cron)
 ```bash

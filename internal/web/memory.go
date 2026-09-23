@@ -1,7 +1,9 @@
 package web
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -53,7 +55,7 @@ func (s *Server) handleMemories(w http.ResponseWriter, r *http.Request) {
 				Workspace string `json:"workspace"`
 				Content   string `json:"content"`
 			}
-			if !decode(w, r, &input) {
+			if !decodeMemoryAdd(w, r, &input) {
 				return
 			}
 			if input.Workspace == "" || input.Content == "" {
@@ -108,6 +110,29 @@ func (s *Server) handleMemories(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeMemoryJSON(w, resp.Memory, http.StatusOK)
+}
+
+func decodeMemoryAdd(w http.ResponseWriter, r *http.Request, value any) bool {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64*1024))
+	if err != nil {
+		writeDecodeError(w, err)
+		return false
+	}
+	if !utf8.Valid(body) {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return false
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(value); err != nil {
+		writeDecodeError(w, err)
+		return false
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		writeDecodeError(w, err)
+		return false
+	}
+	return true
 }
 
 func validMemoryQuery(r *http.Request, allowed ...string) bool {

@@ -54,7 +54,24 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
     <label for="prompt">任務提示詞 (Prompt)</label>
     <textarea id="prompt" rows="3" placeholder="請輸入欲交由本機執行的自然語言任務..."></textarea>
 
+    <div id="memory-section" class="card" style="margin-top:1rem;">
+      <h3>專案記憶</h3>
+      <div id="memory-msg" class="msg hidden"></div>
+      <button type="button" id="memory-reload" class="secondary">載入記憶</button>
+      <div id="memory-list"></div>
+      <button type="button" id="memory-next" class="secondary hidden">下一頁</button>
+      <pre id="memory-detail">(選取記憶後可查看詳情)</pre>
+      <label for="memory-content">新增手動記憶</label>
+      <textarea id="memory-content" rows="3"></textarea>
+      <button type="button" id="memory-add">新增記憶</button>
+    </div>
+
+    <label for="memory-recall">自動召回</label>
+    <select id="memory-recall"><option value="off">關閉</option><option value="bounded">啟用 bounded 召回</option></select>
     <button type="button" id="submit-btn">提交任務</button>
+    <div>Request ID：<code id="request-id-display">(尚未提交)</code></div>
+    <button type="button" id="retry-btn" class="secondary hidden">原請求重試</button>
+    <p>若送出後結果未知，請先保存 Request ID；重新登入後可用下方欄位查詢。關閉頁面後無法恢復待重試內容。</p>
   </form>
 
   <hr style="margin: 1.5rem 0; border: 0; border-top: 1px solid #d0d7de;">
@@ -74,6 +91,8 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
     <div>狀態：<span id="task-status" class="status-badge">-</span></div>
     <div style="margin-top:0.5rem; font-weight:600; font-size:0.9rem;">任務輸出：</div>
     <pre id="task-result">(尚未查詢任務)</pre>
+    <div style="margin-top:0.5rem; font-weight:600; font-size:0.9rem;">記憶與召回稽核：</div>
+    <pre id="memory-audit">(尚未查詢任務)</pre>
   </div>
 </div>
 
@@ -90,6 +109,9 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
   const projectSelect = document.getElementById('project-select');
   const promptInput = document.getElementById('prompt');
   const submitBtn = document.getElementById('submit-btn');
+  const recallSelect = document.getElementById('memory-recall');
+  const retryBtn = document.getElementById('retry-btn');
+  const requestIDDisplay = document.getElementById('request-id-display');
 
   const taskIdInput = document.getElementById('task-id');
   const queryBtn = document.getElementById('query-btn');
@@ -97,8 +119,158 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
 
   const taskStatus = document.getElementById('task-status');
   const taskResult = document.getElementById('task-result');
+  const memoryAudit = document.getElementById('memory-audit');
 
-  let currentRequestID = '';
+  const memoryList = document.getElementById('memory-list');
+  const memoryDetail = document.getElementById('memory-detail');
+  const memoryMessage = document.getElementById('memory-msg');
+  const memoryContent = document.getElementById('memory-content');
+  const memoryNext = document.getElementById('memory-next');
+  const selectedMemories = new Set();
+  let sessionGeneration = 0;
+  let memoryCursor = '';
+  let memoryGeneration = 0;
+
+  function clearMemoryState() {
+    memoryGeneration++;
+    selectedMemories.clear();
+    recallSelect.value = 'off';
+    clearPendingRequest();
+    stopPolling();
+    taskStatus.textContent = '-';
+    taskResult.textContent = '(尚未查詢任務)';
+    memoryAudit.textContent = '(尚未查詢任務)';
+    taskIdInput.value = '';
+    requestIDDisplay.textContent = '(尚未提交)';
+    memoryCursor = '';
+    memoryList.replaceChildren();
+    memoryDetail.textContent = '(選取記憶後可查看詳情)';
+    memoryContent.value = '';
+    memoryNext.classList.add('hidden');
+    clearMessage(memoryMessage);
+  }
+
+  async function loadMemories(cursor) {
+    const generation = memoryGeneration;
+    const workspace = projectSelect.value;
+    if (!workspace) return;
+    if (!cursor) {
+      memoryList.replaceChildren();
+      memoryNext.classList.add('hidden');
+    }
+    try {
+      const url = '/api/memories?workspace=' + encodeURIComponent(workspace) + (cursor ? '&cursor=' + encodeURIComponent(cursor) : '');
+      const res = await fetch(url);
+      if (generation !== memoryGeneration || workspace !== projectSelect.value) return;
+      if (res.status === 401) { sessionExpired(); return; }
+      if (!res.ok) { showMessage(memoryMessage, '記憶載入失敗：' + res.status, true); return; }
+      const page = await res.json();
+      if (generation !== memoryGeneration || workspace !== projectSelect.value) return;
+      if (!cursor) memoryList.replaceChildren();
+      for (const item of page.items || []) {
+        const row = document.createElement('div');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.style.width = 'auto';
+        checkbox.checked = selectedMemories.has(item.id);
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) {
+            if (selectedMemories.size >= 32) {
+              checkbox.checked = false;
+              showMessage(memoryMessage, '最多選取 32 筆記憶', true);
+              return;
+            }
+            selectedMemories.add(item.id);
+          } else {
+            selectedMemories.delete(item.id);
+          }
+        });
+        row.appendChild(checkbox);
+        const summary = document.createElement('span');
+        summary.textContent = ' ' + item.id + '：' + item.summary + (item.truncated ? '…' : '');
+        row.appendChild(summary);
+        const detailButton = document.createElement('button');
+        detailButton.type = 'button';
+        detailButton.className = 'secondary';
+        detailButton.textContent = '查看';
+        detailButton.addEventListener('click', () => showMemoryDetail(item.id));
+        row.appendChild(detailButton);
+        const deleteButton = document.createElement('button');
+        deleteButton.type = 'button';
+        deleteButton.className = 'danger';
+        deleteButton.textContent = '刪除';
+        deleteButton.addEventListener('click', () => deleteMemory(item.id));
+        row.appendChild(deleteButton);
+        memoryList.appendChild(row);
+      }
+      memoryCursor = page.next_cursor || '';
+      memoryNext.classList.toggle('hidden', !memoryCursor);
+    } catch (err) {
+      if (generation === memoryGeneration) showMessage(memoryMessage, '記憶載入失敗', true);
+    }
+  }
+
+  async function showMemoryDetail(id) {
+    const generation = memoryGeneration;
+    const workspace = projectSelect.value;
+    memoryDetail.textContent = '(讀取中...)';
+    try {
+      const res = await fetch('/api/memories/' + encodeURIComponent(id) + '?workspace=' + encodeURIComponent(workspace));
+      if (generation !== memoryGeneration || workspace !== projectSelect.value) return;
+      if (res.status === 401) { sessionExpired(); return; }
+      if (!res.ok) { showMessage(memoryMessage, '詳情讀取失敗：' + res.status, true); return; }
+      const memory = await res.json();
+      if (generation === memoryGeneration && workspace === projectSelect.value) memoryDetail.textContent = memory.content;
+    } catch (err) {
+      if (generation === memoryGeneration) showMessage(memoryMessage, '詳情讀取失敗', true);
+    }
+  }
+
+  async function deleteMemory(id) {
+    if (!window.confirm('確定刪除這筆記憶？已接受任務的快照不會改變。')) return;
+    const generation = memoryGeneration;
+    const workspace = projectSelect.value;
+    try {
+      const res = await fetch('/api/memories/' + encodeURIComponent(id) + '?workspace=' + encodeURIComponent(workspace), { method: 'DELETE' });
+      if (generation !== memoryGeneration || workspace !== projectSelect.value) return;
+      if (res.status === 401) { sessionExpired(); return; }
+      if (!res.ok) { showMessage(memoryMessage, '刪除失敗：' + res.status, true); return; }
+      selectedMemories.delete(id);
+      memoryDetail.textContent = '(選取記憶後可查看詳情)';
+      await loadMemories('');
+      if (generation === memoryGeneration) showMessage(memoryMessage, '記憶已刪除', false);
+    } catch (err) {
+      if (generation === memoryGeneration) showMessage(memoryMessage, '刪除失敗', true);
+    }
+  }
+
+  document.getElementById('memory-reload').addEventListener('click', () => loadMemories(''));
+  memoryNext.addEventListener('click', () => loadMemories(memoryCursor));
+  projectSelect.addEventListener('change', () => { clearMemoryState(); loadMemories(''); });
+  document.getElementById('memory-add').addEventListener('click', async () => {
+    const generation = memoryGeneration;
+    const workspace = projectSelect.value;
+    const content = memoryContent.value;
+    if (!workspace || !content) { showMessage(memoryMessage, '請選擇專案並輸入記憶內容', true); return; }
+    try {
+      const res = await fetch('/api/memories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ workspace, content }) });
+      if (generation !== memoryGeneration || workspace !== projectSelect.value) return;
+      if (res.status === 401) { sessionExpired(); return; }
+      if (!res.ok) { showMessage(memoryMessage, '新增失敗：' + res.status, true); return; }
+      memoryContent.value = '';
+      await loadMemories('');
+      if (generation === memoryGeneration) showMessage(memoryMessage, '記憶已新增', false);
+    } catch (err) {
+      if (generation === memoryGeneration) showMessage(memoryMessage, '新增失敗', true);
+    }
+  });
+
+  let pendingRequest = null;
+
+  function clearPendingRequest() {
+    pendingRequest = null;
+    retryBtn.classList.add('hidden');
+  }
 
   function generateRequestID() {
     if (window.crypto && window.crypto.randomUUID) {
@@ -118,19 +290,34 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
     el.classList.add('hidden');
   }
 
+  function sessionExpired() {
+    sessionGeneration++;
+    clearMemoryState();
+    appSection.classList.add('hidden');
+    loginSection.classList.remove('hidden');
+  }
+
   async function checkAuthAndLoad() {
+    const generation = sessionGeneration;
     try {
       const res = await fetch('/api/projects');
+      if (generation !== sessionGeneration) return;
       if (res.status === 200) {
         const projects = await res.json();
+        if (generation !== sessionGeneration) return;
         renderProjects(projects);
+        clearMemoryState();
+        loadMemories('');
         loginSection.classList.add('hidden');
         appSection.classList.remove('hidden');
       } else {
+        clearMemoryState();
         loginSection.classList.remove('hidden');
         appSection.classList.add('hidden');
       }
     } catch (e) {
+      if (generation !== sessionGeneration) return;
+      clearMemoryState();
       loginSection.classList.remove('hidden');
       appSection.classList.add('hidden');
     }
@@ -168,6 +355,7 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
       });
       if (res.ok) {
         loginKey.value = '';
+        sessionGeneration++;
         checkAuthAndLoad();
       } else {
         showMessage(loginMsg, '登入失敗：密鑰不正確', true);
@@ -178,6 +366,8 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
   });
 
   logoutBtn.addEventListener('click', async () => {
+    sessionGeneration++;
+    clearMemoryState();
     try {
       await fetch('/api/logout', { method: 'POST' });
     } finally {
@@ -187,51 +377,110 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
     }
   });
 
-  submitBtn.addEventListener('click', async () => {
-    clearMessage(opMsg);
-    const ws = projectSelect.value;
-    const prompt = promptInput.value.trim();
-    if (!ws) {
-      showMessage(opMsg, '請選擇有效的授權專案', true);
-      return;
-    }
-    if (!prompt) {
-      showMessage(opMsg, '請輸入任務提示詞', true);
-      return;
-    }
-
-    if (!currentRequestID) {
-      currentRequestID = generateRequestID();
-    }
-
+  async function sendTask(payload) {
+    const generation = memoryGeneration;
     submitBtn.disabled = true;
+    retryBtn.disabled = true;
     try {
       const res = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: currentRequestID,
-          workspace: ws,
-          prompt: prompt
-        })
+        body: JSON.stringify(payload)
       });
-      const data = await res.json();
+      if (generation !== memoryGeneration || projectSelect.value !== payload.workspace) return;
+      if (res.status === 401) { sessionExpired(); return; }
       if (res.status === 202) {
+        const data = await res.json();
+        if (generation !== memoryGeneration || projectSelect.value !== payload.workspace) return;
         taskIdInput.value = data.id;
         taskStatus.textContent = data.status || 'pending';
+        renderMemoryAudit(data);
         taskResult.textContent = data.result || '(等待執行中...)';
         showMessage(opMsg, '任務已接受：' + data.id, false);
-        currentRequestID = ''; // 提交成功後重置識別，供下次新任務使用
+        clearPendingRequest();
         pollTask(data.id);
       } else {
-        showMessage(opMsg, '提交被拒絕：' + (data.error || res.statusText), true);
+        const message = await res.text();
+        if (generation !== memoryGeneration) return;
+        showMessage(opMsg, '提交被拒絕：' + message, true);
+        if (res.status >= 400 && res.status < 500) clearPendingRequest();
       }
     } catch (err) {
-      showMessage(opMsg, '請求失敗：' + err.message, true);
+      if (generation === memoryGeneration) {
+        retryBtn.classList.remove('hidden');
+        showMessage(opMsg, '回應未知；請保存 Request ID，或以原請求重試。', true);
+      }
     } finally {
       submitBtn.disabled = false;
+      retryBtn.disabled = false;
     }
+  }
+
+  submitBtn.addEventListener('click', () => {
+    clearMessage(opMsg);
+    const workspace = projectSelect.value;
+    const prompt = promptInput.value.trim();
+    if (!workspace || !prompt) {
+      showMessage(opMsg, '請選擇授權專案並輸入任務提示詞', true);
+      return;
+    }
+    const payload = { id: generateRequestID(), workspace, prompt };
+    if (selectedMemories.size) payload.memory_ids = Array.from(selectedMemories);
+    if (recallSelect.value === 'bounded') payload.memory_recall = 'bounded';
+    clearPendingRequest();
+    pendingRequest = payload;
+    requestIDDisplay.textContent = payload.id;
+    taskIdInput.value = payload.id;
+    sendTask(payload);
   });
+
+  retryBtn.addEventListener('click', () => {
+    if (pendingRequest) sendTask(pendingRequest);
+  });
+
+  function renderMemoryAudit(task) {
+    if (!task.resolved_context) {
+      memoryAudit.textContent = '舊任務：未提供記憶與召回資料';
+      return;
+    }
+    let context;
+    try { context = JSON.parse(task.resolved_context); }
+    catch (err) { memoryAudit.textContent = '記憶稽核資料格式不支援'; return; }
+    if (!context || typeof context !== 'object') { memoryAudit.textContent = '記憶稽核資料格式不支援'; return; }
+    const refs = Array.isArray(context.memory_refs) ? context.memory_refs : (task.memory_refs || []);
+    const recall = context.recall;
+    const lines = [];
+    if (recall && recall.mode === 'bounded') {
+      lines.push('模式：bounded');
+      lines.push('政策：' + (recall.policy_version || '未提供'));
+      if (recall.policy) lines.push('政策限制：' + JSON.stringify(recall.policy));
+      lines.push('explicit IDs：' + ((Array.isArray(recall.explicit_ids) ? recall.explicit_ids : []).join(', ') || '(無)'));
+      lines.push('auto IDs：' + ((Array.isArray(recall.auto_ids) ? recall.auto_ids : []).join(', ') || '(0 筆)'));
+      for (const item of Array.isArray(recall.selected) ? recall.selected : []) lines.push('選取：' + (item.id ?? '未提供') + '，分數 ' + (item.score ?? '未提供') + '，原因 ' + (item.reason ?? '未提供'));
+      for (const [reason, count] of Object.entries(recall.skipped && typeof recall.skipped === 'object' ? recall.skipped : {})) lines.push('略過：' + reason + ' ' + count);
+      if (recall.budget) lines.push('預算估算：' + (recall.budget.estimated_prompt_tokens ?? '未提供') + ' tokens（' + (recall.budget.estimation_method || '估算') + '）');
+    } else if (recall && recall.mode) {
+      lines.push('模式：未知（' + recall.mode + '）');
+    } else if (refs.length) {
+      lines.push('模式：explicit-only');
+      lines.push('explicit IDs：' + refs.join(', '));
+    } else {
+      lines.push('模式：off（無自動召回）');
+    }
+    let trace;
+    try { trace = task.pipeline_trace ? JSON.parse(task.pipeline_trace) : null; }
+    catch (err) { trace = null; }
+    if (trace && Array.isArray(trace.stages)) {
+      for (const stage of trace.stages) {
+        const admission = stage.admission;
+        lines.push('Stage ' + (stage.name || '未提供') + '：' + (stage.status || '未知') + '；准入 ' + (admission ? admission.verdict : '未提供') + '；context window ' + (admission && admission.max_tokens ? admission.max_tokens : '未知'));
+        if (admission && admission.estimate) lines.push('估算：' + (admission.estimate.total_estimated_tokens ?? '未提供') + ' tokens（' + (admission.estimate.provenance || '估算') + '）');
+      }
+    } else {
+      lines.push('Stage trace：未提供');
+    }
+    memoryAudit.textContent = lines.join('\n');
+  }
 
   let pollTimer = null;
 
@@ -243,16 +492,20 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
   }
 
   async function loadFullResultPaged(taskID) {
+    const generation = memoryGeneration;
     taskResult.textContent = '';
     let offset = 0;
     const limit = 1000;
     while (true) {
       try {
         const res = await fetch('/api/tasks/' + encodeURIComponent(taskID) + '/result?offset=' + offset + '&limit=' + limit);
+        if (generation !== memoryGeneration) return;
+        if (res.status === 401) { sessionExpired(); return; }
         if (!res.ok) {
           break;
         }
         const page = await res.json();
+        if (generation !== memoryGeneration) return;
         taskResult.textContent += page.data || '';
         if (!page.has_more) {
           break;
@@ -266,11 +519,19 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
 
   async function pollTask(tid) {
     stopPolling();
+    taskStatus.textContent = '-';
+    taskResult.textContent = '(查詢中...)';
+    memoryAudit.textContent = '(查詢中...)';
+    const generation = memoryGeneration;
     try {
       const res = await fetch('/api/tasks/' + encodeURIComponent(tid));
+      if (generation !== memoryGeneration) return;
+      if (res.status === 401) { sessionExpired(); return; }
       if (res.ok) {
         const task = await res.json();
+        if (generation !== memoryGeneration) return;
         taskStatus.textContent = task.status || '-';
+        renderMemoryAudit(task);
         if (task.status === 'completed') {
           if (task.result && task.result.length > 500) {
             await loadFullResultPaged(task.id);
@@ -300,11 +561,19 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
       return;
     }
     stopPolling();
+    taskStatus.textContent = '-';
+    taskResult.textContent = '(查詢中...)';
+    memoryAudit.textContent = '(查詢中...)';
+    const generation = memoryGeneration;
     try {
       const res = await fetch('/api/tasks/' + encodeURIComponent(tid));
+      if (generation !== memoryGeneration) return;
+      if (res.status === 401) { sessionExpired(); return; }
       if (res.ok) {
         const task = await res.json();
+        if (generation !== memoryGeneration) return;
         taskStatus.textContent = task.status || '-';
+        renderMemoryAudit(task);
         if (task.status === 'completed' && task.result && task.result.length > 500) {
           await loadFullResultPaged(task.id);
         } else {
@@ -316,10 +585,11 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
         }
       } else {
         const errText = await res.text();
+        if (generation !== memoryGeneration) return;
         showMessage(opMsg, '查詢失敗：' + errText, true);
       }
     } catch (err) {
-      showMessage(opMsg, '查詢出錯：' + err.message, true);
+      if (generation === memoryGeneration) showMessage(opMsg, '查詢出錯：' + err.message, true);
     }
   });
 
@@ -331,22 +601,28 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
       showMessage(opMsg, '請輸入欲取消的 Task ID', true);
       return;
     }
+    const generation = memoryGeneration;
     try {
       const res = await fetch('/api/tasks/' + encodeURIComponent(tid) + '/cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: '{}'
       });
+      if (generation !== memoryGeneration) return;
+      if (res.status === 401) { sessionExpired(); return; }
       if (res.ok) {
         const task = await res.json();
+        if (generation !== memoryGeneration) return;
         taskStatus.textContent = task.status || 'cancelled';
+        renderMemoryAudit(task);
         showMessage(opMsg, '任務已成功取消：' + task.id, false);
       } else {
         const errText = await res.text();
+        if (generation !== memoryGeneration) return;
         showMessage(opMsg, '取消失敗：' + errText, true);
       }
     } catch (err) {
-      showMessage(opMsg, '取消請求出錯：' + err.message, true);
+      if (generation === memoryGeneration) showMessage(opMsg, '取消請求出錯：' + err.message, true);
     }
   });
 

@@ -11,6 +11,7 @@
 - [權威實作計畫](implementation-plan.md)
 - [初始風險探測](evidence/probe-results.md)
 - [探測 SQL](evidence/probe.sql)
+- [Web UI 可重跑探測](evidence/ui-probe.cjs)
 - [修訂前獨立審查](review-9d5c2a3.md)
 
 ## 關鍵差異
@@ -170,9 +171,10 @@ Feature: 已登入 Web Console 的專案記憶與召回操作
 | 2026-09-23 | 依獨立審查修訂 detail 上界、GET Origin 驗收與 UI 競態，補可重跑探測；規格仍待核准 | Codex |
 | 2026-09-23 | 使用者核准 WEBMEM-001～010 外部行為；G-TBD-1～5 的具體數值與協定待定案 | 使用者 |
 | 2026-09-23 | 使用者核准 G-TBD-1～5 的現行技術提案與固定上限 | 使用者 |
+| 2026-09-23 | 完成 Web、Daemon、SQLite 與 UI 實作及任務級紅綠證據；完整回歸與交付審查待執行 | Codex |
 
 ---
 **建立日期**: 2026-09-23
 **分級**: Large — Web、Daemon、SQLite 與 Task 稽核跨模組
 **風險**: High — 授權外洩、無界傳輸與重送副作用
-**狀態**: 驗收與設計已核准，待實作
+**狀態**: 實作完成，待完整回歸與獨立審查

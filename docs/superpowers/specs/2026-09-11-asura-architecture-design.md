@@ -303,7 +303,7 @@ Asura/
 
 *文件版本：v1.2.0*
 *建立日期：2026-09-11*
-*更新日期：2026-09-21*
+*更新日期：2026-09-23*
 
 
 ## Phase 3F：有界自動專案記憶召回
@@ -317,3 +317,9 @@ SQLite 新增 `(workspace,id)` 索引；前 257 筆中僅前 256 筆供 selector
 ExecutionContext 的可選 `recall` 保存政策、explicit/auto IDs、選中分數、estimated budget 與略過計數；無匹配也保存。舊資料沒有 recall 即視為 off；不改寫 memories 或舊 Task。PipelineTrace 的所屬 Task 保有唯一決策，後續 stages 沿用密封內容並各自執行 admission。重啟的中斷失敗政策不變。
 
 完整上限、排序限制與驗收見 [Issue 19](../../issues/issue-19/README.md)。
+
+## Phase 3G：Web Console 專案記憶管理與召回操作
+
+2026-09-23。Web 的 `/api/memories` list/detail/add/delete 經既有 session、Host 與變更方法 Origin 入口，透過 Unix IPC 交由 Daemon 每次重新授權 canonical workspace；Web 不直接讀寫 SQLite。CLI 的全量 `memory_list/get` 維持原契約，Web 另使用 `memory_page` 與 `memory_detail_bounded`。SQLite 的 `(workspace,created_at,id)` 索引支援 `(created_at,id)` keyset；SQL 以 bytes sentinel 限制欄位，單頁最多 50 筆，摘要 512 bytes、detail 64 KiB。新記憶 page/detail 的 IPC 及 HTTP JSON 回應均於編碼前檢查 512 KiB 上限。
+
+Web Task submit 僅接受 ID、workspace、prompt、explicit `memory_ids` 與 `memory_recall`，由 Daemon 依原指紋、記憶解析、bounded selector 與密封流程處理；預設 off。介面送出前顯示 Request ID，回應遺失時以同一 ID 和 payload 重送。專案或 session 切換會清除記憶內容、選取與待重送資料，並以世代值丟棄遲到的 UI 回應。歷史稽核只依 Task 保存的 `resolved_context` 與 `pipeline_trace` 呈現簡要決策，不重查現存記憶；首版沿用既有 Task status IPC，因此該舊路徑的完整 context/result 大小限制仍須另案處理。詳細驗收與證據見 [Issue 21](../../issues/issue-21/README.md)。
