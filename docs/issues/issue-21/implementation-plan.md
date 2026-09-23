@@ -104,12 +104,12 @@
 - 狀態：✅ 已完成（2026-09-23）。紅燈：固定基線 `db6c847` 執行 `node docs/issues/issue-21/evidence/ui-probe.cjs race` exit 1，A Task 遲到回應在切換 B 後寫回狀態。綠燈：現行 race 與完整 probe exit 0，script/img 樣式只作文字，A detail／Task 遲到回應不回填；切換清除選取、recall、Task 與待重送 payload，session 401 清空並隱藏 app。`TestWEBMEMHTTPBoundary` 另保障服務端 session 拒絕；UI 競態與 HTTP 授權不同層。精煉檢查移除重複清理並重跑 probe。
 
 ### Task 4.3 — 全面回歸與交付文件
-- 產出與最小範圍：更新根 `README.md` 與既有架構文件的 Web 記憶資料流，整理各 Task 證據、資源邊界與獨立 review，準備 PR。
+- 產出與最小範圍：更新根 `README.md` 與既有架構文件的 Web 記憶資料流，整理各 Task 證據與資源邊界，準備 PR。
 - 相依：Task 4.2。
 - 驗收編號：WEBMEM-010（責任）。
-- 完成判準：WEB／MEM／CTXMEM／RECALL／CTXWIN／TFACE／MBACK／CRON／PGID cancel／queue-redelivery 回歸及 `go vet ./...`、`go test -count=1 -race ./...`、`go build ./cmd/asura` 全綠；記錄傳輸上界與 query plan；文件與實作一致。
-- 驗證：重用版本與環境一致的有效 Task 證據，執行完整回歸命令；文件以靜態對照程式與手動閱讀檢查。交付前固定 BASE／HEAD 並由獨立 reviewer 審查。
-- 狀態：🔄 待獨立審查（2026-09-23）。證據：在本次待提交的完整工作區，`go vet ./...` exit 0；`go test -count=1 -race ./...` exit 0，涵蓋 `cmd/asura`、`internal/auth/backend/contextwin/cron/daemon/engine/pipeline/recall/storage/web` 與 `tests/integration`；`go build ./cmd/asura` exit 0；`node docs/issues/issue-21/evidence/ui-probe.cjs` exit 0；`git diff --check` exit 0。根 README 與架構文件已對照新 Web 路由、上限與資料流更新；完整 UI probe 採最小 DOM 模擬，非真實瀏覽器驗證，將交由獨立 review 評估其限制。其餘完成判準待固定交付 HEAD、PR 及獨立 reviewer 報告。
+- 完成判準：WEB／MEM／CTXMEM／RECALL／CTXWIN／TFACE／MBACK／CRON／PGID cancel／queue-redelivery 回歸及 `go vet ./...`、`go test -count=1 -race ./...`、`go build ./cmd/asura` 全綠；記錄傳輸上界與 query plan；文件與實作一致。PR 與獨立 review 由 dev-cycle 的交付 gate 處理。
+- 驗證：重用版本與環境一致的有效 Task 證據，執行完整回歸命令；文件以靜態對照程式與手動閱讀檢查。完成 Task 後固定 BASE／HEAD 供 PR 與獨立 reviewer 使用。
+- 狀態：✅ 已完成（2026-09-23）。證據：對固定提交 `0869a60`，`go vet ./...` exit 0；`go test -count=1 -race ./...` exit 0，涵蓋 `cmd/asura`、`internal/auth/backend/contextwin/cron/daemon/engine/pipeline/recall/storage/web` 與 `tests/integration`；`go build -o /tmp/asura_issue21_build ./cmd/asura` exit 0；`node docs/issues/issue-21/evidence/ui-probe.cjs` exit 0；`git diff --check` exit 0。根 README 與架構文件對照新 Web 路由、上限及資料流更新；UI probe 採最小 DOM 模擬，非真實瀏覽器驗證。query plan 與傳輸 bytes 的真實 fixture 證據分別在 Task 1.1、1.2 與 2.2。文件任務無產品紅燈，依程式對照與可重跑命令作等價證據；精煉檢查只修正受本功能影響的說明，no-op。
 
 ## 測試策略與驗收對應
 
@@ -131,4 +131,5 @@
 - [x] P0-2 初始探測有可重跑的 fixture、查詢與既有邊界測試證據。
 - [x] P0-3 決策完成，記錄核准來源；新功能驗證留給 Phase 1～4。
 - [x] 核准後 decompose；無待核准 Scenario。
-- [ ] 依 Task 紅綠驗證、常青文件更新及交付審查。
+- [x] 依 Task 紅綠驗證及常青文件更新。
+- [ ] 建立 PR 並完成獨立審查。
