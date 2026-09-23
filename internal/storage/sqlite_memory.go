@@ -144,3 +144,43 @@ func (s *SQLiteStore) ResolveMemoriesForTask(ctx context.Context, canonicalWorks
 	return memories, nil
 }
 
+// RecallCandidates 在 2026-09-22 核准的固定邊界內讀取；超限欄位保留一個 sentinel byte 供 selector 拒絕。
+func (s *SQLiteStore) RecallCandidates(ctx context.Context, workspace string) ([]Memory, bool, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT
+ substr(CAST(id AS BLOB),1,257), substr(CAST(content AS BLOB),1,8193),
+ substr(CAST(source AS BLOB),1,129), substr(CAST(created_at AS BLOB),1,65)
+ FROM memories WHERE workspace = ? ORDER BY id LIMIT 257`, workspace)
+	if err != nil {
+		return nil, false, err
+	}
+	defer rows.Close()
+	memories := make([]Memory, 0, 256)
+	truncated := false
+	for rows.Next() {
+		if len(memories) == 256 {
+			truncated = true
+			break
+		}
+		var id, content, source, created string
+		if err := rows.Scan(&id, &content, &source, &created); err != nil {
+			return nil, false, err
+		}
+		m := Memory{ID: id, Workspace: workspace, Content: content, Source: source}
+		if len(created) <= 64 {
+			for _, layout := range []string{"2006-01-02 15:04:05.999999999 -0700 MST", "2006-01-02 15:04:05.999999999-07:00", "2006-01-02 15:04:05.999999999", time.RFC3339Nano, "2006-01-02T15:04:05.999999999", "2006-01-02 15:04", "2006-01-02T15:04", "2006-01-02"} {
+				if parsed, err := time.Parse(layout, created); err == nil {
+					m.CreatedAt = parsed
+					break
+				}
+			}
+		}
+		memories = append(memories, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, false, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
+	return memories, truncated, nil
+}

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"asura/internal/auth"
+	"asura/internal/recall"
 	"asura/internal/storage"
 )
 
@@ -34,6 +35,7 @@ type ProjectMemorySnapshot struct {
 
 // ExecutionContext 代表任務執行時之完整密封上下文
 type ExecutionContext struct {
+	Recall          *recall.Decision        `json:"recall,omitempty"`
 	OriginalPrompt  string                  `json:"original_prompt"`
 	Workspace       string                  `json:"workspace"`
 	Backend         string                  `json:"backend,omitempty"`
@@ -49,6 +51,7 @@ type PipelineRunner interface {
 
 // SubmitRequest 代表提交任務的請求參數
 type SubmitRequest struct {
+	MemoryRecall    string            `json:"memory_recall,omitempty"`
 	ID              string            `json:"id,omitempty"`
 	Workspace       string            `json:"workspace"`
 	Prompt          string            `json:"prompt"`

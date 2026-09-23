@@ -1,0 +1,92 @@
+2026-09-22 base=aeaa652; issue-19 working tree
+$ go test -v -count=1 ./tests/integration -run TestRECALL
+exit=1
+RECALL-002/003: automatic memory missing: done: SQLite 隔離
+$ go test -v -count=1 ./internal/storage -run TestRecallCandidates
+exit=1
+RECALL-004: bounded candidate query is unavailable
+$ go test -v -count=1 ./internal/recall ./internal/storage -run 'TestSelect|TestRecallCandidates'
+selector scaffold (not connected to product): exit=1; RECALL-003 ranking got []
+TestRecallCandidates PASS (0.02s); storage package exit=0
+
+2026-09-22 targeted green:
+$ go test -v -count=1 ./internal/recall ./internal/daemon ./internal/storage ./cmd/asura ./tests/integration -run 'TestSelect|TestRecall|TestRECALL|TestAskRecall'
+exit=0
+ok asura/internal/recall 0.003s
+ok asura/internal/daemon 0.006s
+ok asura/internal/storage 0.195s
+10001 rows returned=256 elapsed=690.974µs; legacy index migration=1.247381ms
+ok asura/cmd/asura 0.004s
+ok asura/tests/integration 0.263s
+
+2026-09-22 full regression after code-simplify:
+$ go test -count=1 -race ./...
+exit=0
+ok asura/cmd/asura 1.197s
+ok asura/docs/issues/issue-19/evidence 4.890s
+ok asura/internal/auth 1.067s
+ok asura/internal/backend 1.050s
+ok asura/internal/backend/codex 10.066s
+ok asura/internal/backend/opencode 26.846s
+ok asura/internal/contextwin 1.054s
+ok asura/internal/cron 1.260s
+ok asura/internal/daemon 14.817s
+ok asura/internal/engine 4.846s
+ok asura/internal/pipeline 1.022s
+ok asura/internal/recall 1.028s
+ok asura/internal/storage 10.603s
+ok asura/internal/web 1.143s
+ok asura/tests/integration 42.922s
+
+2026-09-22 additional test only, production unchanged:
+$ go test -race -v -count=1 ./tests/integration -run TestRECALL_QueryDeadline
+exit=0
+--- PASS: TestRECALL_QueryDeadline (0.33s)
+ok asura/tests/integration 1.345s
+
+$ go test -run '^$' -bench BenchmarkSelectBounded -benchtime=10x -benchmem ./internal/recall
+exit=0
+linux amd64; Intel Core i5-11400 @ 2.60GHz
+BenchmarkSelectBounded-12 10 47340331 ns/op 20476730 B/op 616230 allocs/op
+ok asura/internal/recall 0.520s
+
+$ go vet ./...
+exit=0 (no output)
+$ go build -o /tmp/asura-issue19 ./cmd/asura
+exit=0 (no output)
+
+$ go test -count=1 ./tests/integration -run TestRECALL_BoundedCanonicalExplicitIDs
+exit=0
+ok asura/tests/integration 0.052s（同時確認 bounded canonical redelivery 與 off 舊空白 fingerprint 語意）
+
+2026-09-22 PR #20 review remediation（bounded explicit ID canonicalization）：
+$ go test -count=1 ./tests/integration -run TestRECALL_BoundedCanonicalExplicitIDs
+exit=1
+expected one canonical explicit memory；同一記憶以帶空白 explicit ID 與 auto candidate 身分重複出現
+
+$ go test -count=1 ./tests/integration -run 'TestRECALL_BoundedCanonicalExplicitIDs|TestRECALL_OffScopeExplicitAndNoRequery|TestRECALL_BoundedAndExplicit'
+exit=0
+ok asura/tests/integration 0.146s
+
+$ go test -count=1 -race ./...
+exit=0
+ok asura/cmd/asura 1.193s
+ok asura/docs/issues/issue-19/evidence 4.413s
+ok asura/internal/auth 1.020s
+ok asura/internal/backend 1.028s
+ok asura/internal/backend/codex 8.623s
+ok asura/internal/backend/opencode 25.371s
+ok asura/internal/contextwin 1.030s
+ok asura/internal/cron 1.263s
+ok asura/internal/daemon 13.975s
+ok asura/internal/engine 4.804s
+ok asura/internal/pipeline 1.022s
+ok asura/internal/recall 1.020s
+ok asura/internal/storage 10.591s
+ok asura/internal/web 1.097s
+ok asura/tests/integration 41.447s
+
+$ go vet ./...
+exit=0 (no output)
+$ go build -o /tmp/asura-issue19 ./cmd/asura
+exit=0 (no output)

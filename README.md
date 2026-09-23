@@ -175,6 +175,22 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web \
 - **重啟持久化與指定刪除**：記憶持久化保存於 SQLite，重啟 Daemon 完整保留未刪資料；刪除指定記憶後重啟不恢復，且另一專案與同專案其他記憶完全不受影響。
 - **失敗回報與零 AI 調用**：Daemon 不可用或操作失敗時，CLI 明確輸出錯誤至 stderr 並回傳非零退出碼，絕不冒充已保存或已刪除，不改走其他儲存方式；記憶管理操作直通儲存層，絕不啟動 AI 模型後端；既有任務提交不自動注入記憶內容。
 
+#### 有界自動記憶召回
+
+2026-09-22：`ask` 可明確啟用詞彙召回，預設 `off`；Web/Cron/run 不新增啟用入口。
+
+```bash
+./bin/asura ask --socket /tmp/asura.sock --workspace /path/to/project \
+  --memory-recall bounded --memory-id explicit-id "檢查 SQLite 隔離規則"
+```
+
+- 僅讀取已授權且相同 canonical workspace 的記憶，接受任務時封存；相同 request ID 重送沿用原快照，即使記憶或管理者設定改變也不重新選取。
+- `lexical-v1` 使用英文等字詞與相鄰中文雙字詞比對，不支援同義詞／語意檢索。只評分 ID 升序前 256 筆；query 使用前 4096 bytes 完整字元前綴、最多 128 個不同詞，可能漏召回。
+- 自動最多加入 4 筆，實際格式化增量最多 8192 bytes／2048 estimated prompt tokens；explicit 記憶不裁切或替換。候選內容超過 8192 bytes 或 metadata 過大時整筆略過。
+- 有已設定窗口時，auto 也受首次 stage 含輸出保留的估算限制；原始 prompt／explicit 基底超限仍沿用 `observe`／`reject`。後續每個 stage 依實際產物重新 admission。未設定窗口時，只保證 auto 額度有限，不能保證模型不溢出。
+- 查詢及選取期限 250ms，逾時或資料庫錯誤拒絕提交。`status` 的 `Recall` 提供選取來源、排序分數、政策、estimated budget 與略過原因計數，不保存未選候選全文。
+- 重啟沿用既有政策：未完成任務標為中斷失敗，快照保留，不自動重跑。
+
 #### 固定三面管線 (Three-Face Fixed Pipeline)
 2026-09-17：
 - **模式語意與向後相容**：
@@ -211,6 +227,7 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web \
   - [Issue 6 定時排程與容量調度 (Phase 2B)](docs/issues/issue-6/README.md) 與 [實作計畫拆解](docs/issues/issue-6/implementation-plan-decomposition.md)
   - [Issue 9 專案級基礎記憶 (Phase 3A)](docs/issues/issue-9/README.md) 與 [實作計畫](docs/issues/issue-9/implementation-plan.md)
   - [Issue 13 Three-Face Fixed Pipeline (Phase 3C)](docs/issues/issue-13/README.md) 與 [實作計畫](docs/issues/issue-13/implementation-plan.md)
+  - [Issue 19 Bounded Automatic Recall](docs/issues/issue-19/README.md) 與 [實作計畫](docs/issues/issue-19/implementation-plan.md)
   - [Issue 17 Context Window Management Foundation (Phase 3E)](docs/issues/issue-17/README.md) 與 [實作計畫](docs/issues/issue-17/implementation-plan.md)
 
 ---
@@ -264,4 +281,4 @@ new-issue ──► decompose (僅 Large) ──► execute-task (BDD + TDD) ─
 
 ---
 
-*最新更新日期：2026-09-21*
+*最新更新日期：2026-09-22*

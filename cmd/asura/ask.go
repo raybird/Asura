@@ -52,11 +52,21 @@ func handleAsk(args []string, stdout, stderr io.Writer) int {
 	wait := fs.Bool("wait", false, "wait for task to complete")
 	mode := fs.String("mode", string(pipeline.ModeDirect), "execution mode (direct or three-face)")
 	backendFlag := fs.String("backend", "opencode", "execution backend (opencode or codex)")
+	memoryRecall := fs.String("memory-recall", "off", "project memory recall (off or bounded)")
 	var memoryIDs stringSliceFlag
 	fs.Var(&memoryIDs, "memory-id", "specify project memory ID to include in task context (can be repeated or comma-separated)")
 
 	if err := fs.Parse(args); err != nil {
 		return 1
+	}
+
+	if *memoryRecall != "off" && *memoryRecall != "bounded" {
+		fmt.Fprintln(stderr, "error: memory-recall must be off or bounded")
+		return 1
+	}
+	recallMode := *memoryRecall
+	if recallMode == "off" {
+		recallMode = ""
 	}
 
 	if !pipeline.IsValidExecutionMode(pipeline.ExecutionMode(*mode)) {
@@ -110,12 +120,13 @@ func handleAsk(args []string, stdout, stderr io.Writer) int {
 
 	ctx := context.Background()
 	task, err := client.Submit(ctx, engine.SubmitRequest{
-		ID:        *customID,
-		Workspace: absWorkspace,
-		Prompt:    prompt,
-		Mode:      *mode,
-		Backend:   bID,
-		MemoryIDs: memoryIDs,
+		ID:           *customID,
+		Workspace:    absWorkspace,
+		Prompt:       prompt,
+		Mode:         *mode,
+		Backend:      bID,
+		MemoryIDs:    memoryIDs,
+		MemoryRecall: recallMode,
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "error: %v\n", err)

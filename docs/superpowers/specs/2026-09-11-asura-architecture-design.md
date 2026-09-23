@@ -304,3 +304,16 @@ Asura/
 *文件版本：v1.2.0*
 *建立日期：2026-09-11*
 *更新日期：2026-09-21*
+
+
+## Phase 3F：有界自動專案記憶召回
+
+最後驗證日期：2026-09-22。
+
+Daemon 在授權與 request fingerprint/redelivery 後、explicit 解析後、容量取得及 Task 保存前執行 bounded recall。預設 off 完全沿用舊指紋；bounded 使用固定結構與獨立 domain 的指紋，只包含使用者選項，不含管理者政策版本。重送先回傳 Task，不查候選。
+
+SQLite 新增 `(workspace,id)` 索引；前 257 筆中僅前 256 筆供 selector 使用，第 257 筆標示截斷。SQL 對 ID/content/source/created_at 只取上限加一的 byte sentinel，避免讀入完整超大欄位。selector 對同 scope、合法 metadata 進行確定性詞彙排序，服務端使用真實 ComposePrompt 與 Oracle Prepare 計算增量及首次 stage 預算。
+
+ExecutionContext 的可選 `recall` 保存政策、explicit/auto IDs、選中分數、estimated budget 與略過計數；無匹配也保存。舊資料沒有 recall 即視為 off；不改寫 memories 或舊 Task。PipelineTrace 的所屬 Task 保有唯一決策，後續 stages 沿用密封內容並各自執行 admission。重啟的中斷失敗政策不變。
+
+完整上限、排序限制與驗收見 [Issue 19](../../issues/issue-19/README.md)。
