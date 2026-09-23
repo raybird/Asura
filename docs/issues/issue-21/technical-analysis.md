@@ -58,7 +58,7 @@
 
 ## G5 — 歷史稽核與隱私
 
-從 Task 的 `resolved_context.recall`、`memory_refs` 與 `pipeline_trace` 呈現 compact 決策，區分 legacy/off、explicit-only、bounded 但 0 auto；缺失欄位顯示「未提供」，估算明標「估算」，context window 不明標「未知」。稽核區建議只顯示 IDs／分數／政策／略過計數及 stage admission，不主動展開保存的完整記憶正文；明確查看任務快照時仍依既有 Task 授權，且不重新查最新 memory。所有使用者文字透過 `textContent`。首版沿用既有 Task status IPC，故舊路徑可能傳送完整 `resolved_context` 與結果；新增 memory page/detail 的 512 KiB 上限不會修正該既有路徑。是否另建有界 audit DTO 或接受此已知限制，須由 G-TBD-5 決定。
+從 Task 的 `resolved_context.recall`、`memory_refs` 與 `pipeline_trace` 呈現 compact 決策，區分 legacy/off、explicit-only、bounded 但 0 auto；缺失欄位顯示「未提供」，估算明標「估算」，context window 不明標「未知」。稽核區建議只顯示 IDs／分數／政策／略過計數及 stage admission，不主動展開保存的完整記憶正文；明確查看任務快照時仍依既有 Task 授權，且不重新查最新 memory。所有使用者文字透過 `textContent`。首版建議沿用既有 Task status IPC，故舊路徑可能傳送完整 `resolved_context` 與結果；新增 memory page/detail 的 512 KiB 上限不會修正該既有路徑。此已知限制在 G-TBD-5 核准時明確接受；若要一併限制歷史 Task 查詢，需增加有界 audit DTO 與新的儲存讀取策略。
 
 ## 架構影響與待釐清項目
 
