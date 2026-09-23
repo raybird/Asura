@@ -39,7 +39,7 @@
 - 驗收編號：WEBMEM-002（責任）、WEBMEM-003（支援）。
 - 完成判準：A/B、父子、symlink、越界與撤權的真實 IPC 請求均只見精確 scope；跨 scope ID 與不存在 ID 同樣不可識別；page/detail IPC 回應遵守 G2 上界，拒絕路徑零寫入／零 backend 呼叫。
 - 驗證：先建立 IPC → Daemon → SQLite 的拒絕與容量紅燈，另用 Daemon 層測試辨識 canonical 授權失敗面；修復後比對實際 response bytes 與儲存狀態。
-- 狀態：📝 待實作。證據：待填。
+- 狀態：✅ 已完成（2026-09-23，Task 1.2）。證據：在 `c59b8ee` 後的工作區，`go test ./internal/daemon -run '^TestDaemonBoundedMemoryIPC$' -count=1` exit 1，直接失敗於 `WEBMEM-002: bounded IPC contract unavailable`；加入新動作後相同命令 exit 0，`go test ./internal/daemon -count=1` exit 0。真實 Unix socket → Daemon → SQLite fixture 覆蓋 A/B、父 scope、symlink 別名與改指向越界後的撤權、跨 scope／不存在 ID 同結果、長內容 detail 拒絕；原始 IPC 行長度小於 512 KiB 且不含全文。新 action 編碼前量測完整 JSON，大於 512 KiB 回固定錯誤；既有 CLI 全量 action 保留。外層 IPC 與底層 Daemon 測試在同一真實 IPC fixture 合併，沒有 mock 授權或儲存。精煉檢查限本次新 action／client 方法，沿用既有 IPC 風格，無可證明安全的額外簡化，no-op；綠燈證據仍有效。HTTP session／Origin 與其副作用計數留在 Task 2.1。
 
 ## Phase 2 — Web 記憶 HTTP API
 

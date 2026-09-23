@@ -66,16 +66,16 @@ type Config struct {
 
 // Daemon 實作單一守護進程中樞
 type Daemon struct {
-	cfg       Config
-	store     *storage.SQLiteStore
-	policy    *auth.Policy
-	engine    *engine.Engine
-	pool      *WorkerPool
-	wsQueue    *WorkspaceQueue
-	scheduler  *cron.Scheduler
-	inFlight   int
-	inFlightMu sync.Mutex
-	listener   net.Listener
+	cfg                   Config
+	store                 *storage.SQLiteStore
+	policy                *auth.Policy
+	engine                *engine.Engine
+	pool                  *WorkerPool
+	wsQueue               *WorkspaceQueue
+	scheduler             *cron.Scheduler
+	inFlight              int
+	inFlightMu            sync.Mutex
+	listener              net.Listener
 	lockFile              *os.File
 	closed                chan struct{}
 	closeOnce             sync.Once
@@ -145,10 +145,10 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 	}
 
 	d := &Daemon{
-		cfg:     cfg,
-		store:   store,
-		policy:  policy,
-		pool:    NewWorkerPoolWithCapacity(CapacityConfig{
+		cfg:    cfg,
+		store:  store,
+		policy: policy,
+		pool: NewWorkerPoolWithCapacity(CapacityConfig{
 			MaxWorkers:     cfg.MaxWorkers,
 			MaxCronWorkers: cfg.MaxCronWorkers,
 			MaxQueue:       cfg.MaxQueue,
@@ -175,7 +175,7 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 			ExpectedVersion:      d.cfg.OpenCodeConfig.ExpectedVersion,
 			ConfigDir:            d.readOnlyConfigDir,
 			Permission:           DefaultReadOnlyPermissionPolicy,
-			DisableAuto:          true, // 嚴禁自動修改、建置或測試
+			DisableAuto:          true,                // 嚴禁自動修改、建置或測試
 			Role:                 opencode.RoleOracle, // Oracle 與 Critic 共享唯讀隔離角色
 			Agent:                opencode.AsuraReadOnlyAgentName,
 			Pure:                 true,
@@ -453,6 +453,7 @@ type IPCRequest struct {
 	CronAddReq   *CronAddRequest `json:"cron_add_req,omitempty"`
 	Limit        int             `json:"limit,omitempty"`
 	MemoryID     string          `json:"memory_id,omitempty"`
+	Cursor       string          `json:"cursor,omitempty"`
 	Content      string          `json:"content,omitempty"`
 	MemoryIDs    []string        `json:"memory_ids,omitempty"`
 	Mode         string          `json:"mode,omitempty"`
@@ -468,6 +469,7 @@ type IPCResponse struct {
 	CronRuns      []storage.CronRun      `json:"cron_runs,omitempty"`
 	Memory        *storage.Memory        `json:"memory,omitempty"`
 	Memories      []storage.Memory       `json:"memories,omitempty"`
+	MemoryPage    *storage.MemoryPage    `json:"memory_page,omitempty"`
 	Error         string                 `json:"error,omitempty"`
 }
 
@@ -980,6 +982,47 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			}
 			_ = encoder.Encode(IPCResponse{Memory: mem})
 
+		case "memory_page", "memory_detail_bounded":
+			if req.Workspace == "" || (action == "memory_detail_bounded" && req.MemoryID == "") {
+				_ = encoder.Encode(IPCResponse{Error: "invalid memory request"})
+				continue
+			}
+			if d.policy == nil {
+				_ = encoder.Encode(IPCResponse{Error: "unauthorized workspace"})
+				continue
+			}
+			canonicalScope, err := d.policy.AuthorizeCanonicalWorkspace(req.Workspace)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: "unauthorized workspace"})
+				continue
+			}
+			var resp IPCResponse
+			if action == "memory_page" {
+				page, err := d.store.PageMemories(context.Background(), canonicalScope, req.Limit, req.Cursor)
+				if err != nil {
+					resp.Error = boundedMemoryError(err)
+				} else {
+					resp.MemoryPage = &page
+				}
+			} else {
+				memory, err := d.store.GetMemoryBounded(context.Background(), canonicalScope, req.MemoryID)
+				if err != nil {
+					resp.Error = boundedMemoryError(err)
+				} else {
+					resp.Memory = memory
+				}
+			}
+			if resp.Error != "" {
+				_ = encoder.Encode(resp)
+				continue
+			}
+			payload, err := json.Marshal(resp)
+			if err != nil || len(payload)+1 > 512<<10 {
+				_ = encoder.Encode(IPCResponse{Error: "memory response too large"})
+				continue
+			}
+			_ = encoder.Encode(json.RawMessage(payload))
+
 		case "memory_remove":
 			if req.Workspace == "" || req.MemoryID == "" {
 				_ = encoder.Encode(IPCResponse{Error: "workspace and memory_id are required"})
@@ -1009,6 +1052,21 @@ func (d *Daemon) handleConn(conn net.Conn) {
 		default:
 			_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unknown action: %s", action)})
 		}
+	}
+}
+
+func boundedMemoryError(err error) string {
+	switch {
+	case errors.Is(err, storage.ErrMemoryNotFound):
+		return "memory not found"
+	case errors.Is(err, storage.ErrMemoryCursor):
+		return "invalid memory cursor"
+	case errors.Is(err, storage.ErrMemoryTooLarge):
+		return "memory content too large"
+	case errors.Is(err, storage.ErrMemoryMetadata):
+		return "invalid memory metadata"
+	default:
+		return "memory query failed"
 	}
 }
 
@@ -1520,6 +1578,46 @@ func (c *Client) GetMemory(ctx context.Context, workspace, id string) (*storage.
 		return nil, errors.New("memory not found")
 	}
 
+	return resp.Memory, nil
+}
+
+// PageMemories 透過有界 IPC 列出記憶摘要；2026-09-23 WEBMEM-003。
+func (c *Client) PageMemories(ctx context.Context, workspace string, limit int, cursor string) (storage.MemoryPage, error) {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+	if err := encoder.Encode(IPCRequest{Action: "memory_page", Workspace: workspace, Limit: limit, Cursor: cursor}); err != nil {
+		return storage.MemoryPage{}, fmt.Errorf("encode request: %w", err)
+	}
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return storage.MemoryPage{}, fmt.Errorf("decode response: %w", err)
+	}
+	if resp.Error != "" {
+		return storage.MemoryPage{}, errors.New(resp.Error)
+	}
+	if resp.MemoryPage == nil {
+		return storage.MemoryPage{}, errors.New("empty memory page in response")
+	}
+	return *resp.MemoryPage, nil
+}
+
+// GetMemoryBounded 透過有界 IPC 查詢 Web detail；2026-09-23 WEBMEM-003。
+func (c *Client) GetMemoryBounded(ctx context.Context, workspace, id string) (*storage.Memory, error) {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+	if err := encoder.Encode(IPCRequest{Action: "memory_detail_bounded", Workspace: workspace, MemoryID: id}); err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	if resp.Error != "" {
+		return nil, errors.New(resp.Error)
+	}
+	if resp.Memory == nil {
+		return nil, errors.New("empty memory in response")
+	}
 	return resp.Memory, nil
 }
 
