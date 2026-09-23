@@ -51,6 +51,7 @@ let queryTask = null;
 let delayTask = false;
 let taskReply;
 let expireNextPage = false;
+let submitStatus = 0;
 const window = {
   crypto: { randomUUID: () => `request-${++requestCounter}` },
   confirm: () => { confirms++; return true; }
@@ -75,6 +76,7 @@ const fetch = async (url, options = {}) => {
   if (url === '/api/tasks') {
     const body = options.body;
     submitted.push({ body, shownID: el('request-id-display').textContent });
+    if (submitStatus === 503) return { status: 503, ok: false, text: async () => 'daemon unavailable' };
     throw new Error('response lost');
   }
   throw new Error(`unexpected fetch ${url}`);
@@ -91,11 +93,13 @@ const fetch = async (url, options = {}) => {
     assert.equal(el('memory-audit').textContent, '舊任務：未提供記憶與召回資料');
     return;
   }
-  if (process.argv[2] === 'retry') {
+  if (process.argv[2] === 'retry' || process.argv[2] === 'retry503') {
+    if (process.argv[2] === 'retry503') submitStatus = 503;
     el('prompt').value = 'first prompt';
     el('submit-btn').click();
     await tick();
     assert.equal(submitted[0].shownID, 'request-1');
+    assert.equal(el('retry-btn').classes.has('hidden'), false);
     el('prompt').value = 'changed prompt';
     el('retry-btn').click();
     await tick();
@@ -140,6 +144,7 @@ const fetch = async (url, options = {}) => {
   assert.equal(submitted[0].shownID, 'request-1');
   assert.equal(JSON.parse(submitted[0].body).memory_ids[0], 'm1');
   assert.equal(JSON.parse(submitted[0].body).memory_recall, 'bounded');
+  assert.equal(el('retry-btn').classes.has('hidden'), false);
   el('prompt').value = 'changed prompt';
   el('retry-btn').click();
   await tick();

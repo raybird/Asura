@@ -83,7 +83,7 @@
 - 驗收編號：WEBMEM-007（責任）、WEBMEM-009（支援）。
 - 完成判準：回應遺失後原 payload 一次執行且可找回同 Task，改 ID 順序仍按既有 fingerprint 語意，同 ID 改內容／模式為衝突；切換 workspace 或重新登入後仍可憑預先保存的 ID 查詢。
 - 驗證：記錄真實提交／中斷回應／重送的 backend 次數、保存 Task ID 與衝突；以 UI 互動測試檢查顯示與 payload 鎖定。
-- 狀態：✅ 已完成（2026-09-23）。紅燈：固定基線 `db6c847` 執行 `node docs/issues/issue-21/evidence/ui-probe.cjs retry` exit 1，網路前未顯示 Request ID。綠燈：現行 retry 與完整 probe exit 0，表單改動後原請求重試仍送完全相同 JSON，新提交產生新 ID；`go test ./tests/integration -run ^TestWEBMEMRedelivery$ -count=1` exit 0，刪除後同 ID 原 payload／改順序回同 Task、保存快照不變，模式改動回 409，backend 計數僅 1。既有 `TestWEB006` 覆蓋重新登入依 ID 查詢。UI payload 與 Daemon 指紋是不同層級；精煉後移除重複清理呼叫，probe 再通過。
+- 狀態：✅ 已完成（2026-09-23）。紅燈：固定基線 `db6c847` 執行 `node docs/issues/issue-21/evidence/ui-probe.cjs retry` exit 1，網路前未顯示 Request ID；獨立審查在 `682193c` 找出 HTTP 503 後重試按鈕仍隱藏，補上 `node docs/issues/issue-21/evidence/ui-probe.cjs retry503` 先得 exit 1（`true !== false`）。綠燈：修正後 retry503、retry 與完整 probe 均 exit 0，503 與回應遺失均顯示原請求重試，表單改動後仍送完全相同 JSON，新提交產生新 ID；`go test ./tests/integration -run ^TestWEBMEMRedelivery$ -count=1` exit 0，刪除後同 ID 原 payload／改順序回同 Task、保存快照不變，模式改動回 409，backend 計數僅 1。既有 `TestWEB006` 覆蓋重新登入依 ID 查詢。UI payload 與 Daemon 指紋是不同層級；精煉後移除重複清理呼叫，probe 再通過。
 
 ## Phase 4 — 稽核、隱私與交付
 
@@ -109,7 +109,7 @@
 - 驗收編號：WEBMEM-010（責任）。
 - 完成判準：WEB／MEM／CTXMEM／RECALL／CTXWIN／TFACE／MBACK／CRON／PGID cancel／queue-redelivery 回歸及 `go vet ./...`、`go test -count=1 -race ./...`、`go build ./cmd/asura` 全綠；記錄傳輸上界與 query plan；文件與實作一致。PR 與獨立 review 由 dev-cycle 的交付 gate 處理。
 - 驗證：重用版本與環境一致的有效 Task 證據，執行完整回歸命令；文件以靜態對照程式與手動閱讀檢查。完成 Task 後固定 BASE／HEAD 供 PR 與獨立 reviewer 使用。
-- 狀態：✅ 已完成（2026-09-23）。證據：對固定提交 `0869a60`，`go vet ./...` exit 0；`go test -count=1 -race ./...` exit 0，涵蓋 `cmd/asura`、`internal/auth/backend/contextwin/cron/daemon/engine/pipeline/recall/storage/web` 與 `tests/integration`；`go build -o /tmp/asura_issue21_build ./cmd/asura` exit 0；`node docs/issues/issue-21/evidence/ui-probe.cjs` exit 0；`git diff --check` exit 0。根 README 與架構文件對照新 Web 路由、上限及資料流更新；UI probe 採最小 DOM 模擬，非真實瀏覽器驗證。query plan 與傳輸 bytes 的真實 fixture 證據分別在 Task 1.1、1.2 與 2.2。文件任務無產品紅燈，依程式對照與可重跑命令作等價證據；精煉檢查只修正受本功能影響的說明，no-op。
+- 狀態：✅ 已完成（2026-09-23）。證據：對固定提交 `0869a60`，`go vet ./...` exit 0；`go test -count=1 -race ./...` exit 0，涵蓋 `cmd/asura`、`internal/auth/backend/contextwin/cron/daemon/engine/pipeline/recall/storage/web` 與 `tests/integration`；`go build -o /tmp/asura_issue21_build ./cmd/asura` exit 0；`node docs/issues/issue-21/evidence/ui-probe.cjs` exit 0；`git diff --check` exit 0。獨立審查修正 HTTP 503 重試入口後，同組 vet、race 全套、build、完整 UI probe、`retry` 與 `retry503` probe、`git diff --check` 均再得 exit 0。根 README 與架構文件對照新 Web 路由、上限及資料流更新；UI probe 採最小 DOM 模擬，非真實瀏覽器驗證。query plan 與傳輸 bytes 的真實 fixture 證據分別在 Task 1.1、1.2 與 2.2。文件任務無產品紅燈，依程式對照與可重跑命令作等價證據；精煉檢查只修正受本功能影響的說明，no-op。
 
 ## 測試策略與驗收對應
 

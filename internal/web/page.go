@@ -402,8 +402,13 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
       } else {
         const message = await res.text();
         if (generation !== memoryGeneration) return;
-        showMessage(opMsg, '提交被拒絕：' + message, true);
-        if (res.status >= 400 && res.status < 500) clearPendingRequest();
+        if (res.status >= 400 && res.status < 500) {
+          showMessage(opMsg, '提交被拒絕：' + message, true);
+          clearPendingRequest();
+        } else {
+          retryBtn.classList.remove('hidden');
+          showMessage(opMsg, '回應未確認：' + message + '；請保存 Request ID，或以原請求重試。', true);
+        }
       }
     } catch (err) {
       if (generation === memoryGeneration) {
