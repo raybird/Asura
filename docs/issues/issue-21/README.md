@@ -175,6 +175,7 @@ Feature: 已登入 Web Console 的專案記憶與召回操作
 | 2026-09-23 | 固定提交 `0869a60` 的 vet、race 全套測試、build 與 UI 探測全綠；待 PR 與獨立 review | Codex |
 | 2026-09-23 | PR #22 獨立審查要求修正 HTTP 5xx 後隱藏的原請求重試入口；503 UI 探測先紅後綠，待新 HEAD 回歸與再審 | Codex |
 | 2026-09-24 | 收到 PR #22 新審查的同 workspace Task 競態意見；以 Task 顯示世代修正並補長結果與輪詢探測，另顯示接受時首次 Stage 預估 | Codex |
+| 2026-09-24 | 修正 PR #22 SHOULD FIX：記憶 page/detail IPC 連線中斷可取消 SQLite 查詢，加入連線 context 傳遞及期限；局部負向對照、全套 race、vet、build 與 UI probe 通過，待新 HEAD 獨立審查 | Codex |
 
 ---
 **建立日期**: 2026-09-23

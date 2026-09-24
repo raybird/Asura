@@ -473,21 +473,88 @@ type IPCResponse struct {
 	Error         string                 `json:"error,omitempty"`
 }
 
+const boundedMemoryQueryTimeout = 9 * time.Second
+
+type boundedMemoryQuerier interface {
+	PageMemories(context.Context, string, int, string) (storage.MemoryPage, error)
+	GetMemoryBounded(context.Context, string, string) (*storage.Memory, error)
+}
+
+type ipcRequestResult struct {
+	request IPCRequest
+	err     error
+}
+
+// readIPCRequests detects client disconnects while an IPC request is running.
+func readIPCRequests(conn net.Conn) (<-chan ipcRequestResult, context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
+	requests := make(chan ipcRequestResult, 1)
+	go func() {
+		defer close(requests)
+		decoder := json.NewDecoder(conn)
+		for {
+			var req IPCRequest
+			err := decoder.Decode(&req)
+			if err != nil {
+				cancel()
+				select {
+				case requests <- ipcRequestResult{err: err}:
+				default:
+				}
+				return
+			}
+			select {
+			case requests <- ipcRequestResult{request: req}:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return requests, ctx, cancel
+}
+
+func queryBoundedMemory(parent context.Context, store boundedMemoryQuerier, action, scope string, req IPCRequest) IPCResponse {
+	ctx, cancel := context.WithTimeout(parent, boundedMemoryQueryTimeout)
+	defer cancel()
+
+	if action == "memory_page" {
+		page, err := store.PageMemories(ctx, scope, req.Limit, req.Cursor)
+		if err != nil {
+			return IPCResponse{Error: boundedMemoryError(err)}
+		}
+		return IPCResponse{MemoryPage: &page}
+	}
+
+	memory, err := store.GetMemoryBounded(ctx, scope, req.MemoryID)
+	if err != nil {
+		return IPCResponse{Error: boundedMemoryError(err)}
+	}
+	return IPCResponse{Memory: memory}
+}
+
 func (d *Daemon) handleConn(conn net.Conn) {
 	defer conn.Close()
 
-	decoder := json.NewDecoder(conn)
+	requests, connCtx, cancel := readIPCRequests(conn)
+	defer cancel()
 	encoder := json.NewEncoder(conn)
 
 	for {
-		var req IPCRequest
-		if err := decoder.Decode(&req); err != nil {
-			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
+		decoded, ok := <-requests
+		if !ok {
+			return
+		}
+		if decoded.err != nil {
+			if errors.Is(decoded.err, io.EOF) || errors.Is(decoded.err, net.ErrClosed) {
 				return
 			}
 			_ = encoder.Encode(IPCResponse{Error: "invalid request payload"})
 			return
 		}
+		if connCtx.Err() != nil {
+			return
+		}
+		req := decoded.request
 
 		action := req.Action
 		if action == "" {
@@ -996,21 +1063,9 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				_ = encoder.Encode(IPCResponse{Error: "unauthorized workspace"})
 				continue
 			}
-			var resp IPCResponse
-			if action == "memory_page" {
-				page, err := d.store.PageMemories(context.Background(), canonicalScope, req.Limit, req.Cursor)
-				if err != nil {
-					resp.Error = boundedMemoryError(err)
-				} else {
-					resp.MemoryPage = &page
-				}
-			} else {
-				memory, err := d.store.GetMemoryBounded(context.Background(), canonicalScope, req.MemoryID)
-				if err != nil {
-					resp.Error = boundedMemoryError(err)
-				} else {
-					resp.Memory = memory
-				}
+			resp := queryBoundedMemory(connCtx, d.store, action, canonicalScope, req)
+			if connCtx.Err() != nil {
+				return
 			}
 			if resp.Error != "" {
 				_ = encoder.Encode(resp)
