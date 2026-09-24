@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"asura/internal/auth"
 	"asura/internal/storage"
 )
 
@@ -35,6 +37,40 @@ func (q *blockingMemoryQuerier) GetMemoryBounded(ctx context.Context, _, _ strin
 	return nil, ctx.Err()
 }
 
+func unixConnPair(t *testing.T) (*net.UnixConn, *net.UnixConn) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "daemon.sock")
+	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+
+	accepted := make(chan *net.UnixConn, 1)
+	acceptErr := make(chan error, 1)
+	go func() {
+		conn, err := listener.AcceptUnix()
+		if err != nil {
+			acceptErr <- err
+			return
+		}
+		accepted <- conn
+	}()
+	client, err := net.DialUnix("unix", nil, &net.UnixAddr{Name: path, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var server *net.UnixConn
+	select {
+	case server = <-accepted:
+	case err := <-acceptErr:
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+	t.Cleanup(func() { _ = server.Close() })
+	return server, client
+}
+
 func TestBoundedMemoryQueryCanceledOnIPCDisconnect(t *testing.T) {
 	for _, test := range []struct {
 		action  string
@@ -44,18 +80,17 @@ func TestBoundedMemoryQueryCanceledOnIPCDisconnect(t *testing.T) {
 		{action: "memory_detail_bounded", request: IPCRequest{Action: "memory_detail_bounded", Workspace: "/workspace", MemoryID: "m1"}},
 	} {
 		t.Run(test.action, func(t *testing.T) {
-			server, client := net.Pipe()
-			requests, connCtx, cancel := readIPCRequests(server)
+			server, client := unixConnPair(t)
+			connCtx, cancel := context.WithCancel(context.Background())
 			t.Cleanup(cancel)
-			t.Cleanup(func() { _ = server.Close() })
-			t.Cleanup(func() { _ = client.Close() })
+			watchIPCDisconnect(connCtx, server, cancel)
 
 			if err := json.NewEncoder(client).Encode(test.request); err != nil {
 				t.Fatal(err)
 			}
-			decoded, ok := <-requests
-			if !ok || decoded.err != nil {
-				t.Fatalf("decoded=%+v, open=%v", decoded, ok)
+			var req IPCRequest
+			if err := json.NewDecoder(server).Decode(&req); err != nil {
+				t.Fatal(err)
 			}
 
 			store := &blockingMemoryQuerier{
@@ -64,7 +99,7 @@ func TestBoundedMemoryQueryCanceledOnIPCDisconnect(t *testing.T) {
 			}
 			done := make(chan IPCResponse, 1)
 			go func() {
-				done <- queryBoundedMemory(connCtx, store, test.action, "/workspace", decoded.request)
+				done <- queryBoundedMemory(connCtx, store, test.action, "/workspace", req)
 			}()
 
 			started := <-store.started
@@ -101,5 +136,40 @@ func TestBoundedMemoryQueryCanceledOnIPCDisconnect(t *testing.T) {
 				t.Fatal("bounded memory query did not return after cancellation")
 			}
 		})
+	}
+}
+
+func TestDaemonIPCReplyAfterClientHalfClose(t *testing.T) {
+	server, client := unixConnPair(t)
+	root := t.TempDir()
+	policy := auth.NewPolicy([]string{root})
+	d := &Daemon{policy: policy}
+	done := make(chan struct{})
+	go func() {
+		d.handleConn(server)
+		close(done)
+	}()
+
+	if err := json.NewEncoder(client).Encode(IPCRequest{Action: "projects"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.CloseWrite(); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	var resp IPCResponse
+	if err := json.NewDecoder(client).Decode(&resp); err != nil {
+		t.Fatalf("half-close reply: %v", err)
+	}
+	roots := policy.AllowedRoots()
+	if len(resp.Projects) != 1 || len(roots) != 1 || resp.Projects[0] != roots[0] {
+		t.Fatalf("projects response=%+v, want %v", resp.Projects, roots)
+	}
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("daemon connection did not finish after half-close")
 	}
 }

@@ -29,6 +29,7 @@ import (
 	"asura/internal/pipeline"
 	"asura/internal/recall"
 	"asura/internal/storage"
+	"golang.org/x/sys/unix"
 )
 
 var (
@@ -480,37 +481,44 @@ type boundedMemoryQuerier interface {
 	GetMemoryBounded(context.Context, string, string) (*storage.Memory, error)
 }
 
-type ipcRequestResult struct {
-	request IPCRequest
-	err     error
-}
-
-// readIPCRequests detects client disconnects while an IPC request is running.
-func readIPCRequests(conn net.Conn) (<-chan ipcRequestResult, context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithCancel(context.Background())
-	requests := make(chan ipcRequestResult, 1)
+// watchIPCDisconnect cancels work when the Unix peer closes both socket directions.
+func watchIPCDisconnect(ctx context.Context, conn net.Conn, cancel context.CancelFunc) {
+	unixConn, ok := conn.(*net.UnixConn)
+	if !ok {
+		return
+	}
+	rawConn, err := unixConn.SyscallConn()
+	if err != nil {
+		cancel()
+		return
+	}
 	go func() {
-		defer close(requests)
-		decoder := json.NewDecoder(conn)
+		var fd uintptr
+		if err := rawConn.Control(func(rawFD uintptr) { fd = rawFD }); err != nil {
+			cancel()
+			return
+		}
+		pollFDs := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLHUP | unix.POLLERR}}
 		for {
-			var req IPCRequest
-			err := decoder.Decode(&req)
-			if err != nil {
-				cancel()
-				select {
-				case requests <- ipcRequestResult{err: err}:
-				default:
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			pollFDs[0].Revents = 0
+			if _, err := unix.Poll(pollFDs, 100); err != nil {
+				if errors.Is(err, unix.EINTR) {
+					continue
 				}
+				cancel()
 				return
 			}
-			select {
-			case requests <- ipcRequestResult{request: req}:
-			case <-ctx.Done():
+			if pollFDs[0].Revents&(unix.POLLHUP|unix.POLLERR|unix.POLLNVAL) != 0 {
+				cancel()
 				return
 			}
 		}
 	}()
-	return requests, ctx, cancel
 }
 
 func queryBoundedMemory(parent context.Context, store boundedMemoryQuerier, action, scope string, req IPCRequest) IPCResponse {
@@ -535,17 +543,16 @@ func queryBoundedMemory(parent context.Context, store boundedMemoryQuerier, acti
 func (d *Daemon) handleConn(conn net.Conn) {
 	defer conn.Close()
 
-	requests, connCtx, cancel := readIPCRequests(conn)
+	connCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	watchIPCDisconnect(connCtx, conn, cancel)
+	decoder := json.NewDecoder(conn)
 	encoder := json.NewEncoder(conn)
 
 	for {
-		decoded, ok := <-requests
-		if !ok {
-			return
-		}
-		if decoded.err != nil {
-			if errors.Is(decoded.err, io.EOF) || errors.Is(decoded.err, net.ErrClosed) {
+		var req IPCRequest
+		if err := decoder.Decode(&req); err != nil {
+			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
 				return
 			}
 			_ = encoder.Encode(IPCResponse{Error: "invalid request payload"})
@@ -554,7 +561,6 @@ func (d *Daemon) handleConn(conn net.Conn) {
 		if connCtx.Err() != nil {
 			return
 		}
-		req := decoded.request
 
 		action := req.Action
 		if action == "" {
