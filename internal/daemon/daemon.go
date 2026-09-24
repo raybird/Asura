@@ -493,11 +493,25 @@ func watchIPCDisconnect(ctx context.Context, conn net.Conn, cancel context.Cance
 		return
 	}
 	go func() {
-		var fd uintptr
-		if err := rawConn.Control(func(rawFD uintptr) { fd = rawFD }); err != nil {
+		fd := -1
+		var dupErr error
+		if err := rawConn.Control(func(rawFD uintptr) {
+			fd, dupErr = unix.Dup(int(rawFD))
+			if dupErr == nil {
+				unix.CloseOnExec(fd)
+			}
+		}); err != nil {
+			if fd >= 0 {
+				_ = unix.Close(fd)
+			}
 			cancel()
 			return
 		}
+		if dupErr != nil {
+			cancel()
+			return
+		}
+		defer unix.Close(fd)
 		pollFDs := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLHUP | unix.POLLERR}}
 		for {
 			select {

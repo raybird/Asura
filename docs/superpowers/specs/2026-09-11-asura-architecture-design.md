@@ -320,7 +320,7 @@ ExecutionContext 的可選 `recall` 保存政策、explicit/auto IDs、選中分
 
 ## Phase 3G：Web Console 專案記憶管理與召回操作
 
-2026-09-23；2026-09-24 更新。Web 的 `/api/memories` list/detail/add/delete 經既有 session、Host 與變更方法 Origin 入口，透過 Unix IPC 交由 Daemon 每次重新授權 canonical workspace；Web 不直接讀寫 SQLite。CLI 的全量 `memory_list/get` 維持原契約，Web 另使用 `memory_page` 與 `memory_detail_bounded`。SQLite 的 `(workspace,created_at,id)` 索引支援 `(created_at,id)` keyset；SQL 以 bytes sentinel 限制欄位，單頁最多 50 筆，摘要 512 bytes、detail 64 KiB。新記憶 page/detail 的 IPC 及 HTTP JSON 回應均於編碼前檢查 512 KiB 上限。Daemon 保留同步 IPC JSON 解碼，另以 Unix socket `POLLHUP`／`POLLERR` 監看完整連線中斷；只有 page/detail 查詢使用該連線 context，並套用獨立 9 秒期限，比 Web IPC 10 秒等待上限早一秒。客戶端只關閉寫入方向時仍可收到回覆。SQLite 使用 `QueryContext`；現有 `busy_timeout=10000` 下，SQLite 鎖等待可能延後已取消查詢的返回，該限制未由此變更調整。
+2026-09-23；2026-09-24 更新。Web 的 `/api/memories` list/detail/add/delete 經既有 session、Host 與變更方法 Origin 入口，透過 Unix IPC 交由 Daemon 每次重新授權 canonical workspace；Web 不直接讀寫 SQLite。CLI 的全量 `memory_list/get` 維持原契約，Web 另使用 `memory_page` 與 `memory_detail_bounded`。SQLite 的 `(workspace,created_at,id)` 索引支援 `(created_at,id)` keyset；SQL 以 bytes sentinel 限制欄位，單頁最多 50 筆，摘要 512 bytes、detail 64 KiB。新記憶 page/detail 的 IPC 及 HTTP JSON 回應均於編碼前檢查 512 KiB 上限。Daemon 保留同步 IPC JSON 解碼，另以 Unix socket `POLLHUP`／`POLLERR` 監看完整連線中斷；在 `RawConn.Control` callback 內複製 fd 供 watcher 使用。只有 page/detail 查詢使用該連線 context，並套用獨立 9 秒期限，比 Web IPC 10 秒等待上限早一秒。客戶端只關閉寫入方向時仍可收到回覆。SQLite 使用 `QueryContext`；現有 `busy_timeout=10000` 下，SQLite 鎖等待可能延後已取消查詢的返回，該限制未由此變更調整。
 
 最後驗證日期：2026-09-24。
 
