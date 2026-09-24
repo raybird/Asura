@@ -173,3 +173,84 @@ func TestDaemonIPCReplyAfterClientHalfClose(t *testing.T) {
 		t.Fatal("daemon connection did not finish after half-close")
 	}
 }
+
+func TestDaemonBoundedMemoryIPCReplyAfterClientHalfClose(t *testing.T) {
+	for _, action := range []string{"memory_page", "memory_detail_bounded"} {
+		t.Run(action, func(t *testing.T) {
+			server, client := unixConnPair(t)
+			root := t.TempDir()
+			store, err := storage.NewSQLiteStore(filepath.Join(root, "memory.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer store.Close()
+			if err := store.CreateMemory(context.Background(), storage.Memory{ID: "m1", Workspace: root, Content: "body"}); err != nil {
+				t.Fatal(err)
+			}
+			d := &Daemon{policy: auth.NewPolicy([]string{root}), store: store}
+			go d.handleConn(server)
+
+			req := IPCRequest{Action: action, Workspace: root, Limit: 1, MemoryID: "m1"}
+			if err := json.NewEncoder(client).Encode(req); err != nil {
+				t.Fatal(err)
+			}
+			if err := client.CloseWrite(); err != nil {
+				t.Fatal(err)
+			}
+			if err := client.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+				t.Fatal(err)
+			}
+			var resp IPCResponse
+			if err := json.NewDecoder(client).Decode(&resp); err != nil {
+				t.Fatalf("half-close reply: %v", err)
+			}
+			if resp.Error != "" {
+				t.Fatalf("half-close response=%+v", resp)
+			}
+			if action == "memory_page" && (resp.MemoryPage == nil || len(resp.MemoryPage.Items) != 1 || resp.MemoryPage.Items[0].ID != "m1") {
+				t.Fatalf("memory page=%+v", resp.MemoryPage)
+			}
+			if action == "memory_detail_bounded" && (resp.Memory == nil || resp.Memory.Content != "body") {
+				t.Fatalf("memory detail=%+v", resp.Memory)
+			}
+		})
+	}
+}
+
+func TestDaemonIPCReplyBeforeMalformedPayload(t *testing.T) {
+	server, client := unixConnPair(t)
+	done := make(chan struct{})
+	go func() {
+		(&Daemon{}).handleConn(server)
+		close(done)
+	}()
+
+	if err := client.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.NewEncoder(client).Encode(IPCRequest{Action: "projects"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Write([]byte("{oops")); err != nil {
+		t.Fatal(err)
+	}
+	decoder := json.NewDecoder(client)
+	var first, second IPCResponse
+	if err := decoder.Decode(&first); err != nil {
+		t.Fatalf("first reply: %v", err)
+	}
+	if first.Error != "" {
+		t.Fatalf("first response=%+v", first)
+	}
+	if err := decoder.Decode(&second); err != nil {
+		t.Fatalf("malformed payload reply: %v", err)
+	}
+	if second.Error != "invalid request payload" {
+		t.Fatalf("second response=%+v", second)
+	}
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("daemon connection did not finish after malformed payload")
+	}
+}
