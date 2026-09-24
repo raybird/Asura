@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -693,6 +694,7 @@ func TestEngineCancel_ClearPGIDErrorFailsClosed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSQLiteStore failed: %v", err)
 	}
+	defer store.Close()
 
 	policy := auth.NewPolicy([]string{tmpDir})
 	eng := NewEngine(store, policy)
@@ -715,7 +717,6 @@ func TestEngineCancel_ClearPGIDErrorFailsClosed(t *testing.T) {
 		_ = syscall.Kill(-pgid, syscall.SIGKILL)
 	}()
 
-
 	task := &storage.Task{
 		ID:        taskID,
 		Workspace: tmpDir,
@@ -730,26 +731,22 @@ func TestEngineCancel_ClearPGIDErrorFailsClosed(t *testing.T) {
 		t.Fatalf("CreateTask failed: %v", err)
 	}
 
-	// 2. 監聽進程組死亡時，立即關閉 store 使隨後的 UpdateTaskPGID 失敗
-	go func() {
-		for {
-			if !opencode.IsProcessGroupAlive(pgid) {
-				_ = store.Close()
-				break
-			}
-			time.Sleep(5 * time.Millisecond)
-		}
-	}()
+	// 2026-09-24：固定讓清除 PGID 的 UPDATE 失敗，避免靠進程死亡與關庫時序競爭。
+	faultDB, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open fault injection db: %v", err)
+	}
+	defer faultDB.Close()
+	if _, err := faultDB.Exec(`CREATE TRIGGER fail_clear_pgid BEFORE UPDATE OF pgid ON tasks WHEN NEW.pgid = 0 BEGIN SELECT RAISE(ABORT, 'blocked pgid clear'); END`); err != nil {
+		t.Fatalf("create fault injection trigger: %v", err)
+	}
 
 	// 3. 呼叫 CancelTask
 	cancelErr := eng.CancelTask(taskID)
 
 	// 4. 斷言：CancelTask 絕不能忽略 DB 錯誤而宣告成功，必須 fail-closed
-	if cancelErr == nil {
-		t.Fatalf("expected CancelTask to fail closed when database error occurs during cleanup, got nil")
+	if cancelErr == nil || !strings.Contains(cancelErr.Error(), "persist cleared process group") || !strings.Contains(cancelErr.Error(), "blocked pgid clear") {
+		t.Fatalf("expected PGID cleanup failure, got %v", cancelErr)
 	}
 
 }
-
-
-

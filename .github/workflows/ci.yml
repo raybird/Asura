@@ -38,5 +38,12 @@ jobs:
       - name: Test with Race Detector
         run: go test -count=1 -race -v ./...
 
+      - name: Web memory UI probe
+        run: |
+          node docs/issues/issue-21/evidence/ui-probe.cjs
+          node docs/issues/issue-21/evidence/ui-probe.cjs audit
+          node docs/issues/issue-21/evidence/ui-probe.cjs taskRace
+          node docs/issues/issue-21/evidence/ui-probe.cjs retry503
+
       - name: Build CLI
         run: go build -v ./cmd/asura

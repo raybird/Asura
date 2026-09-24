@@ -552,8 +552,8 @@ func TestWEB005(t *testing.T) {
 		Prompt:    "different-prompt-content",
 	}
 	codeA, _, bodyA := f.submitTask(t, conflictReqA, c)
-	if codeA != http.StatusBadRequest {
-		t.Errorf("expected 400 Bad Request for conflicting payload, got %d (body: %s)", codeA, bodyA)
+	if codeA != http.StatusConflict {
+		t.Errorf("expected 409 Conflict for conflicting payload, got %d (body: %s)", codeA, bodyA)
 	}
 	if !strings.Contains(bodyA, "request ID reused with different payload") {
 		t.Errorf("expected conflict message, got %q", bodyA)

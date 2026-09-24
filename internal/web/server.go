@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"asura/internal/daemon"
-	"asura/internal/engine"
 )
 
 type Config struct {
@@ -86,6 +85,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+	if r.URL.Path == "/api/memories" || strings.HasPrefix(r.URL.Path, "/api/memories/") {
+		s.handleMemories(w, r)
+		return
+	}
 	if r.URL.Path == "/api/projects" && r.Method == http.MethodGet {
 		resp, err := s.exchange(r.Context(), daemon.IPCRequest{Action: "projects"})
 		if err != nil {
@@ -109,7 +112,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	status := http.StatusOK
 	switch {
 	case r.URL.Path == "/api/tasks" && r.Method == http.MethodPost:
-		var input engine.SubmitRequest
+		var input struct {
+			ID           string   `json:"id"`
+			Workspace    string   `json:"workspace"`
+			Prompt       string   `json:"prompt"`
+			MemoryIDs    []string `json:"memory_ids,omitempty"`
+			MemoryRecall string   `json:"memory_recall,omitempty"`
+		}
 		if !decode(w, r, &input) {
 			return
 		}
@@ -117,7 +126,20 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "id, workspace and prompt are required", http.StatusBadRequest)
 			return
 		}
-		req = daemon.IPCRequest{Action: "submit", RequestID: input.ID, Workspace: input.Workspace, Prompt: input.Prompt}
+		if len(input.MemoryIDs) > 32 || (input.MemoryRecall != "" && input.MemoryRecall != "off" && input.MemoryRecall != "bounded") {
+			http.Error(w, "invalid memory selection", http.StatusBadRequest)
+			return
+		}
+		for _, id := range input.MemoryIDs {
+			if id == "" || len(id) > 256 {
+				http.Error(w, "invalid memory selection", http.StatusBadRequest)
+				return
+			}
+		}
+		if input.MemoryRecall == "off" {
+			input.MemoryRecall = ""
+		}
+		req = daemon.IPCRequest{Action: "submit", RequestID: input.ID, Workspace: input.Workspace, Prompt: input.Prompt, MemoryIDs: input.MemoryIDs, MemoryRecall: input.MemoryRecall}
 		status = http.StatusAccepted
 	case strings.HasPrefix(r.URL.Path, "/api/tasks/"):
 		id := strings.TrimPrefix(r.URL.Path, "/api/tasks/")
@@ -162,11 +184,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			code = http.StatusNotFound
 			message = "task not found"
 		case strings.Contains(resp.Error, "different payload"):
-			code = http.StatusBadRequest
+			code = http.StatusConflict
 			message = "request ID reused with different payload"
 		case strings.Contains(resp.Error, "cancelled request"):
 			code = http.StatusBadRequest
 			message = "cannot redeliver cancelled request"
+		case strings.HasPrefix(resp.Error, "resolve memories: memory not found"):
+			code = http.StatusNotFound
+			message = "memory not found"
 		}
 		http.Error(w, message, code)
 		return
@@ -185,14 +210,23 @@ func decode(w http.ResponseWriter, r *http.Request, value any) bool {
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(value); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+		writeDecodeError(w, err)
 		return false
 	}
 	if err := d.Decode(new(any)); err != io.EOF {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+		writeDecodeError(w, err)
 		return false
 	}
 	return true
+}
+
+func writeDecodeError(w http.ResponseWriter, err error) {
+	var tooLarge *http.MaxBytesError
+	if errors.As(err, &tooLarge) {
+		http.Error(w, "request too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+	http.Error(w, "invalid request", http.StatusBadRequest)
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {

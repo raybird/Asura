@@ -11,7 +11,7 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/sys v0.47.0
 	golang.org/x/text v0.25.0 // indirect
 	golang.org/x/tools/go/expect v0.1.1-deprecated // indirect
 	modernc.org/cc/v4 v4.29.2 // indirect

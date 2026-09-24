@@ -29,6 +29,7 @@ import (
 	"asura/internal/pipeline"
 	"asura/internal/recall"
 	"asura/internal/storage"
+	"golang.org/x/sys/unix"
 )
 
 var (
@@ -66,16 +67,16 @@ type Config struct {
 
 // Daemon 實作單一守護進程中樞
 type Daemon struct {
-	cfg       Config
-	store     *storage.SQLiteStore
-	policy    *auth.Policy
-	engine    *engine.Engine
-	pool      *WorkerPool
-	wsQueue    *WorkspaceQueue
-	scheduler  *cron.Scheduler
-	inFlight   int
-	inFlightMu sync.Mutex
-	listener   net.Listener
+	cfg                   Config
+	store                 *storage.SQLiteStore
+	policy                *auth.Policy
+	engine                *engine.Engine
+	pool                  *WorkerPool
+	wsQueue               *WorkspaceQueue
+	scheduler             *cron.Scheduler
+	inFlight              int
+	inFlightMu            sync.Mutex
+	listener              net.Listener
 	lockFile              *os.File
 	closed                chan struct{}
 	closeOnce             sync.Once
@@ -145,10 +146,10 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 	}
 
 	d := &Daemon{
-		cfg:     cfg,
-		store:   store,
-		policy:  policy,
-		pool:    NewWorkerPoolWithCapacity(CapacityConfig{
+		cfg:    cfg,
+		store:  store,
+		policy: policy,
+		pool: NewWorkerPoolWithCapacity(CapacityConfig{
 			MaxWorkers:     cfg.MaxWorkers,
 			MaxCronWorkers: cfg.MaxCronWorkers,
 			MaxQueue:       cfg.MaxQueue,
@@ -175,7 +176,7 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 			ExpectedVersion:      d.cfg.OpenCodeConfig.ExpectedVersion,
 			ConfigDir:            d.readOnlyConfigDir,
 			Permission:           DefaultReadOnlyPermissionPolicy,
-			DisableAuto:          true, // 嚴禁自動修改、建置或測試
+			DisableAuto:          true,                // 嚴禁自動修改、建置或測試
 			Role:                 opencode.RoleOracle, // Oracle 與 Critic 共享唯讀隔離角色
 			Agent:                opencode.AsuraReadOnlyAgentName,
 			Pure:                 true,
@@ -453,6 +454,7 @@ type IPCRequest struct {
 	CronAddReq   *CronAddRequest `json:"cron_add_req,omitempty"`
 	Limit        int             `json:"limit,omitempty"`
 	MemoryID     string          `json:"memory_id,omitempty"`
+	Cursor       string          `json:"cursor,omitempty"`
 	Content      string          `json:"content,omitempty"`
 	MemoryIDs    []string        `json:"memory_ids,omitempty"`
 	Mode         string          `json:"mode,omitempty"`
@@ -468,12 +470,96 @@ type IPCResponse struct {
 	CronRuns      []storage.CronRun      `json:"cron_runs,omitempty"`
 	Memory        *storage.Memory        `json:"memory,omitempty"`
 	Memories      []storage.Memory       `json:"memories,omitempty"`
+	MemoryPage    *storage.MemoryPage    `json:"memory_page,omitempty"`
 	Error         string                 `json:"error,omitempty"`
+}
+
+const boundedMemoryQueryTimeout = 9 * time.Second
+
+type boundedMemoryQuerier interface {
+	PageMemories(context.Context, string, int, string) (storage.MemoryPage, error)
+	GetMemoryBounded(context.Context, string, string) (*storage.Memory, error)
+}
+
+// watchIPCDisconnect cancels work when the Unix peer closes both socket directions.
+func watchIPCDisconnect(ctx context.Context, conn net.Conn, cancel context.CancelFunc) {
+	unixConn, ok := conn.(*net.UnixConn)
+	if !ok {
+		return
+	}
+	rawConn, err := unixConn.SyscallConn()
+	if err != nil {
+		cancel()
+		return
+	}
+	go func() {
+		fd := -1
+		var dupErr error
+		if err := rawConn.Control(func(rawFD uintptr) {
+			fd, dupErr = unix.Dup(int(rawFD))
+			if dupErr == nil {
+				unix.CloseOnExec(fd)
+			}
+		}); err != nil {
+			if fd >= 0 {
+				_ = unix.Close(fd)
+			}
+			cancel()
+			return
+		}
+		if dupErr != nil {
+			cancel()
+			return
+		}
+		defer unix.Close(fd)
+		pollFDs := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLHUP | unix.POLLERR}}
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			pollFDs[0].Revents = 0
+			if _, err := unix.Poll(pollFDs, 100); err != nil {
+				if errors.Is(err, unix.EINTR) {
+					continue
+				}
+				cancel()
+				return
+			}
+			if pollFDs[0].Revents&(unix.POLLHUP|unix.POLLERR|unix.POLLNVAL) != 0 {
+				cancel()
+				return
+			}
+		}
+	}()
+}
+
+func queryBoundedMemory(parent context.Context, store boundedMemoryQuerier, action, scope string, req IPCRequest) IPCResponse {
+	ctx, cancel := context.WithTimeout(parent, boundedMemoryQueryTimeout)
+	defer cancel()
+
+	if action == "memory_page" {
+		page, err := store.PageMemories(ctx, scope, req.Limit, req.Cursor)
+		if err != nil {
+			return IPCResponse{Error: boundedMemoryError(err)}
+		}
+		return IPCResponse{MemoryPage: &page}
+	}
+
+	memory, err := store.GetMemoryBounded(ctx, scope, req.MemoryID)
+	if err != nil {
+		return IPCResponse{Error: boundedMemoryError(err)}
+	}
+	return IPCResponse{Memory: memory}
 }
 
 func (d *Daemon) handleConn(conn net.Conn) {
 	defer conn.Close()
 
+	connCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	watchIPCDisconnect(connCtx, conn, cancel)
 	decoder := json.NewDecoder(conn)
 	encoder := json.NewEncoder(conn)
 
@@ -484,6 +570,9 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				return
 			}
 			_ = encoder.Encode(IPCResponse{Error: "invalid request payload"})
+			return
+		}
+		if connCtx.Err() != nil {
 			return
 		}
 
@@ -980,6 +1069,35 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			}
 			_ = encoder.Encode(IPCResponse{Memory: mem})
 
+		case "memory_page", "memory_detail_bounded":
+			if req.Workspace == "" || (action == "memory_detail_bounded" && req.MemoryID == "") {
+				_ = encoder.Encode(IPCResponse{Error: "invalid memory request"})
+				continue
+			}
+			if d.policy == nil {
+				_ = encoder.Encode(IPCResponse{Error: "unauthorized workspace"})
+				continue
+			}
+			canonicalScope, err := d.policy.AuthorizeCanonicalWorkspace(req.Workspace)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: "unauthorized workspace"})
+				continue
+			}
+			resp := queryBoundedMemory(connCtx, d.store, action, canonicalScope, req)
+			if connCtx.Err() != nil {
+				return
+			}
+			if resp.Error != "" {
+				_ = encoder.Encode(resp)
+				continue
+			}
+			payload, err := json.Marshal(resp)
+			if err != nil || len(payload)+1 > 512<<10 {
+				_ = encoder.Encode(IPCResponse{Error: "memory response too large"})
+				continue
+			}
+			_ = encoder.Encode(json.RawMessage(payload))
+
 		case "memory_remove":
 			if req.Workspace == "" || req.MemoryID == "" {
 				_ = encoder.Encode(IPCResponse{Error: "workspace and memory_id are required"})
@@ -1009,6 +1127,21 @@ func (d *Daemon) handleConn(conn net.Conn) {
 		default:
 			_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unknown action: %s", action)})
 		}
+	}
+}
+
+func boundedMemoryError(err error) string {
+	switch {
+	case errors.Is(err, storage.ErrMemoryNotFound):
+		return "memory not found"
+	case errors.Is(err, storage.ErrMemoryCursor):
+		return "invalid memory cursor"
+	case errors.Is(err, storage.ErrMemoryTooLarge):
+		return "memory content too large"
+	case errors.Is(err, storage.ErrMemoryMetadata):
+		return "invalid memory metadata"
+	default:
+		return "memory query failed"
 	}
 }
 
@@ -1520,6 +1653,46 @@ func (c *Client) GetMemory(ctx context.Context, workspace, id string) (*storage.
 		return nil, errors.New("memory not found")
 	}
 
+	return resp.Memory, nil
+}
+
+// PageMemories 透過有界 IPC 列出記憶摘要；2026-09-23 WEBMEM-003。
+func (c *Client) PageMemories(ctx context.Context, workspace string, limit int, cursor string) (storage.MemoryPage, error) {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+	if err := encoder.Encode(IPCRequest{Action: "memory_page", Workspace: workspace, Limit: limit, Cursor: cursor}); err != nil {
+		return storage.MemoryPage{}, fmt.Errorf("encode request: %w", err)
+	}
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return storage.MemoryPage{}, fmt.Errorf("decode response: %w", err)
+	}
+	if resp.Error != "" {
+		return storage.MemoryPage{}, errors.New(resp.Error)
+	}
+	if resp.MemoryPage == nil {
+		return storage.MemoryPage{}, errors.New("empty memory page in response")
+	}
+	return *resp.MemoryPage, nil
+}
+
+// GetMemoryBounded 透過有界 IPC 查詢 Web detail；2026-09-23 WEBMEM-003。
+func (c *Client) GetMemoryBounded(ctx context.Context, workspace, id string) (*storage.Memory, error) {
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+	if err := encoder.Encode(IPCRequest{Action: "memory_detail_bounded", Workspace: workspace, MemoryID: id}); err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	if resp.Error != "" {
+		return nil, errors.New(resp.Error)
+	}
+	if resp.Memory == nil {
+		return nil, errors.New("empty memory in response")
+	}
 	return resp.Memory, nil
 }
 
