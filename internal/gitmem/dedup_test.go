@@ -403,4 +403,100 @@ func TestCaptureService_ConcurrentCheckpointAdvancement_NeverRewindsStaleHead(t 
 	}
 }
 
+type slowAIGenerator struct {
+	delay time.Duration
+}
+
+func (s *slowAIGenerator) GenerateDraft(ctx context.Context, facts *CaptureFacts) (string, error) {
+	select {
+	case <-time.After(s.delay):
+		return "slow generated draft", nil
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+}
+
+func TestCaptureService_CaptureBudgetTimeout_DuringAIGeneration(t *testing.T) {
+	allowedRoot, repoDir := initTestRepoWithBranches(t)
+	exec := NewGitExecutor([]string{allowedRoot})
+	store := newTestStore(t)
+	service := NewCaptureService(exec, store)
+
+	// 配置一個延遲 100ms 的 AI Generator，但我們傳入只有 20ms 的 context 模擬逾時
+	service.SetAIGenerator(&slowAIGenerator{delay: 100 * time.Millisecond})
+
+	shortCtx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	// 執行 capture，啟用 --ai-draft
+	_, err := service.Capture(shortCtx, repoDir, CaptureOptions{RangeExpr: "HEAD~1..HEAD", AIDraft: true})
+	if err == nil {
+		t.Fatal("expected error due to total capture deadline exceeded, got nil")
+	}
+	if !strings.Contains(err.Error(), "deadline exceeded") && !strings.Contains(err.Error(), "timed out") {
+		t.Errorf("expected deadline exceeded error, got: %v", err)
+	}
+
+	// 關鍵驗證：超時後絕不可寫入 Candidate，且 Checkpoint 絕不前進（0 進展）
+	cands, err := store.ListCandidates(context.Background(), repoDir, "pending", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cands) != 0 {
+		t.Fatalf("expected 0 candidates after timed out capture, got %d", len(cands))
+	}
+
+	repoInfo, _ := exec.ValidateAndResolveRepo(context.Background(), repoDir)
+	cp, err := store.GetCheckpoint(context.Background(), repoInfo.Workspace, repoInfo.RepoID, repoInfo.CurrentRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cp != nil {
+		t.Fatalf("expected nil checkpoint after timed out capture, got: %+v", cp)
+	}
+}
+
+func TestCaptureService_ReopenDiscardedCandidate_HandlesConcurrentApprovalSafely(t *testing.T) {
+	allowedRoot, repoDir := initTestRepoWithBranches(t)
+	exec := NewGitExecutor([]string{allowedRoot})
+	store := newTestStore(t)
+	service := NewCaptureService(exec, store)
+	ctx := context.Background()
+
+	// 1. 初次擷取產生 candidate
+	res, err := service.Capture(ctx, repoDir, CaptureOptions{RangeExpr: "HEAD~1..HEAD"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	candID := res.Candidate.ID
+
+	// 2. 標記為 discarded
+	if err := store.DiscardCandidate(ctx, repoDir, candID); err != nil {
+		t.Fatal(err)
+	}
+
+	// 3. 模擬交錯：另一個 goroutine 先完成了 reopen 並執行了核准（狀態變為 approved）
+	_ = store.ReopenDiscardedCandidate(ctx, repoDir, candID, "first reopened draft", "{}", 1)
+	memID, err := store.ApproveCandidateTx(ctx, repoDir, candID, storage.ApproveOptions{Content: "approved content"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 4. 現在這個延遲的 Capture 呼叫以 --force 嘗試重開此 candidate
+	// 由於底層 ReopenDiscardedCandidate 具備 status='discarded' 的 CAS，此時會觸發狀態衝突並重新讀回最新 approved 候選
+	resRace, err := service.Capture(ctx, repoDir, CaptureOptions{RangeExpr: "HEAD~1..HEAD", Force: true})
+	if err != nil {
+		t.Fatalf("expected capture to handle concurrent approval gracefully, got: %v", err)
+	}
+
+	// 關鍵驗證：絕不能覆寫為 pending，必須回傳已核准之候選
+	if resRace.Candidate.Status != "approved" || resRace.Candidate.ApprovedMemoryID != memID {
+		t.Fatalf("DATA INTEGRITY BUG: Approved candidate was corrupted by concurrent reopen! Got: %+v", resRace.Candidate)
+	}
+	if !resRace.IsReused {
+		t.Errorf("expected candidate to be reused")
+	}
+}
+
+
 

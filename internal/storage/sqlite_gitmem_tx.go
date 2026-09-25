@@ -135,14 +135,22 @@ func (s *SQLiteStore) ApproveCandidateTx(ctx context.Context, workspace, candida
 		return "", fmt.Errorf("insert into memory_provenance: %w", err)
 	}
 
-	// 7. 更新候選表狀態 (memory_candidates)
+	// 7. 更新候選表狀態 (memory_candidates) - 嚴格原子 CAS 限定 status = 'pending'
 	updateCand := `
 	UPDATE memory_candidates
 	SET status = 'approved', approved_memory_id = ?, approved_at = ?
-	WHERE workspace = ? AND id = ?
+	WHERE workspace = ? AND id = ? AND status = 'pending'
 	`
-	if _, err := tx.ExecContext(ctx, updateCand, memoryID, now, workspace, cand.ID); err != nil {
+	res, err := tx.ExecContext(ctx, updateCand, memoryID, now, workspace, cand.ID)
+	if err != nil {
 		return "", fmt.Errorf("update memory_candidates status: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return "", fmt.Errorf("get rows affected: %w", err)
+	}
+	if rows == 0 {
+		return "", fmt.Errorf("candidate %s is no longer pending (concurrent modification)", cand.ID)
 	}
 
 	// 8. 提交交易

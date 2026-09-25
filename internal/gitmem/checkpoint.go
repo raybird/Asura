@@ -57,8 +57,24 @@ func generateCandidateID() string {
 
 // Capture 執行變更擷取、嚴格去重判斷與 Checkpoint 前進或阻斷 (H-TBD-1, H-TBD-3, H-TBD-6)
 func (s *CaptureService) Capture(ctx context.Context, workspace string, opts CaptureOptions) (*CaptureResult, error) {
+	// 0. 在 Capture 服務邊界建立全流程統一時間預算（預設 10 秒硬邊界），落實 GITMEM-004
+	captureCtx := ctx
+	var cancel context.CancelFunc
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		totalTimeout := 10 * time.Second
+		if s.exec != nil && s.exec.timeout > 0 {
+			totalTimeout = s.exec.timeout
+		}
+		captureCtx, cancel = context.WithTimeout(ctx, totalTimeout)
+		defer cancel()
+	}
+
+	if err := captureCtx.Err(); err != nil {
+		return nil, fmt.Errorf("capture deadline exceeded: %w", err)
+	}
+
 	// 1. 驗證並解析 Repo 邊界
-	repoInfo, err := s.exec.ValidateAndResolveRepo(ctx, workspace)
+	repoInfo, err := s.exec.ValidateAndResolveRepo(captureCtx, workspace)
 	if err != nil {
 		return nil, fmt.Errorf("validate repo: %w", err)
 	}
@@ -67,7 +83,7 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 	var rangeExpr string
 	var expectedOldSHA string
 	if opts.SinceLast {
-		cp, err := s.store.GetCheckpoint(ctx, repoInfo.Workspace, repoInfo.RepoID, repoInfo.CurrentRef)
+		cp, err := s.store.GetCheckpoint(captureCtx, repoInfo.Workspace, repoInfo.RepoID, repoInfo.CurrentRef)
 		if err != nil {
 			return nil, fmt.Errorf("get checkpoint: %w", err)
 		}
@@ -83,13 +99,17 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 	}
 
 	// 3. 執行有界擷取
-	facts, err := s.capturer.CaptureRange(ctx, workspace, rangeExpr)
+	facts, err := s.capturer.CaptureRange(captureCtx, workspace, rangeExpr)
 	if err != nil {
 		return nil, fmt.Errorf("capture range: %w", err)
 	}
 
+	if err := captureCtx.Err(); err != nil {
+		return nil, fmt.Errorf("capture deadline exceeded: %w", err)
+	}
+
 	// 4. 評估 Checkpoint 前進條件 (僅在 SinceLast 且無截斷時，並嚴格檢驗新舊 Head 祖先血統)
-	newCP, err := s.evaluateCheckpointAdvance(ctx, repoInfo.RepoRoot, facts, opts.SinceLast)
+	newCP, err := s.evaluateCheckpointAdvance(captureCtx, repoInfo.RepoRoot, facts, opts.SinceLast)
 	if err != nil {
 		return nil, err
 	}
@@ -99,14 +119,14 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 	}
 
 	// 5. 擷取去重 (Capture Dedup)
-	existing, err := s.store.FindCandidateByRange(ctx, repoInfo.Workspace, facts.RepoID, facts.RefName, facts.BaseSHA, facts.HeadSHA, "gitmem-v1")
+	existing, err := s.store.FindCandidateByRange(captureCtx, repoInfo.Workspace, facts.RepoID, facts.RefName, facts.BaseSHA, facts.HeadSHA, "gitmem-v1")
 	if err != nil {
 		return nil, fmt.Errorf("check existing candidate: %w", err)
 	}
 
 	if existing != nil {
 		if newCP != nil {
-			if err := s.store.AdvanceCheckpointTx(ctx, newCP, expectedOldSHA, ancestryChecker); err != nil {
+			if err := s.store.AdvanceCheckpointTx(captureCtx, newCP, expectedOldSHA, ancestryChecker); err != nil {
 				return nil, fmt.Errorf("advance checkpoint for existing candidate: %w", err)
 			}
 		}
@@ -141,15 +161,43 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 					return nil, errors.New("AI draft generation requested (--ai-draft), but no AI generator is configured on daemon; please use standard capture or configure an AI generator")
 				}
 				var err error
-				draft, err = s.aiGen.GenerateDraft(ctx, facts)
+				draft, err = s.aiGen.GenerateDraft(captureCtx, facts)
 				if err != nil {
 					return nil, fmt.Errorf("AI draft generation failed: %w", err)
+				}
+				if err := captureCtx.Err(); err != nil {
+					return nil, fmt.Errorf("capture deadline exceeded after AI generation: %w", err)
 				}
 			} else {
 				draft = GenerateDraftContent(facts)
 			}
 
-			if err := s.store.ReopenDiscardedCandidate(ctx, repoInfo.Workspace, existing.ID, draft, factsSummary, facts.CommitCount); err != nil {
+			if err := captureCtx.Err(); err != nil {
+				return nil, fmt.Errorf("capture deadline exceeded: %w", err)
+			}
+
+			if err := s.store.ReopenDiscardedCandidate(captureCtx, repoInfo.Workspace, existing.ID, draft, factsSummary, facts.CommitCount); err != nil {
+				if errors.Is(err, storage.ErrCandidateStatusConflict) {
+					// 發生並行狀態競爭（例如已被並行重開或並行核准），原子重讀最新持久化資料
+					freshCand, getErr := s.store.GetCandidate(captureCtx, repoInfo.Workspace, existing.ID)
+					if getErr == nil && freshCand != nil {
+						if freshCand.Status == "approved" {
+							return &CaptureResult{
+								Candidate: freshCand,
+								Facts:     facts,
+								IsReused:  true,
+								Message:   fmt.Sprintf("range already approved as memory %s", freshCand.ApprovedMemoryID),
+							}, nil
+						} else if freshCand.Status == "pending" {
+							return &CaptureResult{
+								Candidate: freshCand,
+								Facts:     facts,
+								IsReused:  true,
+								Message:   "reused existing pending candidate",
+							}, nil
+						}
+					}
+				}
 				return nil, fmt.Errorf("reopen discarded candidate: %w", err)
 			}
 			existing.Status = "pending"
@@ -179,12 +227,19 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 			return nil, errors.New("AI draft generation requested (--ai-draft), but no AI generator is configured on daemon; please use standard capture or configure an AI generator")
 		}
 		var err error
-		draft, err = s.aiGen.GenerateDraft(ctx, facts)
+		draft, err = s.aiGen.GenerateDraft(captureCtx, facts)
 		if err != nil {
 			return nil, fmt.Errorf("AI draft generation failed: %w", err)
 		}
+		if err := captureCtx.Err(); err != nil {
+			return nil, fmt.Errorf("capture deadline exceeded after AI generation: %w", err)
+		}
 	} else {
 		draft = GenerateDraftContent(facts)
+	}
+
+	if err := captureCtx.Err(); err != nil {
+		return nil, fmt.Errorf("capture deadline exceeded: %w", err)
 	}
 
 	cand := &storage.MemoryCandidate{
@@ -202,7 +257,7 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 		CreatedAt:     time.Now().UTC(),
 	}
 
-	persistedCand, err := s.store.SaveCandidateAndCheckpointTx(ctx, cand, newCP, expectedOldSHA, ancestryChecker)
+	persistedCand, err := s.store.SaveCandidateAndCheckpointTx(captureCtx, cand, newCP, expectedOldSHA, ancestryChecker)
 	if err != nil {
 		return nil, fmt.Errorf("save candidate and checkpoint: %w", err)
 	}

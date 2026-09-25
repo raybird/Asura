@@ -12,6 +12,8 @@ import (
 var (
 	// ErrCandidateNotFound 代表候選記憶不存在
 	ErrCandidateNotFound = errors.New("memory candidate not found")
+	// ErrCandidateStatusConflict 代表候選狀態與期望條件衝突
+	ErrCandidateStatusConflict = errors.New("candidate status conflict")
 )
 
 // MemoryCandidate 代表 Git 變更分析後產生的候選專案記憶草稿
@@ -280,11 +282,12 @@ func (s *SQLiteStore) ClearProcessedCandidates(ctx context.Context, workspace st
 }
 
 // ReopenDiscardedCandidate 重開已捨棄之候選，以新的草稿與事實更新其內容，並重設狀態為 pending
+// 嚴格原子 CAS：限定 WHERE status = 'discarded'，防止並行競爭將已 approved 之候選砸回 pending
 func (s *SQLiteStore) ReopenDiscardedCandidate(ctx context.Context, workspace, id string, draftContent, factsSummary string, commitCount int) error {
 	query := `
 	UPDATE memory_candidates
 	SET status = 'pending', draft_content = ?, facts_summary = ?, commit_count = ?, approved_memory_id = '', approved_at = NULL
-	WHERE workspace = ? AND id = ?
+	WHERE workspace = ? AND id = ? AND status = 'discarded'
 	`
 	res, err := s.db.ExecContext(ctx, query, draftContent, factsSummary, commitCount, workspace, id)
 	if err != nil {
@@ -295,7 +298,46 @@ func (s *SQLiteStore) ReopenDiscardedCandidate(ctx context.Context, workspace, i
 		return fmt.Errorf("get rows affected: %w", err)
 	}
 	if rows == 0 {
+		cand, err := s.GetCandidate(ctx, workspace, id)
+		if err != nil {
+			return err
+		}
+		if cand.Status != "discarded" {
+			return fmt.Errorf("%w: candidate is in status %q, cannot reopen non-discarded candidate", ErrCandidateStatusConflict, cand.Status)
+		}
 		return ErrCandidateNotFound
+	}
+	return nil
+}
+
+// DiscardCandidate 捨棄候選
+// 嚴格原子 CAS：限定 WHERE status = 'pending'，防止並行競爭將已 approved 之候選砸回 discarded
+func (s *SQLiteStore) DiscardCandidate(ctx context.Context, workspace, id string) error {
+	query := `
+	UPDATE memory_candidates
+	SET status = 'discarded', approved_memory_id = '', approved_at = NULL
+	WHERE workspace = ? AND id = ? AND status = 'pending'
+	`
+	res, err := s.db.ExecContext(ctx, query, workspace, id)
+	if err != nil {
+		return fmt.Errorf("discard candidate: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
+	if rows == 0 {
+		cand, err := s.GetCandidate(ctx, workspace, id)
+		if err != nil {
+			return err
+		}
+		if cand.Status == "approved" {
+			return errors.New("cannot discard an already approved candidate; delete the formal memory instead")
+		}
+		if cand.Status == "discarded" {
+			return nil // 已經是 discarded，保持冪等成功
+		}
+		return fmt.Errorf("%w: cannot discard candidate in status %q", ErrCandidateStatusConflict, cand.Status)
 	}
 	return nil
 }

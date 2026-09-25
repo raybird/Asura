@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -662,5 +663,156 @@ func TestAdvanceCheckpointTx_MonotonicAndCAS(t *testing.T) {
 		t.Fatalf("checkpoint was rewound to %s, expected %s", res.LastCapturedSHA, h2)
 	}
 }
+
+func TestDiscardCandidate_AtomicStatusCAS(t *testing.T) {
+	store := newTestGitMemStore(t)
+	ctx := context.Background()
+	ws := "/workspace/discard-cas"
+
+	cand := &MemoryCandidate{
+		ID:            "cand-discard-cas",
+		Workspace:     ws,
+		RepoID:        "repo-1",
+		RefName:       "refs/heads/main",
+		BaseSHA:       "base",
+		HeadSHA:       "head",
+		CommitCount:   1,
+		FactsSummary:  "{}",
+		DraftContent:  "draft content",
+		Status:        "pending",
+		PolicyVersion: "gitmem-v1",
+		CreatedAt:     time.Now().UTC(),
+	}
+	if err := store.SaveCandidate(ctx, cand); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. 正常情況：pending -> discarded 成功
+	if err := store.DiscardCandidate(ctx, ws, cand.ID); err != nil {
+		t.Fatalf("discard pending candidate failed: %v", err)
+	}
+
+	c, _ := store.GetCandidate(ctx, ws, cand.ID)
+	if c.Status != "discarded" {
+		t.Fatalf("expected status discarded, got %s", c.Status)
+	}
+
+	// 2. 冪等性：再次 discard 已 discarded 的候選應保持冪等成功
+	if err := store.DiscardCandidate(ctx, ws, cand.ID); err != nil {
+		t.Fatalf("expected idempotent discard to succeed, got: %v", err)
+	}
+
+	// 3. 安全防禦：如果候選已被核准（approved），絕對禁止被 discard！
+	candApproved := &MemoryCandidate{
+		ID:            "cand-approved-nodiscard",
+		Workspace:     ws,
+		RepoID:        "repo-1",
+		RefName:       "refs/heads/main",
+		BaseSHA:       "b2",
+		HeadSHA:       "h2",
+		CommitCount:   1,
+		FactsSummary:  "{}",
+		DraftContent:  "approved content",
+		Status:        "pending",
+		PolicyVersion: "gitmem-v1",
+		CreatedAt:     time.Now().UTC(),
+	}
+	_ = store.SaveCandidate(ctx, candApproved)
+	memID, err := store.ApproveCandidateTx(ctx, ws, candApproved.ID, ApproveOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 嘗試 discard 已 approved 的候選：必須被嚴格阻絕！
+	err = store.DiscardCandidate(ctx, ws, candApproved.ID)
+	if err == nil {
+		t.Fatal("SECURITY BUG: Approved candidate was discarded!")
+	}
+	if !strings.Contains(err.Error(), "already approved") {
+		t.Errorf("expected already approved error, got: %v", err)
+	}
+
+	// 驗證 approved 候選的元資料與記憶 ID 完好無損
+	cA, _ := store.GetCandidate(ctx, ws, candApproved.ID)
+	if cA.Status != "approved" || cA.ApprovedMemoryID != memID {
+		t.Fatalf("approved candidate metadata was corrupted: status=%s, memID=%s", cA.Status, cA.ApprovedMemoryID)
+	}
+}
+
+func TestReopenDiscardedCandidate_AtomicCAS_RejectsApproved(t *testing.T) {
+	store := newTestGitMemStore(t)
+	ctx := context.Background()
+	ws := "/workspace/reopen-cas"
+
+	// 建立一個 approved 的候選
+	cand := &MemoryCandidate{
+		ID:            "cand-approved-noreopen",
+		Workspace:     ws,
+		RepoID:        "repo-1",
+		RefName:       "refs/heads/main",
+		BaseSHA:       "base",
+		HeadSHA:       "head",
+		CommitCount:   1,
+		FactsSummary:  "{}",
+		DraftContent:  "approved draft",
+		Status:        "pending",
+		PolicyVersion: "gitmem-v1",
+		CreatedAt:     time.Now().UTC(),
+	}
+	_ = store.SaveCandidate(ctx, cand)
+	memID, err := store.ApproveCandidateTx(ctx, ws, cand.ID, ApproveOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 模擬並行競爭：另一個請求試圖 ReopenDiscardedCandidate 把此 approved 候選重開為 pending
+	err = store.ReopenDiscardedCandidate(ctx, ws, cand.ID, "malicious draft", "{}", 1)
+	if err == nil {
+		t.Fatal("SECURITY BUG: Approved candidate was reopened back to pending!")
+	}
+	if !errors.Is(err, ErrCandidateStatusConflict) {
+		t.Errorf("expected ErrCandidateStatusConflict, got: %v", err)
+	}
+
+	// 驗證 approved 狀態與 approved_memory_id 絕無被抹除
+	c, _ := store.GetCandidate(ctx, ws, cand.ID)
+	if c.Status != "approved" || c.ApprovedMemoryID != memID {
+		t.Fatalf("approved candidate was corrupted by reopen: %+v", c)
+	}
+}
+
+func TestApproveCandidateTx_AtomicStatusCAS_RejectsNonPending(t *testing.T) {
+	store := newTestGitMemStore(t)
+	ctx := context.Background()
+	ws := "/workspace/approve-cas"
+
+	// 建立一個已 discarded 的候選
+	cand := &MemoryCandidate{
+		ID:            "cand-discarded-noapprove",
+		Workspace:     ws,
+		RepoID:        "repo-1",
+		RefName:       "refs/heads/main",
+		BaseSHA:       "base",
+		HeadSHA:       "head",
+		CommitCount:   1,
+		FactsSummary:  "{}",
+		DraftContent:  "some draft",
+		Status:        "pending",
+		PolicyVersion: "gitmem-v1",
+		CreatedAt:     time.Now().UTC(),
+	}
+	_ = store.SaveCandidate(ctx, cand)
+	_ = store.DiscardCandidate(ctx, ws, cand.ID)
+
+	// 嘗試直接核准 discarded 候選：交易內的原子 CAS 必須拒絕
+	_, err := store.ApproveCandidateTx(ctx, ws, cand.ID, ApproveOptions{})
+	if err == nil {
+		t.Fatal("SECURITY BUG: Discarded candidate was approved!")
+	}
+	if !strings.Contains(err.Error(), "discarded") && !strings.Contains(err.Error(), "no longer pending") {
+		t.Errorf("expected rejection error, got: %v", err)
+	}
+}
+
 
 

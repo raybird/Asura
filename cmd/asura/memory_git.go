@@ -21,7 +21,7 @@ func handleMemoryCapture(args []string, stdout, stderr io.Writer) int {
 	rangeExpr := fs.String("range", "", "git commit range (e.g. HEAD~2..HEAD or <sha>)")
 	sinceLast := fs.Bool("since-last", false, "capture incrementally since last recorded checkpoint")
 	force := fs.Bool("force", false, "force reopening discarded candidate")
-	aiDraft := fs.Bool("ai-draft", false, "use AI-assisted draft generator with fallback to deterministic facts")
+	aiDraft := fs.Bool("ai-draft", false, "use AI-assisted draft generator (requires configured AI generator; errors fail closed)")
 	jsonOutput := fs.Bool("json", false, "output in JSON format")
 
 	if err := fs.Parse(reorderArgs(args)); err != nil {

@@ -176,17 +176,7 @@ func (d *Daemon) handleGitMemoryDiscard(ctx context.Context, req IPCRequest, enc
 		return
 	}
 
-	cand, err := d.store.GetCandidate(ctx, canonicalScope, req.CandidateID)
-	if err != nil {
-		_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("get candidate: %v", err)})
-		return
-	}
-	if cand.Status == "approved" {
-		_ = encoder.Encode(IPCResponse{Error: "cannot discard an already approved candidate; delete the formal memory instead"})
-		return
-	}
-
-	if err := d.store.UpdateCandidateStatus(ctx, canonicalScope, req.CandidateID, "discarded", "", nil); err != nil {
+	if err := d.store.DiscardCandidate(ctx, canonicalScope, req.CandidateID); err != nil {
 		_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("discard candidate failed: %v", err)})
 		return
 	}
