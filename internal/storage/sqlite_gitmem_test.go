@@ -98,10 +98,10 @@ func TestGitMem_CandidateCRUD(t *testing.T) {
 		t.Fatalf("expected candidate ID %s, got %v", c.ID, found)
 	}
 
-	// 更新狀態為 approved
-	now := time.Now().UTC()
-	if err := store.UpdateCandidateStatus(ctx, ws, c.ID, "approved", "mem-formal-1", &now); err != nil {
-		t.Fatalf("failed to update status: %v", err)
+	// 透過原子核准交易更新狀態為 approved
+	memID, err := store.ApproveCandidateTx(ctx, ws, c.ID, ApproveOptions{Content: "approved content"})
+	if err != nil {
+		t.Fatalf("failed to approve candidate: %v", err)
 	}
 
 	// 依 ID 重新取得並驗證欄位
@@ -112,8 +112,8 @@ func TestGitMem_CandidateCRUD(t *testing.T) {
 	if reloaded.Status != "approved" {
 		t.Errorf("expected status 'approved', got '%s'", reloaded.Status)
 	}
-	if reloaded.ApprovedMemoryID != "mem-formal-1" {
-		t.Errorf("expected ApprovedMemoryID 'mem-formal-1', got '%s'", reloaded.ApprovedMemoryID)
+	if reloaded.ApprovedMemoryID != memID {
+		t.Errorf("expected ApprovedMemoryID %s, got '%s'", memID, reloaded.ApprovedMemoryID)
 	}
 	if reloaded.ApprovedAt == nil {
 		t.Errorf("expected ApprovedAt to be non-nil")

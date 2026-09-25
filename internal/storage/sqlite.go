@@ -300,6 +300,8 @@ func (s *SQLiteStore) initSchema() error {
 		approved_memory_id TEXT NOT NULL DEFAULT '',
 		created_at DATETIME NOT NULL,
 		approved_at DATETIME,
+		is_truncated INTEGER NOT NULL DEFAULT 0,
+		truncated_reason TEXT NOT NULL DEFAULT '',
 		UNIQUE(workspace, repo_id, ref_name, base_sha, head_sha, policy_version)
 	);
 
@@ -335,6 +337,24 @@ func (s *SQLiteStore) initSchema() error {
 	`
 	if _, err := s.db.Exec(indices); err != nil {
 		return fmt.Errorf("create indices, cron, and memory tables: %w", err)
+	}
+
+	candCols, err := s.getTableColumns("memory_candidates")
+	if err != nil {
+		return fmt.Errorf("check memory_candidates columns: %w", err)
+	}
+	if len(candCols) > 0 {
+		if !candCols["is_truncated"] {
+			if _, err := s.db.Exec("ALTER TABLE memory_candidates ADD COLUMN is_truncated INTEGER NOT NULL DEFAULT 0"); err != nil {
+				return fmt.Errorf("add column is_truncated to memory_candidates: %w", err)
+			}
+		}
+		if !candCols["truncated_reason"] {
+			if _, err := s.db.Exec("ALTER TABLE memory_candidates ADD COLUMN truncated_reason TEXT NOT NULL DEFAULT ''"); err != nil {
+				return fmt.Errorf("add column truncated_reason to memory_candidates: %w", err)
+			}
+		}
+		_, _ = s.db.Exec(`UPDATE memory_candidates SET is_truncated = 1 WHERE is_truncated = 0 AND facts_summary LIKE '%"truncated":true%'`)
 	}
 	return nil
 }

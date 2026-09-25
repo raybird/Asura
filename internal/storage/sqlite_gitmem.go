@@ -32,6 +32,8 @@ type MemoryCandidate struct {
 	ApprovedMemoryID string     `json:"approved_memory_id"`
 	CreatedAt        time.Time  `json:"created_at"`
 	ApprovedAt       *time.Time `json:"approved_at,omitempty"`
+	IsTruncated      bool       `json:"is_truncated"`
+	TruncatedReason  string     `json:"truncated_reason,omitempty"`
 }
 
 // CandidateSummary 代表有界候選清單項目（不包含龐大 facts_summary JSON 與全文 diff，約束傳輸大小）
@@ -49,6 +51,7 @@ type CandidateSummary struct {
 	ApprovedMemoryID string     `json:"approved_memory_id,omitempty"`
 	CreatedAt        time.Time  `json:"created_at"`
 	ApprovedAt       *time.Time `json:"approved_at,omitempty"`
+	IsTruncated      bool       `json:"is_truncated"`
 }
 
 // GitCheckpoint 記錄單一儲存庫在特定分支上的完整擷取進度游標
@@ -94,18 +97,25 @@ func (s *SQLiteStore) SaveCandidate(ctx context.Context, c *MemoryCandidate) err
 		c.CreatedAt = time.Now().UTC()
 	}
 
+	isTruncatedInt := 0
+	if c.IsTruncated {
+		isTruncatedInt = 1
+	}
+
 	query := `
 	INSERT INTO memory_candidates (
 		id, workspace, repo_id, ref_name, base_sha, head_sha,
 		commit_count, facts_summary, draft_content, status,
-		policy_version, approved_memory_id, created_at, approved_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		policy_version, approved_memory_id, created_at, approved_at,
+		is_truncated, truncated_reason
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(workspace, repo_id, ref_name, base_sha, head_sha, policy_version) DO NOTHING
 	`
 	_, err := s.db.ExecContext(ctx, query,
 		c.ID, c.Workspace, c.RepoID, c.RefName, c.BaseSHA, c.HeadSHA,
 		c.CommitCount, c.FactsSummary, c.DraftContent, c.Status,
 		c.PolicyVersion, c.ApprovedMemoryID, c.CreatedAt, c.ApprovedAt,
+		isTruncatedInt, c.TruncatedReason,
 	)
 	if err != nil {
 		return fmt.Errorf("save candidate: %w", err)
@@ -127,16 +137,19 @@ func (s *SQLiteStore) GetCandidate(ctx context.Context, workspace, id string) (*
 	query := `
 	SELECT id, workspace, repo_id, ref_name, base_sha, head_sha,
 	       commit_count, facts_summary, draft_content, status,
-	       policy_version, approved_memory_id, created_at, approved_at
+	       policy_version, approved_memory_id, created_at, approved_at,
+	       is_truncated, truncated_reason
 	FROM memory_candidates
 	WHERE workspace = ? AND id = ?
 	`
 	var c MemoryCandidate
 	var approvedAt sql.NullTime
+	var isTruncatedInt int
 	err := s.db.QueryRowContext(ctx, query, workspace, id).Scan(
 		&c.ID, &c.Workspace, &c.RepoID, &c.RefName, &c.BaseSHA, &c.HeadSHA,
 		&c.CommitCount, &c.FactsSummary, &c.DraftContent, &c.Status,
 		&c.PolicyVersion, &c.ApprovedMemoryID, &c.CreatedAt, &approvedAt,
+		&isTruncatedInt, &c.TruncatedReason,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -147,6 +160,7 @@ func (s *SQLiteStore) GetCandidate(ctx context.Context, workspace, id string) (*
 	if approvedAt.Valid {
 		c.ApprovedAt = &approvedAt.Time
 	}
+	c.IsTruncated = (isTruncatedInt == 1)
 	return &c, nil
 }
 
@@ -158,17 +172,20 @@ func (s *SQLiteStore) FindCandidateByRange(ctx context.Context, workspace, repoI
 	query := `
 	SELECT id, workspace, repo_id, ref_name, base_sha, head_sha,
 	       commit_count, facts_summary, draft_content, status,
-	       policy_version, approved_memory_id, created_at, approved_at
+	       policy_version, approved_memory_id, created_at, approved_at,
+	       is_truncated, truncated_reason
 	FROM memory_candidates
 	WHERE workspace = ? AND repo_id = ? AND ref_name = ?
 	  AND base_sha = ? AND head_sha = ? AND policy_version = ?
 	`
 	var c MemoryCandidate
 	var approvedAt sql.NullTime
+	var isTruncatedInt int
 	err := s.db.QueryRowContext(ctx, query, workspace, repoID, refName, baseSHA, headSHA, policyVersion).Scan(
 		&c.ID, &c.Workspace, &c.RepoID, &c.RefName, &c.BaseSHA, &c.HeadSHA,
 		&c.CommitCount, &c.FactsSummary, &c.DraftContent, &c.Status,
 		&c.PolicyVersion, &c.ApprovedMemoryID, &c.CreatedAt, &approvedAt,
+		&isTruncatedInt, &c.TruncatedReason,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -179,6 +196,7 @@ func (s *SQLiteStore) FindCandidateByRange(ctx context.Context, workspace, repoI
 	if approvedAt.Valid {
 		c.ApprovedAt = &approvedAt.Time
 	}
+	c.IsTruncated = (isTruncatedInt == 1)
 	return &c, nil
 }
 
@@ -194,7 +212,8 @@ func (s *SQLiteStore) ListCandidates(ctx context.Context, workspace string, stat
 		query = `
 		SELECT id, workspace, repo_id, ref_name, base_sha, head_sha,
 		       commit_count, substr(CAST(draft_content AS BLOB), 1, 513), status,
-		       policy_version, COALESCE(approved_memory_id, ''), created_at, approved_at
+		       policy_version, COALESCE(approved_memory_id, ''), created_at, approved_at,
+		       is_truncated
 		FROM memory_candidates
 		WHERE workspace = ? AND status = ?
 		ORDER BY created_at DESC, id ASC
@@ -205,7 +224,8 @@ func (s *SQLiteStore) ListCandidates(ctx context.Context, workspace string, stat
 		query = `
 		SELECT id, workspace, repo_id, ref_name, base_sha, head_sha,
 		       commit_count, substr(CAST(draft_content AS BLOB), 1, 513), status,
-		       policy_version, COALESCE(approved_memory_id, ''), created_at, approved_at
+		       policy_version, COALESCE(approved_memory_id, ''), created_at, approved_at,
+		       is_truncated
 		FROM memory_candidates
 		WHERE workspace = ?
 		ORDER BY created_at DESC, id ASC
@@ -225,10 +245,12 @@ func (s *SQLiteStore) ListCandidates(ctx context.Context, workspace string, stat
 		var c CandidateSummary
 		var rawSummary string
 		var approvedAt sql.NullTime
+		var isTruncatedInt int
 		if err := rows.Scan(
 			&c.ID, &c.Workspace, &c.RepoID, &c.RefName, &c.BaseSHA, &c.HeadSHA,
 			&c.CommitCount, &rawSummary, &c.Status,
 			&c.PolicyVersion, &c.ApprovedMemoryID, &c.CreatedAt, &approvedAt,
+			&isTruncatedInt,
 		); err != nil {
 			return nil, fmt.Errorf("scan candidate: %w", err)
 		}
@@ -240,6 +262,7 @@ func (s *SQLiteStore) ListCandidates(ctx context.Context, workspace string, stat
 		if approvedAt.Valid {
 			c.ApprovedAt = &approvedAt.Time
 		}
+		c.IsTruncated = (isTruncatedInt == 1)
 		candidates = append(candidates, c)
 	}
 	return candidates, rows.Err()
@@ -281,15 +304,42 @@ func (s *SQLiteStore) ClearProcessedCandidates(ctx context.Context, workspace st
 	return res.RowsAffected()
 }
 
-// ReopenDiscardedCandidate 重開已捨棄之候選，以新的草稿與事實更新其內容，並重設狀態為 pending
-// 嚴格原子 CAS：限定 WHERE status = 'discarded'，防止並行競爭將已 approved 之候選砸回 pending
-func (s *SQLiteStore) ReopenDiscardedCandidate(ctx context.Context, workspace, id string, draftContent, factsSummary string, commitCount int) error {
+// UpgradePartialCandidate 將處於 pending 狀態的不完整候選原子升級為完整候選 (MUST FIX 2)
+// 限定 WHERE status = 'pending' AND is_truncated = 1，防止覆寫已核准或已是完整狀態之候選
+func (s *SQLiteStore) UpgradePartialCandidate(ctx context.Context, workspace, id string, draftContent, factsSummary string, commitCount int) error {
 	query := `
 	UPDATE memory_candidates
-	SET status = 'pending', draft_content = ?, facts_summary = ?, commit_count = ?, approved_memory_id = '', approved_at = NULL
-	WHERE workspace = ? AND id = ? AND status = 'discarded'
+	SET draft_content = ?, facts_summary = ?, commit_count = ?, is_truncated = 0, truncated_reason = ''
+	WHERE workspace = ? AND id = ? AND status = 'pending' AND is_truncated = 1
 	`
 	res, err := s.db.ExecContext(ctx, query, draftContent, factsSummary, commitCount, workspace, id)
+	if err != nil {
+		return fmt.Errorf("upgrade partial candidate: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
+	if rows == 0 {
+		return ErrCandidateStatusConflict
+	}
+	return nil
+}
+
+// ReopenDiscardedCandidate 重開已捨棄之候選，以新的草稿與事實更新其內容，並重設狀態為 pending
+// 嚴格原子 CAS：限定 WHERE status = 'discarded'，防止並行競爭將已 approved 之候選砸回 pending
+func (s *SQLiteStore) ReopenDiscardedCandidate(ctx context.Context, workspace, id string, draftContent, factsSummary string, commitCount int, isTruncated bool, truncatedReason string) error {
+	isTruncatedInt := 0
+	if isTruncated {
+		isTruncatedInt = 1
+	}
+	query := `
+	UPDATE memory_candidates
+	SET status = 'pending', draft_content = ?, facts_summary = ?, commit_count = ?,
+	    is_truncated = ?, truncated_reason = ?, approved_memory_id = '', approved_at = NULL
+	WHERE workspace = ? AND id = ? AND status = 'discarded'
+	`
+	res, err := s.db.ExecContext(ctx, query, draftContent, factsSummary, commitCount, isTruncatedInt, truncatedReason, workspace, id)
 	if err != nil {
 		return fmt.Errorf("reopen candidate: %w", err)
 	}
@@ -340,35 +390,6 @@ func (s *SQLiteStore) DiscardCandidate(ctx context.Context, workspace, id string
 		return fmt.Errorf("%w: cannot discard candidate in status %q", ErrCandidateStatusConflict, cand.Status)
 	}
 	return nil
-}
-
-// UpdateCandidateStatusForTest 僅供測試夾具（Test Fixtures）快速配置初始候選狀態使用。
-// 生產環境嚴格禁止調用此函式，必須使用 DiscardCandidate、ReopenDiscardedCandidate 或 ApproveCandidateTx
-// 以確保資料庫層級的狀態 CAS 與防復活（Anti-Revival）不變性。
-func (s *SQLiteStore) UpdateCandidateStatusForTest(ctx context.Context, workspace, id string, status string, approvedMemoryID string, approvedAt *time.Time) error {
-	query := `
-	UPDATE memory_candidates
-	SET status = ?, approved_memory_id = ?, approved_at = ?
-	WHERE workspace = ? AND id = ?
-	`
-	res, err := s.db.ExecContext(ctx, query, status, approvedMemoryID, approvedAt, workspace, id)
-	if err != nil {
-		return fmt.Errorf("update candidate status for test: %w", err)
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("get rows affected: %w", err)
-	}
-	if rows == 0 {
-		return ErrCandidateNotFound
-	}
-	return nil
-}
-
-// UpdateCandidateStatus 已棄用：生產程式碼禁止調用；請使用 DiscardCandidate、ReopenDiscardedCandidate 或 ApproveCandidateTx。
-// 僅保留作為既有測試夾具之過渡別名。
-func (s *SQLiteStore) UpdateCandidateStatus(ctx context.Context, workspace, id string, status string, approvedMemoryID string, approvedAt *time.Time) error {
-	return s.UpdateCandidateStatusForTest(ctx, workspace, id, status, approvedMemoryID, approvedAt)
 }
 
 // UpdateCandidateDraft 更新候選的草稿內文

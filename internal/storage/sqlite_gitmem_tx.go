@@ -200,19 +200,26 @@ func (s *SQLiteStore) SaveCandidateAndCheckpointTx(
 		_ = tx.Rollback()
 	}()
 
+	isTruncatedInt := 0
+	if cand.IsTruncated {
+		isTruncatedInt = 1
+	}
+
 	// 1. Insert-if-absent 候選草稿
 	queryCand := `
 	INSERT INTO memory_candidates (
 		id, workspace, repo_id, ref_name, base_sha, head_sha,
 		commit_count, facts_summary, draft_content, status,
-		policy_version, approved_memory_id, created_at, approved_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		policy_version, approved_memory_id, created_at, approved_at,
+		is_truncated, truncated_reason
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(workspace, repo_id, ref_name, base_sha, head_sha, policy_version) DO NOTHING
 	`
 	_, err = tx.ExecContext(ctx, queryCand,
 		cand.ID, cand.Workspace, cand.RepoID, cand.RefName, cand.BaseSHA, cand.HeadSHA,
 		cand.CommitCount, cand.FactsSummary, cand.DraftContent, cand.Status,
 		cand.PolicyVersion, cand.ApprovedMemoryID, cand.CreatedAt, cand.ApprovedAt,
+		isTruncatedInt, cand.TruncatedReason,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("insert candidate in tx: %w", err)
@@ -222,19 +229,22 @@ func (s *SQLiteStore) SaveCandidateAndCheckpointTx(
 	selectCand := `
 	SELECT id, workspace, repo_id, ref_name, base_sha, head_sha,
 	       commit_count, facts_summary, draft_content, status,
-	       policy_version, approved_memory_id, created_at, approved_at
+	       policy_version, approved_memory_id, created_at, approved_at,
+	       is_truncated, truncated_reason
 	FROM memory_candidates
 	WHERE workspace = ? AND repo_id = ? AND ref_name = ?
 	  AND base_sha = ? AND head_sha = ? AND policy_version = ?
 	`
 	var persisted MemoryCandidate
 	var approvedAt sql.NullTime
+	var persistedIsTruncatedInt int
 	err = tx.QueryRowContext(ctx, selectCand,
 		cand.Workspace, cand.RepoID, cand.RefName, cand.BaseSHA, cand.HeadSHA, cand.PolicyVersion,
 	).Scan(
 		&persisted.ID, &persisted.Workspace, &persisted.RepoID, &persisted.RefName, &persisted.BaseSHA, &persisted.HeadSHA,
 		&persisted.CommitCount, &persisted.FactsSummary, &persisted.DraftContent, &persisted.Status,
 		&persisted.PolicyVersion, &persisted.ApprovedMemoryID, &persisted.CreatedAt, &approvedAt,
+		&persistedIsTruncatedInt, &persisted.TruncatedReason,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("scan persisted candidate: %w", err)
@@ -242,9 +252,28 @@ func (s *SQLiteStore) SaveCandidateAndCheckpointTx(
 	if approvedAt.Valid {
 		persisted.ApprovedAt = &approvedAt.Time
 	}
+	persisted.IsTruncated = (persistedIsTruncatedInt == 1)
+
+	// 若既有候選為 Partial (is_truncated=1, status='pending')，但本次傳入為 Complete (!cand.IsTruncated)，執行原子升級
+	if persisted.IsTruncated && !cand.IsTruncated && persisted.Status == "pending" {
+		upgradeQuery := `
+		UPDATE memory_candidates
+		SET draft_content = ?, facts_summary = ?, commit_count = ?, is_truncated = 0, truncated_reason = ''
+		WHERE workspace = ? AND id = ? AND status = 'pending' AND is_truncated = 1
+		`
+		if _, err := tx.ExecContext(ctx, upgradeQuery, cand.DraftContent, cand.FactsSummary, cand.CommitCount, cand.Workspace, persisted.ID); err != nil {
+			return nil, fmt.Errorf("upgrade partial candidate in tx: %w", err)
+		}
+		persisted.DraftContent = cand.DraftContent
+		persisted.FactsSummary = cand.FactsSummary
+		persisted.CommitCount = cand.CommitCount
+		persisted.IsTruncated = false
+		persisted.TruncatedReason = ""
+	}
 
 	// 3. 若有 Checkpoint 需推進，在同筆交易內原子更新並進行 Monotonic / CAS 校驗
-	if checkpoint != nil {
+	// 安全約束：未確認持久化 Candidate 完整前（!persisted.IsTruncated），絕對禁止 advance Checkpoint！
+	if checkpoint != nil && !persisted.IsTruncated {
 		if err := advanceCheckpointInTx(ctx, tx, checkpoint, expectedOldSHA, isAncestor); err != nil {
 			return nil, err
 		}

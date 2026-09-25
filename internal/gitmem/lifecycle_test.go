@@ -115,7 +115,7 @@ func TestGitMemory_ReopenDiscardedCandidateAfterClear_ProducesNonEmptyMemory(t *
 	candID := res.Candidate.ID
 
 	// 2. 捨棄該候選
-	if err := store.UpdateCandidateStatus(ctx, repoDir, candID, "discarded", "", nil); err != nil {
+	if err := store.DiscardCandidate(ctx, repoDir, candID); err != nil {
 		t.Fatalf("discard candidate failed: %v", err)
 	}
 

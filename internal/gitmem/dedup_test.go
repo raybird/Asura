@@ -52,15 +52,17 @@ func TestCaptureService_DedupPendingAndApproved(t *testing.T) {
 	}
 
 	// 3. 模擬核准該 candidate
-	now := time.Now().UTC()
-	_ = store.UpdateCandidateStatus(ctx, res1.Candidate.Workspace, res1.Candidate.ID, "approved", "mem-formal-99", &now)
+	approvedMemID, err := store.ApproveCandidateTx(ctx, res1.Candidate.Workspace, res1.Candidate.ID, storage.ApproveOptions{Content: "approved content"})
+	if err != nil {
+		t.Fatalf("approve candidate failed: %v", err)
+	}
 
 	// 4. 第三次擷取相同 Range：回傳已核准之候選與既有 approved_memory_id，不重複插入
 	res3, err := service.Capture(ctx, repoDir, CaptureOptions{RangeExpr: "HEAD~1..HEAD"})
 	if err != nil {
 		t.Fatalf("third capture failed: %v", err)
 	}
-	if !res3.IsReused || res3.Candidate.Status != "approved" || res3.Candidate.ApprovedMemoryID != "mem-formal-99" {
+	if !res3.IsReused || res3.Candidate.Status != "approved" || res3.Candidate.ApprovedMemoryID != approvedMemID {
 		t.Errorf("expected approved reused candidate, got: %+v", res3.Candidate)
 	}
 }
@@ -78,7 +80,9 @@ func TestCaptureService_DiscardedRequiresForce(t *testing.T) {
 	}
 
 	// 標記為 discarded
-	_ = store.UpdateCandidateStatus(ctx, res.Candidate.Workspace, res.Candidate.ID, "discarded", "", nil)
+	if err := store.DiscardCandidate(ctx, res.Candidate.Workspace, res.Candidate.ID); err != nil {
+		t.Fatalf("discard candidate failed: %v", err)
+	}
 
 	// 不帶 Force 再次擷取：應回報已被捨棄
 	_, err = service.Capture(ctx, repoDir, CaptureOptions{RangeExpr: "HEAD~1..HEAD", Force: false})
@@ -511,7 +515,7 @@ func TestCaptureService_ReopenDiscardedCandidate_HandlesConcurrentApprovalSafely
 	// 並行交易 B 完成 Reopen 並完成了核准（狀態變為 approved）
 	interleaver := &concurrentInterleavingGenerator{
 		onGenerate: func() {
-			_ = store.ReopenDiscardedCandidate(ctx, repoDir, candID, "parallel reopened draft", "{}", 1)
+			_ = store.ReopenDiscardedCandidate(ctx, repoDir, candID, "parallel reopened draft", "{}", 1, false, "")
 			memID, approveErr := store.ApproveCandidateTx(ctx, repoDir, candID, storage.ApproveOptions{Content: "approved content"})
 			if approveErr != nil {
 				t.Errorf("concurrent approval failed: %v", approveErr)
@@ -613,8 +617,7 @@ func TestCaptureService_AIDraft_PreflightFailClosed_EvenIfCandidateExists(t *tes
 	}
 
 	// 4. 將該候選核准為 approved
-	now := time.Now().UTC()
-	if err := store.UpdateCandidateStatusForTest(ctx, repoDir, resNormal.Candidate.ID, "approved", "mem-approved-1", &now); err != nil {
+	if _, err := store.ApproveCandidateTx(ctx, repoDir, resNormal.Candidate.ID, storage.ApproveOptions{Content: "approved content"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -669,6 +672,214 @@ func TestCaptureService_LongCallerDeadline_EnforcesHardTenSecondLimit(t *testing
 		t.Fatalf("SECURITY VIOLATION: Hard 10s deadline bypassed by long caller deadline! Remaining: %v", timeRemainingFromStart)
 	}
 }
+
+func TestCaptureService_DiscardedCandidate_NeverAdvancesCheckpointOnFailure(t *testing.T) {
+	allowedRoot, repoDir := initTestRepoWithBranches(t)
+	exec := NewGitExecutor([]string{allowedRoot})
+	store := newTestStore(t)
+	service := NewCaptureService(exec, store)
+	ctx := context.Background()
+
+	repoInfo, err := exec.ValidateAndResolveRepo(ctx, repoDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. 初始化 Checkpoint 在 H0 (HEAD~1)
+	resolved, err := exec.ResolveRange(ctx, repoDir, "HEAD~2..HEAD~1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h0 := resolved.HeadSHA
+	initialCP := &storage.GitCheckpoint{
+		Workspace:       repoInfo.Workspace,
+		RepoID:          repoInfo.RepoID,
+		RefName:         repoInfo.CurrentRef,
+		LastCapturedSHA: h0,
+		UpdatedAt:       time.Now().UTC(),
+	}
+	if err := store.SaveCheckpoint(ctx, initialCP); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. 第一次擷取 H0..HEAD，產生 candidate
+	res, err := service.Capture(ctx, repoDir, CaptureOptions{RangeExpr: "HEAD~1..HEAD"})
+	if err != nil {
+		t.Fatalf("first capture failed: %v", err)
+	}
+	candID := res.Candidate.ID
+
+	// 3. 捨棄該候選
+	if err := store.DiscardCandidate(ctx, repoDir, candID); err != nil {
+		t.Fatalf("discard candidate failed: %v", err)
+	}
+
+	// 4. 執行增量擷取 (--since-last)，未帶 --force
+	// 期望：立即報錯拒絕，且 Checkpoint 絕不前進（必須留在 H0）
+	_, err = service.Capture(ctx, repoDir, CaptureOptions{SinceLast: true, Force: false})
+	if err == nil {
+		t.Fatal("expected error when capturing discarded range without force, got nil")
+	}
+	if !strings.Contains(err.Error(), "already discarded") {
+		t.Fatalf("expected 'already discarded' error, got: %v", err)
+	}
+
+	// 關鍵斷言 (MUST FIX 1)：驗證 Checkpoint 保持在 H0，絕對未前進至 HEAD！
+	cpAfterFail, err := store.GetCheckpoint(ctx, repoInfo.Workspace, repoInfo.RepoID, repoInfo.CurrentRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cpAfterFail.LastCapturedSHA != h0 {
+		t.Fatalf("CRITICAL SECURITY BUG: Checkpoint advanced from %s to %s despite discarded candidate rejection!", h0, cpAfterFail.LastCapturedSHA)
+	}
+
+	// 5. 測試帶 --force 但 AI 生成失敗時（例如未配置 AI generator），Checkpoint 同樣絕對不前進
+	_, err = service.Capture(ctx, repoDir, CaptureOptions{SinceLast: true, Force: true, AIDraft: true})
+	if err == nil {
+		t.Fatal("expected error when AI generator is missing, got nil")
+	}
+	cpAfterAIFail, _ := store.GetCheckpoint(ctx, repoInfo.Workspace, repoInfo.RepoID, repoInfo.CurrentRef)
+	if cpAfterAIFail.LastCapturedSHA != h0 {
+		t.Fatalf("CRITICAL SECURITY BUG: Checkpoint advanced despite AI generation failure! Got %s", cpAfterAIFail.LastCapturedSHA)
+	}
+
+	// 6. 帶 --force 且成功重開：此時才合法前進 Checkpoint
+	resReopened, err := service.Capture(ctx, repoDir, CaptureOptions{SinceLast: true, Force: true})
+	if err != nil {
+		t.Fatalf("expected success with force, got: %v", err)
+	}
+	if resReopened.Candidate.Status != "pending" {
+		t.Fatalf("expected candidate status pending, got: %s", resReopened.Candidate.Status)
+	}
+
+	cpAfterSuccess, _ := store.GetCheckpoint(ctx, repoInfo.Workspace, repoInfo.RepoID, repoInfo.CurrentRef)
+	if cpAfterSuccess.LastCapturedSHA != repoInfo.CurrentHead {
+		t.Fatalf("expected checkpoint to advance to %s after successful reopen, got: %s", repoInfo.CurrentHead, cpAfterSuccess.LastCapturedSHA)
+	}
+}
+
+func TestCaptureService_PartialCandidate_CompleteRetryUpgradesCandidateAndAdvancesCheckpoint(t *testing.T) {
+	allowedRoot, repoDir := initTestRepoWithBranches(t)
+	exec := NewGitExecutor([]string{allowedRoot})
+	store := newTestStore(t)
+	service := NewCaptureService(exec, store)
+	ctx := context.Background()
+
+	repoInfo, err := exec.ValidateAndResolveRepo(ctx, repoDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. 初始化 Checkpoint 在 H0 (HEAD~1)
+	resolved, err := exec.ResolveRange(ctx, repoDir, "HEAD~2..HEAD~1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h0 := resolved.HeadSHA
+	initialCP := &storage.GitCheckpoint{
+		Workspace:       repoInfo.Workspace,
+		RepoID:          repoInfo.RepoID,
+		RefName:         repoInfo.CurrentRef,
+		LastCapturedSHA: h0,
+		UpdatedAt:       time.Now().UTC(),
+	}
+	if err := store.SaveCheckpoint(ctx, initialCP); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. 模擬第一次擷取因為暫態問題或超過限制儲存了 Partial Candidate（is_truncated=true）
+	partialCand := &storage.MemoryCandidate{
+		ID:              "cand-partial-123",
+		Workspace:       repoInfo.Workspace,
+		RepoID:          repoInfo.RepoID,
+		RefName:         repoInfo.CurrentRef,
+		BaseSHA:         h0,
+		HeadSHA:         repoInfo.CurrentHead,
+		CommitCount:     1,
+		FactsSummary:    `{"truncated":true,"truncated_reason":"temporary io error"}`,
+		DraftContent:    "incomplete partial draft content",
+		Status:          "pending",
+		PolicyVersion:   "gitmem-v1",
+		CreatedAt:       time.Now().UTC(),
+		IsTruncated:     true,
+		TruncatedReason: "temporary io error",
+	}
+	if err := store.SaveCandidate(ctx, partialCand); err != nil {
+		t.Fatal(err)
+	}
+
+	// 驗證第一次儲存後 Checkpoint 依然保持在 H0（0 前進）
+	cpBeforeRetry, _ := store.GetCheckpoint(ctx, repoInfo.Workspace, repoInfo.RepoID, repoInfo.CurrentRef)
+	if cpBeforeRetry.LastCapturedSHA != h0 {
+		t.Fatalf("expected checkpoint at h0, got: %s", cpBeforeRetry.LastCapturedSHA)
+	}
+
+	// 3. 第二次執行增量擷取 (SinceLast)，此時完整讀取成功（!Truncated）
+	resComplete, err := service.Capture(ctx, repoDir, CaptureOptions{SinceLast: true})
+	if err != nil {
+		t.Fatalf("complete retry capture failed: %v", err)
+	}
+
+	// 關鍵驗證 1：回傳的 Candidate 必須已被升級為完整狀態，不可沿用第一次不完整草稿
+	if resComplete.Candidate.IsTruncated {
+		t.Fatal("expected candidate to be upgraded to non-truncated (complete)")
+	}
+	if resComplete.Candidate.DraftContent == "incomplete partial draft content" {
+		t.Fatalf("DATA INTEGRITY BUG: Complete capture returned stale partial draft content!")
+	}
+	if !strings.Contains(resComplete.Candidate.DraftContent, "專案架構決策與變更摘要") {
+		t.Fatalf("expected complete structured draft content, got: %s", resComplete.Candidate.DraftContent)
+	}
+
+	// 關鍵驗證 2：檢查資料庫中的持久化 Candidate，確認已在 SQLite 中原子升級為 Complete
+	dbCand, err := store.GetCandidate(ctx, repoInfo.Workspace, partialCand.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dbCand.IsTruncated {
+		t.Fatal("expected database candidate is_truncated to be false after complete retry")
+	}
+	if dbCand.DraftContent != resComplete.Candidate.DraftContent {
+		t.Fatalf("database draft mismatch: got %q, expected %q", dbCand.DraftContent, resComplete.Candidate.DraftContent)
+	}
+
+	// 關鍵驗證 3：確認持久化候選確認完整後，Checkpoint 成功推進至最新 HEAD，與保存內容完全一致
+	cpAfterRetry, _ := store.GetCheckpoint(ctx, repoInfo.Workspace, repoInfo.RepoID, repoInfo.CurrentRef)
+	if cpAfterRetry.LastCapturedSHA != repoInfo.CurrentHead {
+		t.Fatalf("expected checkpoint advanced to %s after complete upgrade, got %s", repoInfo.CurrentHead, cpAfterRetry.LastCapturedSHA)
+	}
+}
+
+func TestCaptureService_AIDraft_DisclosesExistingCandidateSkipped(t *testing.T) {
+	allowedRoot, repoDir := initTestRepoWithBranches(t)
+	exec := NewGitExecutor([]string{allowedRoot})
+	store := newTestStore(t)
+	service := NewCaptureService(exec, store)
+	ctx := context.Background()
+
+	// 1. 先用普通模式建立一個 pending candidate (HEAD~1..HEAD)
+	_, err := service.Capture(ctx, repoDir, CaptureOptions{RangeExpr: "HEAD~1..HEAD"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. 配置 AI Generator，再次以 --ai-draft 呼叫相同 Range
+	dlGen := &deadlineCheckingGenerator{}
+	service.SetAIGenerator(dlGen)
+
+	res, err := service.Capture(ctx, repoDir, CaptureOptions{RangeExpr: "HEAD~1..HEAD", AIDraft: true})
+	if err != nil {
+		t.Fatalf("capture failed: %v", err)
+	}
+	if !res.IsReused {
+		t.Fatal("expected candidate to be reused")
+	}
+	// 驗證回傳 Message 明確揭露既有候選未重新執行 AI
+	if !strings.Contains(res.Message, "immutable draft preserved") && !strings.Contains(res.Message, "AI generation skipped") {
+		t.Fatalf("expected message to disclose AI draft skip for existing candidate, got: %s", res.Message)
+	}
+}
+
 
 
 

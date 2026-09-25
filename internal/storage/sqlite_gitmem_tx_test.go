@@ -571,7 +571,7 @@ func TestReopenDiscardedCandidate_ReplacesPayloadAndResetsPending(t *testing.T) 
 	// 重新開啟候選並注入新草稿與事實
 	newDraft := "regenerated draft from re-capture"
 	newFacts := `{"commits":[{"sha":"c1","subject":"refactored"}]}`
-	if err := store.ReopenDiscardedCandidate(ctx, ws, cand.ID, newDraft, newFacts, 2); err != nil {
+	if err := store.ReopenDiscardedCandidate(ctx, ws, cand.ID, newDraft, newFacts, 2, false, ""); err != nil {
 		t.Fatalf("ReopenDiscardedCandidate failed: %v", err)
 	}
 
@@ -766,7 +766,7 @@ func TestReopenDiscardedCandidate_AtomicCAS_RejectsApproved(t *testing.T) {
 	}
 
 	// 模擬並行競爭：另一個請求試圖 ReopenDiscardedCandidate 把此 approved 候選重開為 pending
-	err = store.ReopenDiscardedCandidate(ctx, ws, cand.ID, "malicious draft", "{}", 1)
+	err = store.ReopenDiscardedCandidate(ctx, ws, cand.ID, "malicious draft", "{}", 1, false, "")
 	if err == nil {
 		t.Fatal("SECURITY BUG: Approved candidate was reopened back to pending!")
 	}
@@ -813,6 +813,114 @@ func TestApproveCandidateTx_AtomicStatusCAS_RejectsNonPending(t *testing.T) {
 		t.Errorf("expected rejection error, got: %v", err)
 	}
 }
+
+func TestUpgradePartialCandidate_AtomicUpgrade(t *testing.T) {
+	store := newTestGitMemStore(t)
+	ctx := context.Background()
+	ws := "/workspace/test"
+
+	cand := &MemoryCandidate{
+		ID:              "cand-partial-1",
+		Workspace:       ws,
+		RepoID:          "repo-1",
+		RefName:         "refs/heads/main",
+		BaseSHA:         "base1",
+		HeadSHA:         "head1",
+		CommitCount:     1,
+		FactsSummary:    `{"truncated":true}`,
+		DraftContent:    "partial draft",
+		Status:          "pending",
+		PolicyVersion:   "gitmem-v1",
+		CreatedAt:       time.Now().UTC(),
+		IsTruncated:     true,
+		TruncatedReason: "file limit exceeded",
+	}
+	if err := store.SaveCandidate(ctx, cand); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. 執行原子升級
+	newDraft := "complete draft"
+	newFacts := `{"truncated":false}`
+	if err := store.UpgradePartialCandidate(ctx, ws, cand.ID, newDraft, newFacts, 2); err != nil {
+		t.Fatalf("UpgradePartialCandidate failed: %v", err)
+	}
+
+	// 2. 驗證升級後狀態為 complete
+	upgraded, err := store.GetCandidate(ctx, ws, cand.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if upgraded.IsTruncated {
+		t.Fatal("expected IsTruncated to be false after upgrade")
+	}
+	if upgraded.TruncatedReason != "" {
+		t.Fatalf("expected empty TruncatedReason, got %s", upgraded.TruncatedReason)
+	}
+	if upgraded.DraftContent != newDraft {
+		t.Fatalf("expected draft %q, got %q", newDraft, upgraded.DraftContent)
+	}
+	if upgraded.CommitCount != 2 {
+		t.Fatalf("expected commit count 2, got %d", upgraded.CommitCount)
+	}
+
+	// 3. 再次嘗試對已是 complete 的候選升級，必須觸發 ErrCandidateStatusConflict（只允許升級 is_truncated=1）
+	err = store.UpgradePartialCandidate(ctx, ws, cand.ID, "another draft", "{}", 3)
+	if !errors.Is(err, ErrCandidateStatusConflict) {
+		t.Fatalf("expected ErrCandidateStatusConflict on already upgraded candidate, got: %v", err)
+	}
+}
+
+func TestSaveCandidateAndCheckpointTx_PartialBlocksCheckpointAdvance(t *testing.T) {
+	store := newTestGitMemStore(t)
+	ctx := context.Background()
+	ws := "/workspace/test"
+
+	// 建立一個 Partial Candidate
+	cand := &MemoryCandidate{
+		ID:              "cand-partial-cp",
+		Workspace:       ws,
+		RepoID:          "repo-1",
+		RefName:         "refs/heads/main",
+		BaseSHA:         "h0",
+		HeadSHA:         "h1",
+		CommitCount:     1,
+		FactsSummary:    `{"truncated":true}`,
+		DraftContent:    "partial draft",
+		Status:          "pending",
+		PolicyVersion:   "gitmem-v1",
+		CreatedAt:       time.Now().UTC(),
+		IsTruncated:     true,
+		TruncatedReason: "diff limit exceeded",
+	}
+
+	cp := &GitCheckpoint{
+		Workspace:       ws,
+		RepoID:          "repo-1",
+		RefName:         "refs/heads/main",
+		LastCapturedSHA: "h1",
+		UpdatedAt:       time.Now().UTC(),
+	}
+
+	// 即使傳入 checkpoint，但因 cand.IsTruncated == true，交易必須絕對禁止推進 Checkpoint
+	persisted, err := store.SaveCandidateAndCheckpointTx(ctx, cand, cp, "", nil)
+	if err != nil {
+		t.Fatalf("SaveCandidateAndCheckpointTx failed: %v", err)
+	}
+	if !persisted.IsTruncated {
+		t.Fatal("expected persisted candidate to be truncated")
+	}
+
+	// 驗證庫中 Checkpoint 依然為 nil，未被寫入
+	savedCP, err := store.GetCheckpoint(ctx, ws, "repo-1", "refs/heads/main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if savedCP != nil {
+		t.Fatalf("SECURITY VIOLATION: Checkpoint was advanced for partial candidate! Got: %+v", savedCP)
+	}
+}
+
 
 
 
