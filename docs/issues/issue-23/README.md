@@ -2,9 +2,11 @@
 
 ## 概述
 
-為 Asura 提供**顯式觸發、有界唯讀、隔離且需人工審核**的 Git 變更感知與專案記憶擷取能力。讓 CLI 使用者能針對授權 workspace 的 Git repository，提取固定範圍（commits／diffs）的架構與決策事實，產生待審候選（candidates），經使用者檢視／編修／核准後，以同 scope 的正式專案記憶寫入既有 SQLite，供後續任務召回使用。來源為 [GitHub #23](https://github.com/raybird/Asura/issues/23)。
+為 Asura 提供**顯式觸發、有界唯讀、隔離且需人工審核**的 Git 變更感知與專案記憶擷取能力。讓 CLI 使用者能針對授權 workspace 的 Git repository，提取固定範圍（commits／diffs）的架構與決策事實，區分「原始 Git 變更紀錄」與「具長期價值的專案記憶」（如架構決策、實作約束與設計原由），產生待審候選（candidates），經使用者檢視／編修／核准後，以同 scope 的正式專案記憶寫入既有 SQLite，供後續任務召回使用。
 
-本 issue 當前授權現況調查、方案分析與不造成新 production 行為的安全 probe；具體 Git 擷取方式、checkpoint、AI 草稿、schema、上限與 GITMEM-001～010 驗收劇本待需求與技術分析確認後由使用者正式核准。
+來源為 [GitHub #23](https://github.com/raybird/Asura/issues/23)（2026-09-24 建立立項提案；2026-09-25 完成建檔與初次提交 Commit `9e19fd6`，同日依程式碼與規劃審查 RETURN TO analysis 意見完成資料一致性與安全邊界修訂）。
+
+本 issue 當前授權現況調查、方案分析與不造成新 production 行為的安全 probe（Phase 1）；具體 Git 擷取方式、checkpoint、AI 草稿、schema、上限與 GITMEM-001～010 驗收劇本待需求與技術分析確認後由使用者正式核准。
 
 ## 文件清單
 
@@ -19,13 +21,15 @@
 | **專案記憶來源** | 僅能由使用者以 `asura memory add` 手動建立 | 支援手動建立，亦可顯式針對 Git 變更執行 capture 產生待審候選 |
 | **Git 感知能力** | 無，完全不與 Git 儲存庫互動 | 透過安全封裝之 Git 子程序唯讀讀取固定 base..head 變更事實 |
 | **審核生命週期** | 無審核機制，新增即為正式記憶直接生效 | 擷取後存為 pending 候選草稿，經 CLI 審核／編修／核准後才轉入正式記憶 |
-| **自動記憶召回** | 僅檢索 manual 記憶 | 自動召回已核准之 `git-approved` 記憶；未審核草稿 100% 隔離零召回 |
+| **資料來源追溯** | 僅有 `source='manual'`，無外部證據連結 | 透過獨立 `memory_provenance` 表完整關聯 repo、ref、commit SHA 與事實摘要 |
+| **自動記憶召回** | 僅檢索 manual 記憶 | `asura ask --memory-recall bounded` 自動召回 `git-approved` 記憶；未審核草稿 100% 隔離零召回 |
 
 ## 涉及檔案
 
 ```text
 cmd/asura/
 ├── memory.go                 # 可改：擴充 capture/candidates/approve/discard CLI 子命令
+├── ask.go                    # 不可觸及：既有 --memory-recall bounded 旗標定義處
 └── main.go                   # 不可觸及：入口分發保持穩定
 internal/
 ├── auth/policy.go            # 可改：輔助檢驗 Git root 與 allowed roots 包含關係
@@ -34,9 +38,10 @@ internal/
 │   └── gitmem_handlers.go    # 可改：實作 Git 記憶 IPC 處理常式
 ├── gitmem/                   # 可改：新增模組，包含安全 Git CLI 執行、range、hard bounds、facts 封裝
 ├── storage/
-│   ├── sqlite.go             # 可改：新增 memory_candidates 與 git_checkpoints 表
+│   ├── sqlite.go             # 可改：新增 memory_candidates, git_checkpoints, memory_provenance 表
 │   ├── sqlite_memory.go      # 可改：支援 git-approved 來源標記寫入
-│   └── sqlite_gitmem.go      # 可改：候選與 checkpoint 的 CRUD 及交易支援
+│   ├── sqlite_gitmem.go      # 可改：候選、checkpoint 與 provenance 的 CRUD
+│   └── sqlite_gitmem_tx.go   # 可改：原子性核准交易、去重與冪等保證
 ├── recall/recall.go          # 不可觸及：保持 Phase 3F lexical-v1 選擇器與額度不變
 ├── contextwin/               # 不可觸及：保持 Context Window 預估模型不變
 ├── pipeline/                 # 不可觸及：保持 Three-Face Pipeline 執行邏輯不變
@@ -78,11 +83,12 @@ Feature: Git 變更感知與審核式專案記憶擷取
     And 分支切換、未關聯歷史或 ref 重寫時拒絕靜默混合，防止跨分支增量混淆
 
   @GITMEM-004
-  Scenario: Bounded capture 硬性邊界防護
+  Scenario: Bounded capture 硬性邊界防護與截斷分流
     Given 包含大量 commits、巨幅 diff、binary 檔案、submodule、惡意檔名、超大單檔或超時取消的情境
     When 觸發 Git 變更分析與擷取
     Then 嚴格受 hard bounds 限制（commits 數量、diff bytes、檔案數量、執行逾時），超出時明確標示截斷
     And binary、submodule 與超限檔案自動略過或僅記錄變更標記，不得無界讀入或假裝資料完整
+    And 部分擷取（Partial Capture）明確禁止自動推進 Checkpoint，防止未處理變更永久遺漏
 
   @GITMEM-005
   Scenario: Draft vs approval 候選隔離與人工審核
@@ -96,7 +102,8 @@ Feature: Git 變更感知與審核式專案記憶擷取
     Given 候選記憶與核准轉入的正式專案記憶
     When 檢驗其記憶來源與內容
     Then 候選記憶明確區分 Git 原始客觀事實（commits/paths/diff stats）與摘要文字
-    And 正式記憶保留可追溯之來源 SHA、workspace、ref 與核准時間，不將推測性文字當作已驗證事實
+    And 正式記憶透過獨立 memory_provenance 表保留可追溯之來源 SHA、workspace、ref 與核准時間
+    And 正式記憶內文維持純淨決策與約束，不將大量 raw SHA 拼接進內文以防污染詞彙召回
 
   @GITMEM-007
   Scenario: 崩潰恢復、交易保證與重送冪等
@@ -104,6 +111,7 @@ Feature: Git 變更感知與審核式專案記憶擷取
     When 系統重啟並重新執行相同要求
     Then 任何部分失敗不冒充成功，不前進未完成之 checkpoint
     And 相同範圍與政策之重複請求維持冪等，不產生重複候選或重複正式記憶
+    And 正式記憶被手動刪除後，再次 approve 原 Candidate 明確報錯，禁止悄悄復活
 
   @GITMEM-008
   Scenario: Sealed context 密封相容性
@@ -117,7 +125,7 @@ Feature: Git 變更感知與審核式專案記憶擷取
     Given 含惡意 commit message、注入指令之 diff 或不受信任之 Git 內容
     When 啟用 AI 輔助生成候選草稿摘要
     Then 模型在唯讀權限邊界（deny mutating capabilities）與固定 token 預算下執行
-    And 模型無法直接寫入資料庫或外送資料，任何生成失敗或超限均如實揭露並退回手動編修模式
+    And 模型無法直接寫入資料庫或外送資料，任何生成失敗或超限均如實揭露並退回確定性事實模式
 
   @GITMEM-010
   Scenario: 完整回歸與系統穩定性
@@ -129,8 +137,8 @@ Feature: Git 變更感知與審核式專案記憶擷取
 
 ## Gherkin 核准紀錄
 
-- **核准 commit**: 待提交
-- **核准來源**: 使用者於 2026-09-25 提交 GitHub Issue #23，授權現況調查、方案分析與安全 probe；GITMEM-001～010 驗收行為與 H-TBD-1～6 待需求與技術分析確認後由使用者正式核准。
+- **核准 commit**: 9e19fd6（承載初次建檔與審查基準之提交；待修訂確認後回填正式核准 SHA）
+- **核准來源**: 使用者於 2026-09-24 在 GitHub 提出 Issue #23，授權現況調查、方案分析與安全 probe；2026-09-25 審查 Commit 9e19fd6 提出修訂意見（RETURN TO analysis）；GITMEM-001～010 驗收行為與 H-TBD-1～6 待修訂確認後正式核准。
 
 | Scenario | 核准日期 | 狀態 |
 |---|---|---|
@@ -147,32 +155,34 @@ Feature: Git 變更感知與審核式專案記憶擷取
 
 ## 實作步驟概要
 
-權威任務與相依見 [implementation-plan.md](implementation-plan.md)。本期已授權 Phase 1 現況調查與安全 probe；Phase 2～6 待 H-TBD-1～6 與 Gherkin 驗收核准後推進實作。
+權威任務與相依見 [implementation-plan.md](implementation-plan.md)。本期已授權 Phase 1 現況調查與安全 probe；Phase 2～7 待 H-TBD-1～6 與 Gherkin 驗收核准後推進實作。
 
 ## 風險與首要驗證
 
 - **最大風險**：Git 差異讀取若未嚴格設限或存在參數/路徑逃逸，可能造成非預期的檔案修改、任意指令注入、巨量資料耗盡 Daemon 記憶體，或因未審核草稿提前外洩進入召回 prompt。
 - **風險等級與理由**：High；涉及未受信任之外部 Git 儲存庫輸入、子程序安全邊界、檔案系統路徑授權及潛在的記憶污染。
-- **首要驗證**：在實作生產程式碼前，先於測試倉庫構建包含 symlink 逃逸、submodule、二進位檔案、巨大 diff、無關歷史（unrelated history）與注入參數的負向樣本集，探測 Git CLI 安全唯讀旗標與 SQLite 候選儲存隔離能力，產出安全性探測報告。
+- **首要驗證**：在實作生產程式碼前，先於測試倉庫構建包含 symlink 逃逸、submodule、二進位檔案、巨大 diff、無關歷史（unrelated history）、外部 diff 配置與注入參數的負向樣本集，探測 Git CLI 安全唯讀旗標與 SQLite 候選儲存隔離能力，產出安全性探測報告。
 - **選擇理由**：先以隔離探測直接檢驗 Git 子程序呼叫與資料邊界，能以最低成本排除原 repo 被意外修改及資料逃逸的致命風險；單看單元測試無法保證外部 Git 子程序的真實行為。
-- **完成證據**：探測報告證實原 repo 之 HEAD、branch、worktree、index 與 Git config 零變更，且所有異常邊界均能被有效攔截與揭露截斷，無未經審核之草稿寫入 `memories`。
+- **完成證據**：探測報告證實原 repo 之 HEAD、branch、worktree、index 與 Git config 零變更，外部 diff 被強制禁用，且所有異常邊界均能被有效攔截與揭露截斷，無未經審核之草稿寫入 `memories`。
 
 ## 待確認事項
 
 | 編號 | 事項 | 狀態 | 影響 |
 |---|---|---|---|
-| H-TBD-1 | 第一版 Git range／ref／checkpoint 策略；分支、merge、force-push、uncommitted 狀態 | 待確認（技術分析已提供 1A/1B 比較） | 影響 GITMEM-003、GITMEM-007、Task 2.2、4.1 |
-| H-TBD-2 | Repo identity、路徑授權與 Git 子程序安全、固定 SHA 防 TOCTOU 策略 | 待確認（技術分析已提供防護矩陣） | 影響 GITMEM-001、GITMEM-002、Task 2.1 |
-| H-TBD-3 | 擷取數量／bytes／時間上限與 binary、symlink、submodule、secret policy | 待確認（技術分析已提供保守數值） | 影響 GITMEM-004、Task 2.3 |
-| H-TBD-4 | 候選 schema、provenance、審核命令／修改方式、保留與刪除；正式 memory source 向後相容 | 待確認（技術分析已提供獨立表設計） | 影響 GITMEM-005、GITMEM-006、Task 3.1、3.2 |
-| H-TBD-5 | AI 草稿是否納入本期、模型執行預算與唯讀／prompt-injection 邊界；未核准時的無模型最小交付 | 待確認（技術分析已提供無模型最小交付） | 影響 GITMEM-009、Task 5.2 |
-| H-TBD-6 | 候選去重、核准冪等、checkpoint 交易／崩潰恢復，及 GITMEM-001～010 的最終驗收 | 待確認（技術分析已提供交易方案） | 影響 GITMEM-007、GITMEM-010、Task 4.1、4.2 |
+| H-TBD-1 | 第一版 Git range、repo identity 與 Checkpoint 策略（已定義 repo_id、複合主鍵與雙軌進度分離） | 待確認（技術分析已提供完備設計） | 影響 GITMEM-003、GITMEM-007、Task 2.2、4.1 |
+| H-TBD-2 | Repo identity、路徑授權與 Git 子程序安全防護矩陣（已補齊禁用外部 diff/textconv、Git config 隔離、git-dir 校驗與 Process Group 回收） | 待確認（技術分析已提供防護矩陣） | 影響 GITMEM-001、GITMEM-002、Task 2.1 |
+| H-TBD-3 | 有界擷取、截斷政策與秘密過濾邊界（已劃分 Complete / Partial / Rejected 三態，Partial 禁止自動推進 Checkpoint） | 待確認（技術分析已提供政策與邊界） | 影響 GITMEM-004、Task 2.3 |
+| H-TBD-4 | 候選 schema、provenance 獨立表與正式 memory 純淨性（已設計 memory_provenance 獨立表與 ON DELETE CASCADE） | 待確認（技術分析已提供 Schema） | 影響 GITMEM-005、GITMEM-006、Task 3.1、3.2 |
+| H-TBD-5 | AI 草稿是否納入本期與長期專案記憶價值（已區分變更紀錄與專案記憶，模式 1 確定性事實為最小交付閉環） | 待確認（技術分析已提供無模型最小交付） | 影響 GITMEM-009、Task 5.3 |
+| H-TBD-6 | 候選去重、核准冪等性、交易原子性與防復活機制（已建立 ApprovedMemoryID 與原子交易模型） | 待確認（技術分析已提供交易與冪等設計） | 影響 GITMEM-007、GITMEM-010、Task 4.2、4.3 |
 
 ## Timeline
 
 | 日期 | 異動 | 負責人 |
 |---|---|---|
-| 2026-09-25 | 建立 Issue 23，完成現況調查、技術分析、初始實作計畫與驗收規格草案 | - |
+| 2026-09-24 | GitHub 上提出 Issue #23 立項提案 | - |
+| 2026-09-25 | 建立 Issue 23，完成現況調查、技術分析、初始實作計畫與驗收規格草案，提交並推送至 `origin/issue-23-git-memory`（Commit `9e19fd6`） | - |
+| 2026-09-25 | 接收 Commit `9e19fd6` 審查意見（RETURN TO analysis），完成技術分析、實作計畫、需求分析與資料一致性/安全邊界架構修訂 | - |
 
 ---
 **建立日期**: 2026-09-25  

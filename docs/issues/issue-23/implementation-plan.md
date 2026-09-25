@@ -2,7 +2,7 @@
 
 2026-09-25。分級：Large。本檔為 Phase 3H（Git-Aware Project Memory Capture）的唯一實作任務與進度追蹤來源。外部驗收契約見 [README Gherkin 驗收劇本](README.md#gherkin-驗收劇本)；技術決策與選型細節見 [技術分析](technical-analysis.md)。
 
-> **核准門檻宣告**：依 [GitHub #23](https://github.com/raybird/Asura/issues/23) 規範，本 issue 目前授權「現況調查、方案分析與不造成新 production 行為的安全 probe」；具體 Git 擷取方式、checkpoint、AI 草稿、schema、上限與 GITMEM-001～010 驗收行為須待使用者定案核准後方可實作。因此，Phase 1 為立項已授權之非變更性探測，Phase 2～6 列為待核准任務。
+> **核准門檻宣告**：依 [GitHub #23](https://github.com/raybird/Asura/issues/23) 規範，本 issue 目前授權「現況調查、方案分析與不造成新 production 行為的安全 probe」；具體 Git 擷取方式、checkpoint、AI 草稿、schema、上限與 GITMEM-001～010 驗收行為須待使用者定案核准後方可實作。因此，Phase 1 為立項已授權之非變更性探測，Phase 2～7 列為待核准任務。
 
 ---
 
@@ -16,16 +16,17 @@ cmd/asura/ (CLI)
         │ Unix Socket IPC (有界 JSON)
         ▼
 internal/daemon/ (Daemon)
-  ├── 授權比對 (AuthorizeCanonicalWorkspace)
+  ├── 授權比對 (AuthorizeCanonicalWorkspace & Repo Root 包含性校驗)
   ├── Git 子程序安全調度器 (internal/gitmem/git.go)
-  │     ├── 唯讀參數封裝 (--no-replace-objects, -c core.fsmonitor=)
-  │     ├── SHA 固定與祖先血統檢查
-  │     └── 有界串流與截斷 (Hard bounds: 100 commits, 50 files, 256KB diff)
-  └── 記憶庫與候選暫存管理器 (internal/gitmem/service.go)
+  │     ├── 禁用外部 Diff 與擴展工具 (--no-ext-diff, -c diff.external=, -c core.fsmonitor=)
+  │     ├── SHA 固定、祖先血統檢查與 Process Group 安全回收
+  │     └── 截斷狀態分流 (Complete: 前進 Checkpoint / Partial: 阻斷 Checkpoint / Rejected)
+  └── 記憶庫與來源追溯管理器 (internal/gitmem/service.go)
         │
         ├── 候選暫存表 (memory_candidates) ─── 待審核草稿 (零召回污染)
-        ├── Checkpoint 表 (git_checkpoints) ── 增量 SHA 紀錄 (交易保護)
-        └── 正式記憶表 (memories) ───────────── 核准轉入 (source='git-approved')
+        ├── 增量游標表 (git_checkpoints) ──── 分支/儲存庫複合鍵 (Complete 推進)
+        ├── 來源關聯表 (memory_provenance) ─── 結構化客觀事實 (ON DELETE CASCADE)
+        └── 正式記憶表 (memories) ───────────── 高價值決策純淨內文 (source='git-approved')
 ```
 
 ### 2. 資料結構與 DTO 規格
@@ -39,131 +40,177 @@ const (
     StatusDiscarded CandidateStatus = "discarded"
 )
 
+type CaptureOutcome string
+const (
+    OutcomeComplete CaptureOutcome = "complete" // 完整擷取，可推進 Checkpoint
+    OutcomePartial  CaptureOutcome = "partial"  // 超出 Hard bounds 截斷，禁止自動推進 Checkpoint
+    OutcomeRejected CaptureOutcome = "rejected" // 驗證失敗、逾時或血統異常，0 候選產生
+)
+
 type MemoryCandidate struct {
-    ID           string          `json:"id"`
-    Workspace    string          `json:"workspace"`
-    RefName      string          `json:"ref_name"`
-    BaseSHA      string          `json:"base_sha"`
-    HeadSHA      string          `json:"head_sha"`
-    CommitCount  int             `json:"commit_count"`
-    FactsSummary string          `json:"facts_summary"`
-    DraftContent string          `json:"draft_content"`
-    Status       CandidateStatus `json:"status"`
-    CreatedAt    time.Time       `json:"created_at"`
-    ApprovedAt   *time.Time      `json:"approved_at,omitempty"`
+    ID               string          `json:"id"`
+    Workspace        string          `json:"workspace"`
+    RepoID           string          `json:"repo_id"`
+    RefName          string          `json:"ref_name"`
+    BaseSHA          string          `json:"base_sha"`
+    HeadSHA          string          `json:"head_sha"`
+    CommitCount      int             `json:"commit_count"`
+    FactsSummary     string          `json:"facts_summary"`
+    DraftContent     string          `json:"draft_content"`
+    Status           CandidateStatus `json:"status"`
+    PolicyVersion    string          `json:"policy_version"`
+    ApprovedMemoryID string          `json:"approved_memory_id,omitempty"`
+    CreatedAt        time.Time       `json:"created_at"`
+    ApprovedAt       *time.Time      `json:"approved_at,omitempty"`
 }
 
 type GitCheckpoint struct {
-    Workspace  string    `json:"workspace"`
-    RepoRoot   string    `json:"repo_root"`
-    RefName    string    `json:"ref_name"`
-    LastHeadSHA string   `json:"last_head_sha"`
-    UpdatedAt  time.Time `json:"updated_at"`
+    Workspace       string    `json:"workspace"`
+    RepoID          string    `json:"repo_id"`
+    RefName         string    `json:"ref_name"`
+    LastCapturedSHA string    `json:"last_captured_sha"`
+    UpdatedAt       time.Time `json:"updated_at"`
+}
+
+type MemoryProvenance struct {
+    MemoryID       string    `json:"memory_id"`
+    CandidateID    string    `json:"candidate_id"`
+    Workspace      string    `json:"workspace"`
+    RepoID         string    `json:"repo_id"`
+    RefName        string    `json:"ref_name"`
+    BaseSHA        string    `json:"base_sha"`
+    HeadSHA        string    `json:"head_sha"`
+    CommitCount    int       `json:"commit_count"`
+    CommitSHAsJSON string    `json:"commit_shas_json"`
+    FactsSummary   string    `json:"facts_summary"`
+    IsUserEdited   bool      `json:"is_user_edited"`
+    ApprovedAt     time.Time `json:"approved_at"`
 }
 ```
 
 ---
 
-## 實作步驟（Phase / Task）
+## 實作步驟（Phase / Task，資料模型優先）
 
-### Phase 1：現況調查、危險 Git 輸入矩陣與安全 Probe（已授權／不改變 production 行為）
+### Phase 1：Git 安全與授權 Probe（已授權／不改變 production 行為）
 
 - [ ] ⏳ **Task 1.1 — 建立測試 Git 負向樣本與指令邊界探測**
   - **產出**：`tests/integration/testdata/git_probe_repo` 輔助腳本與 `docs/issues/issue-23/evidence/probe-git-boundary.md`
-  - **目標**：在隔離目錄構造 symlink 逃逸、submodule、二進位檔案、巨大 diff、無關歷史（unrelated history）、以及參數注入（如 `--upload-pack` 等）樣本；驗證 `git rev-parse`、`git log`、`git diff` 在唯讀旗標下是否保持原 repo 零修改。
-  - **完成判準**：探測腳本確認原 repo HEAD/branch/index 無任何改動，且所有惡意邊界均能被靜態/命令封裝攔截。
+  - **目標**：在隔離目錄構造 symlink 逃逸、submodule、二進位檔案、巨大 diff、無關歷史（unrelated history）、外部 diff 配置與參數注入；驗證 `git rev-parse`、`git log`、`git diff` 在嚴格安全旗標下是否保持原 repo 零修改與零外部程式調用。
+  - **完成判準**：探測報告證實原 repo HEAD/branch/index 無任何改動，且所有惡意邊界均能被靜態/命令封裝攔截。
 
 - [ ] 📝 **Task 1.2 — 探測既有 SQLite Schema 與記憶隔離能力**
   - **產出**：`docs/issues/issue-23/evidence/probe-sqlite-isolation.md`
-  - **目標**：測試既有 `memories` 查詢在加入 `source='git-approved'` 時之相容性，驗證 Phase 3F `recall` 與 Context Window 估算是否正常運作。
+  - **目標**：測試既有 `memories` 查詢在加入 `source='git-approved'` 時之相容性，驗證 Phase 3F `recall`（詞彙重疊計數）與 Context Window 估算是否正常運作。
   - **完成判準**：證明正式記憶五欄位不需破壞性遷移即可自然相容新 source。
 
 ---
 
-### Phase 2：有界 Git 唯讀讀取與 Repo 安全邊界（待核准）
+### Phase 2：Git Range、血統驗證與截斷策略（待核准）
 
 > 依賴：H-TBD-1、H-TBD-2、H-TBD-3 核准，GITMEM-001～004 驗收確認。
 
-- [ ] 📝 **Task 2.1 — 實作安全 Git CLI 執行器與 Repo 驗證 (`internal/gitmem/git.go`)**
+- [ ] 📝 **Task 2.1 — 實作安全 Git CLI 執行器與 Repo 邊界校驗 (`internal/gitmem/git.go`)**
   - **產出**：`internal/gitmem/git.go`, `internal/gitmem/git_test.go`
   - **對應驗收**：GITMEM-001, GITMEM-002
-  - **完成判準**：通過非 Git 目錄拒絕、頂層路徑超出 allowed roots 拒絕測試；確認執行後原 repo 零暫存檔、零 index 變更。
+  - **完成判準**：通過非 Git 目錄拒絕、頂層路徑超出 allowed roots 拒絕、外部 diff 禁用測試；Process Group 逾時安全回收。
 
-- [ ] 📝 **Task 2.2 — 實作固定 Range 解析與祖先血統檢查**
+- [ ] 📝 **Task 2.2 — 實作固定 Range 解析與祖先血統檢查 (`internal/gitmem/range.go`)**
   - **產出**：`internal/gitmem/range.go`, `internal/gitmem/range_test.go`
   - **對應驗收**：GITMEM-003
   - **完成判準**：單元測試驗證 base/head 存在性比對、merge 與 commit-graph 祖先驗證；unrelated history 拒絕混合。
 
-- [ ] 📝 **Task 2.3 — 實作有界串流擷取與截斷防護 (Hard Bounds)**
+- [ ] 📝 **Task 2.3 — 實作有界串流擷取與截斷分流政策 (`internal/gitmem/capture.go`)**
   - **產出**：`internal/gitmem/capture.go`, `internal/gitmem/capture_test.go`
   - **對應驗收**：GITMEM-004
-  - **完成判準**：超過 100 commits、超過 50 files、超過 256KB diff 時如實標記 truncated；binary 檔案自動略過。
+  - **完成判準**：明確分流 Complete / Partial / Rejected；Partial Capture 標記 `truncated: true` 且明確禁止推進 Checkpoint。
 
 ---
 
-### Phase 3：候選記憶儲存、Provenance 與 CLI 審核工作流（待核准）
+### Phase 3：Candidate / Provenance / Checkpoint Schema 與資料模型（待核准）
 
-> 依賴：H-TBD-4、H-TBD-5 核准，GITMEM-005、GITMEM-006 驗收確認。
+> 依賴：H-TBD-4 核准，GITMEM-005、GITMEM-006 驗收確認。
 
-- [ ] 📝 **Task 3.1 — 候選記憶與 Checkpoint 資料庫表實作 (`internal/storage/sqlite_gitmem.go`)**
+- [ ] 📝 **Task 3.1 — 資料庫 Schema 實作 (`internal/storage/sqlite_gitmem.go`)**
   - **產出**：`internal/storage/sqlite_gitmem.go`, `internal/storage/sqlite_gitmem_test.go`
-  - **對應驗收**：GITMEM-005
-  - **完成判準**：建立 `memory_candidates` 與 `git_checkpoints` 表；草稿資料不被 `ListMemories` 讀出。
+  - **對應驗收**：GITMEM-005, GITMEM-006
+  - **完成判準**：建立 `memory_candidates`（含 `approved_memory_id`）、`git_checkpoints`（複合 PK）與 `memory_provenance`（ON DELETE CASCADE）表；草稿資料 100% 隔離，不被 `ListMemories` 或 `recall` 讀出。
 
-- [ ] 📝 **Task 3.2 — 客觀 Facts 生成與來源 Provenance 封裝**
+- [ ] 📝 **Task 3.2 — 客觀 Facts 生成與 Provenance 封裝 (`internal/gitmem/facts.go`)**
   - **產出**：`internal/gitmem/facts.go`, `internal/gitmem/facts_test.go`
   - **對應驗收**：GITMEM-006
-  - **完成判準**：結構化記錄 commit SHA、作者、統計數據，與草稿文字明確劃分。
-
-- [ ] 📝 **Task 3.3 — Daemon IPC 與 CLI 審核命令列實作**
-  - **產出**：`cmd/asura/memory_git.go`, `internal/daemon/gitmem_handlers.go`
-  - **對應驗收**：GITMEM-005
-  - **完成判準**：CLI 支援 `capture`, `candidates`, `approve`, `discard` 子命令；未審核草稿 0 寫入 `memories`。
+  - **完成判準**：結構化記錄 commit SHA 清單、變更統計與截斷資訊，與專案記憶草稿內文劃分；保持正式記憶內文純淨。
 
 ---
 
-### Phase 4：崩潰恢復、交易保證與 Checkpoint 冪等性（待核准）
+### Phase 4：Atomic Approval、去重與冪等性（待核准）
 
 > 依賴：H-TBD-6 核准，GITMEM-007 驗收確認。
 
-- [ ] 📝 **Task 4.1 — 實作 Checkpoint 更新與原子核准交易**
-  - **產出**：`internal/storage/sqlite_gitmem_tx.go`
+- [ ] 📝 **Task 4.1 — 擷取去重與 Checkpoint 增量游標管理**
+  - **產出**：`internal/gitmem/checkpoint.go`, `internal/gitmem/dedup_test.go`
   - **對應驗收**：GITMEM-007
-  - **完成判準**：核准與 checkpoint 更新置於同一交易；注入 SQLite 失敗驗證 Rollback 零部分寫入。
+  - **完成判準**：相同 `(workspace, repo_id, ref_name, base_sha, head_sha, policy_version)` 重用候選；僅 Complete Capture 推進 `git_checkpoints`。
 
-- [ ] 📝 **Task 4.2 — 候選去重與重複請求冪等性**
-  - **產出**：`internal/gitmem/dedup_test.go`
+- [ ] 📝 **Task 4.2 — 原子性核准交易與冪等性保證 (`internal/storage/sqlite_gitmem_tx.go`)**
+  - **產出**：`internal/storage/sqlite_gitmem_tx.go`, `internal/storage/sqlite_gitmem_tx_test.go`
   - **對應驗收**：GITMEM-007
-  - **完成判準**：相同 base..head 之重複 capture 回傳相同候選；重複 approve 回傳相同記憶 ID，無重複列。
+  - **完成判準**：核准操作於單一 SQLite Transaction 寫入 `memories`、`memory_provenance` 並更新 `memory_candidates`；重複核准回傳既有 `approved_memory_id`。
+
+- [ ] 📝 **Task 4.3 — 防復活機制與刪除行為驗證**
+  - **產出**：`internal/gitmem/lifecycle_test.go`
+  - **對應驗收**：GITMEM-007, GITMEM-008
+  - **完成判準**：正式記憶被手動刪除後，再次 approve 原 Candidate 明確報錯，禁止悄悄復活已刪除記憶。
 
 ---
 
-### Phase 5：既有 Memory 與 Sealed Context 整合相容性（待核准）
+### Phase 5：CLI Capture / Review 審核工作流（待核准）
 
-> 依賴：GITMEM-008, GITMEM-009 驗收確認。
+> 依賴：Phase 2～4 通過。
 
-- [ ] 📝 **Task 5.1 — 正式記憶寫入與 Phase 3F 自動召回整合**
-  - **產出**：`tests/integration/gitmem_recall_test.go`
-  - **對應驗收**：GITMEM-008
-  - **完成判準**：經核准的 `git-approved` 記憶可自然被 `asura run --memory-recall bounded` 召回；不影響已接受任務之密封快照。
+- [ ] 📝 **Task 5.1 — Daemon IPC 動作擴充 (`internal/daemon/gitmem_handlers.go`)**
+  - **產出**：`internal/daemon/gitmem_handlers.go`, `internal/daemon/gitmem_test.go`
+  - **對應驗收**：GITMEM-005
+  - **完成判準**：實作 `git_memory_capture`、`git_memory_candidates`、`git_memory_approve`、`git_memory_discard` 動作並驗證 canonical scope。
 
-- [ ] 📝 **Task 5.2 — AI 輔助草稿唯讀權限與安全邊界（若本期核准）**
+- [ ] 📝 **Task 5.2 — CLI 子命令介面實作 (`cmd/asura/memory_git.go`)**
+  - **產出**：`cmd/asura/memory_git.go`, `cmd/asura/memory_git_test.go`
+  - **對應驗收**：GITMEM-001, GITMEM-005
+  - **完成判準**：CLI 提供 `capture`, `candidates`, `approve`, `discard` 操作閉環；支援 `--content` 編修。
+
+- [ ] 📝 **Task 5.3 — AI 輔助草稿唯讀權限與安全邊界（若本期核准）**
   - **產出**：`internal/gitmem/ai_draft.go`, `internal/gitmem/ai_draft_test.go`
   - **對應驗收**：GITMEM-009
-  - **完成判準**：模型以唯讀策略（deny mutating）執行；超限或惡意 prompt injection 時安全退回模式 1。
+  - **完成判準**：模型以唯讀策略（deny mutating）執行；超限或注入異常時安全退回確定性草稿。
 
 ---
 
-### Phase 6：端到端整合測試與完整回歸（待核准）
+### Phase 6：Memory Recall 整合（待核准）
+
+> 依賴：GITMEM-008 驗收確認。
+
+- [ ] 📝 **Task 6.1 — 正式記憶與 Phase 3F 自動召回整合驗證**
+  - **產出**：`tests/integration/gitmem_recall_test.go`
+  - **對應驗收**：GITMEM-008
+  - **完成判準**：經核准的 `git-approved` 記憶可自然被 `asura ask --memory-recall bounded` 召回；未核准草稿 0 召回。
+
+- [ ] 📝 **Task 6.2 — 任務密封性保護驗證**
+  - **產出**：`tests/integration/sealed_compat_test.go`
+  - **對應驗收**：GITMEM-008
+  - **完成判準**：Git 記憶的新增、刪除或重新擷取不改寫歷史已接受任務之密封快照與 fingerprint。
+
+---
+
+### Phase 7：端到端整合測試與完整回歸（待核准）
 
 > 依賴：GITMEM-010 驗收確認。
 
-- [ ] 📝 **Task 6.1 — 真實 Git Repo 端到端驗收測試**
+- [ ] 📝 **Task 7.1 — 真實 Git Repo 端到端驗收測試**
   - **產出**：`tests/integration/git_memory_e2e_test.go`
   - **對應驗收**：GITMEM-001～009
   - **完成判準**：以真實多分支、帶 merge、帶刪檔之測試 Git Repo 跑通完整 capture -> review -> approve -> recall 流程。
 
-- [ ] 📝 **Task 6.2 — 完整既有套件回歸測試**
+- [ ] 📝 **Task 7.2 — 完整既有套件回歸測試**
   - **產出**：回歸測試紀錄
   - **對應驗收**：GITMEM-010
   - **完成判準**：`go vet ./...`、`go test -count=1 -race ./...`、`go build ./cmd/asura` 全綠通過。
@@ -177,7 +224,7 @@ type GitCheckpoint struct {
 | **專案記憶來源** | 僅能由使用者以 `asura memory add --content "..."` 手動新增 | 支援手動新增，亦可針對 Git 差異執行 `asura memory capture` 自動擷取變更候選 |
 | **Git 變更感知** | 無，完全無 Git 感知能力 | 透過安全封裝之 Git 子程序唯讀讀取固定 base..head 差異事實 |
 | **審核機制** | 無審核概念，新增即正式生效 | 擷取之內容先存為 `pending` 候選草稿，使用者透過 CLI 查看／編修並明確 approve 後方轉為正式記憶 |
-| **記憶召回** | 僅召回手動記憶 | 自動以相同權重與 lexical-v1 選擇器召回已審核之 `git-approved` 記憶 |
+| **記憶召回** | 僅召回手動記憶 | 透過 `asura ask --memory-recall bounded` 自動以相同權重與 lexical-v1 選擇器召回已審核之 `git-approved` 記憶 |
 
 ---
 
@@ -185,12 +232,13 @@ type GitCheckpoint struct {
 
 1. **單元測試（Unit Tests）**：
    - Git 指令參數組裝與安全注入防護（`internal/gitmem`）
-   - Hard bounds 截斷（commit 數、diff bytes、檔案數）與二進位檢測
-   - Keyset/Checkpoint 狀態與 SQLite 候選儲存交易
+   - Complete / Partial / Rejected 截斷分流與二進位檢測
+   - Keyset/Checkpoint 複合鍵隔離與 SQLite 候選儲存交易
 2. **負向測試與安全性測試（Negative & Security Tests）**：
    - 越界 symlink、非 Git 目錄、未授權 workspace 拒絕驗證（0 寫入、0 模型呼叫）
-   - Git 惡意檔名、無關歷史（unrelated history）、force-push 增量拒絕
+   - 外部 diff 注入、Git 惡意檔名、無關歷史（unrelated history）、force-push 增量拒絕
    - 崩潰與斷電注入（Crash injection）：驗證 Transaction 回滾與無孤立記錄
+   - 防復活測試：驗證手動刪除記憶後重複核准被拒絕
 3. **整合測試（Integration Tests）**：
    - 透過 Unix Socket IPC 與 Daemon 進行完整生命週期測試
    - 結合 Phase 3F `recall` 與 Context Window 驗證端到端記憶召回
