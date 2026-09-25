@@ -13,6 +13,8 @@
 - [requirement-analysis.md](./requirement-analysis.md)
 - [technical-analysis.md](./technical-analysis.md)
 - [implementation-plan.md](./implementation-plan.md)
+- [evidence/probe-git-boundary.md](./evidence/probe-git-boundary.md)
+- [evidence/probe-sqlite-isolation.md](./evidence/probe-sqlite-isolation.md)
 
 ## 關鍵差異
 
@@ -163,7 +165,7 @@ Feature: Git 變更感知與審核式專案記憶擷取
 - **風險等級與理由**：High；涉及未受信任之外部 Git 儲存庫輸入、子程序安全邊界、檔案系統路徑授權及潛在的記憶污染。
 - **首要驗證**：在實作生產程式碼前，先於測試倉庫構建包含 symlink 逃逸、submodule、二進位檔案、巨大 diff、無關歷史（unrelated history）、外部 diff 配置與注入參數的負向樣本集，探測 Git CLI 安全唯讀旗標與 SQLite 候選儲存隔離能力，產出安全性探測報告。
 - **選擇理由**：先以隔離探測直接檢驗 Git 子程序呼叫與資料邊界，能以最低成本排除原 repo 被意外修改及資料逃逸的致命風險；單看單元測試無法保證外部 Git 子程序的真實行為。
-- **完成證據**：探測報告證實原 repo 之 HEAD、branch、worktree、index 與 Git config 零變更，外部 diff 被強制禁用，且所有異常邊界均能被有效攔截與揭露截斷，無未經審核之草稿寫入 `memories`。
+- **完成證據**：已完成 Phase 1 首要驗證。[Git 安全邊界探測報告](evidence/probe-git-boundary.md)證實原 repo 之 HEAD、branch、worktree、index 與 Git config 零變更，外部 diff 被強制禁用，且所有異常邊界均能被有效攔截與揭露截斷；[SQLite 隔離探測報告](evidence/probe-sqlite-isolation.md)證實候選庫 100% 隔離，正式記憶 `git-approved` 自然相容 Phase 3F 召回且支援 ON DELETE CASCADE。
 
 ## 待確認事項
 

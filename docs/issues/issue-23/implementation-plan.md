@@ -94,25 +94,25 @@ type MemoryProvenance struct {
 
 ### Phase 1：Git 安全與授權 Probe（首要驗證）
 
-- [ ] ⏳ **Task 1.1 — 建立測試 Git 負向樣本與指令邊界探測**
-  - **產出與範圍**：`tests/integration/testdata/git_probe_repo` 輔助腳本與 `docs/issues/issue-23/evidence/probe-git-boundary.md`
+- [x] ✅ **Task 1.1 — 建立測試 Git 負向樣本與指令邊界探測**
+  - **產出與範圍**：`tests/integration/probe_git_boundary_test.go` 與 `docs/issues/issue-23/evidence/probe-git-boundary.md`
   - **相依**：無
   - **驗收編號**：GITMEM-001, GITMEM-002, GITMEM-004
   - **目標**：在隔離目錄構造 symlink 逃逸、submodule、二進位檔案、巨大 diff、無關歷史（unrelated history）、外部 diff 配置與參數注入；驗證 `git rev-parse`、`git log`、`git diff` 在嚴格安全旗標下是否保持原 repo 零修改與零外部程式調用。
   - **完成判準**：探測報告證實原 repo HEAD/branch/index 無任何改動，且所有惡意邊界均能被靜態/命令封裝攔截。
-  - **驗證**：探測腳本執行並記錄實際 Git 狀態比對與 exit code。
-  - **狀態**：⏳ 進行中
-  - **證據**：執行後寫入 `docs/issues/issue-23/evidence/probe-git-boundary.md`
+  - **驗證**：`go test -v -run TestProbe_GitBoundary ./tests/integration/` 通過（6/6 pass）。
+  - **狀態**：✅ 已完成
+  - **證據**：[probe-git-boundary.md](evidence/probe-git-boundary.md)
 
-- [ ] 📝 **Task 1.2 — 探測既有 SQLite Schema 與記憶隔離能力**
-  - **產出與範圍**：`docs/issues/issue-23/evidence/probe-sqlite-isolation.md`
+- [x] ✅ **Task 1.2 — 探測既有 SQLite Schema 與記憶隔離能力**
+  - **產出與範圍**：`tests/integration/probe_sqlite_isolation_test.go` 與 `docs/issues/issue-23/evidence/probe-sqlite-isolation.md`
   - **相依**：Task 1.1
   - **驗收編號**：GITMEM-005, GITMEM-008, GITMEM-010
   - **目標**：測試既有 `memories` 查詢在加入 `source='git-approved'` 時之相容性，驗證 Phase 3F `recall`（詞彙重疊計數）與 Context Window 估算是否正常運作。
   - **完成判準**：證明正式記憶五欄位不需破壞性遷移即可自然相容新 source。
-  - **驗證**：SQL 探測腳本與單元測試。
-  - **狀態**：📝 待實作
-  - **證據**：執行後寫入 `docs/issues/issue-23/evidence/probe-sqlite-isolation.md`
+  - **驗證**：`go test -v -run TestProbe_SQLite ./tests/integration/` 通過（2/2 pass）。
+  - **狀態**：✅ 已完成
+  - **證據**：[probe-sqlite-isolation.md](evidence/probe-sqlite-isolation.md)
 
 ---
 
