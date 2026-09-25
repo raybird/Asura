@@ -228,14 +228,14 @@ type MemoryProvenance struct {
   - **狀態**：✅ 已完成
   - **證據**：單元與整合測試覆蓋 memory capture/candidates/approve/discard 全指令、缺少旗標拒絕與 JSON/文字輸出雙模式。
 
-- [ ] 📝 **Task 5.3 — AI 輔助草稿唯讀權限與安全邊界（可選增強模組）**
+- [x] ✅ **Task 5.3 — AI 輔助草稿唯讀權限與安全邊界（可選增強模組）**
   - **產出與範圍**：`internal/gitmem/ai_draft.go`, `internal/gitmem/ai_draft_test.go`
   - **相依**：Task 5.2
   - **驗收編號**：GITMEM-009
-  - **完成判準**：模型以唯讀策略（deny mutating）執行；超限或注入異常時安全退回確定性草稿。
-  - **驗證**：Prompt injection 與權限拒絕測試。
-  - **狀態**：📝 待實作
-  - **證據**：待填入
+  - **完成判準**：模型以唯讀策略（deny mutating）執行；超限或注入異常時安全退回確定性草稿；不可信 diff 包裹於安全邊界標籤。
+  - **驗證**：`go test -v -run TestAIDraft ./internal/gitmem`（4/4 pass）。
+  - **狀態**：✅ 已完成
+  - **證據**：單元測試覆蓋 FormatPrompt (UntrustedBoundary 注入防護)、Success (AI 生成)、FallbackOnError (連線或超限優雅降級)、CaptureService 整合。
 
 ---
 

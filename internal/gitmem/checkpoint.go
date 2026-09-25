@@ -15,6 +15,7 @@ type CaptureOptions struct {
 	RangeExpr string
 	SinceLast bool
 	Force     bool
+	AIDraft   bool
 }
 
 // CaptureResult 代表擷取作業的執行結果與候選中繼資料
@@ -30,6 +31,7 @@ type CaptureService struct {
 	exec     *GitExecutor
 	capturer *Capturer
 	store    *storage.SQLiteStore
+	aiGen    AIDraftGenerator
 }
 
 // NewCaptureService 建立新的擷取協調服務實例
@@ -39,6 +41,11 @@ func NewCaptureService(exec *GitExecutor, store *storage.SQLiteStore) *CaptureSe
 		capturer: NewCapturer(exec),
 		store:    store,
 	}
+}
+
+// SetAIGenerator 注入可選的 AI 輔助草稿生成器 (GITMEM-009)
+func (s *CaptureService) SetAIGenerator(gen AIDraftGenerator) {
+	s.aiGen = gen
 }
 
 func generateCandidateID() string {
@@ -126,7 +133,12 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 	if err != nil {
 		return nil, fmt.Errorf("format facts summary: %w", err)
 	}
-	draft := GenerateDraftContent(facts)
+	var draft string
+	if opts.AIDraft && s.aiGen != nil {
+		draft, _ = GenerateAIDraftWithFallback(ctx, facts, s.aiGen)
+	} else {
+		draft = GenerateDraftContent(facts)
+	}
 
 	cand := &storage.MemoryCandidate{
 		ID:            candID,
