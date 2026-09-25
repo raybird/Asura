@@ -210,14 +210,14 @@ type MemoryProvenance struct {
 
 > 依賴：Phase 4 完成。
 
-- [ ] 📝 **Task 5.1 — Daemon IPC 動作擴充 (`internal/daemon/gitmem_handlers.go`)**
+- [x] ✅ **Task 5.1 — Daemon IPC 動作擴充 (`internal/daemon/gitmem_handlers.go`)**
   - **產出與範圍**：`internal/daemon/gitmem_handlers.go`, `internal/daemon/gitmem_test.go`
   - **相依**：Phase 4
   - **驗收編號**：GITMEM-005
   - **完成判準**：實作 `git_memory_capture`、`git_memory_candidates`、`git_memory_approve`、`git_memory_discard` 動作並驗證 canonical scope。
-  - **驗證**：IPC 整合測試。
-  - **狀態**：📝 待實作
-  - **證據**：待填入
+  - **驗證**：`go test -v -run TestDaemon_GitMemory_IPC ./internal/daemon`（2/2 pass）。
+  - **狀態**：✅ 已完成
+  - **證據**：單元測試覆蓋未授權與缺少參數拒絕、Capture/Candidates/Approve/Discard 完整端到端 IPC 調用流程。
 
 - [ ] 📝 **Task 5.2 — CLI 子命令介面實作 (`cmd/asura/memory_git.go`)**
   - **產出與範圍**：`cmd/asura/memory_git.go`, `cmd/asura/memory_git_test.go`

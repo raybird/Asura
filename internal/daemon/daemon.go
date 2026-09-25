@@ -26,6 +26,7 @@ import (
 	"asura/internal/contextwin"
 	"asura/internal/cron"
 	"asura/internal/engine"
+	"asura/internal/gitmem"
 	"asura/internal/pipeline"
 	"asura/internal/recall"
 	"asura/internal/storage"
@@ -459,19 +460,30 @@ type IPCRequest struct {
 	MemoryIDs    []string        `json:"memory_ids,omitempty"`
 	Mode         string          `json:"mode,omitempty"`
 	Backend      string          `json:"backend,omitempty"`
+	Range        string          `json:"range,omitempty"`
+	SinceLast    bool            `json:"since_last,omitempty"`
+	Force        bool            `json:"force,omitempty"`
+	CandidateID  string          `json:"candidate_id,omitempty"`
+	Status       string          `json:"status,omitempty"`
 }
 
 // IPCResponse 定義傳回用戶端之結果
 type IPCResponse struct {
-	Task          *storage.Task          `json:"task,omitempty"`
-	Projects      []string               `json:"projects,omitempty"`
-	CronSchedule  *storage.CronSchedule  `json:"cron_schedule,omitempty"`
-	CronSchedules []storage.CronSchedule `json:"cron_schedules,omitempty"`
-	CronRuns      []storage.CronRun      `json:"cron_runs,omitempty"`
-	Memory        *storage.Memory        `json:"memory,omitempty"`
-	Memories      []storage.Memory       `json:"memories,omitempty"`
-	MemoryPage    *storage.MemoryPage    `json:"memory_page,omitempty"`
-	Error         string                 `json:"error,omitempty"`
+	Task             *storage.Task             `json:"task,omitempty"`
+	Projects         []string                  `json:"projects,omitempty"`
+	CronSchedule     *storage.CronSchedule     `json:"cron_schedule,omitempty"`
+	CronSchedules    []storage.CronSchedule    `json:"cron_schedules,omitempty"`
+	CronRuns         []storage.CronRun         `json:"cron_runs,omitempty"`
+	Memory           *storage.Memory           `json:"memory,omitempty"`
+	Memories         []storage.Memory          `json:"memories,omitempty"`
+	MemoryPage       *storage.MemoryPage       `json:"memory_page,omitempty"`
+	Candidate        *storage.MemoryCandidate  `json:"candidate,omitempty"`
+	Candidates       []storage.MemoryCandidate `json:"candidates,omitempty"`
+	GitFacts         *gitmem.CaptureFacts      `json:"git_facts,omitempty"`
+	ApprovedMemoryID string                    `json:"approved_memory_id,omitempty"`
+	IsReused         bool                      `json:"is_reused,omitempty"`
+	Message          string                    `json:"message,omitempty"`
+	Error            string                    `json:"error,omitempty"`
 }
 
 const boundedMemoryQueryTimeout = 9 * time.Second
@@ -1123,6 +1135,18 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				continue
 			}
 			_ = encoder.Encode(IPCResponse{})
+
+		case "git_memory_capture":
+			d.handleGitMemoryCapture(connCtx, req, encoder)
+
+		case "git_memory_candidates":
+			d.handleGitMemoryCandidates(connCtx, req, encoder)
+
+		case "git_memory_approve":
+			d.handleGitMemoryApprove(connCtx, req, encoder)
+
+		case "git_memory_discard":
+			d.handleGitMemoryDiscard(connCtx, req, encoder)
 
 		default:
 			_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unknown action: %s", action)})
