@@ -138,14 +138,14 @@ type MemoryProvenance struct {
   - **狀態**：✅ 已完成
   - **證據**：單元測試覆蓋 ResolveRange (ValidRange, SingleCommit, InvalidRef, NotAncestor, UnrelatedHistory, EmptyRange, TooManyCommits)。
 
-- [ ] 📝 **Task 2.3 — 實作有界串流擷取與截斷分流政策 (`internal/gitmem/capture.go`)**
+- [x] ✅ **Task 2.3 — 實作有界串流擷取與截斷分流政策 (`internal/gitmem/capture.go`)**
   - **產出與範圍**：`internal/gitmem/capture.go`, `internal/gitmem/capture_test.go`
   - **相依**：Task 2.2
   - **驗收編號**：GITMEM-004
-  - **完成判準**：明確分流 Complete / Partial / Rejected；Partial Capture 標記 `truncated: true` 且明確禁止推進 Checkpoint。
-  - **驗證**：超限資料與二進位略過測試。
-  - **狀態**：📝 待實作
-  - **證據**：待填入
+  - **完成判準**：明確分流 Complete / Partial (50 檔案、256 KiB diff) / Rejected；Partial Capture 標記 `truncated: true` 且明確禁止推進 Checkpoint；機密檔案過濾。
+  - **驗證**：`go test -v ./internal/gitmem`（18/18 pass）。
+  - **狀態**：✅ 已完成
+  - **證據**：單元測試覆蓋 Capture (Complete, Partial_FileLimit, Partial_DiffSizeLimit, SensitiveFileFiltering)。
 
 ---
 
