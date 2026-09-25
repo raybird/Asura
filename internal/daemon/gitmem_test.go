@@ -12,6 +12,7 @@ import (
 
 	"asura/internal/auth"
 	"asura/internal/daemon"
+	"asura/internal/gitmem"
 	"asura/internal/storage"
 )
 
@@ -303,6 +304,97 @@ func TestDaemon_GitMemory_BoundedCandidatesListAndDetail(t *testing.T) {
 	}
 	if len(remaining) != 49 {
 		t.Errorf("expected 49 remaining pending candidates, got %d", len(remaining))
+	}
+
+	// 驗證第 50 筆 approved 記錄仍存在但 payload 已被安全瘦身
+	detail50, err := client.GetGitCandidate(ctx, repoDir, "cand-large-050")
+	if err != nil {
+		t.Fatalf("expected approved candidate to still exist: %v", err)
+	}
+	if detail50.DraftContent != "" || detail50.FactsSummary != "{}" {
+		t.Errorf("expected approved candidate payload to be cleared, got draft=%q, facts=%q", detail50.DraftContent, detail50.FactsSummary)
+	}
+}
+
+type daemonMockAIGenerator struct {
+	result string
+	err    error
+}
+
+func (m *daemonMockAIGenerator) GenerateDraft(ctx context.Context, facts *gitmem.CaptureFacts) (string, error) {
+	if m.err != nil {
+		return "", m.err
+	}
+	return m.result, nil
+}
+
+func TestDaemon_GitMemory_AIDraftFailClosedAndInjection(t *testing.T) {
+	tmpDir := t.TempDir()
+	repoDir := initTestGitRepoInDaemon(t, tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "daemon_gitmem_ai.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+
+	// 1. 測試未注入 AI Generator 時，帶入 AIDraft=true 必須 fail-closed 報錯
+	sockPathNoAI := filepath.Join(tmpDir, "daemon_gitmem_no_ai.sock")
+	dNoAI := daemon.NewDaemon(daemon.Config{
+		SocketPath: sockPathNoAI,
+		MaxWorkers: 2,
+	}, store, policy)
+	if err := dNoAI.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer dNoAI.Close()
+
+	clientNoAI, err := daemon.NewClient(sockPathNoAI)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clientNoAI.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err = clientNoAI.CaptureGitMemory(ctx, repoDir, "HEAD~1..HEAD", false, false, true)
+	if err == nil {
+		t.Fatal("SECURITY/ACCURACY FAIL: expected error when --ai-draft used without generator, got nil")
+	}
+	if !strings.Contains(err.Error(), "no AI generator is configured on daemon") {
+		t.Errorf("expected no AI generator error message, got: %v", err)
+	}
+
+	// 2. 測試透過 WithAIDraftGenerator 注入 Generator，能成功生成 AI 草稿
+	mockAI := &daemonMockAIGenerator{
+		result: "# Architecture Decision from Daemon AI\n- Adopted daemon-level AI draft generator.",
+	}
+	sockPathWithAI := filepath.Join(tmpDir, "daemon_gitmem_with_ai.sock")
+	dWithAI := daemon.NewDaemon(daemon.Config{
+		SocketPath: sockPathWithAI,
+		MaxWorkers: 2,
+	}, store, policy, daemon.WithAIDraftGenerator(mockAI))
+	if err := dWithAI.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer dWithAI.Close()
+
+	clientWithAI, err := daemon.NewClient(sockPathWithAI)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clientWithAI.Close()
+
+	respWithAI, err := clientWithAI.CaptureGitMemory(ctx, repoDir, "HEAD~1..HEAD", false, false, true)
+	if err != nil {
+		t.Fatalf("expected capture with AI generator to succeed, got: %v", err)
+	}
+	if respWithAI.Candidate == nil || !strings.Contains(respWithAI.Candidate.DraftContent, "Adopted daemon-level AI draft generator") {
+		t.Errorf("expected AI draft content in candidate, got: %+v", respWithAI.Candidate)
 	}
 }
 

@@ -150,8 +150,18 @@ func (s *SQLiteStore) ApproveCandidateTx(ctx context.Context, workspace, candida
 	return memoryID, nil
 }
 
+// CheckpointAncestryCheckFunc 檢查 ancestorSHA 是否為 descendantSHA 的祖先
+type CheckpointAncestryCheckFunc func(ctx context.Context, ancestorSHA, descendantSHA string) (bool, error)
+
 // SaveCandidateAndCheckpointTx 在單一原子 SQLite 交易中完成候選建立（insert-if-absent）與 Checkpoint 前進
-func (s *SQLiteStore) SaveCandidateAndCheckpointTx(ctx context.Context, cand *MemoryCandidate, checkpoint *GitCheckpoint) (*MemoryCandidate, error) {
+// 具備 CAS 樂觀鎖與祖先單調遞增檢查，嚴格保證並行擷取時絕不發生逆序落盤導致 Checkpoint 倒退
+func (s *SQLiteStore) SaveCandidateAndCheckpointTx(
+	ctx context.Context,
+	cand *MemoryCandidate,
+	checkpoint *GitCheckpoint,
+	expectedOldSHA string,
+	isAncestor CheckpointAncestryCheckFunc,
+) (*MemoryCandidate, error) {
 	if cand == nil {
 		return nil, errors.New("candidate cannot be nil")
 	}
@@ -222,21 +232,83 @@ func (s *SQLiteStore) SaveCandidateAndCheckpointTx(ctx context.Context, cand *Me
 		persisted.ApprovedAt = &approvedAt.Time
 	}
 
-	// 3. 若有 Checkpoint 需推進，在同筆交易內原子更新
+	// 3. 若有 Checkpoint 需推進，在同筆交易內原子更新並進行 Monotonic / CAS 校驗
 	if checkpoint != nil {
-		queryCP := `
-		INSERT INTO git_checkpoints (workspace, repo_id, ref_name, last_captured_sha, updated_at)
-		VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT(workspace, repo_id, ref_name) DO UPDATE SET
-			last_captured_sha = excluded.last_captured_sha,
-			updated_at = excluded.updated_at
-		`
-		_, err = tx.ExecContext(ctx, queryCP,
-			checkpoint.Workspace, checkpoint.RepoID, checkpoint.RefName,
-			checkpoint.LastCapturedSHA, checkpoint.UpdatedAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("save checkpoint in tx: %w", err)
+		var currentSHA string
+		err := tx.QueryRowContext(ctx, `
+			SELECT last_captured_sha FROM git_checkpoints 
+			WHERE workspace = ? AND repo_id = ? AND ref_name = ?
+		`, checkpoint.Workspace, checkpoint.RepoID, checkpoint.RefName).Scan(&currentSHA)
+
+		if errors.Is(err, sql.ErrNoRows) {
+			// 庫中尚無 Checkpoint（初始擷取），直接寫入
+			queryInsert := `
+			INSERT INTO git_checkpoints (workspace, repo_id, ref_name, last_captured_sha, updated_at)
+			VALUES (?, ?, ?, ?, ?)
+			`
+			_, err = tx.ExecContext(ctx, queryInsert,
+				checkpoint.Workspace, checkpoint.RepoID, checkpoint.RefName,
+				checkpoint.LastCapturedSHA, checkpoint.UpdatedAt,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("insert initial checkpoint in tx: %w", err)
+			}
+		} else if err != nil {
+			return nil, fmt.Errorf("query current checkpoint in tx: %w", err)
+		} else {
+			// 庫中已有 Checkpoint currentSHA
+			if currentSHA == checkpoint.LastCapturedSHA {
+				// 已經是同一 SHA，更新 updated_at
+				_, err = tx.ExecContext(ctx, `
+					UPDATE git_checkpoints SET updated_at = ?
+					WHERE workspace = ? AND repo_id = ? AND ref_name = ?
+				`, checkpoint.UpdatedAt, checkpoint.Workspace, checkpoint.RepoID, checkpoint.RefName)
+				if err != nil {
+					return nil, fmt.Errorf("update checkpoint timestamp in tx: %w", err)
+				}
+			} else if expectedOldSHA != "" && currentSHA == expectedOldSHA {
+				// 庫中 SHA 與進入交易前預期完全一致（無並行干擾），安全前進至目標 SHA
+				_, err = tx.ExecContext(ctx, `
+					UPDATE git_checkpoints SET last_captured_sha = ?, updated_at = ?
+					WHERE workspace = ? AND repo_id = ? AND ref_name = ?
+				`, checkpoint.LastCapturedSHA, checkpoint.UpdatedAt, checkpoint.Workspace, checkpoint.RepoID, checkpoint.RefName)
+				if err != nil {
+					return nil, fmt.Errorf("advance checkpoint in tx: %w", err)
+				}
+			} else {
+				// 庫中 SHA 已被並行交易變更（currentSHA != expectedOldSHA）
+				// 必須檢驗 Monotonic 關係，防止較舊的 HEAD 逆序落盤覆寫較新的 HEAD
+				shouldAdvance := false
+				if isAncestor != nil {
+					// 1. 檢查我們的目標 LastCapturedSHA 是否比庫中的 currentSHA 更新（currentSHA 是目標的祖先）
+					isDescendant, err := isAncestor(ctx, currentSHA, checkpoint.LastCapturedSHA)
+					if err == nil && isDescendant {
+						shouldAdvance = true
+					} else {
+						// 2. 檢查庫中的 currentSHA 是否比我們的目標還要更新（目標是 currentSHA 的祖先）
+						isAhead, _ := isAncestor(ctx, checkpoint.LastCapturedSHA, currentSHA)
+						if isAhead {
+							// 庫中已經前進到更新的 Head，跳過覆寫以保持單調遞增 (Monotonic)
+							shouldAdvance = false
+						} else {
+							// 兩者分叉歷史
+							return nil, fmt.Errorf("concurrent checkpoint update conflict: current %s and target %s diverged", currentSHA, checkpoint.LastCapturedSHA)
+						}
+					}
+				} else {
+					return nil, fmt.Errorf("concurrent checkpoint conflict: expected %s, found %s", expectedOldSHA, currentSHA)
+				}
+
+				if shouldAdvance {
+					_, err = tx.ExecContext(ctx, `
+						UPDATE git_checkpoints SET last_captured_sha = ?, updated_at = ?
+						WHERE workspace = ? AND repo_id = ? AND ref_name = ?
+					`, checkpoint.LastCapturedSHA, checkpoint.UpdatedAt, checkpoint.Workspace, checkpoint.RepoID, checkpoint.RefName)
+					if err != nil {
+						return nil, fmt.Errorf("advance concurrent checkpoint in tx: %w", err)
+					}
+				}
+			}
 		}
 	}
 

@@ -75,6 +75,7 @@ type Daemon struct {
 	pool                  *WorkerPool
 	wsQueue               *WorkspaceQueue
 	scheduler             *cron.Scheduler
+	aiDraftGen            gitmem.AIDraftGenerator
 	inFlight              int
 	inFlightMu            sync.Mutex
 	listener              net.Listener
@@ -113,6 +114,13 @@ type DaemonOption func(*Daemon)
 func WithEngine(eng *engine.Engine) DaemonOption {
 	return func(d *Daemon) {
 		d.engine = eng
+	}
+}
+
+// WithAIDraftGenerator 注入可選的 AI 草稿生成器
+func WithAIDraftGenerator(gen gitmem.AIDraftGenerator) DaemonOption {
+	return func(d *Daemon) {
+		d.aiDraftGen = gen
 	}
 }
 

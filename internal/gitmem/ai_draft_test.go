@@ -69,17 +69,29 @@ func TestCaptureService_WithAIDraft(t *testing.T) {
 	allowedRoot, repoDir := initTestRepoWithBranches(t)
 	exec := NewGitExecutor([]string{allowedRoot})
 	store := newTestStore(t)
-	service := NewCaptureService(exec, store)
+	ctx := context.Background()
 
+	// 1. 未配置 AI Generator 時，顯式請求 AIDraft 必須 fail-closed 拒絕，絕不可靜默回退
+	serviceNoAI := NewCaptureService(exec, store)
+	_, err := serviceNoAI.Capture(ctx, repoDir, CaptureOptions{
+		RangeExpr: "HEAD~1..HEAD",
+		AIDraft:   true,
+	})
+	if err == nil {
+		t.Fatal("SECURITY/ACCURACY FAIL: expected error when AIDraft=true but no generator configured, got nil")
+	}
+	if !strings.Contains(err.Error(), "no AI generator is configured") {
+		t.Errorf("expected no AI generator error message, got: %v", err)
+	}
+
+	// 2. 注入 AI Generator，驗證成功生成 AI 草稿
 	mockAI := &mockAIGenerator{
 		result: "# AI Draft Decision\n- High-level decision from mock AI.",
 	}
-	service.SetAIGenerator(mockAI)
+	serviceWithAI := NewCaptureService(exec, store)
+	serviceWithAI.SetAIGenerator(mockAI)
 
-	ctx := context.Background()
-
-	// 1. 啟用 AI Draft
-	res, err := service.Capture(ctx, repoDir, CaptureOptions{
+	res, err := serviceWithAI.Capture(ctx, repoDir, CaptureOptions{
 		RangeExpr: "HEAD~1..HEAD",
 		AIDraft:   true,
 	})
@@ -90,16 +102,28 @@ func TestCaptureService_WithAIDraft(t *testing.T) {
 		t.Errorf("expected AI draft content in candidate, got: %s", res.Candidate.DraftContent)
 	}
 
-	// 2. AI 失敗時自動降級
-	mockAI.err = errors.New("network failure")
-	resFallback, err := service.Capture(ctx, repoDir, CaptureOptions{
+	// 3. AI 執行報錯時明確回報錯誤，不靜默掩飾
+	mockAI.err = errors.New("network timeout")
+	_, err = serviceWithAI.Capture(ctx, repoDir, CaptureOptions{
 		RangeExpr: "HEAD~2..HEAD~1",
 		AIDraft:   true,
 	})
-	if err != nil {
-		t.Fatalf("capture fallback failed: %v", err)
+	if err == nil {
+		t.Fatal("expected error on AI failure, got nil")
 	}
-	if !strings.Contains(resFallback.Candidate.DraftContent, "架構決策與技術約束") {
-		t.Errorf("expected deterministic fallback draft on AI failure, got: %s", resFallback.Candidate.DraftContent)
+	if !strings.Contains(err.Error(), "AI draft generation failed") {
+		t.Errorf("expected AI draft generation failed error, got: %v", err)
+	}
+
+	// 4. 預設不帶 AIDraft 旗標時，正常生成模式 1 確定性草稿
+	resDefault, err := serviceNoAI.Capture(ctx, repoDir, CaptureOptions{
+		RangeExpr: "HEAD~2..HEAD~1",
+		AIDraft:   false,
+	})
+	if err != nil {
+		t.Fatalf("capture with default deterministic draft failed: %v", err)
+	}
+	if !strings.Contains(resDefault.Candidate.DraftContent, "架構決策與技術約束") {
+		t.Errorf("expected deterministic draft, got: %s", resDefault.Candidate.DraftContent)
 	}
 }

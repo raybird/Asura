@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"time"
+	"unicode/utf8"
 )
 
 var (
@@ -230,7 +231,7 @@ func (s *SQLiteStore) ListCandidates(ctx context.Context, workspace string, stat
 			return nil, fmt.Errorf("scan candidate: %w", err)
 		}
 		if len(rawSummary) > 512 {
-			c.Summary = rawSummary[:512] + "..."
+			c.Summary = TruncateUTF8Safe(rawSummary, 512) + "..."
 		} else {
 			c.Summary = rawSummary
 		}
@@ -242,9 +243,35 @@ func (s *SQLiteStore) ListCandidates(ctx context.Context, workspace string, stat
 	return candidates, rows.Err()
 }
 
-// ClearProcessedCandidates 清理指定工作區中已處理完畢之候選（approved 與 discarded），保留 pending 草稿
+// TruncateUTF8Safe 將字串截短至最多 maxBytes 位元組，保證絕不腰斬 UTF-8 多位元組字元
+func TruncateUTF8Safe(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
+		return s
+	}
+	cutoff := maxBytes
+	for cutoff > 0 && !utf8.RuneStart(s[cutoff]) {
+		cutoff--
+	}
+	for cutoff > 0 && !utf8.ValidString(s[:cutoff]) {
+		cutoff--
+		for cutoff > 0 && !utf8.RuneStart(s[cutoff]) {
+			cutoff--
+		}
+	}
+	return s[:cutoff]
+}
+
+// ClearProcessedCandidates 清理指定工作區中已處理完畢之候選（approved 與 discarded）
+// 安全約束：絕對禁止 DELETE 整個 Candidate 列（否則會抹除 approved_memory_id、唯一索引與審核痕跡，引發防復活繞過風險）
+// 僅清理其佔用空間的大型 facts_summary 與 draft_content payload
 func (s *SQLiteStore) ClearProcessedCandidates(ctx context.Context, workspace string) (int64, error) {
-	query := `DELETE FROM memory_candidates WHERE workspace = ? AND status IN ('approved', 'discarded')`
+	query := `
+	UPDATE memory_candidates 
+	SET draft_content = '', facts_summary = '{}' 
+	WHERE workspace = ? 
+	  AND status IN ('approved', 'discarded') 
+	  AND (draft_content != '' OR facts_summary != '{}')
+	`
 	res, err := s.db.ExecContext(ctx, query, workspace)
 	if err != nil {
 		return 0, fmt.Errorf("clear processed candidates: %w", err)

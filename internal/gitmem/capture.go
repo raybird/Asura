@@ -67,6 +67,14 @@ func isSensitiveFile(filename string) bool {
 	return false
 }
 
+// ToLiteralPathspec 將路徑轉換為 Git literal pathspec（:(literal)<cleanPath>）
+// 確保所有特殊萬用字元（*、?、[等）均被視為字面文字，並規範為正斜線路徑分隔
+func ToLiteralPathspec(p string) string {
+	clean := filepath.ToSlash(filepath.Clean(p))
+	clean = strings.TrimPrefix(clean, "./")
+	return ":(literal)" + clean
+}
+
 // CaptureRange 執行有界擷取，套用 500 files / 256 KiB 限制、子目錄範圍隔離與敏感資料過濾
 func (c *Capturer) CaptureRange(ctx context.Context, repoDir string, rangeExpr string) (*CaptureFacts, error) {
 	// 1. 儲存庫與邊界校驗
@@ -79,7 +87,7 @@ func (c *Capturer) CaptureRange(ctx context.Context, repoDir string, rangeExpr s
 	relPath, err := filepath.Rel(repoInfo.RepoRoot, repoInfo.Workspace)
 	var pathspecs []string
 	if err == nil && relPath != "." && relPath != "" {
-		pathspecs = append(pathspecs, relPath)
+		pathspecs = append(pathspecs, ToLiteralPathspec(relPath))
 	}
 
 	// 2. 解析 Range 與祖先血統檢查 (若為子目錄傳入 pathspec)
@@ -143,7 +151,7 @@ func (c *Capturer) CaptureRange(ctx context.Context, repoDir string, rangeExpr s
 			continue
 		}
 
-		fileDiffOut, err := c.exec.Exec(ctx, repoInfo.RepoRoot, "diff", fmt.Sprintf("%s..%s", resolved.BaseSHA, resolved.HeadSHA), "--", file)
+		fileDiffOut, err := c.exec.Exec(ctx, repoInfo.RepoRoot, "diff", fmt.Sprintf("%s..%s", resolved.BaseSHA, resolved.HeadSHA), "--", ToLiteralPathspec(file))
 		if err != nil {
 			truncated = true
 			if errors.Is(err, ErrStdoutTruncated) {

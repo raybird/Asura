@@ -208,7 +208,7 @@ func TestSaveCandidateAndCheckpointTx_RollbackOnFailure(t *testing.T) {
 	}
 
 	// 2. 執行原子交易寫入：預期因 Checkpoint 寫入失敗而整體回滾
-	_, err := store.SaveCandidateAndCheckpointTx(ctx, cand, cp)
+	_, err := store.SaveCandidateAndCheckpointTx(ctx, cand, cp, "", nil)
 	if err == nil {
 		t.Fatal("expected error due to injected checkpoint failure, got nil")
 	}
@@ -239,7 +239,7 @@ func TestSaveCandidateAndCheckpointTx_RollbackOnFailure(t *testing.T) {
 		t.Fatalf("drop trigger failed: %v", err)
 	}
 
-	persisted, err := store.SaveCandidateAndCheckpointTx(ctx, cand, cp)
+	persisted, err := store.SaveCandidateAndCheckpointTx(ctx, cand, cp, "", nil)
 	if err != nil {
 		t.Fatalf("expected successful atomic save after dropping trigger, got: %v", err)
 	}
@@ -255,6 +255,177 @@ func TestSaveCandidateAndCheckpointTx_RollbackOnFailure(t *testing.T) {
 	cpCheck, err := store.GetCheckpoint(ctx, ws, cp.RepoID, cp.RefName)
 	if err != nil || cpCheck == nil || cpCheck.LastCapturedSHA != "head1" {
 		t.Fatalf("expected checkpoint exists in DB: %v, cp: %+v", err, cpCheck)
+	}
+}
+
+func TestSaveCandidateAndCheckpointTx_MonotonicConcurrentAdvance(t *testing.T) {
+	store := newTestGitMemStore(t)
+	ctx := context.Background()
+	ws := "/workspace/monotonic-test"
+
+	// 模擬歷史關係：H0 -> H1 -> H2
+	h0 := "0000000000000000000000000000000000000000"
+	h1 := "1111111111111111111111111111111111111111"
+	h2 := "2222222222222222222222222222222222222222"
+
+	isAncestorMock := func(ctx context.Context, anc, desc string) (bool, error) {
+		if anc == h0 && (desc == h1 || desc == h2) {
+			return true, nil
+		}
+		if anc == h1 && desc == h2 {
+			return true, nil
+		}
+		return false, nil
+	}
+
+	// 1. 初始 Checkpoint 為 H0
+	initialCP := &GitCheckpoint{
+		Workspace:       ws,
+		RepoID:          "repo-mono",
+		RefName:         "refs/heads/main",
+		LastCapturedSHA: h0,
+		UpdatedAt:       time.Now().UTC(),
+	}
+	if err := store.SaveCheckpoint(ctx, initialCP); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. 模擬並行交易 Capture B（H0 -> H2）先完成落盤
+	candB := &MemoryCandidate{
+		ID:            "cand-b",
+		Workspace:     ws,
+		RepoID:        "repo-mono",
+		RefName:       "refs/heads/main",
+		BaseSHA:       h0,
+		HeadSHA:       h2,
+		CommitCount:   2,
+		FactsSummary:  "{}",
+		DraftContent:  "draft B",
+		Status:        "pending",
+		PolicyVersion: "gitmem-v1",
+	}
+	cpB := &GitCheckpoint{
+		Workspace:       ws,
+		RepoID:          "repo-mono",
+		RefName:         "refs/heads/main",
+		LastCapturedSHA: h2,
+		UpdatedAt:       time.Now().UTC(),
+	}
+	_, err := store.SaveCandidateAndCheckpointTx(ctx, candB, cpB, h0, isAncestorMock)
+	if err != nil {
+		t.Fatalf("save B failed: %v", err)
+	}
+
+	// 驗證庫中當前 Checkpoint 已前進到 H2
+	cpCurrent, _ := store.GetCheckpoint(ctx, ws, "repo-mono", "refs/heads/main")
+	if cpCurrent.LastCapturedSHA != h2 {
+		t.Fatalf("expected checkpoint at H2, got %s", cpCurrent.LastCapturedSHA)
+	}
+
+	// 3. 模擬延遲完成的並行交易 Capture A（H0 -> H1）後完成落盤
+	// A 進入交易前以為 Checkpoint 是 H0，目標是推進到 H1
+	candA := &MemoryCandidate{
+		ID:            "cand-a",
+		Workspace:     ws,
+		RepoID:        "repo-mono",
+		RefName:       "refs/heads/main",
+		BaseSHA:       h0,
+		HeadSHA:       h1,
+		CommitCount:   1,
+		FactsSummary:  "{}",
+		DraftContent:  "draft A",
+		Status:        "pending",
+		PolicyVersion: "gitmem-v1",
+	}
+	cpA := &GitCheckpoint{
+		Workspace:       ws,
+		RepoID:          "repo-mono",
+		RefName:         "refs/heads/main",
+		LastCapturedSHA: h1,
+		UpdatedAt:       time.Now().UTC(),
+	}
+
+	persistedA, err := store.SaveCandidateAndCheckpointTx(ctx, candA, cpA, h0, isAncestorMock)
+	if err != nil {
+		t.Fatalf("expected A to succeed saving candidate despite stale checkpoint, got: %v", err)
+	}
+	if persistedA.ID != candA.ID {
+		t.Errorf("expected candidate A to be persisted, got %+v", persistedA)
+	}
+
+	// 4. 關鍵斷言：Checkpoint 必須保持在 H2，絕對不能被 A 逆序覆寫倒退回 H1！
+	cpFinal, _ := store.GetCheckpoint(ctx, ws, "repo-mono", "refs/heads/main")
+	if cpFinal.LastCapturedSHA != h2 {
+		t.Fatalf("MONOTONIC INTEGRITY BUG: Checkpoint rewound from %s to %s due to concurrent stale advance!", h2, cpFinal.LastCapturedSHA)
+	}
+}
+
+func TestClearProcessedCandidates_AntiRevivalAndDedupProtected(t *testing.T) {
+	store := newTestGitMemStore(t)
+	ctx := context.Background()
+	ws := "/workspace/clear-safety"
+
+	cand := &MemoryCandidate{
+		ID:            "cand-clear-1",
+		Workspace:     ws,
+		RepoID:        "repo-1",
+		RefName:       "refs/heads/main",
+		BaseSHA:       "base1",
+		HeadSHA:       "head1",
+		CommitCount:   2,
+		FactsSummary:  `{"commits":[{"sha":"c1","subject":"s1"}]}`,
+		DraftContent:  "massive draft content occupying lots of disk space",
+		Status:        "pending",
+		PolicyVersion: "gitmem-v1",
+		CreatedAt:     time.Now().UTC(),
+	}
+	if err := store.SaveCandidate(ctx, cand); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. 核准產生正式記憶
+	memID, err := store.ApproveCandidateTx(ctx, ws, cand.ID, ApproveOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. 執行 ClearProcessedCandidates 清理
+	clearedCount, err := store.ClearProcessedCandidates(ctx, ws)
+	if err != nil {
+		t.Fatalf("ClearProcessedCandidates failed: %v", err)
+	}
+	if clearedCount != 1 {
+		t.Fatalf("expected 1 row cleared, got %d", clearedCount)
+	}
+
+	// 3. 驗證瘦身效果：大型 Draft 與 FactsSummary 已被清空
+	cAfter, err := store.GetCandidate(ctx, ws, cand.ID)
+	if err != nil {
+		t.Fatalf("candidate should still exist after clear: %v", err)
+	}
+	if cAfter.DraftContent != "" || cAfter.FactsSummary != "{}" {
+		t.Errorf("expected payload cleared, got draft=%q, facts=%q", cAfter.DraftContent, cAfter.FactsSummary)
+	}
+	if cAfter.Status != "approved" || cAfter.ApprovedMemoryID != memID {
+		t.Errorf("expected approved metadata preserved, got status=%s, memID=%s", cAfter.Status, cAfter.ApprovedMemoryID)
+	}
+
+	// 4. 驗證去重防重複生成：相同 Range 查詢依然能查到該 candidate，絕不重複生成 pending！
+	existing, err := store.FindCandidateByRange(ctx, ws, cand.RepoID, cand.RefName, cand.BaseSHA, cand.HeadSHA, "gitmem-v1")
+	if err != nil || existing == nil {
+		t.Fatalf("expected candidate range to remain indexed, got: %v", existing)
+	}
+
+	// 5. 驗證防復活（Anti-Revival）：刪除正式記憶後，再次嘗試核准該 candidate 必須被嚴格阻絕！
+	if err := store.DeleteMemory(ctx, ws, memID); err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.ApproveCandidateTx(ctx, ws, cand.ID, ApproveOptions{})
+	if err == nil {
+		t.Fatal("SECURITY BUG: Anti-revival bypassed after clear-candidates!")
+	}
+	if !strings.Contains(err.Error(), "deleted") && !strings.Contains(err.Error(), "revival prevented") {
+		t.Errorf("expected revival prevented error, got: %v", err)
 	}
 }
 

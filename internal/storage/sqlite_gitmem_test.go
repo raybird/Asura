@@ -3,8 +3,10 @@ package storage
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 func newTestGitMemStore(t *testing.T) *SQLiteStore {
@@ -273,5 +275,71 @@ func TestGitMem_ProvenanceCascadeDelete(t *testing.T) {
 	}
 	if keptCand == nil || keptCand.ApprovedMemoryID != mem.ID {
 		t.Errorf("expected candidate to survive and retain audit record")
+	}
+}
+
+func TestTruncateUTF8Safe_MultiByteCharacters(t *testing.T) {
+	// 繁體中文每個漢字佔 3 個 bytes
+	chineseText := "架構決策與變更摘要：專案記憶安全邊界與有界隔離防護策略"
+
+	for maxBytes := 1; maxBytes <= len(chineseText)+5; maxBytes++ {
+		truncated := TruncateUTF8Safe(chineseText, maxBytes)
+		if len(truncated) > maxBytes {
+			t.Fatalf("maxBytes=%d: truncated length %d exceeds maxBytes", maxBytes, len(truncated))
+		}
+		if !utf8.ValidString(truncated) {
+			t.Fatalf("maxBytes=%d: truncated string is not valid UTF-8! bytes: %v", maxBytes, []byte(truncated))
+		}
+		if strings.ContainsRune(truncated, utf8.RuneError) {
+			t.Fatalf("maxBytes=%d: truncated string contains utf8.RuneError (U+FFFD)", maxBytes)
+		}
+	}
+
+	// 測試在 ListCandidates 中使用超長繁體中文
+	store := newTestGitMemStore(t)
+	ctx := context.Background()
+	ws := "/workspace/utf8-test"
+
+	// 構造約 600 bytes 的繁體中文草稿
+	longChineseDraft := strings.Repeat("架構決策與核心隔離約束規範。", 20)
+	cand := &MemoryCandidate{
+		ID:            "cand-utf8-1",
+		Workspace:     ws,
+		RepoID:        "repo-utf8",
+		RefName:       "refs/heads/main",
+		BaseSHA:       "base-utf8",
+		HeadSHA:       "head-utf8",
+		CommitCount:   1,
+		FactsSummary:  "{}",
+		DraftContent:  longChineseDraft,
+		Status:        "pending",
+		PolicyVersion: "gitmem-v1",
+		CreatedAt:     time.Now().UTC(),
+	}
+	if err := store.SaveCandidate(ctx, cand); err != nil {
+		t.Fatal(err)
+	}
+
+	cands, err := store.ListCandidates(ctx, ws, "pending", 10)
+	if err != nil {
+		t.Fatalf("ListCandidates failed: %v", err)
+	}
+	if len(cands) != 1 {
+		t.Fatalf("expected 1 candidate, got %d", len(cands))
+	}
+
+	summary := cands[0].Summary
+	if !strings.HasSuffix(summary, "...") {
+		t.Errorf("expected summary to end with '...', got: %s", summary)
+	}
+	rawWithoutEllipsis := strings.TrimSuffix(summary, "...")
+	if len(rawWithoutEllipsis) > 512 {
+		t.Errorf("expected raw summary <= 512 bytes, got %d", len(rawWithoutEllipsis))
+	}
+	if !utf8.ValidString(summary) {
+		t.Fatalf("summary is not valid UTF-8: %v", []byte(summary))
+	}
+	if strings.ContainsRune(summary, utf8.RuneError) {
+		t.Fatal("summary contains broken UTF-8 character (U+FFFD)")
 	}
 }

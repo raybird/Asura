@@ -27,6 +27,9 @@ func (d *Daemon) handleGitMemoryCapture(ctx context.Context, req IPCRequest, enc
 
 	exec := gitmem.NewGitExecutor(d.policy.AllowedRoots())
 	service := gitmem.NewCaptureService(exec, d.store)
+	if d.aiDraftGen != nil {
+		service.SetAIGenerator(d.aiDraftGen)
+	}
 
 	res, err := service.Capture(ctx, canonicalScope, gitmem.CaptureOptions{
 		RangeExpr: req.Range,

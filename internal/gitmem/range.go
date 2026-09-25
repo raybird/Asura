@@ -3,6 +3,7 @@ package gitmem
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -85,11 +86,25 @@ func (g *GitExecutor) ResolveRange(ctx context.Context, repoDir string, rangeExp
 		return nil, fmt.Errorf("base commit %s is not an ancestor of head commit %s (unrelated history or diverged branch)", baseSHA, headSHA)
 	}
 
-	// 5. 檢查 commit 數量上限
+	// 5. 檢查 commit 數量上限 (套用 literal pathspecs 隔離)
+	var literalPathspecs []string
+	for _, ps := range pathspecs {
+		ps = strings.TrimSpace(ps)
+		if ps != "" {
+			if strings.HasPrefix(ps, ":(") {
+				literalPathspecs = append(literalPathspecs, ps)
+			} else {
+				clean := filepath.ToSlash(filepath.Clean(ps))
+				clean = strings.TrimPrefix(clean, "./")
+				literalPathspecs = append(literalPathspecs, ":(literal)"+clean)
+			}
+		}
+	}
+
 	countArgs := []string{"rev-list", "--count", fmt.Sprintf("%s..%s", baseSHA, headSHA)}
-	if len(pathspecs) > 0 {
+	if len(literalPathspecs) > 0 {
 		countArgs = append(countArgs, "--")
-		countArgs = append(countArgs, pathspecs...)
+		countArgs = append(countArgs, literalPathspecs...)
 	}
 	countOut, err := g.Exec(ctx, repoDir, countArgs...)
 	if err != nil {
@@ -111,9 +126,9 @@ func (g *GitExecutor) ResolveRange(ctx context.Context, repoDir string, rangeExp
 	// 6. 讀取區間內的 commit 清單 (由舊到新排序)
 	logFormat := "%H%x1f%s%x1f%an%x1f%aI"
 	logArgs := []string{"log", "--reverse", fmt.Sprintf("--format=%s", logFormat), fmt.Sprintf("%s..%s", baseSHA, headSHA)}
-	if len(pathspecs) > 0 {
+	if len(literalPathspecs) > 0 {
 		logArgs = append(logArgs, "--")
-		logArgs = append(logArgs, pathspecs...)
+		logArgs = append(logArgs, literalPathspecs...)
 	}
 	logOut, err := g.Exec(ctx, repoDir, logArgs...)
 	if err != nil {

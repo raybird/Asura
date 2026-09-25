@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
@@ -146,8 +147,15 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 		return nil, fmt.Errorf("format facts summary: %w", err)
 	}
 	var draft string
-	if opts.AIDraft && s.aiGen != nil {
-		draft, _ = GenerateAIDraftWithFallback(ctx, facts, s.aiGen)
+	if opts.AIDraft {
+		if s.aiGen == nil {
+			return nil, errors.New("AI draft generation requested (--ai-draft), but no AI generator is configured on daemon; please use standard capture or configure an AI generator")
+		}
+		var err error
+		draft, err = s.aiGen.GenerateDraft(ctx, facts)
+		if err != nil {
+			return nil, fmt.Errorf("AI draft generation failed: %w", err)
+		}
 	} else {
 		draft = GenerateDraftContent(facts)
 	}
@@ -167,7 +175,17 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 		CreatedAt:     time.Now().UTC(),
 	}
 
-	persistedCand, err := s.store.SaveCandidateAndCheckpointTx(ctx, cand, newCP)
+	// 取得既有 Checkpoint 作為 CAS 期望值
+	var expectedOldSHA string
+	if existingCP, _ := s.store.GetCheckpoint(ctx, facts.Workspace, facts.RepoID, facts.RefName); existingCP != nil {
+		expectedOldSHA = existingCP.LastCapturedSHA
+	}
+
+	ancestryChecker := func(ctx context.Context, ancestorSHA, descendantSHA string) (bool, error) {
+		return s.exec.IsAncestor(ctx, repoInfo.RepoRoot, ancestorSHA, descendantSHA)
+	}
+
+	persistedCand, err := s.store.SaveCandidateAndCheckpointTx(ctx, cand, newCP, expectedOldSHA, ancestryChecker)
 	if err != nil {
 		return nil, fmt.Errorf("save candidate and checkpoint: %w", err)
 	}

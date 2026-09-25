@@ -232,10 +232,10 @@ type MemoryProvenance struct {
   - **產出與範圍**：`internal/gitmem/ai_draft.go`, `internal/gitmem/ai_draft_test.go`
   - **相依**：Task 5.2
   - **驗收編號**：GITMEM-009
-  - **完成判準**：模型以唯讀策略（deny mutating）執行；超限或注入異常時安全退回確定性草稿；不可信 diff 包裹於安全邊界標籤。
-  - **驗證**：`go test -v -run TestAIDraft ./internal/gitmem`（4/4 pass）。
-  - **狀態**：✅ 已完成
-  - **證據**：單元測試覆蓋 FormatPrompt (UntrustedBoundary 注入防護)、Success (AI 生成)、FallbackOnError (連線或超限優雅降級)、CaptureService 整合。
+  - **完成判準**：不可信 diff 包裹於安全邊界標籤 `<untrusted_git_diff>`；實作可插拔 `AIDraftGenerator` 介面；未配置 Generator 時顯式使用 `--ai-draft` 採 fail-closed 明確報錯；預設採用模式 1 確定性草稿。
+  - **驗證**：`go test -v -run TestAIDraft ./internal/gitmem`、`TestCaptureService_WithAIDraft` 與 Daemon `TestDaemon_GitMemory_AIDraftFailClosedAndInjection` 全數通過。
+  - **狀態**：✅ 已完成（介面與安全邊界已交付；預設為確定性草稿，無 generator 時 fail-closed）
+  - **證據**：單元與 Daemon 整合測試覆蓋 FormatPrompt (UntrustedBoundary 注入防護)、Success (AI 生成)、FailClosed (未配置 generator 拒絕)、CaptureService 整合。
 
 ---
 

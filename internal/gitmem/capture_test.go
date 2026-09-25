@@ -204,8 +204,8 @@ func TestCapture_SingleFileOver512KiB_Truncated(t *testing.T) {
 	if !facts.Truncated {
 		t.Fatal("SECURITY/ACCURACY FAIL: expected facts.Truncated=true for single file > 512KiB stdout buffer limit")
 	}
-	if !strings.Contains(facts.TruncatedReason, "stdout limit") && !strings.Contains(facts.TruncatedReason, "buffer limit") && !strings.Contains(facts.TruncatedReason, "diff failed/truncated") {
-		t.Errorf("expected stdout limit truncation reason, got: %s", facts.TruncatedReason)
+	if !strings.Contains(facts.TruncatedReason, "stdout limit") && !strings.Contains(facts.TruncatedReason, "buffer limit") && !strings.Contains(facts.TruncatedReason, "diff failed") {
+		t.Errorf("expected stdout limit or diff failed truncation reason, got: %s", facts.TruncatedReason)
 	}
 }
 
@@ -271,6 +271,61 @@ func TestCapture_SubdirectoryScopeIsolation(t *testing.T) {
 	}
 	if !strings.Contains(factsB.FilteredDiff, "B modified") {
 		t.Errorf("expected pkg_b changes in diff, got: %s", factsB.FilteredDiff)
+	}
+}
+
+func TestCapture_SubdirectoryWithWildcardName_LiteralIsolation(t *testing.T) {
+	dir := t.TempDir()
+	allowedRoot := filepath.Join(dir, "allowed")
+	repoDir := filepath.Join(allowedRoot, "project")
+	_ = os.MkdirAll(repoDir, 0755)
+
+	// 建立帶有特殊萬用字元 * 的目錄 pkg*，以及兄弟目錄 pkg_a、pkg_b
+	pkgStarDir := filepath.Join(repoDir, "pkg*")
+	pkgADir := filepath.Join(repoDir, "pkg_a")
+	pkgBDir := filepath.Join(repoDir, "pkg_b")
+	_ = os.MkdirAll(pkgStarDir, 0755)
+	_ = os.MkdirAll(pkgADir, 0755)
+	_ = os.MkdirAll(pkgBDir, 0755)
+
+	cmd := execCommand(repoDir, "init", "-b", "main")
+	_ = cmd.Run()
+
+	_ = os.WriteFile(filepath.Join(pkgStarDir, "star.txt"), []byte("initial star"), 0644)
+	_ = os.WriteFile(filepath.Join(pkgADir, "a.txt"), []byte("initial a"), 0644)
+	_ = os.WriteFile(filepath.Join(pkgBDir, "b.txt"), []byte("initial b"), 0644)
+	cmd = execCommand(repoDir, "add", "-A")
+	_ = cmd.Run()
+	cmd = execCommand(repoDir, "commit", "-m", "init packages")
+	_ = cmd.Run()
+
+	// 修改三個目錄下的檔案
+	_ = os.WriteFile(filepath.Join(pkgStarDir, "star.txt"), []byte("modified star content"), 0644)
+	_ = os.WriteFile(filepath.Join(pkgADir, "a.txt"), []byte("modified a content"), 0644)
+	_ = os.WriteFile(filepath.Join(pkgBDir, "b.txt"), []byte("modified b content"), 0644)
+	cmd = execCommand(repoDir, "add", "-A")
+	_ = cmd.Run()
+	cmd = execCommand(repoDir, "commit", "-m", "modify all packages")
+	_ = cmd.Run()
+
+	exec := NewGitExecutor([]string{allowedRoot})
+	ctx := context.Background()
+	capturer := NewCapturer(exec)
+
+	// 在 pkg* 目錄執行 capture：必須使用字面路徑匹配，絕不能因 * 萬用字元而把 pkg_a 或 pkg_b 的變更抓進來！
+	facts, err := capturer.CaptureRange(ctx, pkgStarDir, "HEAD~1..HEAD")
+	if err != nil {
+		t.Fatalf("capture pkg* failed: %v", err)
+	}
+
+	if len(facts.ChangedFiles) != 1 || facts.ChangedFiles[0] != "pkg*/star.txt" {
+		t.Fatalf("LITERAL ISOLATION FAIL: expected exactly [pkg*/star.txt], got: %v", facts.ChangedFiles)
+	}
+	if strings.Contains(facts.FilteredDiff, "modified a content") || strings.Contains(facts.FilteredDiff, "modified b content") {
+		t.Fatalf("LITERAL ISOLATION FAIL: sibling directories pkg_a or pkg_b leaked into pkg* diff! Diff:\n%s", facts.FilteredDiff)
+	}
+	if !strings.Contains(facts.FilteredDiff, "modified star content") {
+		t.Errorf("expected star.txt content in diff, got:\n%s", facts.FilteredDiff)
 	}
 }
 

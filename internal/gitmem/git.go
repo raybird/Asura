@@ -311,16 +311,16 @@ func (g *GitExecutor) ExecRaw(ctx context.Context, dir string, bin string, args 
 		return stdoutBuf.Bytes(), fmt.Errorf("command canceled: %w", runCtx.Err())
 	}
 
+	if stdoutBuf.truncated {
+		return stdoutBuf.Bytes(), ErrStdoutTruncated
+	}
+
 	if runErr != nil {
 		errMsg := strings.TrimSpace(stderrBuf.String())
 		if errMsg != "" {
 			return stdoutBuf.Bytes(), fmt.Errorf("%w: %s", runErr, errMsg)
 		}
 		return stdoutBuf.Bytes(), runErr
-	}
-
-	if stdoutBuf.truncated {
-		return stdoutBuf.Bytes(), ErrStdoutTruncated
 	}
 
 	return stdoutBuf.Bytes(), nil
