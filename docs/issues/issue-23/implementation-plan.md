@@ -243,14 +243,14 @@ type MemoryProvenance struct {
 
 > 依賴：Phase 5 完成。
 
-- [ ] 📝 **Task 6.1 — 正式記憶與 Phase 3F 自動召回整合驗證**
+- [x] ✅ **Task 6.1 — 正式記憶與 Phase 3F 自動召回整合驗證**
   - **產出與範圍**：`tests/integration/gitmem_recall_test.go`
   - **相依**：Phase 5
   - **驗收編號**：GITMEM-008
-  - **完成判準**：經核准的 `git-approved` 記憶可自然被 `asura ask --memory-recall bounded` 召回；未核准草稿 0 召回。
-  - **驗證**：Recall 整合測試。
-  - **狀態**：📝 待實作
-  - **證據**：待填入
+  - **完成判準**：經核准的 `git-approved` 記憶可自然被 `asura ask --memory-recall bounded` 召回；未核准草稿 0 召回；刪除記憶後 0 召回；Provenance 與 Candidate 依規格連動。
+  - **驗證**：`go test -v -run TestGitMem_RecallIntegration ./tests/integration`（1/1 pass）。
+  - **狀態**：✅ 已完成
+  - **證據**：整合測試驗證未核准草稿 0 召回、核准後自動自然召回、刪除後 0 召回、Provenance CASCADE 刪除、Candidate 留存。
 
 - [ ] 📝 **Task 6.2 — 任務密封性保護驗證**
   - **產出與範圍**：`tests/integration/sealed_compat_test.go`
