@@ -2,6 +2,7 @@ package gitmem
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -9,7 +10,7 @@ import (
 
 const (
 	// MaxAllowedFiles 每次擷取允許的最大變更檔案數上限 (H-TBD-3 / GITMEM-004)
-	MaxAllowedFiles = 50
+	MaxAllowedFiles = 500
 	// MaxDiffBytes 每次擷取允許的最大 diff 位元組上限 256 KiB (H-TBD-3 / GITMEM-004)
 	MaxDiffBytes = 256 * 1024
 )
@@ -66,7 +67,7 @@ func isSensitiveFile(filename string) bool {
 	return false
 }
 
-// CaptureRange 執行有界擷取，套用 50 files / 256 KiB 限制與敏感資料過濾
+// CaptureRange 執行有界擷取，套用 500 files / 256 KiB 限制、子目錄範圍隔離與敏感資料過濾
 func (c *Capturer) CaptureRange(ctx context.Context, repoDir string, rangeExpr string) (*CaptureFacts, error) {
 	// 1. 儲存庫與邊界校驗
 	repoInfo, err := c.exec.ValidateAndResolveRepo(ctx, repoDir)
@@ -74,14 +75,26 @@ func (c *Capturer) CaptureRange(ctx context.Context, repoDir string, rangeExpr s
 		return nil, fmt.Errorf("failed to validate repo: %w", err)
 	}
 
-	// 2. 解析 Range 與祖先血統檢查
-	resolved, err := c.exec.ResolveRange(ctx, repoDir, rangeExpr)
+	// 計算 Workspace 相對於 RepoRoot 的子目錄相對路徑
+	relPath, err := filepath.Rel(repoInfo.RepoRoot, repoInfo.Workspace)
+	var pathspecs []string
+	if err == nil && relPath != "." && relPath != "" {
+		pathspecs = append(pathspecs, relPath)
+	}
+
+	// 2. 解析 Range 與祖先血統檢查 (若為子目錄傳入 pathspec)
+	resolved, err := c.exec.ResolveRange(ctx, repoInfo.RepoRoot, rangeExpr, pathspecs...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve range: %w", err)
 	}
 
-	// 3. 取得變更檔案清單
-	namesOut, err := c.exec.Exec(ctx, repoDir, "diff", "--name-only", fmt.Sprintf("%s..%s", resolved.BaseSHA, resolved.HeadSHA))
+	// 3. 取得變更檔案清單 (若為子目錄僅取子目錄範圍)
+	namesArgs := []string{"diff", "--name-only", fmt.Sprintf("%s..%s", resolved.BaseSHA, resolved.HeadSHA)}
+	if len(pathspecs) > 0 {
+		namesArgs = append(namesArgs, "--")
+		namesArgs = append(namesArgs, pathspecs...)
+	}
+	namesOut, err := c.exec.Exec(ctx, repoInfo.RepoRoot, namesArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list changed files: %w", err)
 	}
@@ -111,7 +124,12 @@ func (c *Capturer) CaptureRange(ctx context.Context, repoDir string, rangeExpr s
 	}
 
 	// 4. 取得 Diff Stat Summary
-	statOut, err := c.exec.Exec(ctx, repoDir, "diff", "--stat", fmt.Sprintf("%s..%s", resolved.BaseSHA, resolved.HeadSHA))
+	statArgs := []string{"diff", "--stat", fmt.Sprintf("%s..%s", resolved.BaseSHA, resolved.HeadSHA)}
+	if len(pathspecs) > 0 {
+		statArgs = append(statArgs, "--")
+		statArgs = append(statArgs, pathspecs...)
+	}
+	statOut, err := c.exec.Exec(ctx, repoInfo.RepoRoot, statArgs...)
 	var diffStat string
 	if err == nil {
 		diffStat = strings.TrimSpace(string(statOut))
@@ -125,8 +143,14 @@ func (c *Capturer) CaptureRange(ctx context.Context, repoDir string, rangeExpr s
 			continue
 		}
 
-		fileDiffOut, err := c.exec.Exec(ctx, repoDir, "diff", fmt.Sprintf("%s..%s", resolved.BaseSHA, resolved.HeadSHA), "--", file)
+		fileDiffOut, err := c.exec.Exec(ctx, repoInfo.RepoRoot, "diff", fmt.Sprintf("%s..%s", resolved.BaseSHA, resolved.HeadSHA), "--", file)
 		if err != nil {
+			truncated = true
+			if errors.Is(err, ErrStdoutTruncated) {
+				reasons = append(reasons, fmt.Sprintf("file %s diff exceeded stdout limit (512 KiB)", file))
+			} else {
+				reasons = append(reasons, fmt.Sprintf("file %s diff failed: %v", file, err))
+			}
 			continue
 		}
 

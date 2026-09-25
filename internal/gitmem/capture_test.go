@@ -49,13 +49,13 @@ func TestCapture_Partial_FileLimit(t *testing.T) {
 	cmd = execCommand(repoDir, "commit", "-m", "base commit")
 	_ = cmd.Run()
 
-	// 產生 60 個變更檔案
-	for i := 1; i <= 60; i++ {
-		_ = os.WriteFile(filepath.Join(repoDir, fmt.Sprintf("file_%02d.txt", i)), []byte("content"), 0644)
-		cmd = execCommand(repoDir, "add", fmt.Sprintf("file_%02d.txt", i))
-		_ = cmd.Run()
+	// 產生 510 個變更檔案 (超過 500 上限)
+	for i := 1; i <= 510; i++ {
+		_ = os.WriteFile(filepath.Join(repoDir, fmt.Sprintf("file_%03d.txt", i)), []byte("content"), 0644)
 	}
-	cmd = execCommand(repoDir, "commit", "-m", "add 60 files")
+	cmd = execCommand(repoDir, "add", "-A")
+	_ = cmd.Run()
+	cmd = execCommand(repoDir, "commit", "-m", "add 510 files")
 	_ = cmd.Run()
 
 	exec := NewGitExecutor([]string{allowedRoot})
@@ -68,13 +68,13 @@ func TestCapture_Partial_FileLimit(t *testing.T) {
 	}
 
 	if !facts.Truncated {
-		t.Fatal("expected truncated=true when files > 50, got false")
+		t.Fatal("expected truncated=true when files > 500, got false")
 	}
 	if !strings.Contains(facts.TruncatedReason, "file limit exceeded") {
 		t.Errorf("expected file limit exceeded in reason, got %s", facts.TruncatedReason)
 	}
-	if len(facts.ChangedFiles) != 50 {
-		t.Errorf("expected 50 kept files, got %d", len(facts.ChangedFiles))
+	if len(facts.ChangedFiles) != 500 {
+		t.Errorf("expected 500 kept files, got %d", len(facts.ChangedFiles))
 	}
 	if len(facts.OmittedFiles) != 10 {
 		t.Errorf("expected 10 omitted files, got %d", len(facts.OmittedFiles))
@@ -168,3 +168,109 @@ func TestCapture_SensitiveFileFiltering(t *testing.T) {
 		t.Errorf("expected normal.go content to be in diff, got: %s", facts.FilteredDiff)
 	}
 }
+
+func TestCapture_SingleFileOver512KiB_Truncated(t *testing.T) {
+	dir := t.TempDir()
+	allowedRoot := filepath.Join(dir, "allowed")
+	repoDir := filepath.Join(allowedRoot, "project")
+	_ = os.MkdirAll(repoDir, 0755)
+
+	cmd := execCommand(repoDir, "init", "-b", "main")
+	_ = cmd.Run()
+
+	_ = os.WriteFile(filepath.Join(repoDir, "base.txt"), []byte("base"), 0644)
+	cmd = execCommand(repoDir, "add", "base.txt")
+	_ = cmd.Run()
+	cmd = execCommand(repoDir, "commit", "-m", "base commit")
+	_ = cmd.Run()
+
+	// 單一檔案產生 600 KiB 變更（超過 GitExecutor 512 KiB 單次 stdout 緩衝區上限）
+	largeContent := strings.Repeat("X\n", 300*1024)
+	_ = os.WriteFile(filepath.Join(repoDir, "huge.txt"), []byte(largeContent), 0644)
+	cmd = execCommand(repoDir, "add", "huge.txt")
+	_ = cmd.Run()
+	cmd = execCommand(repoDir, "commit", "-m", "huge file diff")
+	_ = cmd.Run()
+
+	exec := NewGitExecutor([]string{allowedRoot})
+	ctx := context.Background()
+
+	capturer := NewCapturer(exec)
+	facts, err := capturer.CaptureRange(ctx, repoDir, "HEAD~1..HEAD")
+	if err != nil {
+		t.Fatalf("expected capture to succeed gracefully with partial truncation, got error: %v", err)
+	}
+
+	if !facts.Truncated {
+		t.Fatal("SECURITY/ACCURACY FAIL: expected facts.Truncated=true for single file > 512KiB stdout buffer limit")
+	}
+	if !strings.Contains(facts.TruncatedReason, "stdout limit") && !strings.Contains(facts.TruncatedReason, "buffer limit") && !strings.Contains(facts.TruncatedReason, "diff failed/truncated") {
+		t.Errorf("expected stdout limit truncation reason, got: %s", facts.TruncatedReason)
+	}
+}
+
+func TestCapture_SubdirectoryScopeIsolation(t *testing.T) {
+	dir := t.TempDir()
+	allowedRoot := filepath.Join(dir, "allowed")
+	repoDir := filepath.Join(allowedRoot, "project")
+	_ = os.MkdirAll(repoDir, 0755)
+
+	pkgADir := filepath.Join(repoDir, "pkg_a")
+	pkgBDir := filepath.Join(repoDir, "pkg_b")
+	_ = os.MkdirAll(pkgADir, 0755)
+	_ = os.MkdirAll(pkgBDir, 0755)
+
+	cmd := execCommand(repoDir, "init", "-b", "main")
+	_ = cmd.Run()
+
+	_ = os.WriteFile(filepath.Join(repoDir, "root.txt"), []byte("root"), 0644)
+	_ = os.WriteFile(filepath.Join(pkgADir, "a.go"), []byte("package a\nfunc A() {}\n"), 0644)
+	_ = os.WriteFile(filepath.Join(pkgBDir, "b.go"), []byte("package b\nfunc B() {}\n"), 0644)
+	cmd = execCommand(repoDir, "add", "-A")
+	_ = cmd.Run()
+	cmd = execCommand(repoDir, "commit", "-m", "initial commit with multi-packages")
+	_ = cmd.Run()
+
+	// 修改 pkg_a 與 pkg_b 中的檔案
+	_ = os.WriteFile(filepath.Join(pkgADir, "a.go"), []byte("package a\nfunc A() { println(\"A modified\") }\n"), 0644)
+	_ = os.WriteFile(filepath.Join(pkgBDir, "b.go"), []byte("package b\nfunc B() { println(\"B modified\") }\n"), 0644)
+	cmd = execCommand(repoDir, "add", "-A")
+	_ = cmd.Run()
+	cmd = execCommand(repoDir, "commit", "-m", "modify both packages")
+	_ = cmd.Run()
+
+	exec := NewGitExecutor([]string{allowedRoot})
+	ctx := context.Background()
+	capturer := NewCapturer(exec)
+
+	// 1. 在 pkgADir workspace 擷取：只能看到 pkg_a/a.go，絕不可洩漏 pkg_b/b.go
+	factsA, err := capturer.CaptureRange(ctx, pkgADir, "HEAD~1..HEAD")
+	if err != nil {
+		t.Fatalf("capture pkgA failed: %v", err)
+	}
+	if len(factsA.ChangedFiles) != 1 || factsA.ChangedFiles[0] != "pkg_a/a.go" {
+		t.Errorf("expected only pkg_a/a.go in pkgA scope, got: %v", factsA.ChangedFiles)
+	}
+	if strings.Contains(factsA.FilteredDiff, "B modified") {
+		t.Fatal("ISOLATION VIOLATION: sibling pkg_b changes leaked into pkg_a diff!")
+	}
+	if !strings.Contains(factsA.FilteredDiff, "A modified") {
+		t.Errorf("expected pkg_a changes in diff, got: %s", factsA.FilteredDiff)
+	}
+
+	// 2. 在 pkgBDir workspace 擷取：只能看到 pkg_b/b.go，絕不可洩漏 pkg_a/a.go
+	factsB, err := capturer.CaptureRange(ctx, pkgBDir, "HEAD~1..HEAD")
+	if err != nil {
+		t.Fatalf("capture pkgB failed: %v", err)
+	}
+	if len(factsB.ChangedFiles) != 1 || factsB.ChangedFiles[0] != "pkg_b/b.go" {
+		t.Errorf("expected only pkg_b/b.go in pkgB scope, got: %v", factsB.ChangedFiles)
+	}
+	if strings.Contains(factsB.FilteredDiff, "A modified") {
+		t.Fatal("ISOLATION VIOLATION: sibling pkg_a changes leaked into pkg_b diff!")
+	}
+	if !strings.Contains(factsB.FilteredDiff, "B modified") {
+		t.Errorf("expected pkg_b changes in diff, got: %s", factsB.FilteredDiff)
+	}
+}
+

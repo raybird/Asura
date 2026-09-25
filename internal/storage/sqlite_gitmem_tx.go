@@ -149,3 +149,100 @@ func (s *SQLiteStore) ApproveCandidateTx(ctx context.Context, workspace, candida
 
 	return memoryID, nil
 }
+
+// SaveCandidateAndCheckpointTx 在單一原子 SQLite 交易中完成候選建立（insert-if-absent）與 Checkpoint 前進
+func (s *SQLiteStore) SaveCandidateAndCheckpointTx(ctx context.Context, cand *MemoryCandidate, checkpoint *GitCheckpoint) (*MemoryCandidate, error) {
+	if cand == nil {
+		return nil, errors.New("candidate cannot be nil")
+	}
+	if cand.ID == "" {
+		return nil, errors.New("candidate id cannot be empty")
+	}
+	if cand.Workspace == "" {
+		return nil, errors.New("workspace cannot be empty")
+	}
+	if cand.Status == "" {
+		cand.Status = "pending"
+	}
+	if cand.PolicyVersion == "" {
+		cand.PolicyVersion = "gitmem-v1"
+	}
+	if cand.CreatedAt.IsZero() {
+		cand.CreatedAt = time.Now().UTC()
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin transaction: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	// 1. Insert-if-absent 候選草稿
+	queryCand := `
+	INSERT INTO memory_candidates (
+		id, workspace, repo_id, ref_name, base_sha, head_sha,
+		commit_count, facts_summary, draft_content, status,
+		policy_version, approved_memory_id, created_at, approved_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT(workspace, repo_id, ref_name, base_sha, head_sha, policy_version) DO NOTHING
+	`
+	_, err = tx.ExecContext(ctx, queryCand,
+		cand.ID, cand.Workspace, cand.RepoID, cand.RefName, cand.BaseSHA, cand.HeadSHA,
+		cand.CommitCount, cand.FactsSummary, cand.DraftContent, cand.Status,
+		cand.PolicyVersion, cand.ApprovedMemoryID, cand.CreatedAt, cand.ApprovedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("insert candidate in tx: %w", err)
+	}
+
+	// 2. 讀回持久化的候選記錄（若衝突則讀回既有記錄）
+	selectCand := `
+	SELECT id, workspace, repo_id, ref_name, base_sha, head_sha,
+	       commit_count, facts_summary, draft_content, status,
+	       policy_version, approved_memory_id, created_at, approved_at
+	FROM memory_candidates
+	WHERE workspace = ? AND repo_id = ? AND ref_name = ?
+	  AND base_sha = ? AND head_sha = ? AND policy_version = ?
+	`
+	var persisted MemoryCandidate
+	var approvedAt sql.NullTime
+	err = tx.QueryRowContext(ctx, selectCand,
+		cand.Workspace, cand.RepoID, cand.RefName, cand.BaseSHA, cand.HeadSHA, cand.PolicyVersion,
+	).Scan(
+		&persisted.ID, &persisted.Workspace, &persisted.RepoID, &persisted.RefName, &persisted.BaseSHA, &persisted.HeadSHA,
+		&persisted.CommitCount, &persisted.FactsSummary, &persisted.DraftContent, &persisted.Status,
+		&persisted.PolicyVersion, &persisted.ApprovedMemoryID, &persisted.CreatedAt, &approvedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("scan persisted candidate: %w", err)
+	}
+	if approvedAt.Valid {
+		persisted.ApprovedAt = &approvedAt.Time
+	}
+
+	// 3. 若有 Checkpoint 需推進，在同筆交易內原子更新
+	if checkpoint != nil {
+		queryCP := `
+		INSERT INTO git_checkpoints (workspace, repo_id, ref_name, last_captured_sha, updated_at)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(workspace, repo_id, ref_name) DO UPDATE SET
+			last_captured_sha = excluded.last_captured_sha,
+			updated_at = excluded.updated_at
+		`
+		_, err = tx.ExecContext(ctx, queryCP,
+			checkpoint.Workspace, checkpoint.RepoID, checkpoint.RefName,
+			checkpoint.LastCapturedSHA, checkpoint.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("save checkpoint in tx: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit transaction: %w", err)
+	}
+
+	return &persisted, nil
+}

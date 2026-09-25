@@ -170,3 +170,150 @@ func TestCaptureService_CheckpointProgressionAndPartialBlocking(t *testing.T) {
 		t.Errorf("expected checkpoint unchanged, got %s", cpAfterPartial.LastCapturedSHA)
 	}
 }
+
+func TestCaptureService_ManualRangeDoesNotRewindCheckpoint(t *testing.T) {
+	allowedRoot, repoDir := initTestRepoWithBranches(t)
+	exec := NewGitExecutor([]string{allowedRoot})
+	store := newTestStore(t)
+	service := NewCaptureService(exec, store)
+	ctx := context.Background()
+
+	repoInfo, err := exec.ValidateAndResolveRepo(ctx, repoDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. 初始化 Checkpoint 指向最新 HEAD
+	initialHead := repoInfo.CurrentHead
+	if err := store.SaveCheckpoint(ctx, &storage.GitCheckpoint{
+		Workspace:       repoInfo.Workspace,
+		RepoID:          repoInfo.RepoID,
+		RefName:         repoInfo.CurrentRef,
+		LastCapturedSHA: initialHead,
+		UpdatedAt:       time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. 執行手動歷史舊範圍 --range HEAD~2..HEAD~1
+	resOld, err := service.Capture(ctx, repoDir, CaptureOptions{RangeExpr: "HEAD~2..HEAD~1"})
+	if err != nil {
+		t.Fatalf("manual range capture failed: %v", err)
+	}
+	if resOld.Candidate == nil {
+		t.Fatal("expected candidate generated for manual range")
+	}
+
+	// 3. 嚴格斷言：Checkpoint 必須依然維持在 initialHead，絕對不能被手動舊範圍倒退至 HEAD~1
+	cpAfter, err := store.GetCheckpoint(ctx, repoInfo.Workspace, repoInfo.RepoID, repoInfo.CurrentRef)
+	if err != nil || cpAfter == nil {
+		t.Fatalf("failed to query checkpoint: %v", err)
+	}
+	if cpAfter.LastCapturedSHA != initialHead {
+		t.Fatalf("SECURITY/DATA INTEGRITY FAIL: Manual range rewound checkpoint from %s to %s", initialHead, cpAfter.LastCapturedSHA)
+	}
+}
+
+func TestCaptureService_AncestryCheck_RejectsDivergedHistory(t *testing.T) {
+	allowedRoot, repoDir := initTestRepoWithBranches(t)
+	exec := NewGitExecutor([]string{allowedRoot})
+	store := newTestStore(t)
+	service := NewCaptureService(exec, store)
+	ctx := context.Background()
+
+	repoInfo, err := exec.ValidateAndResolveRepo(ctx, repoDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 取得分叉分支 feature 的 HEAD SHA（真實存在於 repo 中，但不是 main 的祖先）
+	featureRes, err := exec.ResolveRange(ctx, repoDir, "feature~1..feature")
+	if err != nil {
+		t.Fatal(err)
+	}
+	divergedSHA := featureRes.HeadSHA
+
+	// 設定 Checkpoint 為 divergedSHA，但目前處於 main 分支
+	_ = store.SaveCheckpoint(ctx, &storage.GitCheckpoint{
+		Workspace:       repoInfo.Workspace,
+		RepoID:          repoInfo.RepoID,
+		RefName:         repoInfo.CurrentRef,
+		LastCapturedSHA: divergedSHA,
+		UpdatedAt:       time.Now().UTC(),
+	})
+
+	// 執行增量 SinceLast 擷取：因 main HEAD 不是 feature commit 的後裔，必須被 Ancestor 檢查拒絕
+	_, err = service.Capture(ctx, repoDir, CaptureOptions{SinceLast: true})
+	if err == nil {
+		t.Fatal("expected ancestry verification failure on diverged history, got nil")
+	}
+	if !strings.Contains(err.Error(), "not a descendant of previous checkpoint") && !strings.Contains(err.Error(), "is not an ancestor of head commit") {
+		t.Errorf("expected ancestry rejection error message, got: %v", err)
+	}
+}
+
+func TestCaptureService_ConcurrentCaptureAndDraftImmutability(t *testing.T) {
+	allowedRoot, repoDir := initTestRepoWithBranches(t)
+	exec := NewGitExecutor([]string{allowedRoot})
+	store := newTestStore(t)
+	service := NewCaptureService(exec, store)
+	ctx := context.Background()
+
+	// 1. 並行測試：5 個 goroutine 同時針對相同 range 發起 Capture
+	concurrency := 5
+	errCh := make(chan error, concurrency)
+	candCh := make(chan *storage.MemoryCandidate, concurrency)
+
+	for i := 0; i < concurrency; i++ {
+		go func() {
+			res, err := service.Capture(ctx, repoDir, CaptureOptions{RangeExpr: "HEAD~1..HEAD"})
+			if err != nil {
+				errCh <- err
+				return
+			}
+			candCh <- res.Candidate
+			errCh <- nil
+		}()
+	}
+
+	var firstCandID string
+	for i := 0; i < concurrency; i++ {
+		if err := <-errCh; err != nil {
+			t.Fatalf("concurrent capture failed: %v", err)
+		}
+		cand := <-candCh
+		if firstCandID == "" {
+			firstCandID = cand.ID
+		} else if cand.ID != firstCandID {
+			t.Errorf("ID mismatch under concurrent capture: got %s, expected %s", cand.ID, firstCandID)
+		}
+	}
+
+	// 驗證資料庫中該 ID 確實存在且只有 1 筆候選記錄
+	cands, err := store.ListCandidates(ctx, repoDir, "pending", 50)
+	if err != nil {
+		t.Fatalf("list candidates failed: %v", err)
+	}
+	if len(cands) != 1 || cands[0].ID != firstCandID {
+		t.Fatalf("expected exactly 1 candidate with ID %s, got %v", firstCandID, cands)
+	}
+
+	// 2. 使用者手動編輯草稿內容
+	userEditedDraft := "User edited draft content: critical security policy decision"
+	if err := store.UpdateCandidateDraft(ctx, repoDir, firstCandID, userEditedDraft); err != nil {
+		t.Fatalf("update draft failed: %v", err)
+	}
+
+	// 3. 再次對相同 Range 發起 Capture：草稿與候選必須保持不可變，絕對不可被預設生成內容覆寫
+	resRepeat, err := service.Capture(ctx, repoDir, CaptureOptions{RangeExpr: "HEAD~1..HEAD"})
+	if err != nil {
+		t.Fatalf("repeat capture failed: %v", err)
+	}
+	if !resRepeat.IsReused {
+		t.Errorf("expected candidate to be reused")
+	}
+	if resRepeat.Candidate.DraftContent != userEditedDraft {
+		t.Fatalf("DATA INTEGRITY BUG: User edited draft content was overwritten! Got %q, expected %q", resRepeat.Candidate.DraftContent, userEditedDraft)
+	}
+}
+

@@ -34,7 +34,7 @@ func reorderArgs(args []string) []string {
 
 func handleMemory(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "error: memory subcommands: add, list, get, remove, capture, candidates, approve, discard")
+		fmt.Fprintln(stderr, "error: memory subcommands: add, list, get, remove, capture, candidates, candidate, approve, discard, clear-candidates")
 		return 1
 	}
 
@@ -231,6 +231,12 @@ func handleMemory(args []string, stdout, stderr io.Writer) int {
 
 	case "discard":
 		return handleMemoryDiscard(subargs, stdout, stderr)
+
+	case "candidate":
+		return handleMemoryCandidate(subargs, stdout, stderr)
+
+	case "clear-candidates":
+		return handleMemoryClearCandidates(subargs, stdout, stderr)
 
 	default:
 		fmt.Fprintf(stderr, "error: unknown memory subcommand %q\n", subcmd)

@@ -62,14 +62,14 @@
 針對超出 Hard bounds 的情境，嚴格劃分三種處理狀態，**絕不允許 Partial Capture 悄悄推進 Checkpoint**：
 
 - **Complete Capture（完整擷取）**：
-  - 條件：commits <= 100，files <= 50，diff <= 256 KiB。
+  - 條件：commits <= 200，files <= 500，diff <= 256 KiB。
   - 行為：生成候選草稿，`truncated = false`。若啟用增量模式，`git_checkpoints.last_captured_sha` 前進至 `head_sha`。
 - **Partial Capture（部分擷取／截斷）**：
-  - 條件：超過檔案數（>50）或 diff 位元組（>256 KiB）。
-  - 行為：僅保留前 50 個檔案或前 256 KiB 內容，候選草稿明確標註 `truncated = true`，並在 Facts 中條列省略檔案清單。
-  - **重要約束**：**不得自動推進 Checkpoint**，防止剩餘未處理檔案永久遺漏。使用者需顯式提供縮小的 `--range` 重新擷取，或傳入 `--allow-partial-checkpoint` 明確承擔遺漏風險。
+  - 條件：超過檔案數（>500）或 diff 位元組（>256 KiB）。
+  - 行為：僅保留前 500 個檔案或前 256 KiB 內容，候選草稿明確標註 `truncated = true`，並在 Facts 中條列省略檔案清單。
+  - **重要約束**：**不得自動推進 Checkpoint**，防止剩餘未處理檔案永久遺漏。使用者需顯式提供縮小的 `--range` 重新擷取。
 - **Rejected Capture（拒絕擷取）**：
-  - 條件：Commits 超過 100 個、執行逾時（>10s）、無關歷史（unrelated history）或祖先血統檢查失敗。
+  - 條件：Commits 超過 200 個、執行逾時（>10s）、無關歷史（unrelated history）或祖先血統檢查失敗。
   - 行為：中止操作，回報錯誤，0 候選產生，Checkpoint 保持不變。
 
 #### 2. 機密過濾邊界宣告

@@ -216,3 +216,33 @@ func TestGitExecutor_Exec_TimeoutWithProcessGroup(t *testing.T) {
 		t.Fatalf("timeout took too long to terminate: %v", elapsed)
 	}
 }
+
+func TestGitExecutor_NoLazyFetchWithPromisorRemote(t *testing.T) {
+	allowedRoot, repoDir := initTestGitRepo(t)
+
+	// 配置 promisor remote 與 partial clone 擴充設定
+	cmd := exec.Command("git", "-C", repoDir, "config", "remote.origin.url", "http://127.0.0.1:59999/repo.git")
+	_ = cmd.Run()
+	cmd = exec.Command("git", "-C", repoDir, "config", "remote.origin.promisor", "true")
+	_ = cmd.Run()
+	cmd = exec.Command("git", "-C", repoDir, "config", "remote.origin.partialclonefilter", "blob:none")
+	_ = cmd.Run()
+
+	executor := NewGitExecutor([]string{allowedRoot})
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// 嘗試檢查一個本地不存在的 SHA
+	// 在未注入 GIT_NO_LAZY_FETCH=1 時，Git 會嘗試對外連線 origin
+	// 注入 GIT_NO_LAZY_FETCH=1 與 promisor=false 後，Git 會立即失敗並輸出 lazy fetching disabled，絕不進行連線
+	out, err := executor.Exec(ctx, repoDir, "cat-file", "-e", "0123456789abcdef0123456789abcdef01234567")
+	if err == nil {
+		t.Fatal("expected error for missing object, got nil")
+	}
+
+	outStr := string(out)
+	if strings.Contains(outStr, "Connection refused") || strings.Contains(outStr, "Failed to connect") {
+		t.Fatalf("SECURITY VIOLATION: Git attempted network connection to promisor remote! Output: %s", outStr)
+	}
+}
+

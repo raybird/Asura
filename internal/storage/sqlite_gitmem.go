@@ -31,6 +31,23 @@ type MemoryCandidate struct {
 	ApprovedAt       *time.Time `json:"approved_at,omitempty"`
 }
 
+// CandidateSummary 代表有界候選清單項目（不包含龐大 facts_summary JSON 與全文 diff，約束傳輸大小）
+type CandidateSummary struct {
+	ID               string     `json:"id"`
+	Workspace        string     `json:"workspace"`
+	RepoID           string     `json:"repo_id"`
+	RefName          string     `json:"ref_name"`
+	BaseSHA          string     `json:"base_sha"`
+	HeadSHA          string     `json:"head_sha"`
+	CommitCount      int        `json:"commit_count"`
+	Summary          string     `json:"summary"` // 截短至最多 512 UTF-8 bytes
+	Status           string     `json:"status"`
+	PolicyVersion    string     `json:"policy_version"`
+	ApprovedMemoryID string     `json:"approved_memory_id,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	ApprovedAt       *time.Time `json:"approved_at,omitempty"`
+}
+
 // GitCheckpoint 記錄單一儲存庫在特定分支上的完整擷取進度游標
 type GitCheckpoint struct {
 	Workspace       string    `json:"workspace"`
@@ -56,7 +73,7 @@ type MemoryProvenance struct {
 	ApprovedAt     time.Time `json:"approved_at"`
 }
 
-// SaveCandidate 儲存或插入候選記憶
+// SaveCandidate 儲存或插入候選記憶（insert-if-absent，保證不覆寫既有候選草稿與狀態）
 func (s *SQLiteStore) SaveCandidate(ctx context.Context, c *MemoryCandidate) error {
 	if c.ID == "" {
 		return errors.New("candidate id cannot be empty")
@@ -80,10 +97,7 @@ func (s *SQLiteStore) SaveCandidate(ctx context.Context, c *MemoryCandidate) err
 		commit_count, facts_summary, draft_content, status,
 		policy_version, approved_memory_id, created_at, approved_at
 	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	ON CONFLICT(workspace, repo_id, ref_name, base_sha, head_sha, policy_version) DO UPDATE SET
-		facts_summary = excluded.facts_summary,
-		draft_content = excluded.draft_content,
-		commit_count = excluded.commit_count
+	ON CONFLICT(workspace, repo_id, ref_name, base_sha, head_sha, policy_version) DO NOTHING
 	`
 	_, err := s.db.ExecContext(ctx, query,
 		c.ID, c.Workspace, c.RepoID, c.RefName, c.BaseSHA, c.HeadSHA,
@@ -92,6 +106,15 @@ func (s *SQLiteStore) SaveCandidate(ctx context.Context, c *MemoryCandidate) err
 	)
 	if err != nil {
 		return fmt.Errorf("save candidate: %w", err)
+	}
+
+	// 讀回持久化記錄確保回傳真實入庫的 ID 與狀態
+	persisted, err := s.FindCandidateByRange(ctx, c.Workspace, c.RepoID, c.RefName, c.BaseSHA, c.HeadSHA, c.PolicyVersion)
+	if err != nil {
+		return fmt.Errorf("reload candidate: %w", err)
+	}
+	if persisted != nil {
+		*c = *persisted
 	}
 	return nil
 }
@@ -156,9 +179,9 @@ func (s *SQLiteStore) FindCandidateByRange(ctx context.Context, workspace, repoI
 	return &c, nil
 }
 
-// ListCandidates 依工作區與狀態篩選候選清單
-func (s *SQLiteStore) ListCandidates(ctx context.Context, workspace string, status string, limit int) ([]MemoryCandidate, error) {
-	if limit <= 0 || limit > 100 {
+// ListCandidates 依工作區與狀態篩選候選清單（有界摘要，不傳輸龐大 facts_summary JSON，每頁最多 50 筆）
+func (s *SQLiteStore) ListCandidates(ctx context.Context, workspace string, status string, limit int) ([]CandidateSummary, error) {
+	if limit <= 0 || limit > 50 {
 		limit = 50
 	}
 
@@ -167,8 +190,8 @@ func (s *SQLiteStore) ListCandidates(ctx context.Context, workspace string, stat
 	if status != "" {
 		query = `
 		SELECT id, workspace, repo_id, ref_name, base_sha, head_sha,
-		       commit_count, facts_summary, draft_content, status,
-		       policy_version, approved_memory_id, created_at, approved_at
+		       commit_count, substr(CAST(draft_content AS BLOB), 1, 513), status,
+		       policy_version, COALESCE(approved_memory_id, ''), created_at, approved_at
 		FROM memory_candidates
 		WHERE workspace = ? AND status = ?
 		ORDER BY created_at DESC, id ASC
@@ -178,8 +201,8 @@ func (s *SQLiteStore) ListCandidates(ctx context.Context, workspace string, stat
 	} else {
 		query = `
 		SELECT id, workspace, repo_id, ref_name, base_sha, head_sha,
-		       commit_count, facts_summary, draft_content, status,
-		       policy_version, approved_memory_id, created_at, approved_at
+		       commit_count, substr(CAST(draft_content AS BLOB), 1, 513), status,
+		       policy_version, COALESCE(approved_memory_id, ''), created_at, approved_at
 		FROM memory_candidates
 		WHERE workspace = ?
 		ORDER BY created_at DESC, id ASC
@@ -194,16 +217,22 @@ func (s *SQLiteStore) ListCandidates(ctx context.Context, workspace string, stat
 	}
 	defer rows.Close()
 
-	candidates := make([]MemoryCandidate, 0)
+	candidates := make([]CandidateSummary, 0)
 	for rows.Next() {
-		var c MemoryCandidate
+		var c CandidateSummary
+		var rawSummary string
 		var approvedAt sql.NullTime
 		if err := rows.Scan(
 			&c.ID, &c.Workspace, &c.RepoID, &c.RefName, &c.BaseSHA, &c.HeadSHA,
-			&c.CommitCount, &c.FactsSummary, &c.DraftContent, &c.Status,
+			&c.CommitCount, &rawSummary, &c.Status,
 			&c.PolicyVersion, &c.ApprovedMemoryID, &c.CreatedAt, &approvedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan candidate: %w", err)
+		}
+		if len(rawSummary) > 512 {
+			c.Summary = rawSummary[:512] + "..."
+		} else {
+			c.Summary = rawSummary
 		}
 		if approvedAt.Valid {
 			c.ApprovedAt = &approvedAt.Time
@@ -211,6 +240,16 @@ func (s *SQLiteStore) ListCandidates(ctx context.Context, workspace string, stat
 		candidates = append(candidates, c)
 	}
 	return candidates, rows.Err()
+}
+
+// ClearProcessedCandidates 清理指定工作區中已處理完畢之候選（approved 與 discarded），保留 pending 草稿
+func (s *SQLiteStore) ClearProcessedCandidates(ctx context.Context, workspace string) (int64, error) {
+	query := `DELETE FROM memory_candidates WHERE workspace = ? AND status IN ('approved', 'discarded')`
+	res, err := s.db.ExecContext(ctx, query, workspace)
+	if err != nil {
+		return 0, fmt.Errorf("clear processed candidates: %w", err)
+	}
+	return res.RowsAffected()
 }
 
 // UpdateCandidateStatus 更新候選狀態
@@ -223,6 +262,27 @@ func (s *SQLiteStore) UpdateCandidateStatus(ctx context.Context, workspace, id s
 	res, err := s.db.ExecContext(ctx, query, status, approvedMemoryID, approvedAt, workspace, id)
 	if err != nil {
 		return fmt.Errorf("update candidate status: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
+	if rows == 0 {
+		return ErrCandidateNotFound
+	}
+	return nil
+}
+
+// UpdateCandidateDraft 更新候選的草稿內文
+func (s *SQLiteStore) UpdateCandidateDraft(ctx context.Context, workspace, id, draftContent string) error {
+	query := `
+	UPDATE memory_candidates
+	SET draft_content = ?
+	WHERE workspace = ? AND id = ?
+	`
+	res, err := s.db.ExecContext(ctx, query, draftContent, workspace, id)
+	if err != nil {
+		return fmt.Errorf("update candidate draft: %w", err)
 	}
 	rows, err := res.RowsAffected()
 	if err != nil {

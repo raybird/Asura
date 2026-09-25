@@ -463,6 +463,7 @@ type IPCRequest struct {
 	Range        string          `json:"range,omitempty"`
 	SinceLast    bool            `json:"since_last,omitempty"`
 	Force        bool            `json:"force,omitempty"`
+	AIDraft      bool            `json:"ai_draft,omitempty"`
 	CandidateID  string          `json:"candidate_id,omitempty"`
 	Status       string          `json:"status,omitempty"`
 }
@@ -476,14 +477,15 @@ type IPCResponse struct {
 	CronRuns         []storage.CronRun         `json:"cron_runs,omitempty"`
 	Memory           *storage.Memory           `json:"memory,omitempty"`
 	Memories         []storage.Memory          `json:"memories,omitempty"`
-	MemoryPage       *storage.MemoryPage       `json:"memory_page,omitempty"`
-	Candidate        *storage.MemoryCandidate  `json:"candidate,omitempty"`
-	Candidates       []storage.MemoryCandidate `json:"candidates,omitempty"`
-	GitFacts         *gitmem.CaptureFacts      `json:"git_facts,omitempty"`
-	ApprovedMemoryID string                    `json:"approved_memory_id,omitempty"`
-	IsReused         bool                      `json:"is_reused,omitempty"`
-	Message          string                    `json:"message,omitempty"`
-	Error            string                    `json:"error,omitempty"`
+	MemoryPage       *storage.MemoryPage        `json:"memory_page,omitempty"`
+	Candidate        *storage.MemoryCandidate   `json:"candidate,omitempty"`
+	Candidates       []storage.CandidateSummary `json:"candidates,omitempty"`
+	CandidateCount   int64                      `json:"candidate_count,omitempty"`
+	GitFacts         *gitmem.CaptureFacts       `json:"git_facts,omitempty"`
+	ApprovedMemoryID string                     `json:"approved_memory_id,omitempty"`
+	IsReused         bool                       `json:"is_reused,omitempty"`
+	Message          string                     `json:"message,omitempty"`
+	Error            string                     `json:"error,omitempty"`
 }
 
 const boundedMemoryQueryTimeout = 9 * time.Second
@@ -1147,6 +1149,12 @@ func (d *Daemon) handleConn(conn net.Conn) {
 
 		case "git_memory_discard":
 			d.handleGitMemoryDiscard(connCtx, req, encoder)
+
+		case "git_memory_candidate":
+			d.handleGitMemoryCandidate(connCtx, req, encoder)
+
+		case "git_memory_clear_candidates":
+			d.handleGitMemoryClearCandidates(connCtx, req, encoder)
 
 		default:
 			_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unknown action: %s", action)})

@@ -32,6 +32,7 @@ func (d *Daemon) handleGitMemoryCapture(ctx context.Context, req IPCRequest, enc
 		RangeExpr: req.Range,
 		SinceLast: req.SinceLast,
 		Force:     req.Force,
+		AIDraft:   req.AIDraft,
 	})
 	if err != nil {
 		_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("capture failed: %v", err)})
@@ -69,6 +70,59 @@ func (d *Daemon) handleGitMemoryCandidates(ctx context.Context, req IPCRequest, 
 
 	_ = encoder.Encode(IPCResponse{
 		Candidates: cands,
+	})
+}
+
+func (d *Daemon) handleGitMemoryCandidate(ctx context.Context, req IPCRequest, encoder *json.Encoder) {
+	if req.Workspace == "" || req.CandidateID == "" {
+		_ = encoder.Encode(IPCResponse{Error: "workspace and candidate_id are required"})
+		return
+	}
+	if d.policy == nil {
+		_ = encoder.Encode(IPCResponse{Error: "unauthorized workspace"})
+		return
+	}
+	canonicalScope, err := d.policy.AuthorizeCanonicalWorkspace(req.Workspace)
+	if err != nil {
+		_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unauthorized workspace: %v", err)})
+		return
+	}
+
+	cand, err := d.store.GetCandidate(ctx, canonicalScope, req.CandidateID)
+	if err != nil {
+		_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("get candidate: %v", err)})
+		return
+	}
+
+	_ = encoder.Encode(IPCResponse{
+		Candidate: cand,
+	})
+}
+
+func (d *Daemon) handleGitMemoryClearCandidates(ctx context.Context, req IPCRequest, encoder *json.Encoder) {
+	if req.Workspace == "" {
+		_ = encoder.Encode(IPCResponse{Error: "workspace is required"})
+		return
+	}
+	if d.policy == nil {
+		_ = encoder.Encode(IPCResponse{Error: "unauthorized workspace"})
+		return
+	}
+	canonicalScope, err := d.policy.AuthorizeCanonicalWorkspace(req.Workspace)
+	if err != nil {
+		_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("unauthorized workspace: %v", err)})
+		return
+	}
+
+	count, err := d.store.ClearProcessedCandidates(ctx, canonicalScope)
+	if err != nil {
+		_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("clear candidates failed: %v", err)})
+		return
+	}
+
+	_ = encoder.Encode(IPCResponse{
+		CandidateCount: count,
+		Message:        fmt.Sprintf("cleared %d processed candidates", count),
 	})
 }
 
@@ -140,9 +194,14 @@ func (d *Daemon) handleGitMemoryDiscard(ctx context.Context, req IPCRequest, enc
 }
 
 // CaptureGitMemory 用戶端呼叫 Git 記憶擷取
-func (c *Client) CaptureGitMemory(ctx context.Context, workspace string, rangeExpr string, sinceLast bool, force bool) (*IPCResponse, error) {
+func (c *Client) CaptureGitMemory(ctx context.Context, workspace string, rangeExpr string, sinceLast bool, force bool, aiDraftOpts ...bool) (*IPCResponse, error) {
 	if workspace == "" {
 		return nil, errors.New("workspace is required")
+	}
+
+	aiDraft := false
+	if len(aiDraftOpts) > 0 {
+		aiDraft = aiDraftOpts[0]
 	}
 
 	encoder := json.NewEncoder(c.conn)
@@ -154,6 +213,7 @@ func (c *Client) CaptureGitMemory(ctx context.Context, workspace string, rangeEx
 		Range:     rangeExpr,
 		SinceLast: sinceLast,
 		Force:     force,
+		AIDraft:   aiDraft,
 	}); err != nil {
 		return nil, fmt.Errorf("encode request: %w", err)
 	}
@@ -168,8 +228,8 @@ func (c *Client) CaptureGitMemory(ctx context.Context, workspace string, rangeEx
 	return &resp, nil
 }
 
-// ListGitCandidates 用戶端查詢候選記憶清單
-func (c *Client) ListGitCandidates(ctx context.Context, workspace string, status string, limit int) ([]storage.MemoryCandidate, error) {
+// ListGitCandidates 用戶端查詢候選記憶清單（有界摘要）
+func (c *Client) ListGitCandidates(ctx context.Context, workspace string, status string, limit int) ([]storage.CandidateSummary, error) {
 	if workspace == "" {
 		return nil, errors.New("workspace is required")
 	}
@@ -194,6 +254,62 @@ func (c *Client) ListGitCandidates(ctx context.Context, workspace string, status
 		return nil, errors.New(resp.Error)
 	}
 	return resp.Candidates, nil
+}
+
+// GetGitCandidate 用戶端依 ID 查詢單筆候選記憶詳情
+func (c *Client) GetGitCandidate(ctx context.Context, workspace string, candidateID string) (*storage.MemoryCandidate, error) {
+	if workspace == "" || candidateID == "" {
+		return nil, errors.New("workspace and candidate_id are required")
+	}
+
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action:      "git_memory_candidate",
+		Workspace:   workspace,
+		CandidateID: candidateID,
+	}); err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	if resp.Error != "" {
+		return nil, errors.New(resp.Error)
+	}
+	if resp.Candidate == nil {
+		return nil, errors.New("candidate not found")
+	}
+	return resp.Candidate, nil
+}
+
+// ClearGitCandidates 用戶端清理已處理完畢之候選記憶
+func (c *Client) ClearGitCandidates(ctx context.Context, workspace string) (int64, error) {
+	if workspace == "" {
+		return 0, errors.New("workspace is required")
+	}
+
+	encoder := json.NewEncoder(c.conn)
+	decoder := json.NewDecoder(c.conn)
+
+	if err := encoder.Encode(IPCRequest{
+		Action:    "git_memory_clear_candidates",
+		Workspace: workspace,
+	}); err != nil {
+		return 0, fmt.Errorf("encode request: %w", err)
+	}
+
+	var resp IPCResponse
+	if err := decoder.Decode(&resp); err != nil {
+		return 0, fmt.Errorf("decode response: %w", err)
+	}
+	if resp.Error != "" {
+		return 0, errors.New(resp.Error)
+	}
+	return resp.CandidateCount, nil
 }
 
 // ApproveGitCandidate 用戶端審核並核准候選記憶

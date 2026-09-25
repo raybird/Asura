@@ -166,3 +166,95 @@ func TestApproveCandidate_AntiRevival(t *testing.T) {
 		t.Errorf("expected deleted or revival prevented error message, got: %v", err)
 	}
 }
+
+func TestSaveCandidateAndCheckpointTx_RollbackOnFailure(t *testing.T) {
+	store := newTestGitMemStore(t)
+	ctx := context.Background()
+	ws := "/workspace/test-tx"
+
+	// 1. 在 git_checkpoints 上設定失敗注入 Trigger，模擬 Checkpoint 寫入崩潰/失敗
+	injectSQL := `
+	CREATE TRIGGER fail_checkpoint_trigger
+	BEFORE INSERT ON git_checkpoints
+	BEGIN
+		SELECT RAISE(ABORT, 'injected checkpoint failure for rollback test');
+	END;
+	`
+	if _, err := store.db.Exec(injectSQL); err != nil {
+		t.Fatalf("failed to create injection trigger: %v", err)
+	}
+
+	cand := &MemoryCandidate{
+		ID:            "cand-atomic-fail-1",
+		Workspace:     ws,
+		RepoID:        "repo-tx",
+		RefName:       "refs/heads/main",
+		BaseSHA:       "base1",
+		HeadSHA:       "head1",
+		CommitCount:   1,
+		FactsSummary:  `{"commits":[]}`,
+		DraftContent:  "atomic candidate test",
+		Status:        "pending",
+		PolicyVersion: "gitmem-v1",
+		CreatedAt:     time.Now().UTC(),
+	}
+
+	cp := &GitCheckpoint{
+		Workspace:       ws,
+		RepoID:          "repo-tx",
+		RefName:         "refs/heads/main",
+		LastCapturedSHA: "head1",
+		UpdatedAt:       time.Now().UTC(),
+	}
+
+	// 2. 執行原子交易寫入：預期因 Checkpoint 寫入失敗而整體回滾
+	_, err := store.SaveCandidateAndCheckpointTx(ctx, cand, cp)
+	if err == nil {
+		t.Fatal("expected error due to injected checkpoint failure, got nil")
+	}
+	if !strings.Contains(err.Error(), "injected checkpoint failure") {
+		t.Errorf("expected injected checkpoint failure message, got: %v", err)
+	}
+
+	// 3. 驗證原子性：Candidate 絕不可殘留於資料庫中（已被交易完整 ROLLBACK）
+	savedCand, err := store.GetCandidate(ctx, ws, cand.ID)
+	if err == nil || savedCand != nil {
+		t.Fatalf("ATOMICITY FAIL: Candidate %s persisted despite Checkpoint failure (got: %+v)", cand.ID, savedCand)
+	}
+	if !strings.Contains(err.Error(), "candidate not found") {
+		t.Errorf("expected candidate not found error, got: %v", err)
+	}
+
+	// Checkpoint 亦不得存在
+	savedCP, err := store.GetCheckpoint(ctx, ws, cp.RepoID, cp.RefName)
+	if err != nil {
+		t.Fatalf("unexpected error querying checkpoint: %v", err)
+	}
+	if savedCP != nil {
+		t.Fatalf("ATOMICITY FAIL: Checkpoint persisted despite failure: %+v", savedCP)
+	}
+
+	// 4. 移除 Trigger，驗證正常狀態下兩者原子寫入成功
+	if _, err := store.db.Exec("DROP TRIGGER fail_checkpoint_trigger;"); err != nil {
+		t.Fatalf("drop trigger failed: %v", err)
+	}
+
+	persisted, err := store.SaveCandidateAndCheckpointTx(ctx, cand, cp)
+	if err != nil {
+		t.Fatalf("expected successful atomic save after dropping trigger, got: %v", err)
+	}
+	if persisted == nil || persisted.ID != cand.ID {
+		t.Errorf("expected persisted candidate, got: %+v", persisted)
+	}
+
+	// 驗證兩者皆存在
+	cCheck, err := store.GetCandidate(ctx, ws, cand.ID)
+	if err != nil || cCheck == nil {
+		t.Fatalf("expected candidate exists in DB: %v", err)
+	}
+	cpCheck, err := store.GetCheckpoint(ctx, ws, cp.RepoID, cp.RefName)
+	if err != nil || cpCheck == nil || cpCheck.LastCapturedSHA != "head1" {
+		t.Fatalf("expected checkpoint exists in DB: %v, cp: %+v", err, cpCheck)
+	}
+}
+

@@ -2,6 +2,7 @@ package daemon_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -189,3 +190,119 @@ func TestDaemon_GitMemory_IPC(t *testing.T) {
 		}
 	})
 }
+
+func TestDaemon_GitMemory_BoundedCandidatesListAndDetail(t *testing.T) {
+	tmpDir := t.TempDir()
+	repoDir := initTestGitRepoInDaemon(t, tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "daemon_gitmem_bounded.db")
+	store, err := storage.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	policy := auth.NewPolicy([]string{tmpDir})
+	sockPath := filepath.Join(tmpDir, "daemon_gitmem_bounded.sock")
+
+	d := daemon.NewDaemon(daemon.Config{
+		SocketPath: sockPath,
+		MaxWorkers: 2,
+	}, store, policy)
+
+	if err := d.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+
+	var client *daemon.Client
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if c, err := daemon.NewClient(sockPath); err == nil {
+			client = c
+			break
+		}
+		time.Sleep(15 * time.Millisecond)
+	}
+	if client == nil {
+		t.Fatalf("failed to connect to daemon socket")
+	}
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 1. 建立 50 筆每筆擁有 10 KiB 大型 Draft 的 Candidates
+	largeDraft := strings.Repeat("A", 10*1024)
+	for i := 1; i <= 50; i++ {
+		cand := &storage.MemoryCandidate{
+			ID:            fmt.Sprintf("cand-large-%03d", i),
+			Workspace:     repoDir,
+			RepoID:        "repo-test",
+			RefName:       "refs/heads/main",
+			BaseSHA:       fmt.Sprintf("%039db", i),
+			HeadSHA:       fmt.Sprintf("%039dh", i),
+			CommitCount:   1,
+			FactsSummary:  `{"commits":[]}`,
+			DraftContent:  largeDraft,
+			Status:        "pending",
+			PolicyVersion: "gitmem-v1",
+			CreatedAt:     time.Now().UTC().Add(time.Duration(i) * time.Second),
+		}
+		if i == 50 {
+			cand.Status = "approved"
+			cand.ApprovedMemoryID = "mem-50"
+		}
+		if err := store.SaveCandidate(ctx, cand); err != nil {
+			t.Fatalf("save large candidate %d failed: %v", i, err)
+		}
+	}
+
+	// 2. 測試 ListGitCandidates：每頁上限 50 筆，且回傳之 Summary 嚴格截短至 512 bytes
+	cands, err := client.ListGitCandidates(ctx, repoDir, "", 50)
+	if err != nil {
+		t.Fatalf("ListGitCandidates failed: %v", err)
+	}
+	if len(cands) != 50 {
+		t.Fatalf("expected 50 candidate summaries, got %d", len(cands))
+	}
+
+	for _, c := range cands {
+		// 驗證 Summary 長度不可超過 512 + 3 (...) bytes
+		if len(c.Summary) > 515 {
+			t.Fatalf("BOUNDED RESPONSE FAIL: candidate summary exceeded 515 bytes (got %d bytes)", len(c.Summary))
+		}
+	}
+
+	// 3. 測試 GetCandidate 按 ID 取得單筆詳細內容：能取得完整 10 KiB DraftContent
+	firstID := cands[0].ID
+	detail, err := client.GetGitCandidate(ctx, repoDir, firstID)
+	if err != nil {
+		t.Fatalf("GetGitCandidate detail failed: %v", err)
+	}
+	if detail == nil || detail.ID != firstID {
+		t.Fatalf("unexpected detail: %+v", detail)
+	}
+	if len(detail.DraftContent) != 10*1024 {
+		t.Errorf("expected full 10KiB draft content in detail, got %d bytes", len(detail.DraftContent))
+	}
+
+	// 4. 測試 ClearGitCandidates：清理 approved 與 discarded 候選
+	clearedCount, err := client.ClearGitCandidates(ctx, repoDir)
+	if err != nil {
+		t.Fatalf("ClearGitCandidates failed: %v", err)
+	}
+	if clearedCount != 1 {
+		t.Errorf("expected 1 approved candidate cleared, got %d", clearedCount)
+	}
+
+	// 驗證剩餘 49 筆 pending
+	remaining, err := client.ListGitCandidates(ctx, repoDir, "pending", 50)
+	if err != nil {
+		t.Fatalf("list remaining failed: %v", err)
+	}
+	if len(remaining) != 49 {
+		t.Errorf("expected 49 remaining pending candidates, got %d", len(remaining))
+	}
+}
+

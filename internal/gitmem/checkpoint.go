@@ -85,13 +85,25 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 		return nil, fmt.Errorf("capture range: %w", err)
 	}
 
-	// 4. 擷取去重 (Capture Dedup)
+	// 4. 評估 Checkpoint 前進條件 (僅在 SinceLast 且無截斷時，並嚴格檢驗新舊 Head 祖先血統)
+	newCP, err := s.evaluateCheckpointAdvance(ctx, repoInfo.RepoRoot, facts, opts.SinceLast)
+	if err != nil {
+		return nil, err
+	}
+
+	// 5. 擷取去重 (Capture Dedup)
 	existing, err := s.store.FindCandidateByRange(ctx, repoInfo.Workspace, facts.RepoID, facts.RefName, facts.BaseSHA, facts.HeadSHA, "gitmem-v1")
 	if err != nil {
 		return nil, fmt.Errorf("check existing candidate: %w", err)
 	}
 
 	if existing != nil {
+		if newCP != nil {
+			if err := s.store.SaveCheckpoint(ctx, newCP); err != nil {
+				return nil, fmt.Errorf("advance checkpoint for existing candidate: %w", err)
+			}
+		}
+
 		switch existing.Status {
 		case "pending":
 			return &CaptureResult{
@@ -127,7 +139,7 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 		}
 	}
 
-	// 5. 插入新候選
+	// 6. 插入新候選與推進 Checkpoint（在單一原子 Transaction 內完成）
 	candID := generateCandidateID()
 	factsSummary, err := FormatFactsSummary(facts)
 	if err != nil {
@@ -155,47 +167,95 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 		CreatedAt:     time.Now().UTC(),
 	}
 
-	if err := s.store.SaveCandidate(ctx, cand); err != nil {
-		return nil, fmt.Errorf("save new candidate: %w", err)
+	persistedCand, err := s.store.SaveCandidateAndCheckpointTx(ctx, cand, newCP)
+	if err != nil {
+		return nil, fmt.Errorf("save candidate and checkpoint: %w", err)
 	}
 
-	// 6. 依截斷政策評估 Checkpoint 前進 (僅 Complete Capture 且 SinceLast 時前進)
-	if err := s.UpdateCheckpointIfEligible(ctx, facts, opts.SinceLast); err != nil {
-		return nil, fmt.Errorf("update checkpoint: %w", err)
+	isReused := (persistedCand.ID != cand.ID)
+	msg := "created new candidate draft"
+	if isReused {
+		msg = "reused existing candidate due to concurrent creation"
 	}
 
 	return &CaptureResult{
-		Candidate: cand,
+		Candidate: persistedCand,
 		Facts:     facts,
-		IsReused:  false,
-		Message:   "created new candidate draft",
+		IsReused:  isReused,
+		Message:   msg,
 	}, nil
 }
 
-// UpdateCheckpointIfEligible 根據擷取狀態更新 Checkpoint
-// 嚴格保證：Partial Capture (Truncated == true) 絕對禁止自動前進 Checkpoint (H-TBD-3)
-func (s *CaptureService) UpdateCheckpointIfEligible(ctx context.Context, facts *CaptureFacts, sinceLast bool) error {
+// evaluateCheckpointAdvance 根據擷取狀態安全評估 Checkpoint 前進
+// 嚴格保證：
+// 1. Initial Capture (既無 Checkpoint 且未截斷)：建立初始基準 Checkpoint
+// 2. 既有 Checkpoint 時，只有顯式 SinceLast (增量模式) 允許前進 Checkpoint；手動 --range 絕對不覆寫也不倒退既有 Checkpoint
+// 3. Partial Capture (Truncated == true) 絕對禁止前進 Checkpoint
+// 4. 新 Head 必須為既有 Checkpoint 之子裔 (Ancestry Check)，防止 force push 導致 Checkpoint 倒退
+func (s *CaptureService) evaluateCheckpointAdvance(ctx context.Context, repoRoot string, facts *CaptureFacts, sinceLast bool) (*storage.GitCheckpoint, error) {
 	if facts == nil || facts.Truncated {
-		return nil
+		return nil, nil
 	}
 
 	// 查詢既有 checkpoint
 	cp, err := s.store.GetCheckpoint(ctx, facts.Workspace, facts.RepoID, facts.RefName)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("query existing checkpoint: %w", err)
 	}
 
-	// 若既有 checkpoint 之 SHA 與當前 head_sha 相同，無須重複更新
-	if cp != nil && cp.LastCapturedSHA == facts.HeadSHA {
-		return nil
+	// 情況 1：尚無 checkpoint（初始擷取建立基準）
+	if cp == nil || cp.LastCapturedSHA == "" {
+		return &storage.GitCheckpoint{
+			Workspace:       facts.Workspace,
+			RepoID:          facts.RepoID,
+			RefName:         facts.RefName,
+			LastCapturedSHA: facts.HeadSHA,
+			UpdatedAt:       time.Now().UTC(),
+		}, nil
 	}
 
-	newCP := &storage.GitCheckpoint{
+	// 情況 2：既有 checkpoint 存在，但為手動指定 --range（非增量模式）
+	// 手動指定 --range 絕對禁止覆寫或前進既有 checkpoint，防止增量基線倒退或混淆
+	if !sinceLast {
+		return nil, nil
+	}
+
+	// 情況 3：增量模式 (sinceLast == true)
+	// 若 SHA 與當前 Head 相同，無須重複更新
+	if cp.LastCapturedSHA == facts.HeadSHA {
+		return nil, nil
+	}
+
+	// 增量校驗：當前 HeadSHA 必須是 LastCapturedSHA 的後裔（防止 force push 倒退或分叉）
+	isAnc, err := s.exec.IsAncestor(ctx, repoRoot, cp.LastCapturedSHA, facts.HeadSHA)
+	if err != nil {
+		return nil, fmt.Errorf("verify ancestry for checkpoint advance: %w", err)
+	}
+	if !isAnc {
+		return nil, fmt.Errorf("checkpoint advance rejected: current head %s is not a descendant of previous checkpoint %s (history diverged or rewound)", facts.HeadSHA, cp.LastCapturedSHA)
+	}
+
+	return &storage.GitCheckpoint{
 		Workspace:       facts.Workspace,
 		RepoID:          facts.RepoID,
 		RefName:         facts.RefName,
 		LastCapturedSHA: facts.HeadSHA,
 		UpdatedAt:       time.Now().UTC(),
+	}, nil
+}
+
+// UpdateCheckpointIfEligible 根據擷取狀態安全更新 Checkpoint
+// 嚴格保證：手動 --range 或 Partial 截斷絕對禁止推進 Checkpoint
+func (s *CaptureService) UpdateCheckpointIfEligible(ctx context.Context, facts *CaptureFacts, sinceLast bool) error {
+	if facts == nil {
+		return nil
 	}
-	return s.store.SaveCheckpoint(ctx, newCP)
+	newCP, err := s.evaluateCheckpointAdvance(ctx, facts.Workspace, facts, sinceLast)
+	if err != nil {
+		return err
+	}
+	if newCP != nil {
+		return s.store.SaveCheckpoint(ctx, newCP)
+	}
+	return nil
 }

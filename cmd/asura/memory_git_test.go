@@ -108,12 +108,13 @@ func TestCLI_MemoryCandidates(t *testing.T) {
 			return daemon.IPCResponse{Error: "unexpected action: " + req.Action}
 		}
 		return daemon.IPCResponse{
-			Candidates: []storage.MemoryCandidate{
+			Candidates: []storage.CandidateSummary{
 				{
 					ID:          "cand-list-1",
 					Workspace:   ws,
 					CommitCount: 3,
 					Status:      "pending",
+					Summary:     "feat(auth): initial login",
 					CreatedAt:   time.Now().UTC(),
 				},
 			},
@@ -210,5 +211,64 @@ func TestCLI_MissingFlagsValidation(t *testing.T) {
 	stderr.Reset()
 	if code := handleMemory([]string{"discard", "--workspace", "/ws"}, &out, &stderr); code == 0 {
 		t.Errorf("expected failure for discard without candidate")
+	}
+
+	// candidate 缺少 candidate
+	out.Reset()
+	stderr.Reset()
+	if code := handleMemory([]string{"candidate", "--workspace", "/ws"}, &out, &stderr); code == 0 {
+		t.Errorf("expected failure for candidate without candidate ID")
+	}
+}
+
+func TestCLI_MemoryCandidate_Detail(t *testing.T) {
+	ws := "/workspace/project"
+	sock := startMockDaemon(t, func(req daemon.IPCRequest) daemon.IPCResponse {
+		if req.Action != "git_memory_candidate" {
+			return daemon.IPCResponse{Error: "unexpected action: " + req.Action}
+		}
+		if req.CandidateID != "cand-detail-1" {
+			return daemon.IPCResponse{Error: "not found"}
+		}
+		return daemon.IPCResponse{
+			Candidate: &storage.MemoryCandidate{
+				ID:           "cand-detail-1",
+				Workspace:    ws,
+				CommitCount:  2,
+				Status:       "pending",
+				DraftContent: "Detail draft content here",
+				CreatedAt:    time.Now().UTC(),
+			},
+		}
+	})
+
+	var out, stderr bytes.Buffer
+	code := handleMemory([]string{"candidate", "--socket", sock, "--workspace", ws, "cand-detail-1"}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("handleMemory candidate failed: %s", stderr.String())
+	}
+	if !strings.Contains(out.String(), "Detail draft content here") {
+		t.Errorf("expected draft content in output, got:\n%s", out.String())
+	}
+}
+
+func TestCLI_MemoryClearCandidates(t *testing.T) {
+	ws := "/workspace/project"
+	sock := startMockDaemon(t, func(req daemon.IPCRequest) daemon.IPCResponse {
+		if req.Action != "git_memory_clear_candidates" {
+			return daemon.IPCResponse{Error: "unexpected action: " + req.Action}
+		}
+		return daemon.IPCResponse{
+			CandidateCount: 5,
+		}
+	})
+
+	var out, stderr bytes.Buffer
+	code := handleMemory([]string{"clear-candidates", "--socket", sock, "--workspace", ws}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("handleMemory clear-candidates failed: %s", stderr.String())
+	}
+	if !strings.Contains(out.String(), "Cleared 5 processed candidates") {
+		t.Errorf("expected cleared message in output, got:\n%s", out.String())
 	}
 }

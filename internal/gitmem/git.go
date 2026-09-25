@@ -15,6 +15,11 @@ import (
 	"time"
 )
 
+var (
+	// ErrStdoutTruncated 代表子程序標準輸出超過硬性緩衝上限
+	ErrStdoutTruncated = errors.New("command stdout exceeded buffer limit")
+)
+
 const (
 	defaultTimeout = 10 * time.Second
 	maxStdoutBytes = 512 * 1024
@@ -217,6 +222,8 @@ func (g *GitExecutor) Exec(ctx context.Context, dir string, args ...string) ([]b
 		"-c", "core.fsmonitor=",
 		"-c", "core.alternateRefsCommand=",
 		"-c", "diff.noprefix=false",
+		"-c", "remote.*.promisor=false",
+		"-c", "remote.*.partialclonefilter=",
 		"--no-replace-objects",
 	}
 
@@ -232,16 +239,19 @@ func (g *GitExecutor) Exec(ctx context.Context, dir string, args ...string) ([]b
 }
 
 type limitBuffer struct {
-	buf   bytes.Buffer
-	limit int64
+	buf       bytes.Buffer
+	limit     int64
+	truncated bool
 }
 
 func (l *limitBuffer) Write(p []byte) (n int, err error) {
 	remaining := l.limit - int64(l.buf.Len())
 	if remaining <= 0 {
+		l.truncated = true
 		return len(p), nil
 	}
 	if int64(len(p)) > remaining {
+		l.truncated = true
 		p = p[:remaining]
 	}
 	return l.buf.Write(p)
@@ -272,6 +282,7 @@ func (g *GitExecutor) ExecRaw(ctx context.Context, dir string, bin string, args 
 		"GIT_CONFIG_GLOBAL=/dev/null",
 		"GIT_OPTIONAL_LOCKS=0",
 		"GIT_TERMINAL_PROMPT=0",
+		"GIT_NO_LAZY_FETCH=1",
 		"LC_ALL=C",
 		"PATH=" + os.Getenv("PATH"),
 	}
@@ -308,7 +319,23 @@ func (g *GitExecutor) ExecRaw(ctx context.Context, dir string, bin string, args 
 		return stdoutBuf.Bytes(), runErr
 	}
 
+	if stdoutBuf.truncated {
+		return stdoutBuf.Bytes(), ErrStdoutTruncated
+	}
+
 	return stdoutBuf.Bytes(), nil
+}
+
+// IsAncestor 檢查 ancestorSHA 是否為 descendantSHA 的祖先 commits
+func (g *GitExecutor) IsAncestor(ctx context.Context, dir string, ancestorSHA, descendantSHA string) (bool, error) {
+	if ancestorSHA == descendantSHA {
+		return true, nil
+	}
+	_, err := g.Exec(ctx, dir, "merge-base", "--is-ancestor", ancestorSHA, descendantSHA)
+	if err != nil {
+		return false, nil
+	}
+	return true, nil
 }
 
 func min(a, b int) int {

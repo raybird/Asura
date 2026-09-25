@@ -9,7 +9,7 @@ import (
 
 const (
 	// MaxAllowedCommits 每次擷取允許的最大 commit 數上限 (H-TBD-3 / GITMEM-004)
-	MaxAllowedCommits = 100
+	MaxAllowedCommits = 200
 )
 
 // CommitInfo 儲存單一 Commit 的核心中繼資料
@@ -27,8 +27,8 @@ type ResolvedRange struct {
 	Commits []CommitInfo
 }
 
-// ResolveRange 解析 Git range 表達式（例如 "HEAD~2..HEAD" 或單一 commit "HEAD"），並嚴格執行祖先血統檢查
-func (g *GitExecutor) ResolveRange(ctx context.Context, repoDir string, rangeExpr string) (*ResolvedRange, error) {
+// ResolveRange 解析 Git range 表達式，支援可選的 pathspecs 限定路徑範圍，並嚴格執行祖先血統檢查
+func (g *GitExecutor) ResolveRange(ctx context.Context, repoDir string, rangeExpr string, pathspecs ...string) (*ResolvedRange, error) {
 	rangeExpr = strings.TrimSpace(rangeExpr)
 	if rangeExpr == "" {
 		return nil, fmt.Errorf("range expression cannot be empty")
@@ -86,7 +86,12 @@ func (g *GitExecutor) ResolveRange(ctx context.Context, repoDir string, rangeExp
 	}
 
 	// 5. 檢查 commit 數量上限
-	countOut, err := g.Exec(ctx, repoDir, "rev-list", "--count", fmt.Sprintf("%s..%s", baseSHA, headSHA))
+	countArgs := []string{"rev-list", "--count", fmt.Sprintf("%s..%s", baseSHA, headSHA)}
+	if len(pathspecs) > 0 {
+		countArgs = append(countArgs, "--")
+		countArgs = append(countArgs, pathspecs...)
+	}
+	countOut, err := g.Exec(ctx, repoDir, countArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count commits: %w", err)
 	}
@@ -105,7 +110,12 @@ func (g *GitExecutor) ResolveRange(ctx context.Context, repoDir string, rangeExp
 
 	// 6. 讀取區間內的 commit 清單 (由舊到新排序)
 	logFormat := "%H%x1f%s%x1f%an%x1f%aI"
-	logOut, err := g.Exec(ctx, repoDir, "log", "--reverse", fmt.Sprintf("--format=%s", logFormat), fmt.Sprintf("%s..%s", baseSHA, headSHA))
+	logArgs := []string{"log", "--reverse", fmt.Sprintf("--format=%s", logFormat), fmt.Sprintf("%s..%s", baseSHA, headSHA)}
+	if len(pathspecs) > 0 {
+		logArgs = append(logArgs, "--")
+		logArgs = append(logArgs, pathspecs...)
+	}
+	logOut, err := g.Exec(ctx, repoDir, logArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list commits: %w", err)
 	}

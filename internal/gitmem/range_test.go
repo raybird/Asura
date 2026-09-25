@@ -181,8 +181,8 @@ func TestResolveRange_TooManyCommits(t *testing.T) {
 	cmd := execCommand(repoDir, "init", "-b", "main")
 	_ = cmd.Run()
 
-	// 建立 105 個 commits
-	for i := 1; i <= 105; i++ {
+	// 建立 205 個 commits (超過 200 上限)
+	for i := 1; i <= 205; i++ {
 		_ = os.WriteFile(filepath.Join(repoDir, "dummy.txt"), []byte(fmt.Sprintf("%d", i)), 0644)
 		cmd = execCommand(repoDir, "add", "dummy.txt")
 		_ = cmd.Run()
@@ -193,7 +193,7 @@ func TestResolveRange_TooManyCommits(t *testing.T) {
 	exec := NewGitExecutor([]string{allowedRoot})
 	ctx := context.Background()
 
-	_, err := exec.ResolveRange(ctx, repoDir, "HEAD~102..HEAD")
+	_, err := exec.ResolveRange(ctx, repoDir, "HEAD~202..HEAD")
 	if err == nil {
 		t.Fatal("expected error when commits exceed limit, got nil")
 	}

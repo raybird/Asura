@@ -21,6 +21,7 @@ func handleMemoryCapture(args []string, stdout, stderr io.Writer) int {
 	rangeExpr := fs.String("range", "", "git commit range (e.g. HEAD~2..HEAD or <sha>)")
 	sinceLast := fs.Bool("since-last", false, "capture incrementally since last recorded checkpoint")
 	force := fs.Bool("force", false, "force reopening discarded candidate")
+	aiDraft := fs.Bool("ai-draft", false, "use AI-assisted draft generator with fallback to deterministic facts")
 	jsonOutput := fs.Bool("json", false, "output in JSON format")
 
 	if err := fs.Parse(reorderArgs(args)); err != nil {
@@ -45,7 +46,7 @@ func handleMemoryCapture(args []string, stdout, stderr io.Writer) int {
 	}
 	defer client.Close()
 
-	resp, err := client.CaptureGitMemory(context.Background(), absWs, *rangeExpr, *sinceLast, *force)
+	resp, err := client.CaptureGitMemory(context.Background(), absWs, *rangeExpr, *sinceLast, *force, *aiDraft)
 	if err != nil {
 		fmt.Fprintf(stderr, "error: %v\n", err)
 		return 1
@@ -130,25 +131,129 @@ func handleMemoryCandidates(args []string, stdout, stderr io.Writer) int {
 	}
 
 	w := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tSTATUS\tCOMMITS\tCREATED AT\tAPPROVED MEMORY\tRANGE")
+	fmt.Fprintln(w, "ID\tSTATUS\tCOMMITS\tCREATED AT\tAPPROVED MEMORY\tSUMMARY")
 	for _, c := range cands {
-		baseShort := c.BaseSHA
-		if len(baseShort) > 8 {
-			baseShort = baseShort[:8]
-		}
-		headShort := c.HeadSHA
-		if len(headShort) > 8 {
-			headShort = headShort[:8]
-		}
-		rangeStr := fmt.Sprintf("%s..%s", baseShort, headShort)
 		fmt.Fprintf(w, "%s\t%s\t%d\t%s\t%s\t%s\n",
 			c.ID, c.Status, c.CommitCount,
 			c.CreatedAt.Format(time.RFC3339),
 			c.ApprovedMemoryID,
-			rangeStr,
+			c.Summary,
 		)
 	}
 	_ = w.Flush()
+	return 0
+}
+
+func handleMemoryCandidate(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("memory candidate", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	sockPath := fs.String("socket", DefaultSocketPath(), "path to daemon unix socket")
+	workspace := fs.String("workspace", "", "target workspace directory (required)")
+	candidateID := fs.String("candidate", "", "candidate ID to inspect (required)")
+	jsonOutput := fs.Bool("json", false, "output in JSON format")
+
+	if err := fs.Parse(reorderArgs(args)); err != nil {
+		return 1
+	}
+
+	candID := *candidateID
+	if candID == "" && len(fs.Args()) > 0 {
+		candID = fs.Args()[0]
+	}
+
+	if *workspace == "" || candID == "" {
+		fmt.Fprintln(stderr, "error: --workspace and candidate ID are required")
+		return 1
+	}
+
+	absWs, err := filepath.Abs(*workspace)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: invalid workspace: %v\n", err)
+		return 1
+	}
+
+	client, err := daemon.NewClient(*sockPath)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: daemon unavailable: %v\n", err)
+		return 1
+	}
+	defer client.Close()
+
+	cand, err := client.GetGitCandidate(context.Background(), absWs, candID)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+
+	if *jsonOutput {
+		enc := json.NewEncoder(stdout)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(cand)
+		return 0
+	}
+
+	fmt.Fprintf(stdout, "Candidate ID: %s\n", cand.ID)
+	fmt.Fprintf(stdout, "Status:       %s\n", cand.Status)
+	fmt.Fprintf(stdout, "Workspace:    %s\n", cand.Workspace)
+	fmt.Fprintf(stdout, "Repo ID:      %s\n", cand.RepoID)
+	fmt.Fprintf(stdout, "Ref Name:     %s\n", cand.RefName)
+	fmt.Fprintf(stdout, "Range:        %s..%s (%d commits)\n", cand.BaseSHA, cand.HeadSHA, cand.CommitCount)
+	if cand.ApprovedMemoryID != "" {
+		fmt.Fprintf(stdout, "Approved ID:  %s\n", cand.ApprovedMemoryID)
+	}
+	fmt.Fprintf(stdout, "Created At:   %s\n", cand.CreatedAt.Format(time.RFC3339))
+	fmt.Fprintln(stdout, "\nDraft Content:")
+	fmt.Fprintln(stdout, "----------------------------------------")
+	fmt.Fprintln(stdout, cand.DraftContent)
+	fmt.Fprintln(stdout, "----------------------------------------")
+	return 0
+}
+
+func handleMemoryClearCandidates(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("memory clear-candidates", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	sockPath := fs.String("socket", DefaultSocketPath(), "path to daemon unix socket")
+	workspace := fs.String("workspace", "", "target workspace directory (required)")
+	jsonOutput := fs.Bool("json", false, "output in JSON format")
+
+	if err := fs.Parse(reorderArgs(args)); err != nil {
+		return 1
+	}
+
+	if *workspace == "" {
+		fmt.Fprintln(stderr, "error: --workspace is required")
+		return 1
+	}
+
+	absWs, err := filepath.Abs(*workspace)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: invalid workspace: %v\n", err)
+		return 1
+	}
+
+	client, err := daemon.NewClient(*sockPath)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: daemon unavailable: %v\n", err)
+		return 1
+	}
+	defer client.Close()
+
+	count, err := client.ClearGitCandidates(context.Background(), absWs)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+
+	if *jsonOutput {
+		enc := json.NewEncoder(stdout)
+		_ = enc.Encode(map[string]interface{}{
+			"workspace":     absWs,
+			"cleared_count": count,
+		})
+		return 0
+	}
+
+	fmt.Fprintf(stdout, "Cleared %d processed candidates (approved/discarded)\n", count)
 	return 0
 }
 
