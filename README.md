@@ -170,6 +170,26 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web \
 # 刪除指定記憶（依 ID 與專案精確比對刪除）
 ./bin/asura memory remove \
   --workspace /path/to/project <memory-id>
+
+# 擷取 Git 變更事實產生待審候選草稿（支援固定 --range 或增量 --since-last）
+./bin/asura memory capture \
+  --workspace /path/to/project --since-last
+
+# 檢視專案所有待審候選記憶草稿（包含原始變更事實與 Provenance 來源）
+./bin/asura memory candidates \
+  --workspace /path/to/project
+
+# 核准指定候選草稿轉入正式記憶（可選 --content 就地修訂內文）
+./bin/asura memory approve \
+  --workspace /path/to/project <candidate-id>
+
+# 捨棄指定候選草稿（標記為 rejected，不可逆且防復活）
+./bin/asura memory discard \
+  --workspace /path/to/project <candidate-id>
+
+# 清理專案所有已處理完畢之候選紀錄（清除 approved/rejected，保留 pending）
+./bin/asura memory clear-candidates \
+  --workspace /path/to/project
 ```
 
 2026-09-15：
@@ -178,6 +198,12 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web \
 - **撤權與重新授權政策**：專案自 `--allowed-roots` 撤權後，原記憶保留於儲存層，但所有讀寫刪除操作皆嚴格拒絕；重新獲得授權後立即恢復查詢與操作。
 - **重啟持久化與指定刪除**：記憶持久化保存於 SQLite，重啟 Daemon 完整保留未刪資料；刪除指定記憶後重啟不恢復，且另一專案與同專案其他記憶完全不受影響。
 - **失敗回報與零 AI 調用**：Daemon 不可用或操作失敗時，CLI 明確輸出錯誤至 stderr 並回傳非零退出碼，絕不冒充已保存或已刪除，不改走其他儲存方式；記憶管理操作直通儲存層，絕不啟動 AI 模型後端；既有任務提交不自動注入記憶內容。
+
+2026-09-25：
+- **Git 變更感知與候選隔離（Phase 3H）**：支援 `asura memory capture`，唯讀安全執行 Git 子程序讀取固定範圍（`base..head`）或 `--since-last` 增量變更。
+- **實體儲存與召回隔離**：候選草稿存放於獨立 `git_memory_candidates` 表，未審核之草稿 100% 隔離，絕不進入 Task 記憶召回 prompt；僅在顯式 `asura memory approve` 後寫入正式記憶（`source='git-approved'`）並建立獨立 `memory_provenance` 來源記錄。
+- **有界截斷與 Checkpoint 安全**：受硬性邊界（200 commits、500 files、256 KiB diff）限制；超出限制時標記 Partial 截斷，且嚴格禁止自動前進 Checkpoint，避免未分析歷史遺漏。
+- **防復活與歷史密封性**：核准或拒絕紀錄持久化保存，防止重複 Range 重新擷取；手動刪除已核准記憶後禁止原 Candidate 復活；既有 Task 快照維持密封不變。
 
 #### 有界自動記憶召回
 
@@ -233,6 +259,7 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web \
   - [Issue 13 Three-Face Fixed Pipeline (Phase 3C)](docs/issues/issue-13/README.md) 與 [實作計畫](docs/issues/issue-13/implementation-plan.md)
   - [Issue 19 Bounded Automatic Recall](docs/issues/issue-19/README.md) 與 [實作計畫](docs/issues/issue-19/implementation-plan.md)
   - [Issue 17 Context Window Management Foundation (Phase 3E)](docs/issues/issue-17/README.md) 與 [實作計畫](docs/issues/issue-17/implementation-plan.md)
+  - [Issue 23 Git-Aware Project Memory Capture (Phase 3H)](docs/issues/issue-23/README.md) 與 [實作計畫](docs/issues/issue-23/implementation-plan.md)
 
 ---
 
@@ -285,4 +312,4 @@ new-issue ──► decompose (僅 Large) ──► execute-task (BDD + TDD) ─
 
 ---
 
-*最新更新日期：2026-09-22*
+*最新更新日期：2026-09-25*

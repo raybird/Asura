@@ -276,14 +276,14 @@ type MemoryProvenance struct {
   - **狀態**：✅ 已完成
   - **證據**：整合測試驗證含 merge commit、刪檔、新增檔案之複雜專案，端到端完成擷取、候選查詢、核准、Phase 3F ask 召回、增量 checkpoint 前進、刪除連動與防復活全流程。
 
-- [ ] 📝 **Task 7.2 — 完整既有套件回歸測試**
-  - **產出與範圍**：回歸測試紀錄
+- [x] ✅ **Task 7.2 — 完整既有套件回歸測試**
+  - **產出與範圍**：回歸測試紀錄與報告（`docs/issues/issue-23/evidence/e2e-regression.md`）
   - **相依**：Task 7.1
   - **驗收編號**：GITMEM-010
-  - **完成判準**：`go vet ./...`、`go test -count=1 -race ./...`、`go build ./cmd/asura` 全綠通過。
-  - **驗證**：全專案編譯與回歸測試。
-  - **狀態**：📝 待實作
-  - **證據**：待填入
+  - **完成判準**：`go vet ./...`、`go build ./cmd/asura`、`go test -count=1 ./...` 全綠通過（16/16 套件 PASS），`-race` 併發測試零 Data Race。
+  - **驗證**：全專案編譯、靜態分析、全套測試與併發檢查。
+  - **狀態**：✅ 已完成
+  - **證據**：見 [e2e-regression.md](file:///home/kevin/Documents/RCodes/Asura/docs/issues/issue-23/evidence/e2e-regression.md)，全套 16 個套件（含 integration 41.6s、daemon 13.1s、opencode 25.2s）全數 PASS，零 Data Race，零回歸錯誤。
 
 ---
 

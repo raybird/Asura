@@ -15,6 +15,7 @@
 - [implementation-plan.md](./implementation-plan.md)
 - [evidence/probe-git-boundary.md](./evidence/probe-git-boundary.md)
 - [evidence/probe-sqlite-isolation.md](./evidence/probe-sqlite-isolation.md)
+- [evidence/e2e-regression.md](./evidence/e2e-regression.md)
 
 ## 關鍵差異
 
@@ -186,9 +187,11 @@ Feature: Git 變更感知與審核式專案記憶擷取
 | 2026-09-25 | 建立 Issue 23，完成現況調查、技術分析、初始實作計畫與驗收規格草案，提交並推送至 `origin/issue-23-git-memory`（Commit `9e19fd6`） | - |
 | 2026-09-25 | 接收 Commit `9e19fd6` 審查意見（RETURN TO analysis），完成技術分析、實作計畫、需求分析與資料一致性/安全邊界架構修訂（Commit `a71ea2f`） | - |
 | 2026-09-25 | 使用者正式核准 GITMEM-001～010 與 H-TBD-1～6，啟動實作閉環 | - |
+| 2026-09-25 | 完成 Phase 1～7 共 15 項 Task 實作，包含安全 Git CLI、有界截斷、客觀事實、候選隔離、原子核准、防復活、CLI/IPC 工作流、Phase 3F 召回整合、歷史任務密封與真實 Git Repo 端到端驗收測試 | - |
+| 2026-09-25 | 完成全專案 16 個套件之完整回歸測試（`go test -count=1 ./...` 全數 PASS）、併發防護測試（零 Data Race）與靜態分析檢查，產出 `evidence/e2e-regression.md` 交付證據，結案交付審查 | - |
 
 ---
 **建立日期**: 2026-09-25  
 **分級**: Large  
 **風險**: High  
-**狀態**: 進行中
+**狀態**: 已完成（待交付結案）
