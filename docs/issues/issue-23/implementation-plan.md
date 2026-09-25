@@ -252,14 +252,14 @@ type MemoryProvenance struct {
   - **狀態**：✅ 已完成
   - **證據**：整合測試驗證未核准草稿 0 召回、核准後自動自然召回、刪除後 0 召回、Provenance CASCADE 刪除、Candidate 留存。
 
-- [ ] 📝 **Task 6.2 — 任務密封性保護驗證**
+- [x] ✅ **Task 6.2 — 任務密封性保護驗證**
   - **產出與範圍**：`tests/integration/sealed_compat_test.go`
   - **相依**：Task 6.1
   - **驗收編號**：GITMEM-008
   - **完成判準**：Git 記憶的新增、刪除或重新擷取不改寫歷史已接受任務之密封快照與 fingerprint。
-  - **驗證**：密封快照比對測試。
-  - **狀態**：📝 待實作
-  - **證據**：待填入
+  - **驗證**：`go test -v -run TestGitMem_SealedSnapshotIntegrity ./tests/integration`（1/1 pass）。
+  - **狀態**：✅ 已完成
+  - **證據**：整合測試驗證記憶刪除或 Checkpoint 前進後，歷史任務的 Fingerprint、ResolvedContext 與 MemoryRefs 保持 100% 不可變密封狀態。
 
 ---
 
