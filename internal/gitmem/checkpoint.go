@@ -63,8 +63,9 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 		return nil, fmt.Errorf("validate repo: %w", err)
 	}
 
-	// 2. 決定 Range 表達式
+	// 2. 決定 Range 表達式與 Checkpoint 期望基準
 	var rangeExpr string
+	var expectedOldSHA string
 	if opts.SinceLast {
 		cp, err := s.store.GetCheckpoint(ctx, repoInfo.Workspace, repoInfo.RepoID, repoInfo.CurrentRef)
 		if err != nil {
@@ -73,7 +74,8 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 		if cp == nil || cp.LastCapturedSHA == "" {
 			return nil, fmt.Errorf("no checkpoint found for ref %s in workspace; please specify --range explicitly for initial capture", repoInfo.CurrentRef)
 		}
-		rangeExpr = fmt.Sprintf("%s..%s", cp.LastCapturedSHA, repoInfo.CurrentHead)
+		expectedOldSHA = cp.LastCapturedSHA
+		rangeExpr = fmt.Sprintf("%s..%s", expectedOldSHA, repoInfo.CurrentHead)
 	} else if opts.RangeExpr != "" {
 		rangeExpr = opts.RangeExpr
 	} else {
@@ -92,6 +94,10 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 		return nil, err
 	}
 
+	ancestryChecker := func(ctx context.Context, ancestorSHA, descendantSHA string) (bool, error) {
+		return s.exec.IsAncestor(ctx, repoInfo.RepoRoot, ancestorSHA, descendantSHA)
+	}
+
 	// 5. 擷取去重 (Capture Dedup)
 	existing, err := s.store.FindCandidateByRange(ctx, repoInfo.Workspace, facts.RepoID, facts.RefName, facts.BaseSHA, facts.HeadSHA, "gitmem-v1")
 	if err != nil {
@@ -100,7 +106,7 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 
 	if existing != nil {
 		if newCP != nil {
-			if err := s.store.SaveCheckpoint(ctx, newCP); err != nil {
+			if err := s.store.AdvanceCheckpointTx(ctx, newCP, expectedOldSHA, ancestryChecker); err != nil {
 				return nil, fmt.Errorf("advance checkpoint for existing candidate: %w", err)
 			}
 		}
@@ -124,11 +130,32 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 			if !opts.Force {
 				return nil, fmt.Errorf("candidate for range %s..%s was already discarded; use --force to reopen", facts.BaseSHA[:min(8, len(facts.BaseSHA))], facts.HeadSHA[:min(8, len(facts.HeadSHA))])
 			}
-			// 若顯式帶入 force，重開候選為 pending
-			if err := s.store.UpdateCandidateStatus(ctx, repoInfo.Workspace, existing.ID, "pending", "", nil); err != nil {
+			// 若顯式帶入 force，以本次擷取之 facts 重新生成草稿並重開候選為 pending
+			factsSummary, err := FormatFactsSummary(facts)
+			if err != nil {
+				return nil, fmt.Errorf("format facts summary: %w", err)
+			}
+			var draft string
+			if opts.AIDraft {
+				if s.aiGen == nil {
+					return nil, errors.New("AI draft generation requested (--ai-draft), but no AI generator is configured on daemon; please use standard capture or configure an AI generator")
+				}
+				var err error
+				draft, err = s.aiGen.GenerateDraft(ctx, facts)
+				if err != nil {
+					return nil, fmt.Errorf("AI draft generation failed: %w", err)
+				}
+			} else {
+				draft = GenerateDraftContent(facts)
+			}
+
+			if err := s.store.ReopenDiscardedCandidate(ctx, repoInfo.Workspace, existing.ID, draft, factsSummary, facts.CommitCount); err != nil {
 				return nil, fmt.Errorf("reopen discarded candidate: %w", err)
 			}
 			existing.Status = "pending"
+			existing.DraftContent = draft
+			existing.FactsSummary = factsSummary
+			existing.CommitCount = facts.CommitCount
 			existing.ApprovedMemoryID = ""
 			existing.ApprovedAt = nil
 			return &CaptureResult{
@@ -173,16 +200,6 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 		Status:        "pending",
 		PolicyVersion: "gitmem-v1",
 		CreatedAt:     time.Now().UTC(),
-	}
-
-	// 取得既有 Checkpoint 作為 CAS 期望值
-	var expectedOldSHA string
-	if existingCP, _ := s.store.GetCheckpoint(ctx, facts.Workspace, facts.RepoID, facts.RefName); existingCP != nil {
-		expectedOldSHA = existingCP.LastCapturedSHA
-	}
-
-	ancestryChecker := func(ctx context.Context, ancestorSHA, descendantSHA string) (bool, error) {
-		return s.exec.IsAncestor(ctx, repoInfo.RepoRoot, ancestorSHA, descendantSHA)
 	}
 
 	persistedCand, err := s.store.SaveCandidateAndCheckpointTx(ctx, cand, newCP, expectedOldSHA, ancestryChecker)
@@ -273,7 +290,10 @@ func (s *CaptureService) UpdateCheckpointIfEligible(ctx context.Context, facts *
 		return err
 	}
 	if newCP != nil {
-		return s.store.SaveCheckpoint(ctx, newCP)
+		ancestryChecker := func(ctx context.Context, ancestorSHA, descendantSHA string) (bool, error) {
+			return s.exec.IsAncestor(ctx, facts.Workspace, ancestorSHA, descendantSHA)
+		}
+		return s.store.AdvanceCheckpointTx(ctx, newCP, facts.BaseSHA, ancestryChecker)
 	}
 	return nil
 }

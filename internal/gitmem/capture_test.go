@@ -329,3 +329,130 @@ func TestCapture_SubdirectoryWithWildcardName_LiteralIsolation(t *testing.T) {
 	}
 }
 
+func TestCapture_SpecialFilenamesWithNullDelimiter(t *testing.T) {
+	dir := t.TempDir()
+	allowedRoot := filepath.Join(dir, "allowed")
+	repoDir := filepath.Join(allowedRoot, "project")
+	_ = os.MkdirAll(repoDir, 0755)
+
+	cmd := execCommand(repoDir, "init", "-b", "main")
+	_ = cmd.Run()
+
+	_ = os.WriteFile(filepath.Join(repoDir, "base.txt"), []byte("base"), 0644)
+	cmd = execCommand(repoDir, "add", "-A")
+	_ = cmd.Run()
+	cmd = execCommand(repoDir, "commit", "-m", "base commit")
+	_ = cmd.Run()
+
+	// 建立包含 tab (\t)、空格與特殊引號的檔名
+	// Git diff --name-only 預設會對含 \t 的檔名輸出 C-quoted "\"odd\\tfile.txt\""
+	// 使用 -z 旗標則保證以 NUL 分隔且無 C-style quoting
+	specialFile1 := "odd\tfile.txt"
+	specialFile2 := "space file.txt"
+	specialFile3 := "quote\"file.txt"
+
+	_ = os.WriteFile(filepath.Join(repoDir, specialFile1), []byte("content of tab file"), 0644)
+	_ = os.WriteFile(filepath.Join(repoDir, specialFile2), []byte("content of space file"), 0644)
+	_ = os.WriteFile(filepath.Join(repoDir, specialFile3), []byte("content of quote file"), 0644)
+
+	cmd = execCommand(repoDir, "add", "-A")
+	_ = cmd.Run()
+	cmd = execCommand(repoDir, "commit", "-m", "add special filenames")
+	_ = cmd.Run()
+
+	exec := NewGitExecutor([]string{allowedRoot})
+	ctx := context.Background()
+	capturer := NewCapturer(exec)
+
+	facts, err := capturer.CaptureRange(ctx, repoDir, "HEAD~1..HEAD")
+	if err != nil {
+		t.Fatalf("CaptureRange failed with special filenames: %v", err)
+	}
+
+	if facts.Truncated {
+		t.Fatalf("expected non-truncated capture, got: %s", facts.TruncatedReason)
+	}
+
+	// 驗證 ChangedFiles 精確保留原始 filename bytes，而非 Git C-quoted 顯示名稱
+	fileMap := make(map[string]bool)
+	for _, f := range facts.ChangedFiles {
+		fileMap[f] = true
+	}
+
+	if !fileMap[specialFile1] {
+		t.Errorf("special file with tab %q not found in ChangedFiles: %v", specialFile1, facts.ChangedFiles)
+	}
+	if !fileMap[specialFile2] {
+		t.Errorf("special file with space %q not found in ChangedFiles: %v", specialFile2, facts.ChangedFiles)
+	}
+	if !fileMap[specialFile3] {
+		t.Errorf("special file with quote %q not found in ChangedFiles: %v", specialFile3, facts.ChangedFiles)
+	}
+
+	// 驗證 FilteredDiff 能透過字面 pathspec 順利抓到各檔案的內容，而非取回空 diff
+	if !strings.Contains(facts.FilteredDiff, "content of tab file") {
+		t.Errorf("diff missing content for tab file:\n%s", facts.FilteredDiff)
+	}
+	if !strings.Contains(facts.FilteredDiff, "content of space file") {
+		t.Errorf("diff missing content for space file:\n%s", facts.FilteredDiff)
+	}
+	if !strings.Contains(facts.FilteredDiff, "content of quote file") {
+		t.Errorf("diff missing content for quote file:\n%s", facts.FilteredDiff)
+	}
+}
+
+func TestCapture_TotalTimeoutExceeded_TruncatedAndZeroCheckpointAdvance(t *testing.T) {
+	dir := t.TempDir()
+	allowedRoot := filepath.Join(dir, "allowed")
+	repoDir := filepath.Join(allowedRoot, "project")
+	_ = os.MkdirAll(repoDir, 0755)
+
+	cmd := execCommand(repoDir, "init", "-b", "main")
+	_ = cmd.Run()
+
+	_ = os.WriteFile(filepath.Join(repoDir, "file1.txt"), []byte("v1"), 0644)
+	cmd = execCommand(repoDir, "add", "-A")
+	_ = cmd.Run()
+	cmd = execCommand(repoDir, "commit", "-m", "commit 1")
+	_ = cmd.Run()
+
+	_ = os.WriteFile(filepath.Join(repoDir, "file1.txt"), []byte("v2"), 0644)
+	cmd = execCommand(repoDir, "add", "-A")
+	_ = cmd.Run()
+	cmd = execCommand(repoDir, "commit", "-m", "commit 2")
+	_ = cmd.Run()
+
+	exec := NewGitExecutor([]string{allowedRoot})
+	capturer := NewCapturer(exec)
+
+	// 傳入已經被取消/超時的 Context 模擬執行超時
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// 由於已經超時，CaptureRange 應捕捉此超時，終止 diff 並標記 Truncated
+	facts, err := capturer.CaptureRange(canceledCtx, repoDir, "HEAD~1..HEAD")
+	if err != nil {
+		// 若在早期解析即被阻擋亦屬合法安全行為
+		if !strings.Contains(err.Error(), "canceled") && !strings.Contains(err.Error(), "timed out") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		return
+	}
+
+	// 若產出 facts，必須標記為 Truncated，絕不假裝完整
+	if !facts.Truncated {
+		t.Fatalf("expected facts.Truncated to be true on timeout, got false")
+	}
+
+	// 驗證 Checkpoint 評估：Truncated == true 時絕不前進 Checkpoint（進展為 0）
+	service := NewCaptureService(exec, nil)
+	cp, err := service.evaluateCheckpointAdvance(context.Background(), repoDir, facts, true)
+	if err != nil {
+		t.Fatalf("unexpected evaluate error: %v", err)
+	}
+	if cp != nil {
+		t.Fatalf("SECURITY VIOLATION: Checkpoint advanced on truncated capture: %+v", cp)
+	}
+}
+
+

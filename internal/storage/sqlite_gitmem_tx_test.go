@@ -429,3 +429,238 @@ func TestClearProcessedCandidates_AntiRevivalAndDedupProtected(t *testing.T) {
 	}
 }
 
+func TestSaveCandidateAndCheckpointTx_TargetNotDescendant_NeverRewindsEvenIfExpectedMatches(t *testing.T) {
+	store := newTestGitMemStore(t)
+	ctx := context.Background()
+	ws := "/workspace/ancestry-override-test"
+
+	// 歷史關係：H0 -> H1 -> H2
+	h0 := "0000000000000000000000000000000000000000"
+	h1 := "1111111111111111111111111111111111111111"
+	h2 := "2222222222222222222222222222222222222222"
+
+	isAncestorMock := func(ctx context.Context, anc, desc string) (bool, error) {
+		if anc == h0 && (desc == h1 || desc == h2) {
+			return true, nil
+		}
+		if anc == h1 && desc == h2 {
+			return true, nil
+		}
+		return false, nil
+	}
+
+	// 1. Checkpoint 目前已經在 H2
+	cpInitial := &GitCheckpoint{
+		Workspace:       ws,
+		RepoID:          "repo-anc",
+		RefName:         "refs/heads/main",
+		LastCapturedSHA: h2,
+		UpdatedAt:       time.Now().UTC(),
+	}
+	if err := store.SaveCheckpoint(ctx, cpInitial); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. 模擬反例：調用方傳入 expectedOldSHA 剛好等於當前庫中的 H2（例如事後重新讀取 checkpoint 取得 H2）
+	// 但其 Capture 目標 checkpoint 卻是舊的 H1！
+	// 舊實作中 currentSHA == expectedOldSHA 會直接把 H2 覆寫倒退回 H1！
+	candStale := &MemoryCandidate{
+		ID:            "cand-stale-h1",
+		Workspace:     ws,
+		RepoID:        "repo-anc",
+		RefName:       "refs/heads/main",
+		BaseSHA:       h0,
+		HeadSHA:       h1,
+		CommitCount:   1,
+		FactsSummary:  "{}",
+		DraftContent:  "stale draft",
+		Status:        "pending",
+		PolicyVersion: "gitmem-v1",
+	}
+	cpStale := &GitCheckpoint{
+		Workspace:       ws,
+		RepoID:          "repo-anc",
+		RefName:         "refs/heads/main",
+		LastCapturedSHA: h1, // 舊目標！
+		UpdatedAt:       time.Now().UTC(),
+	}
+
+	// 傳入 expectedOldSHA = h2
+	_, err := store.SaveCandidateAndCheckpointTx(ctx, candStale, cpStale, h2, isAncestorMock)
+	if err != nil {
+		t.Fatalf("expected candidate saving to succeed, got: %v", err)
+	}
+
+	// 3. 關鍵驗證：Checkpoint 必須依然維持在 H2，絕對不能被覆寫成 H1！
+	cpCheck, err := store.GetCheckpoint(ctx, ws, "repo-anc", "refs/heads/main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cpCheck.LastCapturedSHA != h2 {
+		t.Fatalf("SECURITY VULNERABILITY: Checkpoint rewound from H2 to %s because expectedOldSHA matched H2!", cpCheck.LastCapturedSHA)
+	}
+}
+
+func TestApproveCandidateTx_EmptyContentRejected(t *testing.T) {
+	store := newTestGitMemStore(t)
+	ctx := context.Background()
+	ws := "/workspace/empty-approve"
+
+	// 建立一個 draft_content 為空的 candidate（例如被 clear-candidates 清理過）
+	cand := &MemoryCandidate{
+		ID:            "cand-empty",
+		Workspace:     ws,
+		RepoID:        "repo-empty",
+		RefName:       "refs/heads/main",
+		BaseSHA:       "base",
+		HeadSHA:       "head",
+		CommitCount:   1,
+		FactsSummary:  "{}",
+		DraftContent:  "", // 空白草稿！
+		Status:        "pending",
+		PolicyVersion: "gitmem-v1",
+		CreatedAt:     time.Now().UTC(),
+	}
+	if err := store.SaveCandidate(ctx, cand); err != nil {
+		t.Fatal(err)
+	}
+
+	// 嘗試不帶 --content 直接 approve
+	_, err := store.ApproveCandidateTx(ctx, ws, cand.ID, ApproveOptions{Content: ""})
+	if err == nil {
+		t.Fatal("expected error when approving candidate with empty draft and no content, got nil")
+	}
+	if !strings.Contains(err.Error(), "empty content") {
+		t.Errorf("expected empty content error, got: %v", err)
+	}
+
+	// 確保 memories 表中沒有任何記錄被寫入
+	mems, err := store.ListMemories(ctx, ws)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mems) != 0 {
+		t.Fatalf("expected 0 memories, found %d", len(mems))
+	}
+}
+
+func TestReopenDiscardedCandidate_ReplacesPayloadAndResetsPending(t *testing.T) {
+	store := newTestGitMemStore(t)
+	ctx := context.Background()
+	ws := "/workspace/reopen-test"
+
+	cand := &MemoryCandidate{
+		ID:            "cand-reopen",
+		Workspace:     ws,
+		RepoID:        "repo-reopen",
+		RefName:       "refs/heads/main",
+		BaseSHA:       "base",
+		HeadSHA:       "head",
+		CommitCount:   1,
+		FactsSummary:  "{}",
+		DraftContent:  "",
+		Status:        "discarded",
+		PolicyVersion: "gitmem-v1",
+		CreatedAt:     time.Now().UTC(),
+	}
+	if err := store.SaveCandidate(ctx, cand); err != nil {
+		t.Fatal(err)
+	}
+
+	// 重新開啟候選並注入新草稿與事實
+	newDraft := "regenerated draft from re-capture"
+	newFacts := `{"commits":[{"sha":"c1","subject":"refactored"}]}`
+	if err := store.ReopenDiscardedCandidate(ctx, ws, cand.ID, newDraft, newFacts, 2); err != nil {
+		t.Fatalf("ReopenDiscardedCandidate failed: %v", err)
+	}
+
+	updated, err := store.GetCandidate(ctx, ws, cand.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Status != "pending" {
+		t.Errorf("expected status 'pending', got %s", updated.Status)
+	}
+	if updated.DraftContent != newDraft {
+		t.Errorf("expected draft %q, got %q", newDraft, updated.DraftContent)
+	}
+	if updated.FactsSummary != newFacts {
+		t.Errorf("expected facts %q, got %q", newFacts, updated.FactsSummary)
+	}
+	if updated.CommitCount != 2 {
+		t.Errorf("expected commit count 2, got %d", updated.CommitCount)
+	}
+
+	// 隨後能順利核准
+	memID, err := store.ApproveCandidateTx(ctx, ws, cand.ID, ApproveOptions{})
+	if err != nil {
+		t.Fatalf("failed to approve reopened candidate: %v", err)
+	}
+	if memID == "" {
+		t.Fatal("expected valid memory ID")
+	}
+}
+
+func TestAdvanceCheckpointTx_MonotonicAndCAS(t *testing.T) {
+	store := newTestGitMemStore(t)
+	ctx := context.Background()
+	ws := "/workspace/advance-cp-tx"
+
+	h0 := "0000000000000000000000000000000000000000"
+	h1 := "1111111111111111111111111111111111111111"
+	h2 := "2222222222222222222222222222222222222222"
+
+	isAncestorMock := func(ctx context.Context, anc, desc string) (bool, error) {
+		if anc == h0 && (desc == h1 || desc == h2) {
+			return true, nil
+		}
+		if anc == h1 && desc == h2 {
+			return true, nil
+		}
+		return false, nil
+	}
+
+	// 1. 初始前進（無既有 checkpoint）
+	cp0 := &GitCheckpoint{
+		Workspace:       ws,
+		RepoID:          "repo-adv",
+		RefName:         "refs/heads/main",
+		LastCapturedSHA: h0,
+		UpdatedAt:       time.Now().UTC(),
+	}
+	if err := store.AdvanceCheckpointTx(ctx, cp0, "", isAncestorMock); err != nil {
+		t.Fatalf("initial advance failed: %v", err)
+	}
+
+	// 2. 正向單調推進至 H2
+	cp2 := &GitCheckpoint{
+		Workspace:       ws,
+		RepoID:          "repo-adv",
+		RefName:         "refs/heads/main",
+		LastCapturedSHA: h2,
+		UpdatedAt:       time.Now().UTC(),
+	}
+	if err := store.AdvanceCheckpointTx(ctx, cp2, h0, isAncestorMock); err != nil {
+		t.Fatalf("advance to h2 failed: %v", err)
+	}
+
+	// 3. 嘗試以過時的 H1 推進（H1 比庫中的 H2 舊）
+	cp1 := &GitCheckpoint{
+		Workspace:       ws,
+		RepoID:          "repo-adv",
+		RefName:         "refs/heads/main",
+		LastCapturedSHA: h1,
+		UpdatedAt:       time.Now().UTC(),
+	}
+	if err := store.AdvanceCheckpointTx(ctx, cp1, h0, isAncestorMock); err != nil {
+		t.Fatalf("expected advance to ignore stale target without failing, got: %v", err)
+	}
+
+	// 驗證仍停留在 H2
+	res, _ := store.GetCheckpoint(ctx, ws, "repo-adv", "refs/heads/main")
+	if res.LastCapturedSHA != h2 {
+		t.Fatalf("checkpoint was rewound to %s, expected %s", res.LastCapturedSHA, h2)
+	}
+}
+
+

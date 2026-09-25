@@ -279,6 +279,27 @@ func (s *SQLiteStore) ClearProcessedCandidates(ctx context.Context, workspace st
 	return res.RowsAffected()
 }
 
+// ReopenDiscardedCandidate 重開已捨棄之候選，以新的草稿與事實更新其內容，並重設狀態為 pending
+func (s *SQLiteStore) ReopenDiscardedCandidate(ctx context.Context, workspace, id string, draftContent, factsSummary string, commitCount int) error {
+	query := `
+	UPDATE memory_candidates
+	SET status = 'pending', draft_content = ?, facts_summary = ?, commit_count = ?, approved_memory_id = '', approved_at = NULL
+	WHERE workspace = ? AND id = ?
+	`
+	res, err := s.db.ExecContext(ctx, query, draftContent, factsSummary, commitCount, workspace, id)
+	if err != nil {
+		return fmt.Errorf("reopen candidate: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
+	if rows == 0 {
+		return ErrCandidateNotFound
+	}
+	return nil
+}
+
 // UpdateCandidateStatus 更新候選狀態
 func (s *SQLiteStore) UpdateCandidateStatus(ctx context.Context, workspace, id string, status string, approvedMemoryID string, approvedAt *time.Time) error {
 	query := `

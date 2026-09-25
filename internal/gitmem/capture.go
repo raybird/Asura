@@ -1,11 +1,13 @@
 package gitmem
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
@@ -77,8 +79,20 @@ func ToLiteralPathspec(p string) string {
 
 // CaptureRange 執行有界擷取，套用 500 files / 256 KiB 限制、子目錄範圍隔離與敏感資料過濾
 func (c *Capturer) CaptureRange(ctx context.Context, repoDir string, rangeExpr string) (*CaptureFacts, error) {
+	// 整次 Capture 建立總期限（Total Deadline），落實 GITMEM-004 硬時間邊界（10s）
+	captureCtx := ctx
+	var cancel context.CancelFunc
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		totalTimeout := 10 * time.Second
+		if c.exec != nil && c.exec.timeout > 0 {
+			totalTimeout = c.exec.timeout
+		}
+		captureCtx, cancel = context.WithTimeout(ctx, totalTimeout)
+		defer cancel()
+	}
+
 	// 1. 儲存庫與邊界校驗
-	repoInfo, err := c.exec.ValidateAndResolveRepo(ctx, repoDir)
+	repoInfo, err := c.exec.ValidateAndResolveRepo(captureCtx, repoDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate repo: %w", err)
 	}
@@ -91,29 +105,30 @@ func (c *Capturer) CaptureRange(ctx context.Context, repoDir string, rangeExpr s
 	}
 
 	// 2. 解析 Range 與祖先血統檢查 (若為子目錄傳入 pathspec)
-	resolved, err := c.exec.ResolveRange(ctx, repoInfo.RepoRoot, rangeExpr, pathspecs...)
+	resolved, err := c.exec.ResolveRange(captureCtx, repoInfo.RepoRoot, rangeExpr, pathspecs...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve range: %w", err)
 	}
 
 	// 3. 取得變更檔案清單 (若為子目錄僅取子目錄範圍)
-	namesArgs := []string{"diff", "--name-only", fmt.Sprintf("%s..%s", resolved.BaseSHA, resolved.HeadSHA)}
+	// 使用 -z 旗標輸出 NUL 分隔字串，徹底防止 Git 對特殊檔名（換行、tab、引號等）做 C-style quoting，確保得到原始路徑 bytes
+	namesArgs := []string{"diff", "--name-only", "-z", fmt.Sprintf("%s..%s", resolved.BaseSHA, resolved.HeadSHA)}
 	if len(pathspecs) > 0 {
 		namesArgs = append(namesArgs, "--")
 		namesArgs = append(namesArgs, pathspecs...)
 	}
-	namesOut, err := c.exec.Exec(ctx, repoInfo.RepoRoot, namesArgs...)
+	namesOut, err := c.exec.Exec(captureCtx, repoInfo.RepoRoot, namesArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list changed files: %w", err)
 	}
 
-	rawNames := strings.Split(strings.TrimSpace(string(namesOut)), "\n")
-	allFiles := make([]string, 0, len(rawNames))
-	for _, n := range rawNames {
-		n = strings.TrimSpace(n)
-		if n != "" {
-			allFiles = append(allFiles, n)
+	rawEntries := bytes.Split(namesOut, []byte{0})
+	allFiles := make([]string, 0, len(rawEntries))
+	for _, entry := range rawEntries {
+		if len(entry) == 0 {
+			continue
 		}
+		allFiles = append(allFiles, string(entry))
 	}
 
 	var truncated bool
@@ -137,7 +152,7 @@ func (c *Capturer) CaptureRange(ctx context.Context, repoDir string, rangeExpr s
 		statArgs = append(statArgs, "--")
 		statArgs = append(statArgs, pathspecs...)
 	}
-	statOut, err := c.exec.Exec(ctx, repoInfo.RepoRoot, statArgs...)
+	statOut, err := c.exec.Exec(captureCtx, repoInfo.RepoRoot, statArgs...)
 	var diffStat string
 	if err == nil {
 		diffStat = strings.TrimSpace(string(statOut))
@@ -146,15 +161,25 @@ func (c *Capturer) CaptureRange(ctx context.Context, repoDir string, rangeExpr s
 	// 5. 擷取並過濾 Diff 內容
 	var diffBuilder strings.Builder
 	for _, file := range keptFiles {
+		// 檢查整次 capture 的 deadline 是否已經用盡或被取消
+		if captureCtx.Err() != nil {
+			truncated = true
+			reasons = append(reasons, fmt.Sprintf("capture total timeout exceeded: %v", captureCtx.Err()))
+			break
+		}
+
 		if isSensitiveFile(file) {
 			diffBuilder.WriteString(fmt.Sprintf("diff --git a/%s b/%s\n[REDACTED SENSITIVE FILE]\n\n", file, file))
 			continue
 		}
 
-		fileDiffOut, err := c.exec.Exec(ctx, repoInfo.RepoRoot, "diff", fmt.Sprintf("%s..%s", resolved.BaseSHA, resolved.HeadSHA), "--", ToLiteralPathspec(file))
+		fileDiffOut, err := c.exec.Exec(captureCtx, repoInfo.RepoRoot, "diff", fmt.Sprintf("%s..%s", resolved.BaseSHA, resolved.HeadSHA), "--", ToLiteralPathspec(file))
 		if err != nil {
 			truncated = true
-			if errors.Is(err, ErrStdoutTruncated) {
+			if errors.Is(err, context.DeadlineExceeded) || errors.Is(captureCtx.Err(), context.DeadlineExceeded) {
+				reasons = append(reasons, "capture deadline exceeded")
+				break
+			} else if errors.Is(err, ErrStdoutTruncated) {
 				reasons = append(reasons, fmt.Sprintf("file %s diff exceeded stdout limit (512 KiB)", file))
 			} else {
 				reasons = append(reasons, fmt.Sprintf("file %s diff failed: %v", file, err))

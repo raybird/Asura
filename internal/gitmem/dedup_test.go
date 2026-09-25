@@ -317,3 +317,90 @@ func TestCaptureService_ConcurrentCaptureAndDraftImmutability(t *testing.T) {
 	}
 }
 
+func TestCaptureService_ConcurrentCheckpointAdvancement_NeverRewindsStaleHead(t *testing.T) {
+	allowedRoot, repoDir := initTestRepoWithBranches(t)
+	exec := NewGitExecutor([]string{allowedRoot})
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	// 取得當前 commits: HEAD~2 (C1), HEAD~1 (C2), HEAD (C3)
+	c1Out, _ := exec.Exec(ctx, repoDir, "rev-parse", "HEAD~2")
+	c1 := strings.TrimSpace(string(c1Out))
+	c2Out, _ := exec.Exec(ctx, repoDir, "rev-parse", "HEAD~1")
+	c2 := strings.TrimSpace(string(c2Out))
+	c3Out, _ := exec.Exec(ctx, repoDir, "rev-parse", "HEAD")
+	c3 := strings.TrimSpace(string(c3Out))
+
+	repoInfo, _ := exec.ValidateAndResolveRepo(ctx, repoDir)
+
+	// 1. 初始化 Checkpoint 位於 C1
+	initialCP := &storage.GitCheckpoint{
+		Workspace:       repoInfo.Workspace,
+		RepoID:          repoInfo.RepoID,
+		RefName:         repoInfo.CurrentRef,
+		LastCapturedSHA: c1,
+		UpdatedAt:       time.Now().UTC(),
+	}
+	if err := store.SaveCheckpoint(ctx, initialCP); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. 模擬並行交易 B：將 Checkpoint 推進至 C3
+	bCP := &storage.GitCheckpoint{
+		Workspace:       repoInfo.Workspace,
+		RepoID:          repoInfo.RepoID,
+		RefName:         repoInfo.CurrentRef,
+		LastCapturedSHA: c3,
+		UpdatedAt:       time.Now().UTC(),
+	}
+	ancChecker := func(ctx context.Context, anc, desc string) (bool, error) {
+		return exec.IsAncestor(ctx, repoDir, anc, desc)
+	}
+	if err := store.AdvanceCheckpointTx(ctx, bCP, c1, ancChecker); err != nil {
+		t.Fatalf("advance to C3 failed: %v", err)
+	}
+
+	// 3. 模擬延遲完成的交易 A：A 是根據舊基線 C1 擷取到 C2（C1..C2）
+	// 目標是要推進到 C2，expectedOldSHA 為 C1
+	aCP := &storage.GitCheckpoint{
+		Workspace:       repoInfo.Workspace,
+		RepoID:          repoInfo.RepoID,
+		RefName:         repoInfo.CurrentRef,
+		LastCapturedSHA: c2,
+		UpdatedAt:       time.Now().UTC(),
+	}
+	candA := &storage.MemoryCandidate{
+		ID:            "cand-delay-a",
+		Workspace:     repoInfo.Workspace,
+		RepoID:        repoInfo.RepoID,
+		RefName:       repoInfo.CurrentRef,
+		BaseSHA:       c1,
+		HeadSHA:       c2,
+		CommitCount:   1,
+		FactsSummary:  "{}",
+		DraftContent:  "draft A",
+		Status:        "pending",
+		PolicyVersion: "gitmem-v1",
+		CreatedAt:     time.Now().UTC(),
+	}
+
+	// 執行 SaveCandidateAndCheckpointTx
+	persistedA, err := store.SaveCandidateAndCheckpointTx(ctx, candA, aCP, c1, ancChecker)
+	if err != nil {
+		t.Fatalf("expected candidate A to save successfully, got: %v", err)
+	}
+	if persistedA.ID != candA.ID {
+		t.Errorf("expected candidate A to be persisted")
+	}
+
+	// 4. 關鍵斷言：Checkpoint 必須保持在 C3，絕對不能倒退回 C2！
+	cpFinal, err := store.GetCheckpoint(ctx, repoInfo.Workspace, repoInfo.RepoID, repoInfo.CurrentRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cpFinal.LastCapturedSHA != c3 {
+		t.Fatalf("MONOTONIC INTEGRITY VIOLATION: Checkpoint rewound from C3 to %s!", cpFinal.LastCapturedSHA)
+	}
+}
+
+

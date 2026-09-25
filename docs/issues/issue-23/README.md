@@ -124,11 +124,12 @@ Feature: Git 變更感知與審核式專案記憶擷取
     And 記憶的變更或重新擷取不改寫歷史已接受任務之密封快照與 fingerprint
 
   @GITMEM-009
-  Scenario: 唯讀模型邊界（若本期核准 AI 草稿）
+  Scenario: 唯讀模型邊界與 Fail-Closed 防禦（可選 AI 草稿擴充介面）
     Given 含惡意 commit message、注入指令之 diff 或不受信任之 Git 內容
-    When 啟用 AI 輔助生成候選草稿摘要
-    Then 模型在唯讀權限邊界（deny mutating capabilities）與固定 token 預算下執行
-    And 模型無法直接寫入資料庫或外送資料，任何生成失敗或超限均如實揭露並退回確定性事實模式
+    When 啟用可選旗標 --ai-draft 生成候選草稿摘要
+    Then 不受信任之 diff 嚴格封裝於安全標籤 <untrusted_git_diff> 唯讀邊界內
+    And 本期交付可插拔之唯讀 AIDraftGenerator 介面；正式模型 adapter 屬後續擴充規劃，本期尚未交付
+    And 在未配置 Generator 或生成失敗超限時，系統採 Fail-Closed 原則明確拒絕並回傳錯誤，絕不假裝使用 AI 或靜默掩飾，確保審核者知悉草稿之真實來源
 
   @GITMEM-010
   Scenario: 完整回歸與系統穩定性

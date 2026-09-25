@@ -99,3 +99,84 @@ func TestGitMemory_FullLifecycleAndAntiRevival(t *testing.T) {
 		t.Errorf("expected anti-revival error message, got: %v", err)
 	}
 }
+
+func TestGitMemory_ReopenDiscardedCandidateAfterClear_ProducesNonEmptyMemory(t *testing.T) {
+	allowedRoot, repoDir := initTestRepoWithBranches(t)
+	exec := NewGitExecutor([]string{allowedRoot})
+	store := newTestStore(t)
+	service := NewCaptureService(exec, store)
+	ctx := context.Background()
+
+	// 1. 初次擷取：產生候選草稿
+	res, err := service.Capture(ctx, repoDir, CaptureOptions{RangeExpr: "HEAD~1..HEAD"})
+	if err != nil {
+		t.Fatalf("initial capture failed: %v", err)
+	}
+	candID := res.Candidate.ID
+
+	// 2. 捨棄該候選
+	if err := store.UpdateCandidateStatus(ctx, repoDir, candID, "discarded", "", nil); err != nil {
+		t.Fatalf("discard candidate failed: %v", err)
+	}
+
+	// 3. 執行清理瘦身：清除 discarded 候選之 draft 與 facts payload
+	cleared, err := store.ClearProcessedCandidates(ctx, repoDir)
+	if err != nil || cleared != 1 {
+		t.Fatalf("ClearProcessedCandidates failed (cleared=%d, err=%v)", cleared, err)
+	}
+
+	candAfterClear, err := store.GetCandidate(ctx, repoDir, candID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if candAfterClear.DraftContent != "" {
+		t.Fatalf("expected cleared draft to be empty, got %q", candAfterClear.DraftContent)
+	}
+
+	// 4. 驗證 discarded 狀態核准防禦：未重開前禁止直接核准
+	_, err = store.ApproveCandidateTx(ctx, repoDir, candID, storage.ApproveOptions{})
+	if err == nil {
+		t.Fatal("SECURITY BUG: Discarded candidate was approved without reopening!")
+	}
+	if !strings.Contains(err.Error(), "discarded") {
+		t.Errorf("expected discarded error, got: %v", err)
+	}
+
+	// 5. 再次執行 capture 並傳入 --force 重開候選
+	reopenRes, err := service.Capture(ctx, repoDir, CaptureOptions{RangeExpr: "HEAD~1..HEAD", Force: true})
+	if err != nil {
+		t.Fatalf("reopen capture with force failed: %v", err)
+	}
+
+	// 6. 關鍵驗證：候選重開後必須以本次 capture 之 facts 重新生成有界草稿，絕不能留空！
+	if reopenRes.Candidate.Status != "pending" {
+		t.Errorf("expected status 'pending', got %s", reopenRes.Candidate.Status)
+	}
+	if strings.TrimSpace(reopenRes.Candidate.DraftContent) == "" {
+		t.Fatal("BUG: Reopened discarded candidate still has empty draft content!")
+	}
+	if !strings.Contains(reopenRes.Candidate.DraftContent, "專案架構決策與變更摘要") {
+		t.Errorf("expected standard draft template, got: %s", reopenRes.Candidate.DraftContent)
+	}
+
+	// 7. 隨後核准候選（不帶 --content），確認正式記憶完整保存重新生成的草稿，絕非空白記憶
+	memID, err := store.ApproveCandidateTx(ctx, repoDir, candID, storage.ApproveOptions{})
+	if err != nil {
+		t.Fatalf("approve reopened candidate failed: %v", err)
+	}
+
+	mems, err := store.ListMemories(ctx, repoDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mems) != 1 || mems[0].ID != memID {
+		t.Fatalf("expected 1 formal memory with ID %s, got %v", memID, mems)
+	}
+	if strings.TrimSpace(mems[0].Content) == "" {
+		t.Fatal("SECURITY BUG: Formal memory created with empty content!")
+	}
+	if mems[0].Content != reopenRes.Candidate.DraftContent {
+		t.Errorf("formal memory content mismatch: got %q, expected %q", mems[0].Content, reopenRes.Candidate.DraftContent)
+	}
+}
+
