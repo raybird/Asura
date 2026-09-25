@@ -129,14 +129,14 @@ type MemoryProvenance struct {
   - **狀態**：✅ 已完成
   - **證據**：單元測試覆蓋 ValidateAndResolveRepo (Success, Subdir, NotGit, OutsideAllowedRoots, GitDirEscape)、ExternalDiffBlocked、TimeoutWithProcessGroup。
 
-- [ ] 📝 **Task 2.2 — 實作固定 Range 解析與祖先血統檢查 (`internal/gitmem/range.go`)**
+- [x] ✅ **Task 2.2 — 實作固定 Range 解析與祖先血統檢查 (`internal/gitmem/range.go`)**
   - **產出與範圍**：`internal/gitmem/range.go`, `internal/gitmem/range_test.go`
   - **相依**：Task 2.1
   - **驗收編號**：GITMEM-003
   - **完成判準**：單元測試驗證 base/head 存在性比對、merge 與 commit-graph 祖先驗證；unrelated history 拒絕混合。
-  - **驗證**：單元測試。
-  - **狀態**：📝 待實作
-  - **證據**：待填入
+  - **驗證**：`go test -v ./internal/gitmem`（14/14 pass）。
+  - **狀態**：✅ 已完成
+  - **證據**：單元測試覆蓋 ResolveRange (ValidRange, SingleCommit, InvalidRef, NotAncestor, UnrelatedHistory, EmptyRange, TooManyCommits)。
 
 - [ ] 📝 **Task 2.3 — 實作有界串流擷取與截斷分流政策 (`internal/gitmem/capture.go`)**
   - **產出與範圍**：`internal/gitmem/capture.go`, `internal/gitmem/capture_test.go`
