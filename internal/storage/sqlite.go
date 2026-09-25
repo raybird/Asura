@@ -284,6 +284,54 @@ func (s *SQLiteStore) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_memories_workspace ON memories(workspace);
 	CREATE INDEX IF NOT EXISTS idx_memories_workspace_id ON memories(workspace, id);
 	CREATE INDEX IF NOT EXISTS idx_memories_workspace_created_id ON memories(workspace, created_at, id);
+
+	CREATE TABLE IF NOT EXISTS memory_candidates (
+		id TEXT PRIMARY KEY,
+		workspace TEXT NOT NULL,
+		repo_id TEXT NOT NULL,
+		ref_name TEXT NOT NULL,
+		base_sha TEXT NOT NULL,
+		head_sha TEXT NOT NULL,
+		commit_count INTEGER NOT NULL,
+		facts_summary TEXT NOT NULL,
+		draft_content TEXT NOT NULL,
+		status TEXT NOT NULL,
+		policy_version TEXT NOT NULL DEFAULT 'gitmem-v1',
+		approved_memory_id TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		approved_at DATETIME,
+		UNIQUE(workspace, repo_id, ref_name, base_sha, head_sha, policy_version)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_candidates_workspace_status ON memory_candidates(workspace, status);
+
+	CREATE TABLE IF NOT EXISTS git_checkpoints (
+		workspace TEXT NOT NULL,
+		repo_id TEXT NOT NULL,
+		ref_name TEXT NOT NULL,
+		last_captured_sha TEXT NOT NULL,
+		updated_at DATETIME NOT NULL,
+		PRIMARY KEY (workspace, repo_id, ref_name)
+	);
+
+	CREATE TABLE IF NOT EXISTS memory_provenance (
+		memory_id TEXT PRIMARY KEY,
+		candidate_id TEXT NOT NULL,
+		workspace TEXT NOT NULL,
+		repo_id TEXT NOT NULL,
+		ref_name TEXT NOT NULL,
+		base_sha TEXT NOT NULL,
+		head_sha TEXT NOT NULL,
+		commit_count INTEGER NOT NULL,
+		commit_shas_json TEXT NOT NULL DEFAULT '[]',
+		facts_summary TEXT NOT NULL DEFAULT '',
+		is_user_edited INTEGER NOT NULL DEFAULT 0,
+		approved_at DATETIME NOT NULL,
+		FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE CASCADE
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_provenance_workspace ON memory_provenance(workspace);
+	CREATE INDEX IF NOT EXISTS idx_provenance_candidate ON memory_provenance(candidate_id);
 	`
 	if _, err := s.db.Exec(indices); err != nil {
 		return fmt.Errorf("create indices, cron, and memory tables: %w", err)

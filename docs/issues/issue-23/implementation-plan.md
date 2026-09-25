@@ -153,14 +153,14 @@ type MemoryProvenance struct {
 
 > 依賴：Phase 2 完成。
 
-- [ ] 📝 **Task 3.1 — 資料庫 Schema 實作 (`internal/storage/sqlite_gitmem.go`)**
+- [x] ✅ **Task 3.1 — 資料庫 Schema 實作 (`internal/storage/sqlite_gitmem.go`)**
   - **產出與範圍**：`internal/storage/sqlite_gitmem.go`, `internal/storage/sqlite_gitmem_test.go`
   - **相依**：Phase 2
   - **驗收編號**：GITMEM-005, GITMEM-006
   - **完成判準**：建立 `memory_candidates`（含 `approved_memory_id`）、`git_checkpoints`（複合 PK）與 `memory_provenance`（ON DELETE CASCADE）表；草稿資料 100% 隔離，不被 `ListMemories` 或 `recall` 讀出。
-  - **驗證**：SQLite 遷移與 CRUD 測試。
-  - **狀態**：📝 待實作
-  - **證據**：待填入
+  - **驗證**：`go test -v -run TestGitMem ./internal/storage`（4/4 pass）。
+  - **狀態**：✅ 已完成
+  - **證據**：單元測試覆蓋 SchemaAndIsolation (正式記憶與 Recall 零污染)、CandidateCRUD (複合 Range 唯一索引)、CheckpointCRUD (分支/repo 隔離)、ProvenanceCascadeDelete (外鍵連動刪除與不可變稽核)。
 
 - [ ] 📝 **Task 3.2 — 客觀 Facts 生成與 Provenance 封裝 (`internal/gitmem/facts.go`)**
   - **產出與範圍**：`internal/gitmem/facts.go`, `internal/gitmem/facts_test.go`
