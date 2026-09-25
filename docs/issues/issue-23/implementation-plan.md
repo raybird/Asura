@@ -186,14 +186,14 @@ type MemoryProvenance struct {
   - **狀態**：✅ 已完成
   - **證據**：單元測試覆蓋 DedupPendingAndApproved、DiscardedRequiresForce、CheckpointProgressionAndPartialBlocking (Partial 阻斷)。
 
-- [ ] 📝 **Task 4.2 — 原子性核准交易與冪等性保證 (`internal/storage/sqlite_gitmem_tx.go`)**
+- [x] ✅ **Task 4.2 — 原子性核准交易與冪等性保證 (`internal/storage/sqlite_gitmem_tx.go`)**
   - **產出與範圍**：`internal/storage/sqlite_gitmem_tx.go`, `internal/storage/sqlite_gitmem_tx_test.go`
   - **相依**：Task 4.1
   - **驗收編號**：GITMEM-007
-  - **完成判準**：核准操作於單一 SQLite Transaction 寫入 `memories`、`memory_provenance` 並更新 `memory_candidates`；重複核准回傳既有 `approved_memory_id`。
-  - **驗證**：交易崩潰注入與冪等測試。
-  - **狀態**：📝 待實作
-  - **證據**：待填入
+  - **完成判準**：核准操作於單一 SQLite Transaction 寫入 `memories`、`memory_provenance` 並更新 `memory_candidates`；重複核准回傳既有 `approved_memory_id`；支援使用者自訂內文。
+  - **驗證**：`go test -v -run TestApproveCandidate ./internal/storage`（3/3 pass）。
+  - **狀態**：✅ 已完成
+  - **證據**：單元測試覆蓋 SuccessAndIdempotency（多重核准冪等）、WithCustomContent（自訂內文與 IsUserEdited 判定）、AntiRevival（已刪除記憶防復活拒絕）。
 
 - [ ] 📝 **Task 4.3 — 防復活機制與刪除行為驗證**
   - **產出與範圍**：`internal/gitmem/lifecycle_test.go`
