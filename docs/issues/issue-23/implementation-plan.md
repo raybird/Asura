@@ -177,14 +177,14 @@ type MemoryProvenance struct {
 
 > 依賴：Phase 3 完成。
 
-- [ ] 📝 **Task 4.1 — 擷取去重與 Checkpoint 增量游標管理**
+- [x] ✅ **Task 4.1 — 擷取去重與 Checkpoint 增量游標管理**
   - **產出與範圍**：`internal/gitmem/checkpoint.go`, `internal/gitmem/dedup_test.go`
   - **相依**：Phase 3
   - **驗收編號**：GITMEM-007
-  - **完成判準**：相同 `(workspace, repo_id, ref_name, base_sha, head_sha, policy_version)` 重用候選；僅 Complete Capture 推進 `git_checkpoints`。
-  - **驗證**：去重測試。
-  - **狀態**：📝 待實作
-  - **證據**：待填入
+  - **完成判準**：相同 `(workspace, repo_id, ref_name, base_sha, head_sha, policy_version)` 重用候選；僅 Complete Capture 推進 `git_checkpoints`；Partial Capture 嚴格禁止前進 Checkpoint；捨棄候選需 force 重開。
+  - **驗證**：`go test -v -run TestCaptureService ./internal/gitmem`（3/3 pass）。
+  - **狀態**：✅ 已完成
+  - **證據**：單元測試覆蓋 DedupPendingAndApproved、DiscardedRequiresForce、CheckpointProgressionAndPartialBlocking (Partial 阻斷)。
 
 - [ ] 📝 **Task 4.2 — 原子性核准交易與冪等性保證 (`internal/storage/sqlite_gitmem_tx.go`)**
   - **產出與範圍**：`internal/storage/sqlite_gitmem_tx.go`, `internal/storage/sqlite_gitmem_tx_test.go`
