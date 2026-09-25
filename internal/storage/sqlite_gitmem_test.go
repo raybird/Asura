@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -343,3 +344,65 @@ func TestTruncateUTF8Safe_MultiByteCharacters(t *testing.T) {
 		t.Fatal("summary contains broken UTF-8 character (U+FFFD)")
 	}
 }
+
+func TestSQLiteStore_PartialCandidateMigrationBackfill(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "legacy_migration.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. 手動建立舊版 memory_candidates 表（不含 is_truncated 與 truncated_reason）
+	createOldTable := `
+	CREATE TABLE memory_candidates (
+		id TEXT PRIMARY KEY,
+		workspace TEXT NOT NULL,
+		repo_id TEXT NOT NULL,
+		ref_name TEXT NOT NULL,
+		base_sha TEXT NOT NULL,
+		head_sha TEXT NOT NULL,
+		commit_count INTEGER NOT NULL,
+		facts_summary TEXT NOT NULL,
+		draft_content TEXT NOT NULL,
+		status TEXT NOT NULL,
+		policy_version TEXT NOT NULL DEFAULT 'gitmem-v1',
+		approved_memory_id TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		approved_at DATETIME,
+		UNIQUE(workspace, repo_id, ref_name, base_sha, head_sha, policy_version)
+	);
+	INSERT INTO memory_candidates (
+		id, workspace, repo_id, ref_name, base_sha, head_sha,
+		commit_count, facts_summary, draft_content, status,
+		policy_version, approved_memory_id, created_at
+	) VALUES (
+		'cand-old-partial', '/ws', 'r1', 'refs/heads/main', 'b1', 'h1',
+		1, '{"truncated":true,"truncated_reason":"limit"}', 'draft', 'pending',
+		'gitmem-v1', '', '2026-09-25 12:00:00'
+	);
+	`
+	if _, err := db.Exec(createOldTable); err != nil {
+		t.Fatal(err)
+	}
+	_ = db.Close()
+
+	// 2. 透過 NewSQLiteStore 開啟，觸發 schema migration 與 backfill
+	store, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed on legacy schema: %v", err)
+	}
+	defer store.Close()
+
+	// 3. 讀回舊候選，驗證已被正確遷移為 is_truncated=true 與 is_user_edited=false
+	cand, err := store.GetCandidate(context.Background(), "/ws", "cand-old-partial")
+	if err != nil {
+		t.Fatalf("failed to get migrated candidate: %v", err)
+	}
+	if !cand.IsTruncated {
+		t.Fatalf("expected legacy truncated candidate to be backfilled as is_truncated=true, got: %v", cand.IsTruncated)
+	}
+	if cand.IsUserEdited {
+		t.Fatalf("expected legacy candidate is_user_edited to default to false, got: %v", cand.IsUserEdited)
+	}
+}
+

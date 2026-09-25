@@ -37,14 +37,17 @@ func (s *SQLiteStore) ApproveCandidateTx(ctx context.Context, workspace, candida
 	// 1. 查詢並驗證候選狀態
 	queryCand := `
 	SELECT id, workspace, repo_id, ref_name, base_sha, head_sha,
-	       commit_count, facts_summary, draft_content, status, approved_memory_id
+	       commit_count, facts_summary, draft_content, status, approved_memory_id,
+	       is_user_edited
 	FROM memory_candidates
 	WHERE workspace = ? AND id = ?
 	`
 	var cand MemoryCandidate
+	var isUserEditedInt int
 	err = tx.QueryRowContext(ctx, queryCand, workspace, candidateID).Scan(
 		&cand.ID, &cand.Workspace, &cand.RepoID, &cand.RefName, &cand.BaseSHA, &cand.HeadSHA,
 		&cand.CommitCount, &cand.FactsSummary, &cand.DraftContent, &cand.Status, &cand.ApprovedMemoryID,
+		&isUserEditedInt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -52,6 +55,7 @@ func (s *SQLiteStore) ApproveCandidateTx(ctx context.Context, workspace, candida
 		}
 		return "", fmt.Errorf("query candidate: %w", err)
 	}
+	cand.IsUserEdited = (isUserEditedInt == 1)
 
 	// 2. 狀態與冪等性處理
 	if cand.Status == "approved" {
@@ -78,7 +82,7 @@ func (s *SQLiteStore) ApproveCandidateTx(ctx context.Context, workspace, candida
 	memoryID := generateMemoryID()
 
 	finalContent := cand.DraftContent
-	isUserEdited := false
+	isUserEdited := cand.IsUserEdited
 	if strings.TrimSpace(opts.Content) != "" {
 		finalContent = opts.Content
 		if strings.TrimSpace(opts.Content) != strings.TrimSpace(cand.DraftContent) {
@@ -123,7 +127,7 @@ func (s *SQLiteStore) ApproveCandidateTx(ctx context.Context, workspace, candida
 		facts_summary, is_user_edited, approved_at
 	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
-	isUserEditedInt := 0
+	isUserEditedInt = 0
 	if isUserEdited {
 		isUserEditedInt = 1
 	}
@@ -204,6 +208,10 @@ func (s *SQLiteStore) SaveCandidateAndCheckpointTx(
 	if cand.IsTruncated {
 		isTruncatedInt = 1
 	}
+	isUserEditedInt := 0
+	if cand.IsUserEdited {
+		isUserEditedInt = 1
+	}
 
 	// 1. Insert-if-absent 候選草稿
 	queryCand := `
@@ -211,15 +219,15 @@ func (s *SQLiteStore) SaveCandidateAndCheckpointTx(
 		id, workspace, repo_id, ref_name, base_sha, head_sha,
 		commit_count, facts_summary, draft_content, status,
 		policy_version, approved_memory_id, created_at, approved_at,
-		is_truncated, truncated_reason
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		is_truncated, truncated_reason, is_user_edited
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(workspace, repo_id, ref_name, base_sha, head_sha, policy_version) DO NOTHING
 	`
 	_, err = tx.ExecContext(ctx, queryCand,
 		cand.ID, cand.Workspace, cand.RepoID, cand.RefName, cand.BaseSHA, cand.HeadSHA,
 		cand.CommitCount, cand.FactsSummary, cand.DraftContent, cand.Status,
 		cand.PolicyVersion, cand.ApprovedMemoryID, cand.CreatedAt, cand.ApprovedAt,
-		isTruncatedInt, cand.TruncatedReason,
+		isTruncatedInt, cand.TruncatedReason, isUserEditedInt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("insert candidate in tx: %w", err)
@@ -230,7 +238,7 @@ func (s *SQLiteStore) SaveCandidateAndCheckpointTx(
 	SELECT id, workspace, repo_id, ref_name, base_sha, head_sha,
 	       commit_count, facts_summary, draft_content, status,
 	       policy_version, approved_memory_id, created_at, approved_at,
-	       is_truncated, truncated_reason
+	       is_truncated, truncated_reason, is_user_edited
 	FROM memory_candidates
 	WHERE workspace = ? AND repo_id = ? AND ref_name = ?
 	  AND base_sha = ? AND head_sha = ? AND policy_version = ?
@@ -238,13 +246,14 @@ func (s *SQLiteStore) SaveCandidateAndCheckpointTx(
 	var persisted MemoryCandidate
 	var approvedAt sql.NullTime
 	var persistedIsTruncatedInt int
+	var persistedIsUserEditedInt int
 	err = tx.QueryRowContext(ctx, selectCand,
 		cand.Workspace, cand.RepoID, cand.RefName, cand.BaseSHA, cand.HeadSHA, cand.PolicyVersion,
 	).Scan(
 		&persisted.ID, &persisted.Workspace, &persisted.RepoID, &persisted.RefName, &persisted.BaseSHA, &persisted.HeadSHA,
 		&persisted.CommitCount, &persisted.FactsSummary, &persisted.DraftContent, &persisted.Status,
 		&persisted.PolicyVersion, &persisted.ApprovedMemoryID, &persisted.CreatedAt, &approvedAt,
-		&persistedIsTruncatedInt, &persisted.TruncatedReason,
+		&persistedIsTruncatedInt, &persisted.TruncatedReason, &persistedIsUserEditedInt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("scan persisted candidate: %w", err)
@@ -253,18 +262,31 @@ func (s *SQLiteStore) SaveCandidateAndCheckpointTx(
 		persisted.ApprovedAt = &approvedAt.Time
 	}
 	persisted.IsTruncated = (persistedIsTruncatedInt == 1)
+	persisted.IsUserEdited = (persistedIsUserEditedInt == 1)
 
 	// 若既有候選為 Partial (is_truncated=1, status='pending')，但本次傳入為 Complete (!cand.IsTruncated)，執行原子升級
 	if persisted.IsTruncated && !cand.IsTruncated && persisted.Status == "pending" {
-		upgradeQuery := `
-		UPDATE memory_candidates
-		SET draft_content = ?, facts_summary = ?, commit_count = ?, is_truncated = 0, truncated_reason = ''
-		WHERE workspace = ? AND id = ? AND status = 'pending' AND is_truncated = 1
-		`
-		if _, err := tx.ExecContext(ctx, upgradeQuery, cand.DraftContent, cand.FactsSummary, cand.CommitCount, cand.Workspace, persisted.ID); err != nil {
+		var upgradeQuery string
+		var upgradeArgs []interface{}
+		if persisted.IsUserEdited {
+			upgradeQuery = `
+			UPDATE memory_candidates
+			SET facts_summary = ?, commit_count = ?, is_truncated = 0, truncated_reason = ''
+			WHERE workspace = ? AND id = ? AND status = 'pending' AND is_truncated = 1
+			`
+			upgradeArgs = []interface{}{cand.FactsSummary, cand.CommitCount, cand.Workspace, persisted.ID}
+		} else {
+			upgradeQuery = `
+			UPDATE memory_candidates
+			SET draft_content = ?, facts_summary = ?, commit_count = ?, is_truncated = 0, truncated_reason = ''
+			WHERE workspace = ? AND id = ? AND status = 'pending' AND is_truncated = 1
+			`
+			upgradeArgs = []interface{}{cand.DraftContent, cand.FactsSummary, cand.CommitCount, cand.Workspace, persisted.ID}
+			persisted.DraftContent = cand.DraftContent
+		}
+		if _, err := tx.ExecContext(ctx, upgradeQuery, upgradeArgs...); err != nil {
 			return nil, fmt.Errorf("upgrade partial candidate in tx: %w", err)
 		}
-		persisted.DraftContent = cand.DraftContent
 		persisted.FactsSummary = cand.FactsSummary
 		persisted.CommitCount = cand.CommitCount
 		persisted.IsTruncated = false
@@ -272,8 +294,10 @@ func (s *SQLiteStore) SaveCandidateAndCheckpointTx(
 	}
 
 	// 3. 若有 Checkpoint 需推進，在同筆交易內原子更新並進行 Monotonic / CAS 校驗
-	// 安全約束：未確認持久化 Candidate 完整前（!persisted.IsTruncated），絕對禁止 advance Checkpoint！
-	if checkpoint != nil && !persisted.IsTruncated {
+	// 安全約束：只有在確認持久化 Candidate 完整（!persisted.IsTruncated）或該候選已被人工核准（persisted.Status == "approved"）時，
+	// 才允許 advance Checkpoint；未經人工核准的 Partial 候選絕對禁止 advance！
+	allowAdvance := !persisted.IsTruncated || persisted.Status == "approved"
+	if checkpoint != nil && allowAdvance {
 		if err := advanceCheckpointInTx(ctx, tx, checkpoint, expectedOldSHA, isAncestor); err != nil {
 			return nil, err
 		}
@@ -284,6 +308,49 @@ func (s *SQLiteStore) SaveCandidateAndCheckpointTx(
 	}
 
 	return &persisted, nil
+}
+
+// UpgradePartialCandidateAndAdvanceCheckpointTx 在單一原子交易中完成 Partial 候選升級與 Checkpoint 推進 (SHOULD FIX 1)
+// 保證候選升級與游標前進命運同調：任何一步失敗即整體 Rollback，絕無中途孤立不一致
+func (s *SQLiteStore) UpgradePartialCandidateAndAdvanceCheckpointTx(
+	ctx context.Context,
+	workspace, id string,
+	draftContent, factsSummary string,
+	commitCount int,
+	checkpoint *GitCheckpoint,
+	expectedOldSHA string,
+	isAncestor CheckpointAncestryCheckFunc,
+) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx for upgrade partial candidate: %w", err)
+	}
+	defer tx.Rollback()
+
+	query := `
+	UPDATE memory_candidates
+	SET draft_content = ?, facts_summary = ?, commit_count = ?, is_truncated = 0, truncated_reason = ''
+	WHERE workspace = ? AND id = ? AND status = 'pending' AND is_truncated = 1
+	`
+	res, err := tx.ExecContext(ctx, query, draftContent, factsSummary, commitCount, workspace, id)
+	if err != nil {
+		return fmt.Errorf("upgrade partial candidate: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
+	if rows == 0 {
+		return ErrCandidateStatusConflict
+	}
+
+	if checkpoint != nil {
+		if err := advanceCheckpointInTx(ctx, tx, checkpoint, expectedOldSHA, isAncestor); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
 // AdvanceCheckpointTx 在獨立交易內推進 Checkpoint，嚴格保證單調前進（Monotonicity）與 CAS 防倒退

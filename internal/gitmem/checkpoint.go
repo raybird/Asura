@@ -221,14 +221,18 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 			}, nil
 
 		case "pending":
-			// MUST FIX 2: 若既有候選原本為 Partial，但本次重試為 Complete，執行原子升級
+			// MUST FIX 2 & SHOULD FIX 1 & 2: 若既有候選原本為 Partial，但本次重試為 Complete，執行原子升級
 			if existing.IsTruncated && !facts.Truncated {
 				factsSummary, err := FormatFactsSummary(facts)
 				if err != nil {
 					return nil, fmt.Errorf("format facts summary: %w", err)
 				}
 				var draft string
-				if opts.AIDraft {
+				// SHOULD FIX 2: 檢查使用者是否曾手動編修草稿（草稿來源與編修版本檢查）
+				// 若初次 Partial 生成的預設草稿已被使用者編輯，保留使用者的手動編修內容，僅升級客觀事實與截斷標記
+				if existing.IsUserEdited {
+					draft = existing.DraftContent // 保留使用者手動編輯之草稿內容
+				} else if opts.AIDraft {
 					if s.aiGen == nil {
 						return nil, errors.New("AI draft generation requested (--ai-draft), but no AI generator is configured on daemon; please use standard capture or configure an AI generator")
 					}
@@ -241,23 +245,88 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 					draft = GenerateDraftContent(facts)
 				}
 
-				if err := s.store.UpgradePartialCandidate(captureCtx, repoInfo.Workspace, existing.ID, draft, factsSummary, facts.CommitCount); err != nil {
+				// SHOULD FIX 1: 在單一原子交易中完成 Partial 候選升級與 Checkpoint 前進
+				err = s.store.UpgradePartialCandidateAndAdvanceCheckpointTx(
+					captureCtx,
+					repoInfo.Workspace,
+					existing.ID,
+					draft,
+					factsSummary,
+					facts.CommitCount,
+					newCP,
+					expectedOldSHA,
+					ancestryChecker,
+				)
+				if err != nil {
 					if !errors.Is(err, storage.ErrCandidateStatusConflict) {
-						return nil, fmt.Errorf("upgrade partial candidate: %w", err)
+						return nil, fmt.Errorf("upgrade partial candidate and advance checkpoint: %w", err)
 					}
+
+					// MUST FIX 2: 遇到 CAS 並行狀態衝突（例如被另一個請求並行 Discard 或並行 Approve）
+					// 必須重新讀取最新持久化記錄，並嚴格依最新狀態重新跑狀態機分流！
 					fresh, getErr := s.store.GetCandidate(captureCtx, repoInfo.Workspace, existing.ID)
-					if getErr == nil && fresh != nil {
-						existing = fresh
+					if getErr != nil || fresh == nil {
+						return nil, fmt.Errorf("%w: failed to reload fresh candidate on status conflict", storage.ErrCandidateStatusConflict)
 					}
-				} else {
-					existing.DraftContent = draft
-					existing.FactsSummary = factsSummary
-					existing.CommitCount = facts.CommitCount
-					existing.IsTruncated = false
-					existing.TruncatedReason = ""
+
+					switch fresh.Status {
+					case "discarded":
+						// 若並行請求已將該候選改為 discarded，未帶 force 必須堅決報錯拒絕！
+						if !opts.Force {
+							return nil, fmt.Errorf("candidate for range %s..%s was already discarded; use --force to reopen", facts.BaseSHA[:min(8, len(facts.BaseSHA))], facts.HeadSHA[:min(8, len(facts.HeadSHA))])
+						}
+						return nil, fmt.Errorf("%w: candidate was concurrently discarded; please retry capture with --force", storage.ErrCandidateStatusConflict)
+
+					case "approved":
+						// 若並行請求已完成核准，若有 newCP 且允許前進，前進後回傳 approved
+						if newCP != nil {
+							_ = s.store.AdvanceCheckpointTx(captureCtx, newCP, expectedOldSHA, ancestryChecker)
+						}
+						return &CaptureResult{
+							Candidate: fresh,
+							Facts:     facts,
+							IsReused:  true,
+							Message:   fmt.Sprintf("range already approved as memory %s", fresh.ApprovedMemoryID),
+						}, nil
+
+					case "pending":
+						if !fresh.IsTruncated {
+							// 另一個並行請求已經成功將其升級為 Complete！直接安全重用
+							if newCP != nil {
+								_ = s.store.AdvanceCheckpointTx(captureCtx, newCP, expectedOldSHA, ancestryChecker)
+							}
+							return &CaptureResult{
+								Candidate: fresh,
+								Facts:     facts,
+								IsReused:  true,
+								Message:   "reused existing pending candidate",
+							}, nil
+						}
+						return nil, fmt.Errorf("%w: concurrent modification on pending candidate; please retry", storage.ErrCandidateStatusConflict)
+					}
 				}
+
+				// 升級成功，同步本地記憶體物件
+				existing.DraftContent = draft
+				existing.FactsSummary = factsSummary
+				existing.CommitCount = facts.CommitCount
+				existing.IsTruncated = false
+				existing.TruncatedReason = ""
+
+				msg := "reused existing pending candidate (upgraded from partial to complete)"
+				if opts.AIDraft && s.aiGen != nil && !existing.IsUserEdited {
+					msg = "reused existing pending candidate (upgraded from partial to complete with AI draft)"
+				}
+
+				return &CaptureResult{
+					Candidate: existing,
+					Facts:     facts,
+					IsReused:  true,
+					Message:   msg,
+				}, nil
 			}
 
+			// 若無須升級（既有候選原本就已是 Complete）：
 			// 只有確認持久化候選為完整（!existing.IsTruncated）時，才前進 Checkpoint
 			if newCP != nil && !existing.IsTruncated {
 				if err := s.store.AdvanceCheckpointTx(captureCtx, newCP, expectedOldSHA, ancestryChecker); err != nil {
@@ -278,8 +347,10 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 			}, nil
 
 		case "approved":
-			// 只有確認持久化候選為完整（!existing.IsTruncated）時，才前進 Checkpoint
-			if newCP != nil && !existing.IsTruncated {
+			// 人工作業接受 Partial 後的增量恢復策略 (MUST FIX 1)：
+			// 既然該 Range 的候選已經由人工審核核准（無論當初是否包含截斷），該 Range 的進度已正式落盤為專案記憶；
+			// 因此若符合 newCP != nil，允許推進 Checkpoint，解除增量停滯！
+			if newCP != nil {
 				if err := s.store.AdvanceCheckpointTx(captureCtx, newCP, expectedOldSHA, ancestryChecker); err != nil {
 					return nil, fmt.Errorf("advance checkpoint for approved candidate: %w", err)
 				}

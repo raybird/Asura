@@ -302,6 +302,7 @@ func (s *SQLiteStore) initSchema() error {
 		approved_at DATETIME,
 		is_truncated INTEGER NOT NULL DEFAULT 0,
 		truncated_reason TEXT NOT NULL DEFAULT '',
+		is_user_edited INTEGER NOT NULL DEFAULT 0,
 		UNIQUE(workspace, repo_id, ref_name, base_sha, head_sha, policy_version)
 	);
 
@@ -354,7 +355,14 @@ func (s *SQLiteStore) initSchema() error {
 				return fmt.Errorf("add column truncated_reason to memory_candidates: %w", err)
 			}
 		}
-		_, _ = s.db.Exec(`UPDATE memory_candidates SET is_truncated = 1 WHERE is_truncated = 0 AND facts_summary LIKE '%"truncated":true%'`)
+		if !candCols["is_user_edited"] {
+			if _, err := s.db.Exec("ALTER TABLE memory_candidates ADD COLUMN is_user_edited INTEGER NOT NULL DEFAULT 0"); err != nil {
+				return fmt.Errorf("add column is_user_edited to memory_candidates: %w", err)
+			}
+		}
+		if _, err := s.db.Exec(`UPDATE memory_candidates SET is_truncated = 1 WHERE is_truncated = 0 AND facts_summary LIKE '%"truncated":true%'`); err != nil {
+			return fmt.Errorf("backfill is_truncated on memory_candidates: %w", err)
+		}
 	}
 	return nil
 }

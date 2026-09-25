@@ -34,6 +34,7 @@ type MemoryCandidate struct {
 	ApprovedAt       *time.Time `json:"approved_at,omitempty"`
 	IsTruncated      bool       `json:"is_truncated"`
 	TruncatedReason  string     `json:"truncated_reason,omitempty"`
+	IsUserEdited     bool       `json:"is_user_edited"`
 }
 
 // CandidateSummary 代表有界候選清單項目（不包含龐大 facts_summary JSON 與全文 diff，約束傳輸大小）
@@ -101,21 +102,25 @@ func (s *SQLiteStore) SaveCandidate(ctx context.Context, c *MemoryCandidate) err
 	if c.IsTruncated {
 		isTruncatedInt = 1
 	}
+	isUserEditedInt := 0
+	if c.IsUserEdited {
+		isUserEditedInt = 1
+	}
 
 	query := `
 	INSERT INTO memory_candidates (
 		id, workspace, repo_id, ref_name, base_sha, head_sha,
 		commit_count, facts_summary, draft_content, status,
 		policy_version, approved_memory_id, created_at, approved_at,
-		is_truncated, truncated_reason
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		is_truncated, truncated_reason, is_user_edited
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(workspace, repo_id, ref_name, base_sha, head_sha, policy_version) DO NOTHING
 	`
 	_, err := s.db.ExecContext(ctx, query,
 		c.ID, c.Workspace, c.RepoID, c.RefName, c.BaseSHA, c.HeadSHA,
 		c.CommitCount, c.FactsSummary, c.DraftContent, c.Status,
 		c.PolicyVersion, c.ApprovedMemoryID, c.CreatedAt, c.ApprovedAt,
-		isTruncatedInt, c.TruncatedReason,
+		isTruncatedInt, c.TruncatedReason, isUserEditedInt,
 	)
 	if err != nil {
 		return fmt.Errorf("save candidate: %w", err)
@@ -138,18 +143,19 @@ func (s *SQLiteStore) GetCandidate(ctx context.Context, workspace, id string) (*
 	SELECT id, workspace, repo_id, ref_name, base_sha, head_sha,
 	       commit_count, facts_summary, draft_content, status,
 	       policy_version, approved_memory_id, created_at, approved_at,
-	       is_truncated, truncated_reason
+	       is_truncated, truncated_reason, is_user_edited
 	FROM memory_candidates
 	WHERE workspace = ? AND id = ?
 	`
 	var c MemoryCandidate
 	var approvedAt sql.NullTime
 	var isTruncatedInt int
+	var isUserEditedInt int
 	err := s.db.QueryRowContext(ctx, query, workspace, id).Scan(
 		&c.ID, &c.Workspace, &c.RepoID, &c.RefName, &c.BaseSHA, &c.HeadSHA,
 		&c.CommitCount, &c.FactsSummary, &c.DraftContent, &c.Status,
 		&c.PolicyVersion, &c.ApprovedMemoryID, &c.CreatedAt, &approvedAt,
-		&isTruncatedInt, &c.TruncatedReason,
+		&isTruncatedInt, &c.TruncatedReason, &isUserEditedInt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -161,6 +167,7 @@ func (s *SQLiteStore) GetCandidate(ctx context.Context, workspace, id string) (*
 		c.ApprovedAt = &approvedAt.Time
 	}
 	c.IsTruncated = (isTruncatedInt == 1)
+	c.IsUserEdited = (isUserEditedInt == 1)
 	return &c, nil
 }
 
@@ -173,7 +180,7 @@ func (s *SQLiteStore) FindCandidateByRange(ctx context.Context, workspace, repoI
 	SELECT id, workspace, repo_id, ref_name, base_sha, head_sha,
 	       commit_count, facts_summary, draft_content, status,
 	       policy_version, approved_memory_id, created_at, approved_at,
-	       is_truncated, truncated_reason
+	       is_truncated, truncated_reason, is_user_edited
 	FROM memory_candidates
 	WHERE workspace = ? AND repo_id = ? AND ref_name = ?
 	  AND base_sha = ? AND head_sha = ? AND policy_version = ?
@@ -181,11 +188,12 @@ func (s *SQLiteStore) FindCandidateByRange(ctx context.Context, workspace, repoI
 	var c MemoryCandidate
 	var approvedAt sql.NullTime
 	var isTruncatedInt int
+	var isUserEditedInt int
 	err := s.db.QueryRowContext(ctx, query, workspace, repoID, refName, baseSHA, headSHA, policyVersion).Scan(
 		&c.ID, &c.Workspace, &c.RepoID, &c.RefName, &c.BaseSHA, &c.HeadSHA,
 		&c.CommitCount, &c.FactsSummary, &c.DraftContent, &c.Status,
 		&c.PolicyVersion, &c.ApprovedMemoryID, &c.CreatedAt, &approvedAt,
-		&isTruncatedInt, &c.TruncatedReason,
+		&isTruncatedInt, &c.TruncatedReason, &isUserEditedInt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -197,6 +205,7 @@ func (s *SQLiteStore) FindCandidateByRange(ctx context.Context, workspace, repoI
 		c.ApprovedAt = &approvedAt.Time
 	}
 	c.IsTruncated = (isTruncatedInt == 1)
+	c.IsUserEdited = (isUserEditedInt == 1)
 	return &c, nil
 }
 
@@ -336,7 +345,7 @@ func (s *SQLiteStore) ReopenDiscardedCandidate(ctx context.Context, workspace, i
 	query := `
 	UPDATE memory_candidates
 	SET status = 'pending', draft_content = ?, facts_summary = ?, commit_count = ?,
-	    is_truncated = ?, truncated_reason = ?, approved_memory_id = '', approved_at = NULL
+	    is_truncated = ?, truncated_reason = ?, is_user_edited = 0, approved_memory_id = '', approved_at = NULL
 	WHERE workspace = ? AND id = ? AND status = 'discarded'
 	`
 	res, err := s.db.ExecContext(ctx, query, draftContent, factsSummary, commitCount, isTruncatedInt, truncatedReason, workspace, id)
@@ -396,7 +405,7 @@ func (s *SQLiteStore) DiscardCandidate(ctx context.Context, workspace, id string
 func (s *SQLiteStore) UpdateCandidateDraft(ctx context.Context, workspace, id, draftContent string) error {
 	query := `
 	UPDATE memory_candidates
-	SET draft_content = ?
+	SET draft_content = ?, is_user_edited = 1
 	WHERE workspace = ? AND id = ?
 	`
 	res, err := s.db.ExecContext(ctx, query, draftContent, workspace, id)

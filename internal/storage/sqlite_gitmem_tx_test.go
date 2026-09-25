@@ -921,6 +921,112 @@ func TestSaveCandidateAndCheckpointTx_PartialBlocksCheckpointAdvance(t *testing.
 	}
 }
 
+func TestUpgradePartialCandidateAndAdvanceCheckpointTx_SuccessAndRollback(t *testing.T) {
+	store := newTestGitMemStore(t)
+	ctx := context.Background()
+	ws := "/workspace/test"
+
+	// 1. 初始化既有 Checkpoint 在 c0
+	initCP := &GitCheckpoint{
+		Workspace:       ws,
+		RepoID:          "repo-1",
+		RefName:         "refs/heads/main",
+		LastCapturedSHA: "c0",
+		UpdatedAt:       time.Now().UTC(),
+	}
+	if err := store.SaveCheckpoint(ctx, initCP); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. 建立 pending partial candidate
+	cand := &MemoryCandidate{
+		ID:              "cand-partial-tx",
+		Workspace:       ws,
+		RepoID:          "repo-1",
+		RefName:         "refs/heads/main",
+		BaseSHA:         "c0",
+		HeadSHA:         "c1",
+		CommitCount:     1,
+		FactsSummary:    `{"truncated":true}`,
+		DraftContent:    "initial partial draft",
+		Status:          "pending",
+		PolicyVersion:   "gitmem-v1",
+		CreatedAt:       time.Now().UTC(),
+		IsTruncated:     true,
+		TruncatedReason: "io timeout",
+	}
+	if err := store.SaveCandidate(ctx, cand); err != nil {
+		t.Fatal(err)
+	}
+
+	// 3. 測試 Rollback：若 checkpoint 推進時祖先檢查失敗或非祖先，整個交易必須 Rollback（候選維持 partial）
+	newCP := &GitCheckpoint{
+		Workspace:       ws,
+		RepoID:          "repo-1",
+		RefName:         "refs/heads/main",
+		LastCapturedSHA: "unrelated-c1",
+		UpdatedAt:       time.Now().UTC(),
+	}
+	nonAncestorCheck := func(ctx context.Context, ancestor, descendant string) (bool, error) {
+		return false, nil // 判定非祖先
+	}
+	err := store.UpgradePartialCandidateAndAdvanceCheckpointTx(
+		ctx, ws, cand.ID, "should rollback draft", "{}", 2, newCP, "c0", nonAncestorCheck,
+	)
+	if err == nil {
+		t.Fatal("expected error on non-ancestor checkpoint advance, got nil")
+	}
+
+	// 驗證 Candidate 依然是 is_truncated=true，草稿未被修改
+	candAfterRollback, err := store.GetCandidate(ctx, ws, cand.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !candAfterRollback.IsTruncated {
+		t.Fatal("expected candidate to remain truncated after rollback")
+	}
+	if candAfterRollback.DraftContent != "initial partial draft" {
+		t.Fatalf("expected draft to remain unchanged after rollback, got %q", candAfterRollback.DraftContent)
+	}
+
+	// 驗證 Checkpoint 依然保持在 c0
+	cpAfterRollback, _ := store.GetCheckpoint(ctx, ws, "repo-1", "refs/heads/main")
+	if cpAfterRollback.LastCapturedSHA != "c0" {
+		t.Fatalf("expected checkpoint to stay at c0, got %s", cpAfterRollback.LastCapturedSHA)
+	}
+
+	// 4. 測試成功路徑：祖先檢查通過，Candidate 原子升級為 Complete 且 Checkpoint 推進至 c1
+	validAncestorCheck := func(ctx context.Context, ancestor, descendant string) (bool, error) {
+		return true, nil
+	}
+	newCP.LastCapturedSHA = "c1"
+	err = store.UpgradePartialCandidateAndAdvanceCheckpointTx(
+		ctx, ws, cand.ID, "upgraded complete draft", `{"truncated":false}`, 2, newCP, "c0", validAncestorCheck,
+	)
+	if err != nil {
+		t.Fatalf("expected upgrade and advance tx to succeed, got: %v", err)
+	}
+
+	// 驗證 Candidate 已升級為 Complete
+	candUpgraded, err := store.GetCandidate(ctx, ws, cand.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if candUpgraded.IsTruncated {
+		t.Fatal("expected candidate is_truncated to be false after successful tx")
+	}
+	if candUpgraded.DraftContent != "upgraded complete draft" {
+		t.Fatalf("expected upgraded draft, got %q", candUpgraded.DraftContent)
+	}
+
+	// 驗證 Checkpoint 成功推進至 c1
+	cpSuccess, _ := store.GetCheckpoint(ctx, ws, "repo-1", "refs/heads/main")
+	if cpSuccess.LastCapturedSHA != "c1" {
+		t.Fatalf("expected checkpoint advanced to c1, got %s", cpSuccess.LastCapturedSHA)
+	}
+}
+
+
 
 
 
