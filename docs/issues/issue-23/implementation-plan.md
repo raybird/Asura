@@ -162,14 +162,14 @@ type MemoryProvenance struct {
   - **狀態**：✅ 已完成
   - **證據**：單元測試覆蓋 SchemaAndIsolation (正式記憶與 Recall 零污染)、CandidateCRUD (複合 Range 唯一索引)、CheckpointCRUD (分支/repo 隔離)、ProvenanceCascadeDelete (外鍵連動刪除與不可變稽核)。
 
-- [ ] 📝 **Task 3.2 — 客觀 Facts 生成與 Provenance 封裝 (`internal/gitmem/facts.go`)**
+- [x] ✅ **Task 3.2 — 客觀 Facts 生成與 Provenance 封裝 (`internal/gitmem/facts.go`)**
   - **產出與範圍**：`internal/gitmem/facts.go`, `internal/gitmem/facts_test.go`
   - **相依**：Task 3.1
   - **驗收編號**：GITMEM-006
   - **完成判準**：結構化記錄 commit SHA 清單、變更統計與截斷資訊，與專案記憶草稿內文劃分；保持正式記憶內文純淨。
-  - **驗證**：格式化單元測試。
-  - **狀態**：📝 待實作
-  - **證據**：待填入
+  - **驗證**：`go test -v ./internal/gitmem`（21/21 pass）。
+  - **狀態**：✅ 已完成
+  - **證據**：單元測試覆蓋 FormatFactsSummary、GenerateDraftContent (純淨架構決策模板，無 raw diff 污染)、BuildProvenance (JSON SHA 清單、使用者編輯判定)。
 
 ---
 
