@@ -175,16 +175,27 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 // UpdateCheckpointIfEligible 根據擷取狀態更新 Checkpoint
 // 嚴格保證：Partial Capture (Truncated == true) 絕對禁止自動前進 Checkpoint (H-TBD-3)
 func (s *CaptureService) UpdateCheckpointIfEligible(ctx context.Context, facts *CaptureFacts, sinceLast bool) error {
-	if facts == nil || facts.Truncated || !sinceLast {
+	if facts == nil || facts.Truncated {
 		return nil
 	}
 
-	cp := &storage.GitCheckpoint{
+	// 查詢既有 checkpoint
+	cp, err := s.store.GetCheckpoint(ctx, facts.Workspace, facts.RepoID, facts.RefName)
+	if err != nil {
+		return err
+	}
+
+	// 若既有 checkpoint 之 SHA 與當前 head_sha 相同，無須重複更新
+	if cp != nil && cp.LastCapturedSHA == facts.HeadSHA {
+		return nil
+	}
+
+	newCP := &storage.GitCheckpoint{
 		Workspace:       facts.Workspace,
 		RepoID:          facts.RepoID,
 		RefName:         facts.RefName,
 		LastCapturedSHA: facts.HeadSHA,
 		UpdatedAt:       time.Now().UTC(),
 	}
-	return s.store.SaveCheckpoint(ctx, cp)
+	return s.store.SaveCheckpoint(ctx, newCP)
 }

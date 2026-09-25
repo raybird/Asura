@@ -267,14 +267,14 @@ type MemoryProvenance struct {
 
 > 依賴：Phase 6 完成。
 
-- [ ] 📝 **Task 7.1 — 真實 Git Repo 端到端驗收測試**
+- [x] ✅ **Task 7.1 — 真實 Git Repo 端到端驗收測試**
   - **產出與範圍**：`tests/integration/git_memory_e2e_test.go`
   - **相依**：Phase 6
   - **驗收編號**：GITMEM-001～009
   - **完成判準**：以真實多分支、帶 merge、帶刪檔之測試 Git Repo 跑通完整 capture -> review -> approve -> recall 流程。
-  - **驗證**：端到端整合測試。
-  - **狀態**：📝 待實作
-  - **證據**：待填入
+  - **驗證**：`go test -v -run TestGitMemory_EndToEnd_FullWorkflow ./tests/integration`（1/1 pass）。
+  - **狀態**：✅ 已完成
+  - **證據**：整合測試驗證含 merge commit、刪檔、新增檔案之複雜專案，端到端完成擷取、候選查詢、核准、Phase 3F ask 召回、增量 checkpoint 前進、刪除連動與防復活全流程。
 
 - [ ] 📝 **Task 7.2 — 完整既有套件回歸測試**
   - **產出與範圍**：回歸測試紀錄

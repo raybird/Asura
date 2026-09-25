@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -175,12 +176,20 @@ func (g *GitExecutor) ValidateAndResolveRepo(ctx context.Context, targetDir stri
 	}
 
 	// 6. 計算 RepoID (Root commit SHA + Canonical Repo Root SHA-256 前 16 碼)
-	rootOut, err := g.Exec(ctx, canonicalTarget, "rev-list", "--max-parents=0", "--abbrev-commit=40", "HEAD")
+	rootOut, err := g.Exec(ctx, canonicalTarget, "rev-list", "--max-parents=0", "HEAD")
 	var rootSHA string
 	if err == nil {
 		lines := strings.Split(strings.TrimSpace(string(rootOut)), "\n")
-		if len(lines) > 0 {
-			rootSHA = strings.TrimSpace(lines[len(lines)-1])
+		var validRoots []string
+		for _, l := range lines {
+			l = strings.TrimSpace(l)
+			if len(l) == 40 {
+				validRoots = append(validRoots, l)
+			}
+		}
+		if len(validRoots) > 0 {
+			sort.Strings(validRoots)
+			rootSHA = validRoots[0]
 		}
 	}
 	if rootSHA == "" {
