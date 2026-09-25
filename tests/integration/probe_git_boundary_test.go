@@ -225,10 +225,27 @@ func TestProbe_GitBoundary_BinaryAndStats(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(repoDir, "image.bin"), binContent, 0644); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("git", "-C", repoDir, "add", "image.bin")
-	_ = cmd.Run()
-	cmd = exec.Command("git", "-C", repoDir, "commit", "-m", "Add binary file")
-	_ = cmd.Run()
+	runGit := func(args ...string) {
+		t.Helper()
+		c := exec.Command("git", args...)
+		c.Dir = repoDir
+		c.Env = []string{
+			"GIT_AUTHOR_NAME=Test",
+			"GIT_AUTHOR_EMAIL=test@example.com",
+			"GIT_COMMITTER_NAME=Test",
+			"GIT_COMMITTER_EMAIL=test@example.com",
+			"GIT_CONFIG_NOSYSTEM=1",
+			"GIT_CONFIG_GLOBAL=/dev/null",
+			"PATH=" + os.Getenv("PATH"),
+		}
+		out, err := c.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v failed: %v, out: %s", args, err, string(out))
+		}
+	}
+
+	runGit("add", "image.bin")
+	runGit("commit", "-m", "Add binary file")
 
 	// 探測 diff --numstat
 	numstatCmd := exec.Command("git", "-C", repoDir, "diff", "--numstat", "HEAD~1..HEAD")
