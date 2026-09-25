@@ -137,25 +137,25 @@ Feature: Git 變更感知與審核式專案記憶擷取
 
 ## Gherkin 核准紀錄
 
-- **核准 commit**: 9e19fd6（承載初次建檔與審查基準之提交；待修訂確認後回填正式核准 SHA）
-- **核准來源**: 使用者於 2026-09-24 在 GitHub 提出 Issue #23，授權現況調查、方案分析與安全 probe；2026-09-25 審查 Commit 9e19fd6 提出修訂意見（RETURN TO analysis）；GITMEM-001～010 驗收行為與 H-TBD-1～6 待修訂確認後正式核准。
+- **核准 commit**: a71ea2f（承載審查意見修訂與正式核准基準之提交）
+- **核准來源**: 使用者於 2026-09-25 對話明確回覆「已核准」，正式核准修訂後之 GITMEM-001～010 驗收劇本與 H-TBD-1～6 設計選型。
 
 | Scenario | 核准日期 | 狀態 |
 |---|---|---|
-| GITMEM-001 | - | 待核准 |
-| GITMEM-002 | - | 待核准 |
-| GITMEM-003 | - | 待核准 |
-| GITMEM-004 | - | 待核准 |
-| GITMEM-005 | - | 待核准 |
-| GITMEM-006 | - | 待核准 |
-| GITMEM-007 | - | 待核准 |
-| GITMEM-008 | - | 待核准 |
-| GITMEM-009 | - | 待核准 |
-| GITMEM-010 | - | 待核准 |
+| GITMEM-001 | 2026-09-25 | 已核准 |
+| GITMEM-002 | 2026-09-25 | 已核准 |
+| GITMEM-003 | 2026-09-25 | 已核准 |
+| GITMEM-004 | 2026-09-25 | 已核准 |
+| GITMEM-005 | 2026-09-25 | 已核准 |
+| GITMEM-006 | 2026-09-25 | 已核准 |
+| GITMEM-007 | 2026-09-25 | 已核准 |
+| GITMEM-008 | 2026-09-25 | 已核准 |
+| GITMEM-009 | 2026-09-25 | 已核准 |
+| GITMEM-010 | 2026-09-25 | 已核准 |
 
 ## 實作步驟概要
 
-權威任務與相依見 [implementation-plan.md](implementation-plan.md)。本期已授權 Phase 1 現況調查與安全 probe；Phase 2～7 待 H-TBD-1～6 與 Gherkin 驗收核准後推進實作。
+權威任務與相依見 [implementation-plan.md](implementation-plan.md)。H-TBD-1～6 與 Gherkin 驗收劇本已於 2026-09-25 正式核准，Phase 1 安全 probe 與後續 Phase 2～7 依相依關係推進實作。
 
 ## 風險與首要驗證
 
@@ -169,12 +169,12 @@ Feature: Git 變更感知與審核式專案記憶擷取
 
 | 編號 | 事項 | 狀態 | 影響 |
 |---|---|---|---|
-| H-TBD-1 | 第一版 Git range、repo identity 與 Checkpoint 策略（已定義 repo_id、複合主鍵與雙軌進度分離） | 待確認（技術分析已提供完備設計） | 影響 GITMEM-003、GITMEM-007、Task 2.2、4.1 |
-| H-TBD-2 | Repo identity、路徑授權與 Git 子程序安全防護矩陣（已補齊禁用外部 diff/textconv、Git config 隔離、git-dir 校驗與 Process Group 回收） | 待確認（技術分析已提供防護矩陣） | 影響 GITMEM-001、GITMEM-002、Task 2.1 |
-| H-TBD-3 | 有界擷取、截斷政策與秘密過濾邊界（已劃分 Complete / Partial / Rejected 三態，Partial 禁止自動推進 Checkpoint） | 待確認（技術分析已提供政策與邊界） | 影響 GITMEM-004、Task 2.3 |
-| H-TBD-4 | 候選 schema、provenance 獨立表與正式 memory 純淨性（已設計 memory_provenance 獨立表與 ON DELETE CASCADE） | 待確認（技術分析已提供 Schema） | 影響 GITMEM-005、GITMEM-006、Task 3.1、3.2 |
-| H-TBD-5 | AI 草稿是否納入本期與長期專案記憶價值（已區分變更紀錄與專案記憶，模式 1 確定性事實為最小交付閉環） | 待確認（技術分析已提供無模型最小交付） | 影響 GITMEM-009、Task 5.3 |
-| H-TBD-6 | 候選去重、核准冪等性、交易原子性與防復活機制（已建立 ApprovedMemoryID 與原子交易模型） | 待確認（技術分析已提供交易與冪等設計） | 影響 GITMEM-007、GITMEM-010、Task 4.2、4.3 |
+| H-TBD-1 | 第一版 Git range、repo identity 與 Checkpoint 策略（已定義 repo_id、複合主鍵與雙軌進度分離） | 已解決（2026-09-25 使用者核准） | 影響 GITMEM-003、GITMEM-007、Task 2.2、4.1 |
+| H-TBD-2 | Repo identity、路徑授權與 Git 子程序安全防護矩陣（已補齊禁用外部 diff/textconv、Git config 隔離、git-dir 校驗與 Process Group 回收） | 已解決（2026-09-25 使用者核准） | 影響 GITMEM-001、GITMEM-002、Task 2.1 |
+| H-TBD-3 | 有界擷取、截斷政策與秘密過濾邊界（已劃分 Complete / Partial / Rejected 三態，Partial 禁止自動推進 Checkpoint） | 已解決（2026-09-25 使用者核准） | 影響 GITMEM-004、Task 2.3 |
+| H-TBD-4 | 候選 schema、provenance 獨立表與正式 memory 純淨性（已設計 memory_provenance 獨立表與 ON DELETE CASCADE） | 已解決（2026-09-25 使用者核准） | 影響 GITMEM-005、GITMEM-006、Task 3.1、3.2 |
+| H-TBD-5 | AI 草稿是否納入本期與長期專案記憶價值（已區分變更紀錄與專案記憶，模式 1 確定性事實為最小交付閉環） | 已解決（2026-09-25 使用者核准） | 影響 GITMEM-009、Task 5.3 |
+| H-TBD-6 | 候選去重、核准冪等性、交易原子性與防復活機制（已建立 ApprovedMemoryID 與原子交易模型） | 已解決（2026-09-25 使用者核准） | 影響 GITMEM-007、GITMEM-010、Task 4.2、4.3 |
 
 ## Timeline
 
@@ -182,10 +182,11 @@ Feature: Git 變更感知與審核式專案記憶擷取
 |---|---|---|
 | 2026-09-24 | GitHub 上提出 Issue #23 立項提案 | - |
 | 2026-09-25 | 建立 Issue 23，完成現況調查、技術分析、初始實作計畫與驗收規格草案，提交並推送至 `origin/issue-23-git-memory`（Commit `9e19fd6`） | - |
-| 2026-09-25 | 接收 Commit `9e19fd6` 審查意見（RETURN TO analysis），完成技術分析、實作計畫、需求分析與資料一致性/安全邊界架構修訂 | - |
+| 2026-09-25 | 接收 Commit `9e19fd6` 審查意見（RETURN TO analysis），完成技術分析、實作計畫、需求分析與資料一致性/安全邊界架構修訂（Commit `a71ea2f`） | - |
+| 2026-09-25 | 使用者正式核准 GITMEM-001～010 與 H-TBD-1～6，啟動實作閉環 | - |
 
 ---
 **建立日期**: 2026-09-25  
 **分級**: Large  
 **風險**: High  
-**狀態**: 立項／待需求與驗收核准
+**狀態**: 進行中
