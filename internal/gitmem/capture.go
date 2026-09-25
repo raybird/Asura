@@ -79,17 +79,13 @@ func ToLiteralPathspec(p string) string {
 
 // CaptureRange 執行有界擷取，套用 500 files / 256 KiB 限制、子目錄範圍隔離與敏感資料過濾
 func (c *Capturer) CaptureRange(ctx context.Context, repoDir string, rangeExpr string) (*CaptureFacts, error) {
-	// 整次 Capture 建立總期限（Total Deadline），落實 GITMEM-004 硬時間邊界（10s）
-	captureCtx := ctx
-	var cancel context.CancelFunc
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		totalTimeout := 10 * time.Second
-		if c.exec != nil && c.exec.timeout > 0 {
-			totalTimeout = c.exec.timeout
-		}
-		captureCtx, cancel = context.WithTimeout(ctx, totalTimeout)
-		defer cancel()
+	// 整次 Capture 建立硬性總期限（GITMEM-004），上限不得超過 10s
+	totalTimeout := 10 * time.Second
+	if c.exec != nil && c.exec.timeout > 0 && c.exec.timeout < totalTimeout {
+		totalTimeout = c.exec.timeout
 	}
+	captureCtx, cancel := context.WithTimeout(ctx, totalTimeout)
+	defer cancel()
 
 	// 1. 儲存庫與邊界校驗
 	repoInfo, err := c.exec.ValidateAndResolveRepo(captureCtx, repoDir)

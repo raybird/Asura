@@ -57,23 +57,27 @@ func generateCandidateID() string {
 
 // Capture 執行變更擷取、嚴格去重判斷與 Checkpoint 前進或阻斷 (H-TBD-1, H-TBD-3, H-TBD-6)
 func (s *CaptureService) Capture(ctx context.Context, workspace string, opts CaptureOptions) (*CaptureResult, error) {
-	// 0. 在 Capture 服務邊界建立全流程統一時間預算（預設 10 秒硬邊界），落實 GITMEM-004
-	captureCtx := ctx
-	var cancel context.CancelFunc
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		totalTimeout := 10 * time.Second
-		if s.exec != nil && s.exec.timeout > 0 {
-			totalTimeout = s.exec.timeout
-		}
-		captureCtx, cancel = context.WithTimeout(ctx, totalTimeout)
-		defer cancel()
+	// 0. 在 Capture 服務邊界建立全流程統一時間預算，嚴格受限於 10 秒硬邊界（GITMEM-004）
+	// 無論 caller 是否提供更長的 context（如 30s），整次 Capture 總時限絕對不得超過 10s（若 caller 期限更短則自然繼承生效）
+	totalTimeout := 10 * time.Second
+	if s.exec != nil && s.exec.timeout > 0 && s.exec.timeout < totalTimeout {
+		totalTimeout = s.exec.timeout
 	}
+	captureCtx, cancel := context.WithTimeout(ctx, totalTimeout)
+	defer cancel()
 
 	if err := captureCtx.Err(); err != nil {
 		return nil, fmt.Errorf("capture deadline exceeded: %w", err)
 	}
 
-	// 1. 驗證並解析 Repo 邊界
+	// 1. AI 草稿生成模式 Preflight 檢查（GITMEM-009 / Fail-Closed 原則）
+	// 若使用者顯式要求 --ai-draft 但未配置 AI Generator，必須在任何去重判定或 Checkpoint 前進前立即明確拒絕，
+	// 絕不允許因相同 Range 存在既有候選而靜默跳過，更禁止在增量模式下偷偷前進 Checkpoint
+	if opts.AIDraft && s.aiGen == nil {
+		return nil, errors.New("AI draft generation requested (--ai-draft), but no AI generator is configured on daemon; please use standard capture or configure an AI generator")
+	}
+
+	// 2. 驗證並解析 Repo 邊界
 	repoInfo, err := s.exec.ValidateAndResolveRepo(captureCtx, workspace)
 	if err != nil {
 		return nil, fmt.Errorf("validate repo: %w", err)

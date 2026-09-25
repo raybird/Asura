@@ -342,8 +342,10 @@ func (s *SQLiteStore) DiscardCandidate(ctx context.Context, workspace, id string
 	return nil
 }
 
-// UpdateCandidateStatus 更新候選狀態
-func (s *SQLiteStore) UpdateCandidateStatus(ctx context.Context, workspace, id string, status string, approvedMemoryID string, approvedAt *time.Time) error {
+// UpdateCandidateStatusForTest 僅供測試夾具（Test Fixtures）快速配置初始候選狀態使用。
+// 生產環境嚴格禁止調用此函式，必須使用 DiscardCandidate、ReopenDiscardedCandidate 或 ApproveCandidateTx
+// 以確保資料庫層級的狀態 CAS 與防復活（Anti-Revival）不變性。
+func (s *SQLiteStore) UpdateCandidateStatusForTest(ctx context.Context, workspace, id string, status string, approvedMemoryID string, approvedAt *time.Time) error {
 	query := `
 	UPDATE memory_candidates
 	SET status = ?, approved_memory_id = ?, approved_at = ?
@@ -351,7 +353,7 @@ func (s *SQLiteStore) UpdateCandidateStatus(ctx context.Context, workspace, id s
 	`
 	res, err := s.db.ExecContext(ctx, query, status, approvedMemoryID, approvedAt, workspace, id)
 	if err != nil {
-		return fmt.Errorf("update candidate status: %w", err)
+		return fmt.Errorf("update candidate status for test: %w", err)
 	}
 	rows, err := res.RowsAffected()
 	if err != nil {
@@ -361,6 +363,12 @@ func (s *SQLiteStore) UpdateCandidateStatus(ctx context.Context, workspace, id s
 		return ErrCandidateNotFound
 	}
 	return nil
+}
+
+// UpdateCandidateStatus 已棄用：生產程式碼禁止調用；請使用 DiscardCandidate、ReopenDiscardedCandidate 或 ApproveCandidateTx。
+// 僅保留作為既有測試夾具之過渡別名。
+func (s *SQLiteStore) UpdateCandidateStatus(ctx context.Context, workspace, id string, status string, approvedMemoryID string, approvedAt *time.Time) error {
+	return s.UpdateCandidateStatusForTest(ctx, workspace, id, status, approvedMemoryID, approvedAt)
 }
 
 // UpdateCandidateDraft 更新候選的草稿內文
