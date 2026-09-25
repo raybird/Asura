@@ -219,14 +219,14 @@ type MemoryProvenance struct {
   - **狀態**：✅ 已完成
   - **證據**：單元測試覆蓋未授權與缺少參數拒絕、Capture/Candidates/Approve/Discard 完整端到端 IPC 調用流程。
 
-- [ ] 📝 **Task 5.2 — CLI 子命令介面實作 (`cmd/asura/memory_git.go`)**
+- [x] ✅ **Task 5.2 — CLI 子命令介面實作 (`cmd/asura/memory_git.go`)**
   - **產出與範圍**：`cmd/asura/memory_git.go`, `cmd/asura/memory_git_test.go`
   - **相依**：Task 5.1
   - **驗收編號**：GITMEM-001, GITMEM-005
-  - **完成判準**：CLI 提供 `capture`, `candidates`, `approve`, `discard` 操作閉環；支援 `--content` 編修。
-  - **驗證**：CLI 整合測試。
-  - **狀態**：📝 待實作
-  - **證據**：待填入
+  - **完成判準**：CLI 提供 `capture`, `candidates`, `approve`, `discard` 操作閉環；支援 `--content` 編修、`--json` 與純文字輸出；嚴格旗標校驗。
+  - **驗證**：`go test -v -run TestCLI_Memory ./cmd/asura`（5/5 pass）。
+  - **狀態**：✅ 已完成
+  - **證據**：單元與整合測試覆蓋 memory capture/candidates/approve/discard 全指令、缺少旗標拒絕與 JSON/文字輸出雙模式。
 
 - [ ] 📝 **Task 5.3 — AI 輔助草稿唯讀權限與安全邊界（可選增強模組）**
   - **產出與範圍**：`internal/gitmem/ai_draft.go`, `internal/gitmem/ai_draft_test.go`
