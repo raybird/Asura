@@ -195,14 +195,14 @@ type MemoryProvenance struct {
   - **狀態**：✅ 已完成
   - **證據**：單元測試覆蓋 SuccessAndIdempotency（多重核准冪等）、WithCustomContent（自訂內文與 IsUserEdited 判定）、AntiRevival（已刪除記憶防復活拒絕）。
 
-- [ ] 📝 **Task 4.3 — 防復活機制與刪除行為驗證**
+- [x] ✅ **Task 4.3 — 防復活機制與刪除行為驗證**
   - **產出與範圍**：`internal/gitmem/lifecycle_test.go`
   - **相依**：Task 4.2
   - **驗收編號**：GITMEM-007, GITMEM-008
-  - **完成判準**：正式記憶被手動刪除後，再次 approve 原 Candidate 明確報錯，禁止悄悄復活已刪除記憶。
-  - **驗證**：生命週期整合測試。
-  - **狀態**：📝 待實作
-  - **證據**：待填入
+  - **完成判準**：正式記憶被手動刪除後，再次 approve 原 Candidate 明確報錯，禁止悄悄復活已刪除記憶；ON DELETE CASCADE 自動清理 provenance；Candidate 不可變稽核留存。
+  - **驗證**：`go test -v -run TestGitMemory_FullLifecycleAndAntiRevival ./internal/gitmem`（1/1 pass）。
+  - **狀態**：✅ 已完成
+  - **證據**：端到端生命週期測試完整覆蓋「擷取草稿 -> 審核核准 -> Recall 召回 -> 刪除正式記憶 -> Provenance CASCADE 清理 -> Candidate 稽核保留 -> 防復活拒絕」全鏈路。
 
 ---
 
