@@ -120,14 +120,14 @@ type MemoryProvenance struct {
 
 > 依賴：Phase 1 探測完成。
 
-- [ ] 📝 **Task 2.1 — 實作安全 Git CLI 執行器與 Repo 邊界校驗 (`internal/gitmem/git.go`)**
+- [x] ✅ **Task 2.1 — 實作安全 Git CLI 執行器與 Repo 邊界校驗 (`internal/gitmem/git.go`)**
   - **產出與範圍**：`internal/gitmem/git.go`, `internal/gitmem/git_test.go`
   - **相依**：Phase 1
   - **驗收編號**：GITMEM-001, GITMEM-002
   - **完成判準**：通過非 Git 目錄拒絕、頂層路徑超出 allowed roots 拒絕、外部 diff 禁用測試；Process Group 逾時安全回收。
-  - **驗證**：單元與負向邊界測試。
-  - **狀態**：📝 待實作
-  - **證據**：待填入
+  - **驗證**：`go test -v ./internal/gitmem`（7/7 pass，包含 stress 10 次零失敗）。
+  - **狀態**：✅ 已完成
+  - **證據**：單元測試覆蓋 ValidateAndResolveRepo (Success, Subdir, NotGit, OutsideAllowedRoots, GitDirEscape)、ExternalDiffBlocked、TimeoutWithProcessGroup。
 
 - [ ] 📝 **Task 2.2 — 實作固定 Range 解析與祖先血統檢查 (`internal/gitmem/range.go`)**
   - **產出與範圍**：`internal/gitmem/range.go`, `internal/gitmem/range_test.go`
