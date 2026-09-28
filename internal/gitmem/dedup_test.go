@@ -880,7 +880,7 @@ func TestCaptureService_AIDraft_DisclosesExistingCandidateSkipped(t *testing.T) 
 	}
 }
 
-func TestCaptureService_ApprovedPartialCandidate_AllowsCheckpointAdvanceOnSinceLast(t *testing.T) {
+func TestCaptureService_PartialCandidate_CannotBeApprovedUntilCompleteUpgrade(t *testing.T) {
 	allowedRoot, repoDir := initTestRepoWithBranches(t)
 	exec := NewGitExecutor([]string{allowedRoot})
 	store := newTestStore(t)
@@ -911,7 +911,7 @@ func TestCaptureService_ApprovedPartialCandidate_AllowsCheckpointAdvanceOnSinceL
 
 	// 2. 模擬第一次擷取產生了 Partial 候選（is_truncated=true）
 	partialCand := &storage.MemoryCandidate{
-		ID:              "cand-approved-partial",
+		ID:              "cand-partial-cannot-approve",
 		Workspace:       repoInfo.Workspace,
 		RepoID:          repoInfo.RepoID,
 		RefName:         repoInfo.CurrentRef,
@@ -930,31 +930,136 @@ func TestCaptureService_ApprovedPartialCandidate_AllowsCheckpointAdvanceOnSinceL
 		t.Fatal(err)
 	}
 
-	// 3. 人工審核者正式核准此 Partial 候選為正式專案記憶
-	memID, err := store.ApproveCandidateTx(ctx, repoInfo.Workspace, partialCand.ID, storage.ApproveOptions{Content: "approved partial memory"})
+	// 3. MUST FIX 1 核心驗證：嘗試核准 Partial Candidate 必須被嚴格拒絕！
+	_, err = store.ApproveCandidateTx(ctx, repoInfo.Workspace, partialCand.ID, storage.ApproveOptions{Content: "try approve partial"})
+	if err == nil {
+		t.Fatal("SECURITY BUG: ApproveCandidateTx allowed approving partial candidate!")
+	}
+	if !strings.Contains(err.Error(), "cannot approve partial candidate") {
+		t.Fatalf("expected cannot approve partial error, got: %v", err)
+	}
+
+	// 驗證 Checkpoint 保持在 H0 零前進
+	cpBefore, _ := store.GetCheckpoint(ctx, repoInfo.Workspace, repoInfo.RepoID, repoInfo.CurrentRef)
+	if cpBefore.LastCapturedSHA != h0 {
+		t.Fatalf("expected checkpoint to remain at h0, got: %s", cpBefore.LastCapturedSHA)
+	}
+
+	// 4. 再次執行增量擷取 (--since-last)，完整重試升級為 Complete，Checkpoint 推進至 HEAD
+	res, err := service.Capture(ctx, repoDir, CaptureOptions{SinceLast: true})
 	if err != nil {
-		t.Fatalf("approve partial candidate failed: %v", err)
+		t.Fatalf("since-last capture for complete upgrade failed: %v", err)
+	}
+	if res.Candidate.IsTruncated {
+		t.Fatal("expected candidate to be upgraded to complete")
+	}
+
+	// 5. 升級為 Complete 後，再次調用 ApproveCandidateTx 成功核准
+	memID, err := store.ApproveCandidateTx(ctx, repoInfo.Workspace, partialCand.ID, storage.ApproveOptions{Content: "approved complete memory"})
+	if err != nil {
+		t.Fatalf("approve complete candidate failed: %v", err)
 	}
 	if memID == "" {
 		t.Fatal("expected approved memory ID")
 	}
 
-	// 4. 再次執行增量擷取 (--since-last)
-	// MUST FIX 1 核心驗證：已核准的 Partial 候選代表人工已確認吸收該區間，Checkpoint 必須能合法推進至 HEAD，絕不永久停滯在 H0！
-	res, err := service.Capture(ctx, repoDir, CaptureOptions{SinceLast: true})
-	if err != nil {
-		t.Fatalf("since-last capture on approved partial failed: %v", err)
-	}
-	if !res.IsReused || res.Candidate.Status != "approved" {
-		t.Fatalf("expected reused approved candidate, got: %+v", res.Candidate)
-	}
-
+	// 驗證 Checkpoint 成功推進至 HEAD
 	cpAfter, err := store.GetCheckpoint(ctx, repoInfo.Workspace, repoInfo.RepoID, repoInfo.CurrentRef)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cpAfter.LastCapturedSHA != repoInfo.CurrentHead {
-		t.Fatalf("DATA INTEGRITY BUG: Checkpoint failed to advance to %s for approved candidate, remained at %s!", repoInfo.CurrentHead, cpAfter.LastCapturedSHA)
+		t.Fatalf("expected checkpoint advanced to %s, got: %s", repoInfo.CurrentHead, cpAfter.LastCapturedSHA)
+	}
+}
+
+func TestCaptureService_PartialUpgrade_ConcurrentDraftEdit_PreservesManualContent(t *testing.T) {
+	allowedRoot, repoDir := initTestRepoWithBranches(t)
+	exec := NewGitExecutor([]string{allowedRoot})
+	store := newTestStore(t)
+	service := NewCaptureService(exec, store)
+	ctx := context.Background()
+
+	repoInfo, err := exec.ValidateAndResolveRepo(ctx, repoDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resolved, _ := exec.ResolveRange(ctx, repoDir, "HEAD~2..HEAD~1")
+	h0 := resolved.HeadSHA
+	_ = store.SaveCheckpoint(ctx, &storage.GitCheckpoint{
+		Workspace:       repoInfo.Workspace,
+		RepoID:          repoInfo.RepoID,
+		RefName:         repoInfo.CurrentRef,
+		LastCapturedSHA: h0,
+		UpdatedAt:       time.Now().UTC(),
+	})
+
+	// 1. 建立一個未被編輯的 pending partial candidate (is_user_edited=false)
+	candID := "cand-partial-race-edit"
+	partialCand := &storage.MemoryCandidate{
+		ID:              candID,
+		Workspace:       repoInfo.Workspace,
+		RepoID:          repoInfo.RepoID,
+		RefName:         repoInfo.CurrentRef,
+		BaseSHA:         h0,
+		HeadSHA:         repoInfo.CurrentHead,
+		CommitCount:     1,
+		FactsSummary:    `{"truncated":true}`,
+		DraftContent:    "initial unedited partial draft",
+		Status:          "pending",
+		PolicyVersion:   "gitmem-v1",
+		CreatedAt:       time.Now().UTC(),
+		IsTruncated:     true,
+		TruncatedReason: "temporary error",
+		IsUserEdited:    false,
+	}
+	if err := store.SaveCandidate(ctx, partialCand); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. 注入 AI Generator 作為 barrier：在 A 讀取完候選（A 讀到的 IsUserEdited 為 false）並生成 AI 草稿期間，
+	// 插入並行操作 B：使用者透過 UpdateCandidateDraft 寫入人工內容並設 is_user_edited=true！
+	manualEditedDraft := "Critical manual decision by User B during capture"
+	raceGen := &concurrentInterleavingGenerator{
+		onGenerate: func() {
+			if updateErr := store.UpdateCandidateDraft(ctx, repoInfo.Workspace, candID, manualEditedDraft); updateErr != nil {
+				t.Errorf("concurrent update draft failed: %v", updateErr)
+			}
+		},
+	}
+	service.SetAIGenerator(raceGen)
+
+	// 3. A 完成升級交易 (--since-last, AIDraft: true)
+	// MUST FIX 2 核心驗證：即便 A 讀取時 is_user_edited 為 false，SQL transaction 透過 CASE WHEN
+	// 仍能原子依當前資料列保護人工草稿，絕不被 A 生成的 draft 覆蓋！
+	res, err := service.Capture(ctx, repoDir, CaptureOptions{SinceLast: true, AIDraft: true})
+	if err != nil {
+		t.Fatalf("capture failed: %v", err)
+	}
+
+	if res.Candidate.IsTruncated {
+		t.Fatal("expected candidate to be complete")
+	}
+
+	// 斷言：回傳的 Candidate 草稿必須是使用者 B 的手動編修內容，絕不可是生成的草稿
+	if res.Candidate.DraftContent != manualEditedDraft {
+		t.Fatalf("DATA INTEGRITY BUG: Manual edited draft was overwritten by race! Got %q, expected %q", res.Candidate.DraftContent, manualEditedDraft)
+	}
+	if !res.Candidate.IsUserEdited {
+		t.Fatal("expected candidate is_user_edited to be true")
+	}
+
+	// 斷言：資料庫中的 Candidate 草稿也必須是使用者 B 的手動編修內容
+	dbCand, err := store.GetCandidate(ctx, repoInfo.Workspace, candID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dbCand.DraftContent != manualEditedDraft {
+		t.Fatalf("DATABASE INTEGRITY BUG: DB draft was overwritten! Got %q, expected %q", dbCand.DraftContent, manualEditedDraft)
+	}
+	if !dbCand.IsUserEdited {
+		t.Fatal("expected database is_user_edited to be true")
 	}
 }
 
@@ -1100,6 +1205,78 @@ func TestCaptureService_PartialUpgrade_PreservesUserEditedDraft(t *testing.T) {
 		t.Fatalf("database draft mismatch: got %q, expected %q", dbCand.DraftContent, userEditedDraft)
 	}
 }
+
+func TestCaptureService_ConflictRecovery_AdvanceCheckpointErrorPropagated(t *testing.T) {
+	allowedRoot, repoDir := initTestRepoWithBranches(t)
+	exec := NewGitExecutor([]string{allowedRoot})
+	store := newTestStore(t)
+	service := NewCaptureService(exec, store)
+	ctx := context.Background()
+
+	repoInfo, err := exec.ValidateAndResolveRepo(ctx, repoDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resolved, _ := exec.ResolveRange(ctx, repoDir, "HEAD~2..HEAD~1")
+	h0 := resolved.HeadSHA
+	_ = store.SaveCheckpoint(ctx, &storage.GitCheckpoint{
+		Workspace:       repoInfo.Workspace,
+		RepoID:          repoInfo.RepoID,
+		RefName:         repoInfo.CurrentRef,
+		LastCapturedSHA: h0,
+		UpdatedAt:       time.Now().UTC(),
+	})
+
+	// 1. 建立一個 pending partial candidate
+	candID := "cand-partial-conflict-cp-err"
+	partialCand := &storage.MemoryCandidate{
+		ID:              candID,
+		Workspace:       repoInfo.Workspace,
+		RepoID:          repoInfo.RepoID,
+		RefName:         repoInfo.CurrentRef,
+		BaseSHA:         h0,
+		HeadSHA:         repoInfo.CurrentHead,
+		CommitCount:     1,
+		FactsSummary:    `{"truncated":true}`,
+		DraftContent:    "initial draft",
+		Status:          "pending",
+		PolicyVersion:   "gitmem-v1",
+		CreatedAt:       time.Now().UTC(),
+		IsTruncated:     true,
+		TruncatedReason: "timeout",
+	}
+	if err := store.SaveCandidate(ctx, partialCand); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. 注入 AI Generator，在 A 準備升級前，操作 B 並行將該候選升級為 Complete，
+	// 同時取消 context，使得後續 Checkpoint 推進必定失敗！
+	cancelCtx, cancel := context.WithCancel(ctx)
+	raceGen := &concurrentInterleavingGenerator{
+		onGenerate: func() {
+			// B 並行將候選升級為 complete
+			if upgradeErr := store.UpgradePartialCandidate(ctx, repoInfo.Workspace, candID, "complete draft", "{}", 2); upgradeErr != nil {
+				t.Errorf("concurrent upgrade failed: %v", upgradeErr)
+			}
+			// 取消 context，導致後續 CAS conflict recovery 中的 AdvanceCheckpointTx 失敗
+			cancel()
+		},
+	}
+	service.SetAIGenerator(raceGen)
+
+	// 3. A 執行 Capture (--since-last, AIDraft: true)
+	// MUST FIX 3 核心驗證：CAS conflict 分支在呼叫 AdvanceCheckpointTx 遇到錯誤時，
+	// 絕不允許丟棄錯誤回傳成功，必須將錯誤向外傳回！
+	_, err = service.Capture(cancelCtx, repoDir, CaptureOptions{SinceLast: true, AIDraft: true})
+	if err == nil {
+		t.Fatal("SECURITY BUG: AdvanceCheckpointTx error in conflict recovery was swallowed and returned success!")
+	}
+	if !strings.Contains(err.Error(), "advance checkpoint") && !strings.Contains(err.Error(), "context canceled") {
+		t.Fatalf("expected advance checkpoint error, got: %v", err)
+	}
+}
+
 
 
 

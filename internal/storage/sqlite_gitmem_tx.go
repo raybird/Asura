@@ -38,16 +38,17 @@ func (s *SQLiteStore) ApproveCandidateTx(ctx context.Context, workspace, candida
 	queryCand := `
 	SELECT id, workspace, repo_id, ref_name, base_sha, head_sha,
 	       commit_count, facts_summary, draft_content, status, approved_memory_id,
-	       is_user_edited
+	       is_user_edited, is_truncated
 	FROM memory_candidates
 	WHERE workspace = ? AND id = ?
 	`
 	var cand MemoryCandidate
 	var isUserEditedInt int
+	var isTruncatedInt int
 	err = tx.QueryRowContext(ctx, queryCand, workspace, candidateID).Scan(
 		&cand.ID, &cand.Workspace, &cand.RepoID, &cand.RefName, &cand.BaseSHA, &cand.HeadSHA,
 		&cand.CommitCount, &cand.FactsSummary, &cand.DraftContent, &cand.Status, &cand.ApprovedMemoryID,
-		&isUserEditedInt,
+		&isUserEditedInt, &isTruncatedInt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -56,6 +57,12 @@ func (s *SQLiteStore) ApproveCandidateTx(ctx context.Context, workspace, candida
 		return "", fmt.Errorf("query candidate: %w", err)
 	}
 	cand.IsUserEdited = (isUserEditedInt == 1)
+	cand.IsTruncated = (isTruncatedInt == 1)
+
+	// MUST FIX 1: 嚴格禁止核准 Partial Candidate（避免未處理變更永久遺漏至正式記憶庫）
+	if cand.IsTruncated {
+		return "", fmt.Errorf("cannot approve partial candidate %s (is_truncated=true): please retry capture to obtain a complete candidate before approving", candidateID)
+	}
 
 	// 2. 狀態與冪等性處理
 	if cand.Status == "approved" {
@@ -266,27 +273,25 @@ func (s *SQLiteStore) SaveCandidateAndCheckpointTx(
 
 	// 若既有候選為 Partial (is_truncated=1, status='pending')，但本次傳入為 Complete (!cand.IsTruncated)，執行原子升級
 	if persisted.IsTruncated && !cand.IsTruncated && persisted.Status == "pending" {
-		var upgradeQuery string
-		var upgradeArgs []interface{}
-		if persisted.IsUserEdited {
-			upgradeQuery = `
-			UPDATE memory_candidates
-			SET facts_summary = ?, commit_count = ?, is_truncated = 0, truncated_reason = ''
-			WHERE workspace = ? AND id = ? AND status = 'pending' AND is_truncated = 1
-			`
-			upgradeArgs = []interface{}{cand.FactsSummary, cand.CommitCount, cand.Workspace, persisted.ID}
-		} else {
-			upgradeQuery = `
-			UPDATE memory_candidates
-			SET draft_content = ?, facts_summary = ?, commit_count = ?, is_truncated = 0, truncated_reason = ''
-			WHERE workspace = ? AND id = ? AND status = 'pending' AND is_truncated = 1
-			`
-			upgradeArgs = []interface{}{cand.DraftContent, cand.FactsSummary, cand.CommitCount, cand.Workspace, persisted.ID}
-			persisted.DraftContent = cand.DraftContent
-		}
-		if _, err := tx.ExecContext(ctx, upgradeQuery, upgradeArgs...); err != nil {
+		upgradeQuery := `
+		UPDATE memory_candidates
+		SET draft_content = CASE WHEN is_user_edited = 1 THEN draft_content ELSE ? END,
+		    facts_summary = ?,
+		    commit_count = ?,
+		    is_truncated = 0,
+		    truncated_reason = ''
+		WHERE workspace = ? AND id = ? AND status = 'pending' AND is_truncated = 1
+		`
+		if _, err := tx.ExecContext(ctx, upgradeQuery, cand.DraftContent, cand.FactsSummary, cand.CommitCount, cand.Workspace, persisted.ID); err != nil {
 			return nil, fmt.Errorf("upgrade partial candidate in tx: %w", err)
 		}
+		var finalDraft string
+		var isUserEditedInt int
+		if err := tx.QueryRowContext(ctx, "SELECT draft_content, is_user_edited FROM memory_candidates WHERE workspace = ? AND id = ?", cand.Workspace, persisted.ID).Scan(&finalDraft, &isUserEditedInt); err != nil {
+			return nil, fmt.Errorf("reload draft after partial upgrade: %w", err)
+		}
+		persisted.DraftContent = finalDraft
+		persisted.IsUserEdited = (isUserEditedInt == 1)
 		persisted.FactsSummary = cand.FactsSummary
 		persisted.CommitCount = cand.CommitCount
 		persisted.IsTruncated = false
@@ -294,10 +299,9 @@ func (s *SQLiteStore) SaveCandidateAndCheckpointTx(
 	}
 
 	// 3. 若有 Checkpoint 需推進，在同筆交易內原子更新並進行 Monotonic / CAS 校驗
-	// 安全約束：只有在確認持久化 Candidate 完整（!persisted.IsTruncated）或該候選已被人工核准（persisted.Status == "approved"）時，
-	// 才允許 advance Checkpoint；未經人工核准的 Partial 候選絕對禁止 advance！
-	allowAdvance := !persisted.IsTruncated || persisted.Status == "approved"
-	if checkpoint != nil && allowAdvance {
+	// 安全約束：只有在確認持久化 Candidate 完整（!persisted.IsTruncated）時，才允許 advance Checkpoint
+	// 未完整（Partial）的候選絕對禁止 advance（避免未處理變更永久遺漏）！
+	if checkpoint != nil && !persisted.IsTruncated {
 		if err := advanceCheckpointInTx(ctx, tx, checkpoint, expectedOldSHA, isAncestor); err != nil {
 			return nil, err
 		}
@@ -312,6 +316,7 @@ func (s *SQLiteStore) SaveCandidateAndCheckpointTx(
 
 // UpgradePartialCandidateAndAdvanceCheckpointTx 在單一原子交易中完成 Partial 候選升級與 Checkpoint 推進 (SHOULD FIX 1)
 // 保證候選升級與游標前進命運同調：任何一步失敗即整體 Rollback，絕無中途孤立不一致
+// MUST FIX 2: 依資料庫當前列原子保護人工草稿（若 is_user_edited=1 則絕不覆寫草稿）
 func (s *SQLiteStore) UpgradePartialCandidateAndAdvanceCheckpointTx(
 	ctx context.Context,
 	workspace, id string,
@@ -329,7 +334,11 @@ func (s *SQLiteStore) UpgradePartialCandidateAndAdvanceCheckpointTx(
 
 	query := `
 	UPDATE memory_candidates
-	SET draft_content = ?, facts_summary = ?, commit_count = ?, is_truncated = 0, truncated_reason = ''
+	SET draft_content = CASE WHEN is_user_edited = 1 THEN draft_content ELSE ? END,
+	    facts_summary = ?,
+	    commit_count = ?,
+	    is_truncated = 0,
+	    truncated_reason = ''
 	WHERE workspace = ? AND id = ? AND status = 'pending' AND is_truncated = 1
 	`
 	res, err := tx.ExecContext(ctx, query, draftContent, factsSummary, commitCount, workspace, id)

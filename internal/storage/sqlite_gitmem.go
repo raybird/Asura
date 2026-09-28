@@ -318,7 +318,11 @@ func (s *SQLiteStore) ClearProcessedCandidates(ctx context.Context, workspace st
 func (s *SQLiteStore) UpgradePartialCandidate(ctx context.Context, workspace, id string, draftContent, factsSummary string, commitCount int) error {
 	query := `
 	UPDATE memory_candidates
-	SET draft_content = ?, facts_summary = ?, commit_count = ?, is_truncated = 0, truncated_reason = ''
+	SET draft_content = CASE WHEN is_user_edited = 1 THEN draft_content ELSE ? END,
+	    facts_summary = ?,
+	    commit_count = ?,
+	    is_truncated = 0,
+	    truncated_reason = ''
 	WHERE workspace = ? AND id = ? AND status = 'pending' AND is_truncated = 1
 	`
 	res, err := s.db.ExecContext(ctx, query, draftContent, factsSummary, commitCount, workspace, id)

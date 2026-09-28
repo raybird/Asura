@@ -279,8 +279,10 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 
 					case "approved":
 						// 若並行請求已完成核准，若有 newCP 且允許前進，前進後回傳 approved
-						if newCP != nil {
-							_ = s.store.AdvanceCheckpointTx(captureCtx, newCP, expectedOldSHA, ancestryChecker)
+						if newCP != nil && !fresh.IsTruncated {
+							if err := s.store.AdvanceCheckpointTx(captureCtx, newCP, expectedOldSHA, ancestryChecker); err != nil {
+								return nil, fmt.Errorf("advance checkpoint on approved conflict recovery: %w", err)
+							}
 						}
 						return &CaptureResult{
 							Candidate: fresh,
@@ -293,7 +295,9 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 						if !fresh.IsTruncated {
 							// 另一個並行請求已經成功將其升級為 Complete！直接安全重用
 							if newCP != nil {
-								_ = s.store.AdvanceCheckpointTx(captureCtx, newCP, expectedOldSHA, ancestryChecker)
+								if err := s.store.AdvanceCheckpointTx(captureCtx, newCP, expectedOldSHA, ancestryChecker); err != nil {
+									return nil, fmt.Errorf("advance checkpoint on pending conflict recovery: %w", err)
+								}
 							}
 							return &CaptureResult{
 								Candidate: fresh,
@@ -306,12 +310,16 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 					}
 				}
 
-				// 升級成功，同步本地記憶體物件
-				existing.DraftContent = draft
-				existing.FactsSummary = factsSummary
-				existing.CommitCount = facts.CommitCount
-				existing.IsTruncated = false
-				existing.TruncatedReason = ""
+				// 升級成功，從資料庫重新載入最新狀態，保證本地物件與資料庫交易結果絕對一致（含 draft 與 is_user_edited）
+				if fresh, reloadErr := s.store.GetCandidate(captureCtx, repoInfo.Workspace, existing.ID); reloadErr == nil && fresh != nil {
+					*existing = *fresh
+				} else {
+					existing.DraftContent = draft
+					existing.FactsSummary = factsSummary
+					existing.CommitCount = facts.CommitCount
+					existing.IsTruncated = false
+					existing.TruncatedReason = ""
+				}
 
 				msg := "reused existing pending candidate (upgraded from partial to complete)"
 				if opts.AIDraft && s.aiGen != nil && !existing.IsUserEdited {
@@ -347,10 +355,9 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 			}, nil
 
 		case "approved":
-			// 人工作業接受 Partial 後的增量恢復策略 (MUST FIX 1)：
-			// 既然該 Range 的候選已經由人工審核核准（無論當初是否包含截斷），該 Range 的進度已正式落盤為專案記憶；
-			// 因此若符合 newCP != nil，允許推進 Checkpoint，解除增量停滯！
-			if newCP != nil {
+			// 庫中已核准的 Candidate 保證為完整（Partial Candidate 嚴格禁止被核准，杜絕變更遺漏至正式記憶庫）
+			// 因此若符合 newCP != nil 且 !existing.IsTruncated，允許推進 Checkpoint
+			if newCP != nil && !existing.IsTruncated {
 				if err := s.store.AdvanceCheckpointTx(captureCtx, newCP, expectedOldSHA, ancestryChecker); err != nil {
 					return nil, fmt.Errorf("advance checkpoint for approved candidate: %w", err)
 				}

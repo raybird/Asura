@@ -545,6 +545,50 @@ func TestApproveCandidateTx_EmptyContentRejected(t *testing.T) {
 	}
 }
 
+func TestApproveCandidateTx_PartialCandidateRejected(t *testing.T) {
+	store := newTestGitMemStore(t)
+	ctx := context.Background()
+	ws := "/workspace/test-approve-partial"
+
+	cand := &MemoryCandidate{
+		ID:              "cand-partial-reject",
+		Workspace:       ws,
+		RepoID:          "repo-1",
+		RefName:         "refs/heads/main",
+		BaseSHA:         "base",
+		HeadSHA:         "head",
+		CommitCount:     1,
+		FactsSummary:    `{"truncated":true}`,
+		DraftContent:    "some draft",
+		Status:          "pending",
+		PolicyVersion:   "gitmem-v1",
+		CreatedAt:       time.Now().UTC(),
+		IsTruncated:     true,
+		TruncatedReason: "diff limit exceeded",
+	}
+	if err := store.SaveCandidate(ctx, cand); err != nil {
+		t.Fatal(err)
+	}
+
+	// MUST FIX 1: 嘗試核准 Partial 候選，必須返回明確拒絕錯誤
+	_, err := store.ApproveCandidateTx(ctx, ws, cand.ID, ApproveOptions{Content: "try approve"})
+	if err == nil {
+		t.Fatal("expected error when approving partial candidate, got nil")
+	}
+	if !strings.Contains(err.Error(), "cannot approve partial candidate") {
+		t.Fatalf("expected cannot approve partial candidate error, got: %v", err)
+	}
+
+	// 確保 memories 表中沒有任何記錄被寫入
+	mems, err := store.ListMemories(ctx, ws)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mems) != 0 {
+		t.Fatalf("expected 0 memories, found %d", len(mems))
+	}
+}
+
 func TestReopenDiscardedCandidate_ReplacesPayloadAndResetsPending(t *testing.T) {
 	store := newTestGitMemStore(t)
 	ctx := context.Background()
@@ -1025,6 +1069,63 @@ func TestUpgradePartialCandidateAndAdvanceCheckpointTx_SuccessAndRollback(t *tes
 		t.Fatalf("expected checkpoint advanced to c1, got %s", cpSuccess.LastCapturedSHA)
 	}
 }
+
+func TestUpgradePartialCandidate_SQLPreservesUserEditedDraft(t *testing.T) {
+	store := newTestGitMemStore(t)
+	ctx := context.Background()
+	ws := "/workspace/test-sql-case-when"
+
+	// 1. 建立一個 pending partial candidate
+	cand := &MemoryCandidate{
+		ID:              "cand-sql-protect",
+		Workspace:       ws,
+		RepoID:          "repo-1",
+		RefName:         "refs/heads/main",
+		BaseSHA:         "c0",
+		HeadSHA:         "c1",
+		CommitCount:     1,
+		FactsSummary:    `{"truncated":true}`,
+		DraftContent:    "initial draft",
+		Status:          "pending",
+		PolicyVersion:   "gitmem-v1",
+		CreatedAt:       time.Now().UTC(),
+		IsTruncated:     true,
+		TruncatedReason: "io error",
+	}
+	if err := store.SaveCandidate(ctx, cand); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. 模擬人工編輯草稿，將 is_user_edited 設為 1
+	manualDraft := "Preserved User Edited Architecture Decision"
+	if err := store.UpdateCandidateDraft(ctx, ws, cand.ID, manualDraft); err != nil {
+		t.Fatal(err)
+	}
+
+	// 3. 呼叫 UpgradePartialCandidateAndAdvanceCheckpointTx，傳入嘗試覆蓋的新草稿
+	err := store.UpgradePartialCandidateAndAdvanceCheckpointTx(
+		ctx, ws, cand.ID, "attempted overwrite draft", `{"truncated":false}`, 2, nil, "", nil,
+	)
+	if err != nil {
+		t.Fatalf("upgrade tx failed: %v", err)
+	}
+
+	// 4. 驗證資料庫中的草稿內容依然是 manualDraft（未被覆蓋）
+	candAfter, err := store.GetCandidate(ctx, ws, cand.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if candAfter.IsTruncated {
+		t.Fatal("expected candidate to be complete")
+	}
+	if candAfter.DraftContent != manualDraft {
+		t.Fatalf("SQL CASE-WHEN FAILED: manual draft was overwritten! Got %q, expected %q", candAfter.DraftContent, manualDraft)
+	}
+	if !candAfter.IsUserEdited {
+		t.Fatal("expected is_user_edited to remain true")
+	}
+}
+
 
 
 
