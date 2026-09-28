@@ -121,6 +121,15 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 	ancestryChecker := func(ctx context.Context, ancestorSHA, descendantSHA string) (bool, error) {
 		return s.exec.IsAncestor(ctx, repoInfo.RepoRoot, ancestorSHA, descendantSHA)
 	}
+	advanceExistingCandidate := func(candidate *storage.MemoryCandidate) error {
+		if newCP == nil || candidate.IsTruncated {
+			return nil
+		}
+		return s.store.AdvanceCheckpointForCandidateTx(
+			captureCtx, repoInfo.Workspace, candidate.ID, candidate.Status,
+			newCP, expectedOldSHA, ancestryChecker,
+		)
+	}
 
 	// 5. 擷取去重 (Capture Dedup)
 	existing, err := s.store.FindCandidateByRange(captureCtx, repoInfo.Workspace, facts.RepoID, facts.RefName, facts.BaseSHA, facts.HeadSHA, "gitmem-v1")
@@ -163,16 +172,18 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 				return nil, fmt.Errorf("capture deadline exceeded: %w", err)
 			}
 
-			if err := s.store.ReopenDiscardedCandidate(captureCtx, repoInfo.Workspace, existing.ID, draft, factsSummary, facts.CommitCount, facts.Truncated, facts.TruncatedReason); err != nil {
+			if err := s.store.ReopenDiscardedCandidateAndAdvanceCheckpointTx(
+				captureCtx, repoInfo.Workspace, existing.ID, draft, factsSummary,
+				facts.CommitCount, facts.Truncated, facts.TruncatedReason,
+				newCP, expectedOldSHA, ancestryChecker,
+			); err != nil {
 				if errors.Is(err, storage.ErrCandidateStatusConflict) {
 					// 發生並行狀態競爭（例如已被並行重開或並行核准），原子重讀最新持久化資料
 					freshCand, getErr := s.store.GetCandidate(captureCtx, repoInfo.Workspace, existing.ID)
 					if getErr == nil && freshCand != nil {
 						if freshCand.Status == "approved" {
-							if newCP != nil && !freshCand.IsTruncated {
-								if err := s.store.AdvanceCheckpointTx(captureCtx, newCP, expectedOldSHA, ancestryChecker); err != nil {
-									return nil, fmt.Errorf("advance checkpoint: %w", err)
-								}
+							if err := advanceExistingCandidate(freshCand); err != nil {
+								return nil, fmt.Errorf("advance checkpoint: %w", err)
 							}
 							return &CaptureResult{
 								Candidate: freshCand,
@@ -181,10 +192,8 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 								Message:   fmt.Sprintf("range already approved as memory %s", freshCand.ApprovedMemoryID),
 							}, nil
 						} else if freshCand.Status == "pending" {
-							if newCP != nil && !freshCand.IsTruncated {
-								if err := s.store.AdvanceCheckpointTx(captureCtx, newCP, expectedOldSHA, ancestryChecker); err != nil {
-									return nil, fmt.Errorf("advance checkpoint: %w", err)
-								}
+							if err := advanceExistingCandidate(freshCand); err != nil {
+								return nil, fmt.Errorf("advance checkpoint: %w", err)
 							}
 							return &CaptureResult{
 								Candidate: freshCand,
@@ -205,13 +214,6 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 			existing.TruncatedReason = facts.TruncatedReason
 			existing.ApprovedMemoryID = ""
 			existing.ApprovedAt = nil
-
-			// 只有在 Reopen 真正成功落盤、且候選為完整（!facts.Truncated）時，才前進 Checkpoint (MUST FIX 1 & 2)
-			if newCP != nil && !facts.Truncated {
-				if err := s.store.AdvanceCheckpointTx(captureCtx, newCP, expectedOldSHA, ancestryChecker); err != nil {
-					return nil, fmt.Errorf("advance checkpoint for reopened candidate: %w", err)
-				}
-			}
 
 			return &CaptureResult{
 				Candidate: existing,
@@ -278,11 +280,8 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 						return nil, fmt.Errorf("%w: candidate was concurrently discarded; please retry capture with --force", storage.ErrCandidateStatusConflict)
 
 					case "approved":
-						// 若並行請求已完成核准，若有 newCP 且允許前進，前進後回傳 approved
-						if newCP != nil && !fresh.IsTruncated {
-							if err := s.store.AdvanceCheckpointTx(captureCtx, newCP, expectedOldSHA, ancestryChecker); err != nil {
-								return nil, fmt.Errorf("advance checkpoint on approved conflict recovery: %w", err)
-							}
+						if err := advanceExistingCandidate(fresh); err != nil {
+							return nil, fmt.Errorf("advance checkpoint on approved conflict recovery: %w", err)
 						}
 						return &CaptureResult{
 							Candidate: fresh,
@@ -294,10 +293,8 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 					case "pending":
 						if !fresh.IsTruncated {
 							// 另一個並行請求已經成功將其升級為 Complete！直接安全重用
-							if newCP != nil {
-								if err := s.store.AdvanceCheckpointTx(captureCtx, newCP, expectedOldSHA, ancestryChecker); err != nil {
-									return nil, fmt.Errorf("advance checkpoint on pending conflict recovery: %w", err)
-								}
+							if err := advanceExistingCandidate(fresh); err != nil {
+								return nil, fmt.Errorf("advance checkpoint on pending conflict recovery: %w", err)
 							}
 							return &CaptureResult{
 								Candidate: fresh,
@@ -336,10 +333,8 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 
 			// 若無須升級（既有候選原本就已是 Complete）：
 			// 只有確認持久化候選為完整（!existing.IsTruncated）時，才前進 Checkpoint
-			if newCP != nil && !existing.IsTruncated {
-				if err := s.store.AdvanceCheckpointTx(captureCtx, newCP, expectedOldSHA, ancestryChecker); err != nil {
-					return nil, fmt.Errorf("advance checkpoint for existing candidate: %w", err)
-				}
+			if err := advanceExistingCandidate(existing); err != nil {
+				return nil, fmt.Errorf("advance checkpoint for existing candidate: %w", err)
 			}
 
 			msg := "reused existing pending candidate"
@@ -357,10 +352,8 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 		case "approved":
 			// 庫中已核准的 Candidate 保證為完整（Partial Candidate 嚴格禁止被核准，杜絕變更遺漏至正式記憶庫）
 			// 因此若符合 newCP != nil 且 !existing.IsTruncated，允許推進 Checkpoint
-			if newCP != nil && !existing.IsTruncated {
-				if err := s.store.AdvanceCheckpointTx(captureCtx, newCP, expectedOldSHA, ancestryChecker); err != nil {
-					return nil, fmt.Errorf("advance checkpoint for approved candidate: %w", err)
-				}
+			if err := advanceExistingCandidate(existing); err != nil {
+				return nil, fmt.Errorf("advance checkpoint for approved candidate: %w", err)
 			}
 
 			return &CaptureResult{
@@ -424,7 +417,11 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 				if !opts.Force {
 					return nil, fmt.Errorf("candidate for range %s..%s was already discarded; use --force to reopen", facts.BaseSHA[:min(8, len(facts.BaseSHA))], facts.HeadSHA[:min(8, len(facts.HeadSHA))])
 				}
-				if err := s.store.ReopenDiscardedCandidate(captureCtx, repoInfo.Workspace, existingCand.ID, draft, factsSummary, facts.CommitCount, facts.Truncated, facts.TruncatedReason); err != nil {
+				if err := s.store.ReopenDiscardedCandidateAndAdvanceCheckpointTx(
+					captureCtx, repoInfo.Workspace, existingCand.ID, draft, factsSummary,
+					facts.CommitCount, facts.Truncated, facts.TruncatedReason,
+					newCP, expectedOldSHA, ancestryChecker,
+				); err != nil {
 					return nil, fmt.Errorf("reopen discarded candidate on conflict: %w", err)
 				}
 				existingCand.Status = "pending"
@@ -435,11 +432,6 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 				existingCand.TruncatedReason = facts.TruncatedReason
 				existingCand.ApprovedMemoryID = ""
 				existingCand.ApprovedAt = nil
-				if newCP != nil && !facts.Truncated {
-					if err := s.store.AdvanceCheckpointTx(captureCtx, newCP, expectedOldSHA, ancestryChecker); err != nil {
-						return nil, fmt.Errorf("advance checkpoint for reopened candidate on conflict: %w", err)
-					}
-				}
 				return &CaptureResult{
 					Candidate: existingCand,
 					Facts:     facts,

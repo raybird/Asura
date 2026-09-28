@@ -1222,3 +1222,116 @@ func TestSaveCandidateAndCheckpointTx_DiscardedConflict_RollsBackAndNeverAdvance
 		t.Fatalf("CRITICAL SECURITY BUG: Checkpoint was advanced to %s despite discarded candidate conflict! Expected %s", cpAfter.LastCapturedSHA, h0)
 	}
 }
+
+func TestExistingCandidateDiscardedAfterRead_CannotAdvanceCheckpoint(t *testing.T) {
+	ctx := context.Background()
+	store := newTestGitMemStore(t)
+	ws := "/workspace/existing-candidate-race"
+	h0 := "0000000000000000000000000000000000000000"
+	h1 := "1111111111111111111111111111111111111111"
+	cand := &MemoryCandidate{
+		ID:            "cand-existing-race",
+		Workspace:     ws,
+		RepoID:        "repo-1",
+		RefName:       "refs/heads/main",
+		BaseSHA:       h0,
+		HeadSHA:       h1,
+		CommitCount:   1,
+		FactsSummary:  `{"truncated":false}`,
+		DraftContent:  "complete draft",
+		Status:        "pending",
+		PolicyVersion: "gitmem-v1",
+		CreatedAt:     time.Now().UTC(),
+	}
+	if err := store.SaveCandidate(ctx, cand); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveCheckpoint(ctx, &GitCheckpoint{
+		Workspace: ws, RepoID: cand.RepoID, RefName: cand.RefName,
+		LastCapturedSHA: h0, UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// A 已讀到 pending + complete，但 B 在 A 前進 Checkpoint 前先 discard。
+	if _, err := store.GetCandidate(ctx, ws, cand.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DiscardCandidate(ctx, ws, cand.ID); err != nil {
+		t.Fatal(err)
+	}
+	cp := &GitCheckpoint{
+		Workspace: ws, RepoID: cand.RepoID, RefName: cand.RefName,
+		LastCapturedSHA: h1, UpdatedAt: time.Now().UTC(),
+	}
+	err := store.AdvanceCheckpointForCandidateTx(ctx, ws, cand.ID, "pending", cp, h0, func(context.Context, string, string) (bool, error) {
+		return true, nil
+	})
+	if !errors.Is(err, ErrCandidateStatusConflict) {
+		t.Fatalf("expected ErrCandidateStatusConflict after concurrent discard, got: %v", err)
+	}
+	got, err := store.GetCheckpoint(ctx, ws, cand.RepoID, cand.RefName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.LastCapturedSHA != h0 {
+		t.Fatalf("checkpoint advanced after candidate discard: got %s, want %s", got.LastCapturedSHA, h0)
+	}
+}
+
+func TestReopenDiscardedCandidateAndAdvanceCheckpointTx_RollsBackTogether(t *testing.T) {
+	ctx := context.Background()
+	store := newTestGitMemStore(t)
+	ws := "/workspace/reopen-rollback"
+	h0 := "0000000000000000000000000000000000000000"
+	h1 := "1111111111111111111111111111111111111111"
+	cand := &MemoryCandidate{
+		ID:            "cand-reopen-rollback",
+		Workspace:     ws,
+		RepoID:        "repo-1",
+		RefName:       "refs/heads/main",
+		BaseSHA:       h0,
+		HeadSHA:       h1,
+		CommitCount:   1,
+		FactsSummary:  `{"truncated":false}`,
+		DraftContent:  "discarded draft",
+		Status:        "discarded",
+		PolicyVersion: "gitmem-v1",
+		CreatedAt:     time.Now().UTC(),
+	}
+	if err := store.SaveCandidate(ctx, cand); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveCheckpoint(ctx, &GitCheckpoint{
+		Workspace: ws, RepoID: cand.RepoID, RefName: cand.RefName,
+		LastCapturedSHA: h0, UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	cp := &GitCheckpoint{
+		Workspace: ws, RepoID: cand.RepoID, RefName: cand.RefName,
+		LastCapturedSHA: h1, UpdatedAt: time.Now().UTC(),
+	}
+	err := store.ReopenDiscardedCandidateAndAdvanceCheckpointTx(
+		ctx, ws, cand.ID, "new draft", `{"truncated":false}`, 1, false, "",
+		cp, h0, func(context.Context, string, string) (bool, error) { return false, nil },
+	)
+	if err == nil {
+		t.Fatal("expected checkpoint ancestry failure")
+	}
+	gotCandidate, err := store.GetCandidate(ctx, ws, cand.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotCandidate.Status != "discarded" || gotCandidate.DraftContent != "discarded draft" {
+		t.Fatalf("candidate reopen was not rolled back: %+v", gotCandidate)
+	}
+	gotCheckpoint, err := store.GetCheckpoint(ctx, ws, cand.RepoID, cand.RefName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotCheckpoint.LastCapturedSHA != h0 {
+		t.Fatalf("checkpoint changed after rollback: got %s, want %s", gotCheckpoint.LastCapturedSHA, h0)
+	}
+}

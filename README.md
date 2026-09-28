@@ -201,7 +201,7 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web \
 
 2026-09-25：
 - **Git 變更感知與候選隔離（Phase 3H）**：支援 `asura memory capture`，唯讀安全執行 Git 子程序讀取固定範圍（`base..head`）或 `--since-last` 增量變更。
-- **實體儲存與召回隔離**：候選草稿存放於獨立 `git_memory_candidates` 表，未審核之草稿 100% 隔離，絕不進入 Task 記憶召回 prompt；僅在顯式 `asura memory approve` 後寫入正式記憶（`source='git-approved'`）並建立獨立 `memory_provenance` 來源記錄。
+- **實體儲存與召回隔離**：候選草稿存放於獨立 `memory_candidates` 表，未審核之草稿 100% 隔離，絕不進入 Task 記憶召回 prompt；僅在顯式 `asura memory approve` 後寫入正式記憶（`source='git-approved'`）並建立獨立 `memory_provenance` 來源記錄。
 - **有界截斷與 Checkpoint 安全**：受硬性邊界（200 commits、500 files、256 KiB diff）限制；超出限制時標記 Partial 截斷，且嚴格禁止自動前進 Checkpoint，避免未分析歷史遺漏；不完整候選（Partial Candidate）嚴格禁止核准（Approve），杜絕殘缺事實污染正式專案記憶。
 - **防復活與歷史密封性**：核准或拒絕紀錄持久化保存，防止重複 Range 重新擷取；手動刪除已核准記憶後禁止原 Candidate 復活；既有 Task 快照維持密封不變。
 

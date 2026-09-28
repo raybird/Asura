@@ -387,6 +387,21 @@ func (s *SQLiteStore) initSchema() error {
 		if _, err := s.db.Exec(quarantineLegacyApprovedPartial); err != nil {
 			return fmt.Errorf("quarantine legacy approved partial candidates: %w", err)
 		}
+
+		quarantineLegacyPartialMemories := `
+		UPDATE memories
+		SET source = 'git-approved-legacy-partial'
+		WHERE source = 'git-approved'
+		  AND id IN (
+			SELECT p.memory_id
+			FROM memory_provenance p
+			JOIN memory_candidates c ON c.id = p.candidate_id
+			WHERE c.policy_version = 'gitmem-v1-legacy-approved-partial'
+		  );
+		`
+		if _, err := s.db.Exec(quarantineLegacyPartialMemories); err != nil {
+			return fmt.Errorf("quarantine legacy approved partial memories: %w", err)
+		}
 	}
 	return nil
 }

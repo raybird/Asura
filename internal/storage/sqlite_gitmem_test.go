@@ -519,6 +519,20 @@ func TestLegacyMigration_BackfillIsTruncatedFromMemoryProvenanceAfterClearCandid
 	if cand.PolicyVersion != "gitmem-v1-legacy-approved-partial" {
 		t.Fatalf("expected legacy approved partial policy quarantine, got: %s", cand.PolicyVersion)
 	}
+	legacyMemory, err := store.GetMemory(context.Background(), "/ws/cleared", "mem-cleared-1")
+	if err != nil {
+		t.Fatalf("get quarantined legacy memory: %v", err)
+	}
+	if legacyMemory.Source != "git-approved-legacy-partial" {
+		t.Fatalf("expected quarantined legacy memory source, got: %s", legacyMemory.Source)
+	}
+	recalled, _, err := store.RecallCandidates(context.Background(), "/ws/cleared")
+	if err != nil {
+		t.Fatalf("recall candidates: %v", err)
+	}
+	if len(recalled) != 0 {
+		t.Fatalf("expected legacy partial memory to be excluded from bounded recall, got: %+v", recalled)
+	}
 
 	// Migration 不得跳過未完整擷取的 range。
 	cp, err := store.GetCheckpoint(context.Background(), "/ws/cleared", "r1", "refs/heads/main")

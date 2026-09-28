@@ -367,6 +367,89 @@ func (s *SQLiteStore) UpgradePartialCandidateAndAdvanceCheckpointTx(
 	return tx.Commit()
 }
 
+// AdvanceCheckpointForCandidateTx 在同一交易內重新確認完整 Candidate 狀態並推進 Checkpoint。
+func (s *SQLiteStore) AdvanceCheckpointForCandidateTx(
+	ctx context.Context,
+	workspace, candidateID, expectedStatus string,
+	checkpoint *GitCheckpoint,
+	expectedOldSHA string,
+	isAncestor CheckpointAncestryCheckFunc,
+) error {
+	if checkpoint == nil {
+		return nil
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx for candidate checkpoint advance: %w", err)
+	}
+	defer tx.Rollback()
+
+	res, err := tx.ExecContext(ctx, `
+		UPDATE memory_candidates SET status = status
+		WHERE workspace = ? AND id = ? AND status = ? AND is_truncated = 0
+	`, workspace, candidateID, expectedStatus)
+	if err != nil {
+		return fmt.Errorf("lock candidate for checkpoint advance: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get candidate rows affected: %w", err)
+	}
+	if rows == 0 {
+		return ErrCandidateStatusConflict
+	}
+	if err := advanceCheckpointInTx(ctx, tx, checkpoint, expectedOldSHA, isAncestor); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// ReopenDiscardedCandidateAndAdvanceCheckpointTx 原子重開 discarded Candidate，並在完整時推進 Checkpoint。
+func (s *SQLiteStore) ReopenDiscardedCandidateAndAdvanceCheckpointTx(
+	ctx context.Context,
+	workspace, id, draftContent, factsSummary string,
+	commitCount int,
+	isTruncated bool,
+	truncatedReason string,
+	checkpoint *GitCheckpoint,
+	expectedOldSHA string,
+	isAncestor CheckpointAncestryCheckFunc,
+) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx for reopen candidate: %w", err)
+	}
+	defer tx.Rollback()
+
+	isTruncatedInt := 0
+	if isTruncated {
+		isTruncatedInt = 1
+	}
+	res, err := tx.ExecContext(ctx, `
+		UPDATE memory_candidates
+		SET status = 'pending', draft_content = ?, facts_summary = ?, commit_count = ?,
+		    is_truncated = ?, truncated_reason = ?, is_user_edited = 0,
+		    approved_memory_id = '', approved_at = NULL
+		WHERE workspace = ? AND id = ? AND status = 'discarded'
+	`, draftContent, factsSummary, commitCount, isTruncatedInt, truncatedReason, workspace, id)
+	if err != nil {
+		return fmt.Errorf("reopen candidate: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
+	if rows == 0 {
+		return ErrCandidateStatusConflict
+	}
+	if checkpoint != nil && !isTruncated {
+		if err := advanceCheckpointInTx(ctx, tx, checkpoint, expectedOldSHA, isAncestor); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 // AdvanceCheckpointTx 在獨立交易內推進 Checkpoint，嚴格保證單調前進（Monotonicity）與 CAS 防倒退
 func (s *SQLiteStore) AdvanceCheckpointTx(
 	ctx context.Context,
