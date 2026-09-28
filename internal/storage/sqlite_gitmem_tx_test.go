@@ -1335,3 +1335,32 @@ func TestReopenDiscardedCandidateAndAdvanceCheckpointTx_RollsBackTogether(t *tes
 		t.Fatalf("checkpoint changed after rollback: got %s, want %s", gotCheckpoint.LastCapturedSHA, h0)
 	}
 }
+
+func TestAdvanceCheckpointForCandidateTx_RejectsUnsupportedExpectedStatus(t *testing.T) {
+	ctx := context.Background()
+	store := newTestGitMemStore(t)
+	ws := "/workspace/unsupported-status"
+	h0 := "0000000000000000000000000000000000000000"
+	h1 := "1111111111111111111111111111111111111111"
+	cand := &MemoryCandidate{
+		ID: "cand-unsupported-status", Workspace: ws, RepoID: "repo-1", RefName: "refs/heads/main",
+		BaseSHA: h0, HeadSHA: h1, CommitCount: 1, FactsSummary: `{"truncated":false}`,
+		DraftContent: "discarded", Status: "discarded", PolicyVersion: "gitmem-v1", CreatedAt: time.Now().UTC(),
+	}
+	if err := store.SaveCandidate(ctx, cand); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveCheckpoint(ctx, &GitCheckpoint{
+		Workspace: ws, RepoID: cand.RepoID, RefName: cand.RefName,
+		LastCapturedSHA: h0, UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	err := store.AdvanceCheckpointForCandidateTx(ctx, ws, cand.ID, "discarded", &GitCheckpoint{
+		Workspace: ws, RepoID: cand.RepoID, RefName: cand.RefName,
+		LastCapturedSHA: h1, UpdatedAt: time.Now().UTC(),
+	}, h0, func(context.Context, string, string) (bool, error) { return true, nil })
+	if !errors.Is(err, ErrCandidateStatusConflict) {
+		t.Fatalf("expected ErrCandidateStatusConflict, got: %v", err)
+	}
+}

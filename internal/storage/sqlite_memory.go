@@ -150,7 +150,8 @@ func (s *SQLiteStore) RecallCandidates(ctx context.Context, workspace string) ([
  substr(CAST(id AS BLOB),1,257), substr(CAST(content AS BLOB),1,8193),
  substr(CAST(source AS BLOB),1,129), substr(CAST(created_at AS BLOB),1,65)
 	FROM memories
-	WHERE workspace = ? AND source != 'git-approved-legacy-partial'
+	WHERE workspace = ?
+	  AND source NOT IN ('git-approved-legacy-partial', 'git-approved-legacy-unknown')
 	ORDER BY id LIMIT 257`, workspace)
 	if err != nil {
 		return nil, false, err

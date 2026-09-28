@@ -333,7 +333,11 @@ func (g *GitExecutor) IsAncestor(ctx context.Context, dir string, ancestorSHA, d
 	}
 	_, err := g.Exec(ctx, dir, "merge-base", "--is-ancestor", ancestorSHA, descendantSHA)
 	if err != nil {
-		return false, nil
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			return false, nil
+		}
+		return false, fmt.Errorf("check git ancestry: %w", err)
 	}
 	return true, nil
 }

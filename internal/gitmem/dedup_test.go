@@ -1329,6 +1329,7 @@ func TestCaptureService_ConcurrentCreateDiscard_SaveConflictRequiresForce(t *tes
 				CreatedAt:       time.Now().UTC(),
 				IsTruncated:     false,
 				TruncatedReason: "",
+				IsUserEdited:    true,
 			}
 			if err := store.SaveCandidate(ctx, bCand); err != nil {
 				t.Errorf("concurrent B save candidate failed: %v", err)
@@ -1371,6 +1372,9 @@ func TestCaptureService_ConcurrentCreateDiscard_SaveConflictRequiresForce(t *tes
 	}
 	if resForce.Candidate.Status != "pending" {
 		t.Fatalf("expected reopened candidate to be pending, got: %s", resForce.Candidate.Status)
+	}
+	if resForce.Candidate.IsUserEdited {
+		t.Fatal("expected reopened candidate response to reload is_user_edited=false from database")
 	}
 
 	// 驗證 Checkpoint 成功且安全地推進到 CurrentHead

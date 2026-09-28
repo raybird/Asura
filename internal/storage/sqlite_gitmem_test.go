@@ -578,3 +578,126 @@ func TestLegacyMigration_BackfillIsTruncatedFromMemoryProvenanceAfterClearCandid
 		t.Fatalf("expected complete recapture to advance checkpoint to head-old, got: %s", cp.LastCapturedSHA)
 	}
 }
+
+func TestLegacyMigration_QuarantinesApprovedCandidateWithNoRemainingPartialEvidence(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "legacy_unknown.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`
+	CREATE TABLE memory_candidates (
+		id TEXT PRIMARY KEY,
+		workspace TEXT NOT NULL,
+		repo_id TEXT NOT NULL,
+		ref_name TEXT NOT NULL,
+		base_sha TEXT NOT NULL,
+		head_sha TEXT NOT NULL,
+		commit_count INTEGER NOT NULL,
+		facts_summary TEXT NOT NULL,
+		draft_content TEXT NOT NULL,
+		status TEXT NOT NULL,
+		policy_version TEXT NOT NULL DEFAULT 'gitmem-v1',
+		approved_memory_id TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		approved_at DATETIME,
+		UNIQUE(workspace, repo_id, ref_name, base_sha, head_sha, policy_version)
+	);
+	CREATE TABLE git_checkpoints (
+		workspace TEXT NOT NULL,
+		repo_id TEXT NOT NULL,
+		ref_name TEXT NOT NULL,
+		last_captured_sha TEXT NOT NULL,
+		updated_at DATETIME NOT NULL,
+		PRIMARY KEY (workspace, repo_id, ref_name)
+	);
+	INSERT INTO memory_candidates (
+		id, workspace, repo_id, ref_name, base_sha, head_sha,
+		commit_count, facts_summary, draft_content, status,
+		policy_version, approved_memory_id, created_at, approved_at
+	) VALUES (
+		'cand-legacy-unknown', '/ws/unknown', 'r1', 'refs/heads/main', 'base-old', 'head-old',
+		1, '{}', '', 'approved', 'gitmem-v1', 'mem-deleted',
+		'2026-09-25 10:00:00', '2026-09-25 10:05:00'
+	);
+	INSERT INTO git_checkpoints (workspace, repo_id, ref_name, last_captured_sha, updated_at)
+	VALUES ('/ws/unknown', 'r1', 'refs/heads/main', 'base-old', '2026-09-25 10:00:00');
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = db.Close()
+
+	store, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	cand, err := store.GetCandidate(context.Background(), "/ws/unknown", "cand-legacy-unknown")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cand.PolicyVersion != "gitmem-v1-legacy-unknown" {
+		t.Fatalf("expected legacy unknown quarantine, got: %s", cand.PolicyVersion)
+	}
+	cp, err := store.GetCheckpoint(context.Background(), "/ws/unknown", "r1", "refs/heads/main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cp.LastCapturedSHA != "base-old" {
+		t.Fatalf("migration advanced checkpoint: got %s", cp.LastCapturedSHA)
+	}
+	current, err := store.FindCandidateByRange(context.Background(), "/ws/unknown", "r1", "refs/heads/main", "base-old", "head-old", "gitmem-v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current != nil {
+		t.Fatalf("legacy unknown candidate still occupies gitmem-v1 range: %+v", current)
+	}
+	complete := &MemoryCandidate{
+		ID: "cand-unknown-recapture", Workspace: "/ws/unknown", RepoID: "r1", RefName: "refs/heads/main",
+		BaseSHA: "base-old", HeadSHA: "head-old", CommitCount: 1,
+		FactsSummary: `{"truncated":false}`, DraftContent: "complete recapture",
+		Status: "pending", PolicyVersion: "gitmem-v1", CreatedAt: time.Now().UTC(),
+	}
+	if _, err := store.SaveCandidateAndCheckpointTx(context.Background(), complete, &GitCheckpoint{
+		Workspace: "/ws/unknown", RepoID: "r1", RefName: "refs/heads/main",
+		LastCapturedSHA: "head-old", UpdatedAt: time.Now().UTC(),
+	}, "base-old", func(context.Context, string, string) (bool, error) { return true, nil }); err != nil {
+		t.Fatalf("save complete recapture after legacy unknown quarantine: %v", err)
+	}
+}
+
+func TestCurrentSchema_DoesNotQuarantineClearedApprovedCompleteCandidate(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "current_schema.db")
+	store, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cand := &MemoryCandidate{
+		ID: "cand-current-complete", Workspace: "/ws/current", RepoID: "r1", RefName: "refs/heads/main",
+		BaseSHA: "base", HeadSHA: "head", CommitCount: 1, FactsSummary: `{}`, DraftContent: "",
+		Status: "approved", PolicyVersion: "gitmem-v1", ApprovedMemoryID: "mem-deleted",
+		CreatedAt: time.Now().UTC(), IsTruncated: false,
+	}
+	if err := store.SaveCandidate(context.Background(), cand); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err = NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	got, err := store.GetCandidate(context.Background(), "/ws/current", cand.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.PolicyVersion != "gitmem-v1" {
+		t.Fatalf("current-schema complete candidate was quarantined: %s", got.PolicyVersion)
+	}
+}

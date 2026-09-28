@@ -206,14 +206,11 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 				}
 				return nil, fmt.Errorf("reopen discarded candidate: %w", err)
 			}
-			existing.Status = "pending"
-			existing.DraftContent = draft
-			existing.FactsSummary = factsSummary
-			existing.CommitCount = facts.CommitCount
-			existing.IsTruncated = facts.Truncated
-			existing.TruncatedReason = facts.TruncatedReason
-			existing.ApprovedMemoryID = ""
-			existing.ApprovedAt = nil
+			reopened, err := s.store.GetCandidate(captureCtx, repoInfo.Workspace, existing.ID)
+			if err != nil {
+				return nil, fmt.Errorf("reload reopened candidate: %w", err)
+			}
+			existing = reopened
 
 			return &CaptureResult{
 				Candidate: existing,
@@ -424,14 +421,11 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 				); err != nil {
 					return nil, fmt.Errorf("reopen discarded candidate on conflict: %w", err)
 				}
-				existingCand.Status = "pending"
-				existingCand.DraftContent = draft
-				existingCand.FactsSummary = factsSummary
-				existingCand.CommitCount = facts.CommitCount
-				existingCand.IsTruncated = facts.Truncated
-				existingCand.TruncatedReason = facts.TruncatedReason
-				existingCand.ApprovedMemoryID = ""
-				existingCand.ApprovedAt = nil
+				reopened, reloadErr := s.store.GetCandidate(captureCtx, repoInfo.Workspace, existingCand.ID)
+				if reloadErr != nil {
+					return nil, fmt.Errorf("reload reopened candidate on conflict: %w", reloadErr)
+				}
+				existingCand = reopened
 				return &CaptureResult{
 					Candidate: existingCand,
 					Facts:     facts,

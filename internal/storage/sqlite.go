@@ -345,7 +345,8 @@ func (s *SQLiteStore) initSchema() error {
 		return fmt.Errorf("check memory_candidates columns: %w", err)
 	}
 	if len(candCols) > 0 {
-		if !candCols["is_truncated"] {
+		addedIsTruncated := !candCols["is_truncated"]
+		if addedIsTruncated {
 			if _, err := s.db.Exec("ALTER TABLE memory_candidates ADD COLUMN is_truncated INTEGER NOT NULL DEFAULT 0"); err != nil {
 				return fmt.Errorf("add column is_truncated to memory_candidates: %w", err)
 			}
@@ -358,6 +359,23 @@ func (s *SQLiteStore) initSchema() error {
 		if !candCols["is_user_edited"] {
 			if _, err := s.db.Exec("ALTER TABLE memory_candidates ADD COLUMN is_user_edited INTEGER NOT NULL DEFAULT 0"); err != nil {
 				return fmt.Errorf("add column is_user_edited to memory_candidates: %w", err)
+			}
+		}
+		if addedIsTruncated {
+			// 舊 schema 若已清空 facts 且 Provenance 也不存在，無法安全推斷原擷取是否完整。
+			quarantineLegacyUnknown := `
+			UPDATE memory_candidates
+			SET policy_version = 'gitmem-v1-legacy-unknown'
+			WHERE status = 'approved'
+			  AND facts_summary = '{}'
+			  AND policy_version = 'gitmem-v1'
+			  AND NOT EXISTS (
+				SELECT 1 FROM memory_provenance p
+				WHERE p.candidate_id = memory_candidates.id
+			  );
+			`
+			if _, err := s.db.Exec(quarantineLegacyUnknown); err != nil {
+				return fmt.Errorf("quarantine legacy candidates with unknown completeness: %w", err)
 			}
 		}
 		// clear-candidates 會清空 candidate facts，因此舊資料也需從 provenance 回填 Partial 狀態。
@@ -401,6 +419,20 @@ func (s *SQLiteStore) initSchema() error {
 		`
 		if _, err := s.db.Exec(quarantineLegacyPartialMemories); err != nil {
 			return fmt.Errorf("quarantine legacy approved partial memories: %w", err)
+		}
+
+		quarantineLegacyUnknownMemories := `
+		UPDATE memories
+		SET source = 'git-approved-legacy-unknown'
+		WHERE source = 'git-approved'
+		  AND id IN (
+			SELECT approved_memory_id
+			FROM memory_candidates
+			WHERE policy_version = 'gitmem-v1-legacy-unknown'
+		  );
+		`
+		if _, err := s.db.Exec(quarantineLegacyUnknownMemories); err != nil {
+			return fmt.Errorf("quarantine legacy approved memories with unknown completeness: %w", err)
 		}
 	}
 	return nil

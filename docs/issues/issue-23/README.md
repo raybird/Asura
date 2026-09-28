@@ -192,6 +192,7 @@ Feature: Git 變更感知與審核式專案記憶擷取
 | 2026-09-25 | 完成全專案 16 個套件之完整回歸測試（`go test -count=1 ./...` 全數 PASS）、併發防護測試（零 Data Race）與靜態分析檢查，產出 `evidence/e2e-regression.md` 交付證據，結案交付審查 | - |
 | 2026-09-28 | 依 PR #24 第九輪 Review `5336599262` 修正 discarded Candidate 併行 Checkpoint race、legacy approved Partial migration，並補上 CLI PARTIAL／COMPLETE 輸出與回歸測試 | - |
 | 2026-09-28 | 依 PR #24 第十輪 Review `5338648211` 將 existing Candidate 狀態確認、force reopen 與 Checkpoint 前進收旂至同一交易，並隔離 legacy Partial 正式記憶的 bounded recall | - |
+| 2026-09-28 | 依 PR #24 第十一輪 Review `5339099994` 將舊 schema 中已失去 Partial 證據的 approved Candidate fail-safe 隔離為 legacy unknown，並強化 force 回傳狀態、storage 狀態白名單與 Git ancestry 錯誤傳遞 | - |
 
 ---
 **建立日期**: 2026-09-25  

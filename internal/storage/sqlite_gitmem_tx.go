@@ -375,6 +375,9 @@ func (s *SQLiteStore) AdvanceCheckpointForCandidateTx(
 	expectedOldSHA string,
 	isAncestor CheckpointAncestryCheckFunc,
 ) error {
+	if expectedStatus != "pending" && expectedStatus != "approved" {
+		return ErrCandidateStatusConflict
+	}
 	if checkpoint == nil {
 		return nil
 	}

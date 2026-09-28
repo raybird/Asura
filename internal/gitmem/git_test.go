@@ -246,3 +246,32 @@ func TestGitExecutor_NoLazyFetchWithPromisorRemote(t *testing.T) {
 	}
 }
 
+func TestGitExecutor_IsAncestor_DistinguishesNotAncestorFromExecutionErrors(t *testing.T) {
+	allowedRoot, repoDir := initTestGitRepo(t)
+	executor := NewGitExecutor([]string{allowedRoot})
+
+	head, err := executor.Exec(context.Background(), repoDir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent, err := executor.Exec(context.Background(), repoDir, "rev-parse", "HEAD~1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	isAncestor, err := executor.IsAncestor(context.Background(), repoDir, strings.TrimSpace(string(head)), strings.TrimSpace(string(parent)))
+	if err != nil {
+		t.Fatalf("ordinary not-ancestor result returned error: %v", err)
+	}
+	if isAncestor {
+		t.Fatal("expected child commit not to be ancestor of its parent")
+	}
+
+	if _, err := executor.IsAncestor(context.Background(), repoDir, "not-a-valid-sha", strings.TrimSpace(string(head))); err == nil {
+		t.Fatal("expected invalid SHA to return an execution error")
+	}
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := executor.IsAncestor(canceled, repoDir, strings.TrimSpace(string(parent)), strings.TrimSpace(string(head))); err == nil {
+		t.Fatal("expected canceled context to return an error")
+	}
+}
