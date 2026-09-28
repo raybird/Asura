@@ -1277,9 +1277,108 @@ func TestCaptureService_ConflictRecovery_AdvanceCheckpointErrorPropagated(t *tes
 	}
 }
 
+// TestCaptureService_ConcurrentCreateDiscard_SaveConflictRequiresForce
+// MUST FIX 1 Barrier / E2E 測試：
+// 模擬 cp=H0，A 執行 --since-last 並在 service 層查重得到 nil；
+// B 在 A 進入 SaveCandidateAndCheckpointTx 之前，以手動 range 建立同 H0..H1 的 Complete candidate 並 discard；
+// A 的 SaveCandidateAndCheckpointTx 觸發 UNIQUE conflict 並讀到 discarded candidate。
+// 驗證：
+// 1. 未帶 --force 時：Capture 必須失敗被拒絕，且 Checkpoint 絕對維持在 H0！
+// 2. 帶有 --force 時：Capture 成功 reopen 該 discarded candidate，且 Checkpoint 安全推進至 H1！
+func TestCaptureService_ConcurrentCreateDiscard_SaveConflictRequiresForce(t *testing.T) {
+	allowedRoot, repoDir := initTestRepoWithBranches(t)
+	exec := NewGitExecutor([]string{allowedRoot})
+	store := newTestStore(t)
+	service := NewCaptureService(exec, store)
+	ctx := context.Background()
 
+	repoInfo, err := exec.ValidateAndResolveRepo(ctx, repoDir)
+	if err != nil {
+		t.Fatal(err)
+	}
 
+	resolved, _ := exec.ResolveRange(ctx, repoDir, "HEAD~2..HEAD~1")
+	h0 := resolved.HeadSHA
+	_ = store.SaveCheckpoint(ctx, &storage.GitCheckpoint{
+		Workspace:       repoInfo.Workspace,
+		RepoID:          repoInfo.RepoID,
+		RefName:         repoInfo.CurrentRef,
+		LastCapturedSHA: h0,
+		UpdatedAt:       time.Now().UTC(),
+	})
 
+	bCandID := "cand-b-concurrent-discard"
 
+	// 1. 測試情境一：A 未帶 --force
+	// 利用 AIGenerator 在查重（nil）之後、儲存之前觸發 B 建立 Complete 候選並 discard
+	raceGenNoForce := &concurrentInterleavingGenerator{
+		onGenerate: func() {
+			// B 並行建立同 range complete candidate 並將其 discard
+			bCand := &storage.MemoryCandidate{
+				ID:              bCandID,
+				Workspace:       repoInfo.Workspace,
+				RepoID:          repoInfo.RepoID,
+				RefName:         repoInfo.CurrentRef,
+				BaseSHA:         h0,
+				HeadSHA:         repoInfo.CurrentHead,
+				CommitCount:     1,
+				FactsSummary:    `{"truncated":false}`,
+				DraftContent:    "b manual draft",
+				Status:          "pending",
+				PolicyVersion:   "gitmem-v1",
+				CreatedAt:       time.Now().UTC(),
+				IsTruncated:     false,
+				TruncatedReason: "",
+			}
+			if err := store.SaveCandidate(ctx, bCand); err != nil {
+				t.Errorf("concurrent B save candidate failed: %v", err)
+			}
+			if err := store.DiscardCandidate(ctx, repoInfo.Workspace, bCandID); err != nil {
+				t.Errorf("concurrent B discard candidate failed: %v", err)
+			}
+		},
+	}
+	service.SetAIGenerator(raceGenNoForce)
 
+	// A 執行 Capture (--since-last, Force: false)
+	res, err := service.Capture(ctx, repoDir, CaptureOptions{SinceLast: true, AIDraft: true, Force: false})
+	if err == nil {
+		t.Fatal("SECURITY BUG: Capture succeeded without --force when concurrent discarded candidate caused save conflict!")
+	}
+	if !strings.Contains(err.Error(), "was already discarded; use --force to reopen") {
+		t.Fatalf("expected already discarded error with --force guide, got: %v", err)
+	}
+	if res != nil {
+		t.Fatalf("expected nil result on error, got: %+v", res)
+	}
 
+	// 驗證 Checkpoint 絲毫未動，依然停留在 h0！
+	cpAfter, err := store.GetCheckpoint(ctx, repoInfo.Workspace, repoInfo.RepoID, repoInfo.CurrentRef)
+	if err != nil {
+		t.Fatalf("get checkpoint failed: %v", err)
+	}
+	if cpAfter.LastCapturedSHA != h0 {
+		t.Fatalf("CRITICAL SECURITY BUG: Checkpoint was advanced to %s despite discarded candidate conflict! Expected %s", cpAfter.LastCapturedSHA, h0)
+	}
+
+	// 2. 測試情境二：A 帶有 --force
+	// 重新執行 Capture (--since-last, Force: true)
+	// 此時既有候選在查重或 conflict 時會被正確 reopen 並推進 Checkpoint
+	service.SetAIGenerator(nil) // 重置為標準草稿
+	resForce, err := service.Capture(ctx, repoDir, CaptureOptions{SinceLast: true, Force: true})
+	if err != nil {
+		t.Fatalf("expected Capture with --force to succeed, got: %v", err)
+	}
+	if resForce.Candidate.Status != "pending" {
+		t.Fatalf("expected reopened candidate to be pending, got: %s", resForce.Candidate.Status)
+	}
+
+	// 驗證 Checkpoint 成功且安全地推進到 CurrentHead
+	cpAfterForce, err := store.GetCheckpoint(ctx, repoInfo.Workspace, repoInfo.RepoID, repoInfo.CurrentRef)
+	if err != nil {
+		t.Fatalf("get checkpoint after force failed: %v", err)
+	}
+	if cpAfterForce.LastCapturedSHA != repoInfo.CurrentHead {
+		t.Fatalf("expected checkpoint to advance to %s, got: %s", repoInfo.CurrentHead, cpAfterForce.LastCapturedSHA)
+	}
+}

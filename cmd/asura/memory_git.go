@@ -131,10 +131,14 @@ func handleMemoryCandidates(args []string, stdout, stderr io.Writer) int {
 	}
 
 	w := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tSTATUS\tCOMMITS\tCREATED AT\tAPPROVED MEMORY\tSUMMARY")
+	fmt.Fprintln(w, "ID\tSTATUS\tCOMPLETION\tCOMMITS\tCREATED AT\tAPPROVED MEMORY\tSUMMARY")
 	for _, c := range cands {
-		fmt.Fprintf(w, "%s\t%s\t%d\t%s\t%s\t%s\n",
-			c.ID, c.Status, c.CommitCount,
+		completion := "COMPLETE"
+		if c.IsTruncated {
+			completion = "PARTIAL"
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\t%s\n",
+			c.ID, c.Status, completion, c.CommitCount,
 			c.CreatedAt.Format(time.RFC3339),
 			c.ApprovedMemoryID,
 			c.Summary,
@@ -194,6 +198,14 @@ func handleMemoryCandidate(args []string, stdout, stderr io.Writer) int {
 
 	fmt.Fprintf(stdout, "Candidate ID: %s\n", cand.ID)
 	fmt.Fprintf(stdout, "Status:       %s\n", cand.Status)
+	completion := "COMPLETE"
+	if cand.IsTruncated {
+		completion = "PARTIAL"
+		if cand.TruncatedReason != "" {
+			completion = fmt.Sprintf("PARTIAL (%s)", cand.TruncatedReason)
+		}
+	}
+	fmt.Fprintf(stdout, "Completion:   %s\n", completion)
 	fmt.Fprintf(stdout, "Workspace:    %s\n", cand.Workspace)
 	fmt.Fprintf(stdout, "Repo ID:      %s\n", cand.RepoID)
 	fmt.Fprintf(stdout, "Ref Name:     %s\n", cand.RefName)

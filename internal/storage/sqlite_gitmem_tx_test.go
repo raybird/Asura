@@ -1126,8 +1126,99 @@ func TestUpgradePartialCandidate_SQLPreservesUserEditedDraft(t *testing.T) {
 	}
 }
 
+// TestSaveCandidateAndCheckpointTx_DiscardedConflict_RollsBackAndNeverAdvancesCheckpoint
+// MUST FIX 1 單元測試：驗證當 insert-if-absent 發生衝突且既有候選已被捨棄（discarded）時，
+// 交易嚴格 Rollback，絕不把 Checkpoint 推進，並返回 ErrCandidateStatusConflict。
+func TestSaveCandidateAndCheckpointTx_DiscardedConflict_RollsBackAndNeverAdvancesCheckpoint(t *testing.T) {
+	ctx := context.Background()
+	store := newTestGitMemStore(t)
 
+	ws := "/workspace/test-discard-conflict"
+	repoID := "repo-1"
+	refName := "refs/heads/main"
+	h0 := "0000000000000000000000000000000000000000"
+	h1 := "1111111111111111111111111111111111111111"
 
+	// 1. 初始化 Checkpoint 於 h0
+	initialCP := &GitCheckpoint{
+		Workspace:       ws,
+		RepoID:          repoID,
+		RefName:         refName,
+		LastCapturedSHA: h0,
+		UpdatedAt:       time.Now().UTC(),
+	}
+	if err := store.SaveCheckpoint(ctx, initialCP); err != nil {
+		t.Fatalf("failed to init checkpoint: %v", err)
+	}
 
+	// 2. 插入一筆已存在的 complete 候選，並將其狀態置為 discarded
+	discardedCand := &MemoryCandidate{
+		ID:              "cand-discarded-existing",
+		Workspace:       ws,
+		RepoID:          repoID,
+		RefName:         refName,
+		BaseSHA:         h0,
+		HeadSHA:         h1,
+		CommitCount:     2,
+		FactsSummary:    `{"truncated":false}`,
+		DraftContent:    "discarded draft",
+		Status:          "discarded",
+		PolicyVersion:   "gitmem-v1",
+		CreatedAt:       time.Now().UTC(),
+		IsTruncated:     false,
+		TruncatedReason: "",
+	}
+	if err := store.SaveCandidate(ctx, discardedCand); err != nil {
+		t.Fatalf("failed to save discarded candidate: %v", err)
+	}
 
+	// 3. 模擬另一個操作嘗試 SaveCandidateAndCheckpointTx（同 range，Complete，試圖前進至 h1）
+	newCand := &MemoryCandidate{
+		ID:              "cand-new-attempt",
+		Workspace:       ws,
+		RepoID:          repoID,
+		RefName:         refName,
+		BaseSHA:         h0,
+		HeadSHA:         h1,
+		CommitCount:     2,
+		FactsSummary:    `{"truncated":false}`,
+		DraftContent:    "new draft",
+		Status:          "pending",
+		PolicyVersion:   "gitmem-v1",
+		CreatedAt:       time.Now().UTC(),
+		IsTruncated:     false,
+		TruncatedReason: "",
+	}
+	newCP := &GitCheckpoint{
+		Workspace:       ws,
+		RepoID:          repoID,
+		RefName:         refName,
+		LastCapturedSHA: h1,
+		UpdatedAt:       time.Now().UTC(),
+	}
 
+	isAncestorMock := func(ctx context.Context, ancestorSHA, descendantSHA string) (bool, error) {
+		return true, nil
+	}
+
+	// 執行 SaveCandidateAndCheckpointTx
+	persisted, err := store.SaveCandidateAndCheckpointTx(ctx, newCand, newCP, h0, isAncestorMock)
+	if err == nil {
+		t.Fatal("SECURITY BUG: expected SaveCandidateAndCheckpointTx to fail on discarded conflict, but got success!")
+	}
+	if !errors.Is(err, ErrCandidateStatusConflict) {
+		t.Fatalf("expected ErrCandidateStatusConflict, got: %v", err)
+	}
+	if persisted != nil {
+		t.Fatalf("expected nil persisted candidate on error, got: %+v", persisted)
+	}
+
+	// 4. 嚴格驗證 Checkpoint 絲毫未動，依然停留在 h0！
+	cpAfter, err := store.GetCheckpoint(ctx, ws, repoID, refName)
+	if err != nil {
+		t.Fatalf("failed to get checkpoint: %v", err)
+	}
+	if cpAfter.LastCapturedSHA != h0 {
+		t.Fatalf("CRITICAL SECURITY BUG: Checkpoint was advanced to %s despite discarded candidate conflict! Expected %s", cpAfter.LastCapturedSHA, h0)
+	}
+}

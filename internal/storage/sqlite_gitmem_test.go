@@ -406,3 +406,161 @@ func TestSQLiteStore_PartialCandidateMigrationBackfill(t *testing.T) {
 	}
 }
 
+func TestLegacyMigration_BackfillIsTruncatedFromMemoryProvenanceAfterClearCandidates(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "legacy_cleared.db")
+
+	// 1. 手動建立舊版 schema（不具備 is_truncated 欄位）
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	createOldTable := `
+	CREATE TABLE memory_candidates (
+		id TEXT PRIMARY KEY,
+		workspace TEXT NOT NULL,
+		repo_id TEXT NOT NULL,
+		ref_name TEXT NOT NULL,
+		base_sha TEXT NOT NULL,
+		head_sha TEXT NOT NULL,
+		commit_count INTEGER NOT NULL,
+		facts_summary TEXT NOT NULL,
+		draft_content TEXT NOT NULL,
+		status TEXT NOT NULL,
+		policy_version TEXT NOT NULL DEFAULT 'gitmem-v1',
+		approved_memory_id TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		approved_at DATETIME,
+		UNIQUE(workspace, repo_id, ref_name, base_sha, head_sha, policy_version)
+	);
+
+	CREATE TABLE memories (
+		id TEXT PRIMARY KEY,
+		workspace TEXT NOT NULL,
+		content TEXT NOT NULL,
+		source TEXT NOT NULL DEFAULT 'manual',
+		created_at DATETIME NOT NULL
+	);
+
+	CREATE TABLE memory_provenance (
+		memory_id TEXT PRIMARY KEY,
+		candidate_id TEXT NOT NULL,
+		workspace TEXT NOT NULL,
+		repo_id TEXT NOT NULL,
+		ref_name TEXT NOT NULL,
+		base_sha TEXT NOT NULL,
+		head_sha TEXT NOT NULL,
+		commit_count INTEGER NOT NULL,
+		commit_shas_json TEXT NOT NULL DEFAULT '[]',
+		facts_summary TEXT NOT NULL DEFAULT '',
+		is_user_edited INTEGER NOT NULL DEFAULT 0,
+		approved_at DATETIME NOT NULL
+	);
+
+	CREATE TABLE git_checkpoints (
+		workspace TEXT NOT NULL,
+		repo_id TEXT NOT NULL,
+		ref_name TEXT NOT NULL,
+		last_captured_sha TEXT NOT NULL,
+		updated_at DATETIME NOT NULL,
+		PRIMARY KEY (workspace, repo_id, ref_name)
+	);
+
+	-- 插入已被 clear-candidates 清除的候選（facts_summary='{}'，draft_content=''）
+	INSERT INTO memory_candidates (
+		id, workspace, repo_id, ref_name, base_sha, head_sha,
+		commit_count, facts_summary, draft_content, status,
+		policy_version, approved_memory_id, created_at, approved_at
+	) VALUES (
+		'cand-cleared-approved', '/ws/cleared', 'r1', 'refs/heads/main', 'base-old', 'head-old',
+		1, '{}', '', 'approved',
+		'gitmem-v1', 'mem-cleared-1', '2026-09-25 10:00:00', '2026-09-25 10:05:00'
+	);
+
+	INSERT INTO memories (id, workspace, content, source, created_at)
+	VALUES ('mem-cleared-1', '/ws/cleared', 'approved memory', 'git-approved', '2026-09-25 10:05:00');
+
+	-- 原始截斷事實保留於 memory_provenance
+	INSERT INTO memory_provenance (
+		memory_id, candidate_id, workspace, repo_id, ref_name,
+		base_sha, head_sha, commit_count, commit_shas_json,
+		facts_summary, is_user_edited, approved_at
+	) VALUES (
+		'mem-cleared-1', 'cand-cleared-approved', '/ws/cleared', 'r1', 'refs/heads/main',
+		'base-old', 'head-old', 1, '[]',
+		'{"truncated":true,"truncated_reason":"limit"}', 0, '2026-09-25 10:05:00'
+	);
+
+	-- Checkpoint 停滯在 base-old
+	INSERT INTO git_checkpoints (workspace, repo_id, ref_name, last_captured_sha, updated_at)
+	VALUES ('/ws/cleared', 'r1', 'refs/heads/main', 'base-old', '2026-09-25 10:00:00');
+	`
+	if _, err := db.Exec(createOldTable); err != nil {
+		t.Fatal(err)
+	}
+	_ = db.Close()
+
+	// 2. 透過 NewSQLiteStore 開啟，觸發 schema migration、backfill 與 legacy policy 隔離
+	store, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed on legacy schema: %v", err)
+	}
+	defer store.Close()
+
+	// Candidate 需從 provenance 辨識為 Partial，並隔離於新 policy 之外。
+	cand, err := store.GetCandidate(context.Background(), "/ws/cleared", "cand-cleared-approved")
+	if err != nil {
+		t.Fatalf("get candidate failed: %v", err)
+	}
+	if !cand.IsTruncated {
+		t.Fatalf("expected cleared candidate to be backfilled as is_truncated=true via provenance, got: %v", cand.IsTruncated)
+	}
+	if cand.PolicyVersion != "gitmem-v1-legacy-approved-partial" {
+		t.Fatalf("expected legacy approved partial policy quarantine, got: %s", cand.PolicyVersion)
+	}
+
+	// Migration 不得跳過未完整擷取的 range。
+	cp, err := store.GetCheckpoint(context.Background(), "/ws/cleared", "r1", "refs/heads/main")
+	if err != nil {
+		t.Fatalf("get checkpoint failed: %v", err)
+	}
+	if cp.LastCapturedSHA != "base-old" {
+		t.Fatalf("expected checkpoint to remain at base-old, got: %s", cp.LastCapturedSHA)
+	}
+
+	// 新 policy 可對同一 range 建立 Complete 候選，並於同一交易推進 Checkpoint。
+	complete := &MemoryCandidate{
+		ID:            "cand-complete-recapture",
+		Workspace:     "/ws/cleared",
+		RepoID:        "r1",
+		RefName:       "refs/heads/main",
+		BaseSHA:       "base-old",
+		HeadSHA:       "head-old",
+		CommitCount:   1,
+		FactsSummary:  `{"truncated":false}`,
+		DraftContent:  "complete recapture",
+		Status:        "pending",
+		PolicyVersion: "gitmem-v1",
+		CreatedAt:     time.Now().UTC(),
+	}
+	newCP := &GitCheckpoint{
+		Workspace:       "/ws/cleared",
+		RepoID:          "r1",
+		RefName:         "refs/heads/main",
+		LastCapturedSHA: "head-old",
+		UpdatedAt:       time.Now().UTC(),
+	}
+	if _, err := store.SaveCandidateAndCheckpointTx(context.Background(), complete, newCP, "base-old", func(context.Context, string, string) (bool, error) {
+		return true, nil
+	}); err != nil {
+		t.Fatalf("save complete recapture after migration: %v", err)
+	}
+	cp, err = store.GetCheckpoint(context.Background(), "/ws/cleared", "r1", "refs/heads/main")
+	if err != nil {
+		t.Fatalf("get checkpoint after complete recapture: %v", err)
+	}
+	if cp.LastCapturedSHA != "head-old" {
+		t.Fatalf("expected complete recapture to advance checkpoint to head-old, got: %s", cp.LastCapturedSHA)
+	}
+}

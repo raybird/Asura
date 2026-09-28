@@ -418,6 +418,36 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 
 	persistedCand, err := s.store.SaveCandidateAndCheckpointTx(captureCtx, cand, newCP, expectedOldSHA, ancestryChecker)
 	if err != nil {
+		if errors.Is(err, storage.ErrCandidateStatusConflict) {
+			existingCand, findErr := s.store.FindCandidateByRange(captureCtx, facts.Workspace, facts.RepoID, facts.RefName, facts.BaseSHA, facts.HeadSHA, "gitmem-v1")
+			if findErr == nil && existingCand != nil && existingCand.Status == "discarded" {
+				if !opts.Force {
+					return nil, fmt.Errorf("candidate for range %s..%s was already discarded; use --force to reopen", facts.BaseSHA[:min(8, len(facts.BaseSHA))], facts.HeadSHA[:min(8, len(facts.HeadSHA))])
+				}
+				if err := s.store.ReopenDiscardedCandidate(captureCtx, repoInfo.Workspace, existingCand.ID, draft, factsSummary, facts.CommitCount, facts.Truncated, facts.TruncatedReason); err != nil {
+					return nil, fmt.Errorf("reopen discarded candidate on conflict: %w", err)
+				}
+				existingCand.Status = "pending"
+				existingCand.DraftContent = draft
+				existingCand.FactsSummary = factsSummary
+				existingCand.CommitCount = facts.CommitCount
+				existingCand.IsTruncated = facts.Truncated
+				existingCand.TruncatedReason = facts.TruncatedReason
+				existingCand.ApprovedMemoryID = ""
+				existingCand.ApprovedAt = nil
+				if newCP != nil && !facts.Truncated {
+					if err := s.store.AdvanceCheckpointTx(captureCtx, newCP, expectedOldSHA, ancestryChecker); err != nil {
+						return nil, fmt.Errorf("advance checkpoint for reopened candidate on conflict: %w", err)
+					}
+				}
+				return &CaptureResult{
+					Candidate: existingCand,
+					Facts:     facts,
+					IsReused:  false,
+					Message:   "reopened discarded candidate",
+				}, nil
+			}
+		}
 		return nil, fmt.Errorf("save candidate and checkpoint: %w", err)
 	}
 

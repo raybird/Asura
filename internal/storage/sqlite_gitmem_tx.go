@@ -271,6 +271,11 @@ func (s *SQLiteStore) SaveCandidateAndCheckpointTx(
 	persisted.IsTruncated = (persistedIsTruncatedInt == 1)
 	persisted.IsUserEdited = (persistedIsUserEditedInt == 1)
 
+	// insert-if-absent 衝突時，只有 pending 或 approved 候選可參與 Checkpoint 推進。
+	if persisted.Status != "pending" && persisted.Status != "approved" {
+		return nil, fmt.Errorf("%w: candidate %s was already discarded; cannot advance checkpoint without force reopen", ErrCandidateStatusConflict, persisted.ID)
+	}
+
 	// 若既有候選為 Partial (is_truncated=1, status='pending')，但本次傳入為 Complete (!cand.IsTruncated)，執行原子升級
 	if persisted.IsTruncated && !cand.IsTruncated && persisted.Status == "pending" {
 		upgradeQuery := `

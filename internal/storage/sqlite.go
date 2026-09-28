@@ -360,8 +360,32 @@ func (s *SQLiteStore) initSchema() error {
 				return fmt.Errorf("add column is_user_edited to memory_candidates: %w", err)
 			}
 		}
-		if _, err := s.db.Exec(`UPDATE memory_candidates SET is_truncated = 1 WHERE is_truncated = 0 AND facts_summary LIKE '%"truncated":true%'`); err != nil {
+		// clear-candidates 會清空 candidate facts，因此舊資料也需從 provenance 回填 Partial 狀態。
+		backfillQuery := `
+		UPDATE memory_candidates
+		SET is_truncated = 1
+		WHERE is_truncated = 0 AND (
+			facts_summary LIKE '%"truncated":true%'
+			OR id IN (
+				SELECT candidate_id FROM memory_provenance WHERE facts_summary LIKE '%"truncated":true%'
+			)
+		);
+		`
+		if _, err := s.db.Exec(backfillQuery); err != nil {
 			return fmt.Errorf("backfill is_truncated on memory_candidates: %w", err)
+		}
+
+		// 新規則不允許 Partial 核准。將舊版 approved + partial 隔離到舊 policy，
+		// 保留原審核記錄，並讓下次 gitmem-v1 完整擷取可建立新候選。
+		quarantineLegacyApprovedPartial := `
+		UPDATE memory_candidates
+		SET policy_version = 'gitmem-v1-legacy-approved-partial'
+		WHERE status = 'approved'
+		  AND is_truncated = 1
+		  AND policy_version = 'gitmem-v1';
+		`
+		if _, err := s.db.Exec(quarantineLegacyApprovedPartial); err != nil {
+			return fmt.Errorf("quarantine legacy approved partial candidates: %w", err)
 		}
 	}
 	return nil

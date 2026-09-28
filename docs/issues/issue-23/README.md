@@ -91,14 +91,14 @@ Feature: Git 變更感知與審核式專案記憶擷取
     When 觸發 Git 變更分析與擷取
     Then 嚴格受 hard bounds 限制（commits 數量、diff bytes、檔案數量、執行逾時），超出時明確標示截斷
     And binary、submodule 與超限檔案自動略過或僅記錄變更標記，不得無界讀入或假裝資料完整
-    And 部分擷取（Partial Capture）明確禁止自動推進 Checkpoint，防止未處理變更永久遺漏
+    And 部分擷取（Partial Capture）明確禁止自動推進 Checkpoint，防止未處理變更永久遺漏；不完整候選（Partial Candidate）嚴格禁止核准入庫（Approve），杜絕殘缺事實污染正式記憶
 
   @GITMEM-005
   Scenario: Draft vs approval 候選隔離與人工審核
     Given 已擷取的候選記憶草稿與已存在的正式專案記憶
     When 檢視候選、列出候選或執行 Task 記憶召回
     Then 候選記憶與已核准正式記憶隔離儲存，未經核准之候選不得進入 Task 之 bounded recall
-    And 使用者可透過 CLI 檢視、編修或捨棄候選，僅在明確核准後才生成同 scope 之正式記憶
+    And 使用者可透過 CLI 檢視、編修或捨棄候選，僅完整候選（Complete Candidate）允許核准生成正式記憶，不完整候選（Partial Candidate）禁止核准
 
   @GITMEM-006
   Scenario: Provenance 客觀真實性與來源追溯
@@ -190,6 +190,7 @@ Feature: Git 變更感知與審核式專案記憶擷取
 | 2026-09-25 | 使用者正式核准 GITMEM-001～010 與 H-TBD-1～6，啟動實作閉環 | - |
 | 2026-09-25 | 完成 Phase 1～7 共 15 項 Task 實作，包含安全 Git CLI、有界截斷、客觀事實、候選隔離、原子核准、防復活、CLI/IPC 工作流、Phase 3F 召回整合、歷史任務密封與真實 Git Repo 端到端驗收測試 | - |
 | 2026-09-25 | 完成全專案 16 個套件之完整回歸測試（`go test -count=1 ./...` 全數 PASS）、併發防護測試（零 Data Race）與靜態分析檢查，產出 `evidence/e2e-regression.md` 交付證據，結案交付審查 | - |
+| 2026-09-28 | 依 PR #24 第九輪 Review `5336599262` 修正 discarded Candidate 併行 Checkpoint race、legacy approved Partial migration，並補上 CLI PARTIAL／COMPLETE 輸出與回歸測試 | - |
 
 ---
 **建立日期**: 2026-09-25  

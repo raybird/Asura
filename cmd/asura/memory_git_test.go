@@ -117,6 +117,15 @@ func TestCLI_MemoryCandidates(t *testing.T) {
 					Summary:     "feat(auth): initial login",
 					CreatedAt:   time.Now().UTC(),
 				},
+				{
+					ID:          "cand-list-partial",
+					Workspace:   ws,
+					CommitCount: 1,
+					Status:      "pending",
+					Summary:     "partial capture",
+					CreatedAt:   time.Now().UTC(),
+					IsTruncated: true,
+				},
 			},
 		}
 	})
@@ -128,6 +137,12 @@ func TestCLI_MemoryCandidates(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "cand-list-1") {
 		t.Errorf("expected cand-list-1 in candidates table, got:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "COMPLETION") || !strings.Contains(out.String(), "COMPLETE") {
+		t.Errorf("expected COMPLETION column and COMPLETE value in table, got:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "cand-list-partial") || !strings.Contains(out.String(), "PARTIAL") {
+		t.Errorf("expected partial candidate and PARTIAL value in table, got:\n%s", out.String())
 	}
 }
 
@@ -227,6 +242,20 @@ func TestCLI_MemoryCandidate_Detail(t *testing.T) {
 		if req.Action != "git_memory_candidate" {
 			return daemon.IPCResponse{Error: "unexpected action: " + req.Action}
 		}
+		if req.CandidateID == "cand-detail-partial" {
+			return daemon.IPCResponse{
+				Candidate: &storage.MemoryCandidate{
+					ID:              "cand-detail-partial",
+					Workspace:       ws,
+					CommitCount:     2,
+					Status:          "pending",
+					DraftContent:    "Partial draft content here",
+					CreatedAt:       time.Now().UTC(),
+					IsTruncated:     true,
+					TruncatedReason: "file limit exceeded",
+				},
+			}
+		}
 		if req.CandidateID != "cand-detail-1" {
 			return daemon.IPCResponse{Error: "not found"}
 		}
@@ -249,6 +278,20 @@ func TestCLI_MemoryCandidate_Detail(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "Detail draft content here") {
 		t.Errorf("expected draft content in output, got:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "Completion:   COMPLETE") {
+		t.Errorf("expected Completion: COMPLETE in output, got:\n%s", out.String())
+	}
+
+	// 測試 Partial 狀態顯示
+	out.Reset()
+	stderr.Reset()
+	code = handleMemory([]string{"candidate", "--socket", sock, "--workspace", ws, "cand-detail-partial"}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("handleMemory candidate partial failed: %s", stderr.String())
+	}
+	if !strings.Contains(out.String(), "Completion:   PARTIAL (file limit exceeded)") {
+		t.Errorf("expected Completion: PARTIAL (file limit exceeded) in output, got:\n%s", out.String())
 	}
 }
 
