@@ -194,6 +194,7 @@ Feature: Git 變更感知與審核式專案記憶擷取
 | 2026-09-28 | 依 PR #24 第十輪 Review `5338648211` 將 existing Candidate 狀態確認、force reopen 與 Checkpoint 前進收旂至同一交易，並隔離 legacy Partial 正式記憶的 bounded recall | - |
 | 2026-09-28 | 依 PR #24 第十一輪 Review `5339099994` 將舊 schema 中已失去 Partial 證據的 approved Candidate fail-safe 隔離為 legacy unknown，並強化 force 回傳狀態、storage 狀態白名單與 Git ancestry 錯誤傳遞 | - |
 | 2026-09-29 | 依 PR #24 第十二輪 Review `5339956094` 以 durable migration marker 修復 legacy unknown 隔離的 crash-safety，修復 H-01 跨行程取消握手競態，並完整傳遞 Checkpoint ancestry callback 錯誤 | - |
+| 2026-09-29 | 依 PR #24 第十三輪 Review `5346736021` 修正 pre-marker 已隔離 Range 在升級時再次隔離 replacement、造成 UNIQUE 衝突的問題；驗證見 [回歸證據](evidence/e2e-regression.md#2026-09-29-第十三輪審查修復驗證) | - |
 
 ---
 **建立日期**: 2026-09-25  

@@ -128,3 +128,10 @@ ok  	asura/internal/storage	15.561s
 ## 五、結論
 
 Issue #23（Phase 3H: Git-Aware Project Memory Capture）之所有核心功能、安全邊界、資料模型、生命週期與端到端工作流均已全數實作完畢並取得客觀實證。全專案測試無任何回歸，符合專案標準，可正式交付。
+
+## 2026-09-29 第十三輪審查修復驗證
+
+- **範圍**：PR #24 Review `5346736021`；基線 `a84dc3a`，在隔離 worktree 修改 `internal/storage/sqlite.go` 與 `internal/storage/sqlite_gitmem_test.go` 後驗證。對應 GITMEM-005、GITMEM-007、GITMEM-010。
+- **風險與對照**：pre-marker 資料庫已將舊候選 C1 隔離，且同 Range 的完整重擷取 C2 經核准、清理及刪除記憶後失去 provenance。新測試先執行 `go test -count=1 -run '^TestLegacyMigration_PreservesCompleteRecaptureAfterPriorQuarantine$' ./internal/storage`，修正前 exit 1：`NewSQLiteStore` 回報 `UNIQUE constraint failed: memory_candidates.workspace, memory_candidates.repo_id, memory_candidates.ref_name, memory_candidates.base_sha, memory_candidates.head_sha, memory_candidates.policy_version`。
+- **修正後**：`go test -count=1 -run '^TestLegacyMigration_' ./internal/storage` exit 0；新測試確認 DB 開啟、C1 保持 `gitmem-v1-legacy-unknown`、C2 保持 `gitmem-v1`，且 marker 寫入一次。
+- **交付回歸**：`go test -count=1 ./...`、`go test -count=1 -race ./...`、`go vet ./...`、`go build -o /tmp/asura-issue23-review13-bin ./cmd/asura` 均 exit 0；16 個套件測試與 race 檢查全綠。精煉檢查無可安全簡化之處，維持原修改。

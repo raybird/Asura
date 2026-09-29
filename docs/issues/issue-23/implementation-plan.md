@@ -161,6 +161,7 @@ type MemoryProvenance struct {
   - **驗證**：`go test -v -run TestGitMem ./internal/storage`（4/4 pass）。
   - **狀態**：✅ 已完成
   - **證據**：單元測試覆蓋 SchemaAndIsolation (正式記憶與 Recall 零污染)、CandidateCRUD (複合 Range 唯一索引)、CheckpointCRUD (分支/repo 隔離)、ProvenanceCascadeDelete (外鍵連動刪除與不可變稽核)。
+  - **2026-09-29 審查修復證據**：PR #24 Review `5346736021` 的 pre-marker 升級衝突由 `TestLegacyMigration_PreservesCompleteRecaptureAfterPriorQuarantine` 先重現 UNIQUE 紅燈，再驗證修正後可開庫、保留 C1/C2 policy 並寫入 marker；命令與結果見 [e2e-regression.md](evidence/e2e-regression.md#2026-09-29-第十三輪審查修復驗證)（GITMEM-005、GITMEM-007）。
 
 - [x] ✅ **Task 3.2 — 客觀 Facts 生成與 Provenance 封裝 (`internal/gitmem/facts.go`)**
   - **產出與範圍**：`internal/gitmem/facts.go`, `internal/gitmem/facts_test.go`

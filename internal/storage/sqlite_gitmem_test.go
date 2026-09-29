@@ -669,6 +669,100 @@ func TestLegacyMigration_QuarantinesApprovedCandidateWithNoRemainingPartialEvide
 	}
 }
 
+func TestLegacyMigration_PreservesCompleteRecaptureAfterPriorQuarantine(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "pre_marker_recapture.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`
+	PRAGMA foreign_keys=ON;
+	CREATE TABLE memory_candidates (
+		id TEXT PRIMARY KEY,
+		workspace TEXT NOT NULL,
+		repo_id TEXT NOT NULL,
+		ref_name TEXT NOT NULL,
+		base_sha TEXT NOT NULL,
+		head_sha TEXT NOT NULL,
+		commit_count INTEGER NOT NULL,
+		facts_summary TEXT NOT NULL,
+		draft_content TEXT NOT NULL,
+		status TEXT NOT NULL,
+		policy_version TEXT NOT NULL DEFAULT 'gitmem-v1',
+		approved_memory_id TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		approved_at DATETIME,
+		is_truncated INTEGER NOT NULL DEFAULT 0,
+		truncated_reason TEXT NOT NULL DEFAULT '',
+		is_user_edited INTEGER NOT NULL DEFAULT 0,
+		UNIQUE(workspace, repo_id, ref_name, base_sha, head_sha, policy_version)
+	);
+	CREATE TABLE memories (id TEXT PRIMARY KEY, workspace TEXT NOT NULL, content TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'manual', created_at DATETIME NOT NULL);
+	CREATE TABLE memory_provenance (
+		memory_id TEXT PRIMARY KEY, candidate_id TEXT NOT NULL, workspace TEXT NOT NULL,
+		repo_id TEXT NOT NULL, ref_name TEXT NOT NULL, base_sha TEXT NOT NULL,
+		head_sha TEXT NOT NULL, commit_count INTEGER NOT NULL,
+		commit_shas_json TEXT NOT NULL DEFAULT '[]', facts_summary TEXT NOT NULL DEFAULT '',
+		is_user_edited INTEGER NOT NULL DEFAULT 0, approved_at DATETIME NOT NULL,
+		FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE CASCADE
+	);
+	INSERT INTO memory_candidates (id, workspace, repo_id, ref_name, base_sha, head_sha,
+		commit_count, facts_summary, draft_content, status, policy_version, approved_memory_id, created_at)
+	VALUES ('c1', '/ws', 'repo', 'main', 'base', 'head', 1, '{}', '', 'approved', 'gitmem-v1', 'old-deleted-memory', CURRENT_TIMESTAMP);
+	-- 舊版已完成 quarantine，當時尚無 schema_migrations。
+	UPDATE memory_candidates SET policy_version = 'gitmem-v1-legacy-unknown' WHERE id = 'c1';
+	-- 同 Range 完整重新擷取、核准、清理，再刪除正式記憶。
+	INSERT INTO memory_candidates (id, workspace, repo_id, ref_name, base_sha, head_sha,
+		commit_count, facts_summary, draft_content, status, policy_version, approved_memory_id, created_at)
+	VALUES ('c2', '/ws', 'repo', 'main', 'base', 'head', 1, '{"truncated":false}', 'complete', 'pending', 'gitmem-v1', '', CURRENT_TIMESTAMP);
+	INSERT INTO memories VALUES ('m2', '/ws', 'complete', 'git-approved', CURRENT_TIMESTAMP);
+	INSERT INTO memory_provenance (memory_id, candidate_id, workspace, repo_id, ref_name,
+		base_sha, head_sha, commit_count, approved_at)
+	VALUES ('m2', 'c2', '/ws', 'repo', 'main', 'base', 'head', 1, CURRENT_TIMESTAMP);
+	UPDATE memory_candidates SET status = 'approved', approved_memory_id = 'm2' WHERE id = 'c2';
+	UPDATE memory_candidates SET facts_summary = '{}', draft_content = '' WHERE id = 'c2';
+	DELETE FROM memories WHERE id = 'm2';
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var provenanceCount int
+	if err := db.QueryRow("SELECT COUNT(*) FROM memory_provenance").Scan(&provenanceCount); err != nil {
+		t.Fatal(err)
+	}
+	if provenanceCount != 0 {
+		t.Fatalf("deleted memory retained provenance: %d", provenanceCount)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("upgrade from pre-marker database failed: %v", err)
+	}
+	defer store.Close()
+	for id, wantPolicy := range map[string]string{
+		"c1": "gitmem-v1-legacy-unknown",
+		"c2": "gitmem-v1",
+	} {
+		cand, err := store.GetCandidate(context.Background(), "/ws", id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cand.PolicyVersion != wantPolicy {
+			t.Fatalf("%s policy = %s, want %s", id, cand.PolicyVersion, wantPolicy)
+		}
+	}
+	var markerCount int
+	if err := store.db.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE name = 'gitmem-legacy-completeness-v1'").Scan(&markerCount); err != nil {
+		t.Fatal(err)
+	}
+	if markerCount != 1 {
+		t.Fatalf("migration marker count = %d, want 1", markerCount)
+	}
+}
+
 func TestCurrentSchema_DoesNotQuarantineClearedApprovedCompleteCandidate(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "current_schema.db")
 	store, err := NewSQLiteStore(dbPath)

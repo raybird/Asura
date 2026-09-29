@@ -431,6 +431,15 @@ func (s *SQLiteStore) initSchema() error {
 			  AND NOT EXISTS (
 				SELECT 1 FROM memory_provenance p
 				WHERE p.candidate_id = memory_candidates.id
+			  )
+			  AND NOT EXISTS (
+				SELECT 1 FROM memory_candidates legacy
+				WHERE legacy.workspace = memory_candidates.workspace
+				  AND legacy.repo_id = memory_candidates.repo_id
+				  AND legacy.ref_name = memory_candidates.ref_name
+				  AND legacy.base_sha = memory_candidates.base_sha
+				  AND legacy.head_sha = memory_candidates.head_sha
+				  AND legacy.policy_version = 'gitmem-v1-legacy-unknown'
 			  );
 			`
 			if _, err := tx.Exec(quarantineLegacyUnknown); err != nil {
