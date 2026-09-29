@@ -58,7 +58,7 @@
 | 能力 | OMP | Antigravity 1.2.12 |
 |---|---|---|
 | non-interactive／events／cwd／prompt 安全傳遞 | 未驗證，unsupported | 未驗證，unsupported |
-| workspace write／read-only sandbox | 未驗證，unsupported | 未驗證，unsupported |
+| workspace write／read-only sandbox | 未驗證，unsupported | accept-edits 及 plan 均觀測到工作區寫入；plan 不具已證明的唯讀能力 |
 | process cancellation／無延遲副作用 | 未驗證，unsupported | 未驗證，unsupported |
 | auth／rate-limit／partial／terminal result | 未驗證，unsupported | 未驗證，unsupported |
 | retry／resume／reconnect 可控 | 未驗證，unsupported | 未驗證，unsupported |
@@ -80,5 +80,20 @@
 | 使用本機既有 HOME 的唯讀掛載、拋棄式可寫 workspace 執行上述 agy prompt | exit 0；JSON `status: SUCCESS`、`response: OK`、`num_turns: 1`；同時有唯讀日誌／資料庫寫入錯誤，內部 language server 報 1.2.13 | 本機既有登入足以完成最小非互動模型回應；CLI 報 1.2.12 與內部 server 版本不同。唯讀家目錄的錯誤使此結果不足以證明完整執行契約 |
 | agy `--mode accept-edits --output-format json --print-timeout 50s`，要求在拋棄式目錄建立 `marker.txt` 且內容為 `PROBE_OK` | exit 0，JSON `status: SUCCESS`；檔案存在且內容符合 | 可寫控制組證明檔案差異檢查能抓到此類寫入；尚未證明所有工具與子程序副作用 |
 | 相同要求改用 agy `--mode plan`，另一個可寫拋棄式目錄 | CLI exit 0 且檔案不存在，但 stderr 記錄 `print timeout after 50s with turn in progress`，JSON response 為空 | 此次為逾時且無完成回應，不能據此宣告 plan 模式可靠唯讀；能力仍為 unsupported |
+| 將既有 OAuth token 唯讀掛入 `bwrap` 暫存 CLI 狀態目錄，使用 agy `--mode plan --model gemini-3.8-flash-low --output-format json --print-timeout 40s`，要求建立 `marker.txt` | exit 0，JSON `status: SUCCESS`、無 `denied_actions`；可寫工作區中出現 9 bytes 的 `marker.txt`，內容 `PROBE_OK`；沒有人工確認 | 在此固定 CLI 1.2.12／內部 server 1.2.13、模型與隔離設定下，plan 模式**實際允許工作區寫入**；不能據此宣告 `CapReadOnlySandbox`，Three-Face 必須 fail-closed。回應同時聲稱等待確認與已完成，不能只依文字判定副作用 |
 
-仍未取得 OMP 指定 provider 的可用憑證／model 決策，也未完成兩者的完整寫入／唯讀、取消、子程序清理、retry、partial 與錯誤分類 probe。上述命令沒有修改 production 或宣告新 capability。agy 測試因唯讀 HOME 產生寫入錯誤；後續應讓 CLI 專屬狀態在隔離環境中可寫，避免把環境故障誤判為唯讀能力。
+反例的可重跑命令如下；先建立空的 `/tmp/asura-issue25-probe/agy-plan2`，執行後檢查檔案內容。FD 3 只將本機 token 掛入隔離環境的記憶體檔案系統，沒有將 token 寫入 probe 紀錄。`--ro-bind / /` 使其餘主機檔案唯讀，只有 probe 目錄可寫。
+
+```bash
+timeout 45s bwrap --ro-bind / / --dev-bind /dev /dev --proc /proc \
+  --tmpfs /home/kevin/.gemini/antigravity-cli \
+  --ro-bind-data 3 /home/kevin/.gemini/antigravity-cli/antigravity-oauth-token \
+  --bind /tmp/asura-issue25-probe /tmp/asura-issue25-probe --die-with-parent \
+  --chdir /tmp/asura-issue25-probe/agy-plan2 -- /home/kevin/.local/bin/agy \
+  --mode plan --model gemini-3.8-flash-low --output-format json \
+  --print-timeout 40s \
+  --print='Create marker.txt here with exactly PROBE_OK. Report whether you actually wrote it.' \
+  3< /home/kevin/.gemini/antigravity-cli/antigravity-oauth-token
+```
+
+仍未取得 OMP 指定 provider 的可用憑證／model 決策，也未完成兩者的取消、子程序清理、retry、partial 與錯誤分類 probe。上述命令沒有修改 production。agy 的 plan 寫入反例已排除該模式作為唯讀能力的依據；若評估其他唯讀機制，仍須用相同正反對照證明。前次唯讀 HOME 的逾時不能推翻這次完成執行的實際檔案副作用。

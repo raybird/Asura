@@ -154,7 +154,7 @@ Feature: 可替換的四後端執行契約
 |---|---|---|---|
 | I-TBD-1 | OMP 候選 18.4.3 已取得；invocation、events、cancel 及指定 provider/model 待驗 | 待確認 | BADAPT-002、003、007；已用 Bun 1.4.2 啟動，模型憑證不足 |
 | I-TBD-2 | Antigravity 本機 CLI 1.2.12 完成最小非互動回應；內部 server 1.2.13，完整契約待驗 | 待確認 | BADAPT-004、005、007；簡單回應不證明安全或失敗路徑 |
-| I-TBD-3 | 兩者 read-only、sandbox、process tree 邊界 | 待確認 | BADAPT-002、004、006、007；必要安全 gate |
+| I-TBD-3 | agy 1.2.12 `--mode plan` 已觀測到工作區寫入；OMP 及兩者其他 sandbox／process tree 邊界待驗 | 待確認 | BADAPT-002、004、006、007；agy 不宣告 plan 唯讀，Three-Face 須 fail-closed |
 | I-TBD-4 | CLI／adapter version 的 trace 表達，以及固定 model/provider 與 Context window 設定 | 待確認 | BADAPT-008、011；不得動態讀 default 造成身份漂移，版本不改既有 fingerprint |
 | I-TBD-5 | CLI retry/session/resume 關閉方式及 unknown-result 分類 | 待確認 | BADAPT-007、009；必要副作用 gate |
 | I-TBD-6 | auth、rate-limit、partial output、cancel 精確 mapping | 待確認 | BADAPT-002、004、007；由真實 evidence 建 fixtures |
@@ -172,6 +172,7 @@ I-TBD-1～6 先由 probe 取得事實，需使用者選定的 model/provider 或
 | 2026-09-29 | 完成版本／雜湊及環境前置探測；新增 I-TBD-9，live probe 受環境限制 | Codex |
 | 2026-09-29 | 使用者於本對話核准 BADAPT-001～012 當前劇本；probe 技術決策仍待定 | 使用者 |
 | 2026-09-29 | 環境恢復後取得 OMP 18.4.3 候選套件及 agy 最小非互動回應；安全能力仍待 probe | Codex |
+| 2026-09-29 | agy plan 模式於隔離工作區實際寫入，排除該模式的唯讀能力宣告 | Codex |
 
 ---
 **建立日期**: 2026-09-29
