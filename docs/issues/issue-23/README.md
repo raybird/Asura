@@ -141,8 +141,8 @@ Feature: Git 變更感知與審核式專案記憶擷取
 
 ## Gherkin 核准紀錄
 
-- **核准 commit**: a71ea2f（承載審查意見修訂與正式核准基準之提交）
-- **核准來源**: 使用者於 2026-09-25 對話明確回覆「已核准」，正式核准修訂後之 GITMEM-001～010 驗收劇本與 H-TBD-1～6 設計選型。
+- **核准 commit**: GITMEM-001～008、010 為 a71ea2f；GITMEM-009 修訂版為 9173864。
+- **核准來源**: 使用者於 2026-09-25 對話明確回覆「已核准」，正式核准當時之 GITMEM-001～010 驗收劇本與 H-TBD-1～6 設計選型。2026-09-29 使用者針對 GITMEM-009「本期交付可選介面，未配置模型時明確拒絕」或「維持原規格並補上實際模型執行」的選擇，回覆「那就核准」；核准目前文件中的可選介面與 Fail-Closed 行為，正式模型 adapter 留待後續規劃。
 
 | Scenario | 核准日期 | 狀態 |
 |---|---|---|
@@ -154,7 +154,7 @@ Feature: Git 變更感知與審核式專案記憶擷取
 | GITMEM-006 | 2026-09-25 | 已核准 |
 | GITMEM-007 | 2026-09-25 | 已核准 |
 | GITMEM-008 | 2026-09-25 | 已核准 |
-| GITMEM-009 | 2026-09-25 | 已核准 |
+| GITMEM-009 | 2026-09-29 | 已核准 |
 | GITMEM-010 | 2026-09-25 | 已核准 |
 
 ## 實作步驟概要
@@ -195,6 +195,7 @@ Feature: Git 變更感知與審核式專案記憶擷取
 | 2026-09-28 | 依 PR #24 第十一輪 Review `5339099994` 將舊 schema 中已失去 Partial 證據的 approved Candidate fail-safe 隔離為 legacy unknown，並強化 force 回傳狀態、storage 狀態白名單與 Git ancestry 錯誤傳遞 | - |
 | 2026-09-29 | 依 PR #24 第十二輪 Review `5339956094` 以 durable migration marker 修復 legacy unknown 隔離的 crash-safety，修復 H-01 跨行程取消握手競態，並完整傳遞 Checkpoint ancestry callback 錯誤 | - |
 | 2026-09-29 | 依 PR #24 第十三輪 Review `5346736021` 修正 pre-marker 已隔離 Range 在升級時再次隔離 replacement、造成 UNIQUE 衝突的問題；驗證見 [回歸證據](evidence/e2e-regression.md#2026-09-29-第十三輪審查修復驗證) | - |
+| 2026-09-29 | 使用者回覆「那就核准」，重新核准 GITMEM-009 的可選介面、未配置模型時明確拒絕之交付範圍；正式模型 adapter 留待後續規劃 | - |
 
 ---
 **建立日期**: 2026-09-25  

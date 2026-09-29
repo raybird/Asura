@@ -237,6 +237,7 @@ type MemoryProvenance struct {
   - **驗證**：`go test -v -run TestAIDraft ./internal/gitmem`、`TestCaptureService_WithAIDraft` 與 Daemon `TestDaemon_GitMemory_AIDraftFailClosedAndInjection` 全數通過。
   - **狀態**：✅ 已完成（介面與安全邊界已交付；預設為確定性草稿，無 generator 時 fail-closed）
   - **證據**：單元與 Daemon 整合測試覆蓋 FormatPrompt (UntrustedBoundary 注入防護)、Success (AI 生成)、FailClosed (未配置 generator 拒絕)、CaptureService 整合。
+  - **2026-09-29 規格核准**：使用者對 GITMEM-009 當前可選介面與未配置模型時明確拒絕的交付範圍回覆「那就核准」；本 Task 既有完成判準與測試證據適用於重新核准後的規格，未新增程式行為。
 
 ---
 
