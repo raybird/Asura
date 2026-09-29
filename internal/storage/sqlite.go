@@ -284,9 +284,188 @@ func (s *SQLiteStore) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_memories_workspace ON memories(workspace);
 	CREATE INDEX IF NOT EXISTS idx_memories_workspace_id ON memories(workspace, id);
 	CREATE INDEX IF NOT EXISTS idx_memories_workspace_created_id ON memories(workspace, created_at, id);
+
+	CREATE TABLE IF NOT EXISTS memory_candidates (
+		id TEXT PRIMARY KEY,
+		workspace TEXT NOT NULL,
+		repo_id TEXT NOT NULL,
+		ref_name TEXT NOT NULL,
+		base_sha TEXT NOT NULL,
+		head_sha TEXT NOT NULL,
+		commit_count INTEGER NOT NULL,
+		facts_summary TEXT NOT NULL,
+		draft_content TEXT NOT NULL,
+		status TEXT NOT NULL,
+		policy_version TEXT NOT NULL DEFAULT 'gitmem-v1',
+		approved_memory_id TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		approved_at DATETIME,
+		is_truncated INTEGER NOT NULL DEFAULT 0,
+		truncated_reason TEXT NOT NULL DEFAULT '',
+		is_user_edited INTEGER NOT NULL DEFAULT 0,
+		UNIQUE(workspace, repo_id, ref_name, base_sha, head_sha, policy_version)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_candidates_workspace_status ON memory_candidates(workspace, status);
+
+	CREATE TABLE IF NOT EXISTS git_checkpoints (
+		workspace TEXT NOT NULL,
+		repo_id TEXT NOT NULL,
+		ref_name TEXT NOT NULL,
+		last_captured_sha TEXT NOT NULL,
+		updated_at DATETIME NOT NULL,
+		PRIMARY KEY (workspace, repo_id, ref_name)
+	);
+
+	CREATE TABLE IF NOT EXISTS memory_provenance (
+		memory_id TEXT PRIMARY KEY,
+		candidate_id TEXT NOT NULL,
+		workspace TEXT NOT NULL,
+		repo_id TEXT NOT NULL,
+		ref_name TEXT NOT NULL,
+		base_sha TEXT NOT NULL,
+		head_sha TEXT NOT NULL,
+		commit_count INTEGER NOT NULL,
+		commit_shas_json TEXT NOT NULL DEFAULT '[]',
+		facts_summary TEXT NOT NULL DEFAULT '',
+		is_user_edited INTEGER NOT NULL DEFAULT 0,
+		approved_at DATETIME NOT NULL,
+		FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE CASCADE
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_provenance_workspace ON memory_provenance(workspace);
+	CREATE INDEX IF NOT EXISTS idx_provenance_candidate ON memory_provenance(candidate_id);
+
+	CREATE TABLE IF NOT EXISTS schema_migrations (
+		name TEXT PRIMARY KEY,
+		applied_at DATETIME NOT NULL
+	);
 	`
 	if _, err := s.db.Exec(indices); err != nil {
 		return fmt.Errorf("create indices, cron, and memory tables: %w", err)
+	}
+
+	candCols, err := s.getTableColumns("memory_candidates")
+	if err != nil {
+		return fmt.Errorf("check memory_candidates columns: %w", err)
+	}
+	if len(candCols) > 0 {
+		if !candCols["is_truncated"] {
+			if _, err := s.db.Exec("ALTER TABLE memory_candidates ADD COLUMN is_truncated INTEGER NOT NULL DEFAULT 0"); err != nil {
+				return fmt.Errorf("add column is_truncated to memory_candidates: %w", err)
+			}
+		}
+		if !candCols["truncated_reason"] {
+			if _, err := s.db.Exec("ALTER TABLE memory_candidates ADD COLUMN truncated_reason TEXT NOT NULL DEFAULT ''"); err != nil {
+				return fmt.Errorf("add column truncated_reason to memory_candidates: %w", err)
+			}
+		}
+		if !candCols["is_user_edited"] {
+			if _, err := s.db.Exec("ALTER TABLE memory_candidates ADD COLUMN is_user_edited INTEGER NOT NULL DEFAULT 0"); err != nil {
+				return fmt.Errorf("add column is_user_edited to memory_candidates: %w", err)
+			}
+		}
+		// clear-candidates 會清空 candidate facts，因此舊資料也需從 provenance 回填 Partial 狀態。
+		backfillQuery := `
+		UPDATE memory_candidates
+		SET is_truncated = 1
+		WHERE is_truncated = 0 AND (
+			facts_summary LIKE '%"truncated":true%'
+			OR id IN (
+				SELECT candidate_id FROM memory_provenance WHERE facts_summary LIKE '%"truncated":true%'
+			)
+		);
+		`
+		if _, err := s.db.Exec(backfillQuery); err != nil {
+			return fmt.Errorf("backfill is_truncated on memory_candidates: %w", err)
+		}
+
+		// 新規則不允許 Partial 核准。將舊版 approved + partial 隔離到舊 policy，
+		// 保留原審核記錄，並讓下次 gitmem-v1 完整擷取可建立新候選。
+		quarantineLegacyApprovedPartial := `
+		UPDATE memory_candidates
+		SET policy_version = 'gitmem-v1-legacy-approved-partial'
+		WHERE status = 'approved'
+		  AND is_truncated = 1
+		  AND policy_version = 'gitmem-v1';
+		`
+		if _, err := s.db.Exec(quarantineLegacyApprovedPartial); err != nil {
+			return fmt.Errorf("quarantine legacy approved partial candidates: %w", err)
+		}
+
+		quarantineLegacyPartialMemories := `
+		UPDATE memories
+		SET source = 'git-approved-legacy-partial'
+		WHERE source = 'git-approved'
+		  AND id IN (
+			SELECT p.memory_id
+			FROM memory_provenance p
+			JOIN memory_candidates c ON c.id = p.candidate_id
+			WHERE c.policy_version = 'gitmem-v1-legacy-approved-partial'
+		  );
+		`
+		if _, err := s.db.Exec(quarantineLegacyPartialMemories); err != nil {
+			return fmt.Errorf("quarantine legacy approved partial memories: %w", err)
+		}
+
+		// 以持久化 migration marker 與隔離更新的同一交易保證 crash-safety。
+		// 若舊版在 ALTER TABLE 後崩潰，marker 仍不存在，下次啟動會重新執行隔離。
+		const legacyCompletenessMigration = "gitmem-legacy-completeness-v1"
+		var migrationApplied int
+		if err := s.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE name = ?)`, legacyCompletenessMigration).Scan(&migrationApplied); err != nil {
+			return fmt.Errorf("check legacy completeness migration: %w", err)
+		}
+		if migrationApplied == 0 {
+			tx, err := s.db.Begin()
+			if err != nil {
+				return fmt.Errorf("begin legacy completeness migration: %w", err)
+			}
+			defer tx.Rollback()
+
+			quarantineLegacyUnknown := `
+			UPDATE memory_candidates
+			SET policy_version = 'gitmem-v1-legacy-unknown'
+			WHERE status = 'approved'
+			  AND facts_summary = '{}'
+			  AND policy_version = 'gitmem-v1'
+			  AND NOT EXISTS (
+				SELECT 1 FROM memory_provenance p
+				WHERE p.candidate_id = memory_candidates.id
+			  )
+			  AND NOT EXISTS (
+				SELECT 1 FROM memory_candidates legacy
+				WHERE legacy.workspace = memory_candidates.workspace
+				  AND legacy.repo_id = memory_candidates.repo_id
+				  AND legacy.ref_name = memory_candidates.ref_name
+				  AND legacy.base_sha = memory_candidates.base_sha
+				  AND legacy.head_sha = memory_candidates.head_sha
+				  AND legacy.policy_version = 'gitmem-v1-legacy-unknown'
+			  );
+			`
+			if _, err := tx.Exec(quarantineLegacyUnknown); err != nil {
+				return fmt.Errorf("quarantine legacy candidates with unknown completeness: %w", err)
+			}
+
+			quarantineLegacyUnknownMemories := `
+			UPDATE memories
+			SET source = 'git-approved-legacy-unknown'
+			WHERE source = 'git-approved'
+			  AND id IN (
+				SELECT approved_memory_id
+				FROM memory_candidates
+				WHERE policy_version = 'gitmem-v1-legacy-unknown'
+			  );
+			`
+			if _, err := tx.Exec(quarantineLegacyUnknownMemories); err != nil {
+				return fmt.Errorf("quarantine legacy approved memories with unknown completeness: %w", err)
+			}
+			if _, err := tx.Exec(`INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)`, legacyCompletenessMigration, time.Now().UTC()); err != nil {
+				return fmt.Errorf("record legacy completeness migration: %w", err)
+			}
+			if err := tx.Commit(); err != nil {
+				return fmt.Errorf("commit legacy completeness migration: %w", err)
+			}
+		}
 	}
 	return nil
 }

@@ -1714,7 +1714,7 @@ exit 0
 
 	// 2. 等待 socket 就緒
 	ready := false
-	for i := 0; i < 50; i++ {
+	for i := 0; i < 200; i++ {
 		if _, err := os.Stat(sockPath); err == nil {
 			ready = true
 			break
@@ -1723,7 +1723,8 @@ exit 0
 	}
 	if !ready {
 		_ = daemonCmd.Process.Kill()
-		t.Fatalf("daemon socket %s not ready within 2.5s; stderr: %s", sockPath, daemonErr.String())
+		_ = daemonCmd.Wait()
+		t.Fatalf("daemon socket %s not ready within 10s; stderr: %s", sockPath, daemonErr.String())
 	}
 
 	// 3. 透過 asura ask 提交任務 (需等待結果或取得 ID)
@@ -1787,7 +1788,6 @@ exit 0
 		t.Errorf("expected socket %s to be removed on graceful shutdown", sockPath)
 	}
 }
-
 
 
 

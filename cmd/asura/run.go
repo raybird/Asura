@@ -32,6 +32,12 @@ func taskLockPath(dbPath, taskID string) string {
 	return filepath.Join(filepath.Dir(dbPath), safeName)
 }
 
+func taskCancelIntentPath(dbPath, taskID string) string {
+	h := sha256.Sum256([]byte(taskID))
+	safeName := fmt.Sprintf(".task-%s.cancel", hex.EncodeToString(h[:16]))
+	return filepath.Join(filepath.Dir(dbPath), safeName)
+}
+
 // RunCLI 為 CLI 總進入點函式
 func RunCLI(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
@@ -205,6 +211,29 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 
 		// 在啟動排他鎖保護下檢查是否已被取消，徹底防禦啟動已取消之任務與外部副作用 (修復 F-02, G-01)
 		if currentTaskID != "" {
+			cancelIntentPath := taskCancelIntentPath(*dbPath, currentTaskID)
+			if _, statErr := os.Stat(cancelIntentPath); statErr == nil {
+				current, _ := store.GetTask(context.Background(), currentTaskID)
+				currentResult := ""
+				if current != nil {
+					currentResult = current.Result
+				}
+				_, _ = store.UpdateTaskStatusIfRunning(
+					context.Background(), currentTaskID, storage.StatusCancelling,
+					currentResult, "task cancellation requested",
+				)
+				if lockFile != nil {
+					_ = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+					_ = lockFile.Close()
+				}
+				return buf.String(), context.Canceled
+			} else if !os.IsNotExist(statErr) {
+				if lockFile != nil {
+					_ = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+					_ = lockFile.Close()
+				}
+				return "", fmt.Errorf("check task cancellation intent: %w", statErr)
+			}
 			t, err := store.GetTask(context.Background(), currentTaskID)
 			if err == nil && (t.Status == storage.StatusCancelled || t.Status == storage.StatusCancelling) {
 				if lockFile != nil {

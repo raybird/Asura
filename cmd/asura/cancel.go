@@ -11,10 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"asura/internal/auth"
 	"asura/internal/backend/opencode"
 	"asura/internal/daemon"
-	"asura/internal/engine"
 	"asura/internal/storage"
 )
 
@@ -83,6 +81,89 @@ func safeKillTaskProcessGroup(store *storage.SQLiteStore, taskID string, targetP
 	return nil
 }
 
+// requestExternalCancellation 只負責以 DB CAS 登記取消意圖。跨行程回收必須等鎖檔握手完成後才執行，
+// 避免在 runner 身分資料尚未可用時誤判 orphan process group。
+func requestExternalCancellation(store *storage.SQLiteStore, taskID string) (*storage.Task, error) {
+	for {
+		current, err := store.GetTask(context.Background(), taskID)
+		if err != nil {
+			return nil, err
+		}
+		switch current.Status {
+		case storage.StatusRunning:
+			updated, err := store.UpdateTaskStatusIfRunning(
+				context.Background(), taskID, storage.StatusCancelling,
+				current.Result, "task cancellation requested",
+			)
+			if err != nil {
+				return nil, fmt.Errorf("persist cancelling status: %w", err)
+			}
+			if !updated {
+				continue
+			}
+			current.Status = storage.StatusCancelling
+			return current, nil
+
+		case storage.StatusPending, storage.StatusQueued:
+			updated, err := store.UpdateTaskStatusIfPendingOrQueuedWithMsg(
+				context.Background(), taskID, storage.StatusCancelling,
+				current.Result, "task cancellation requested",
+			)
+			if err != nil {
+				return nil, fmt.Errorf("persist cancelling status: %w", err)
+			}
+			if !updated {
+				continue
+			}
+			current.Status = storage.StatusCancelling
+			return current, nil
+
+		case storage.StatusCancelling, storage.StatusCancelled:
+			return current, nil
+
+		case storage.StatusCompleted, storage.StatusFailed:
+			if current.PGID <= 0 {
+				return nil, fmt.Errorf("task is not running: task status is %s", current.Status)
+			}
+			return current, nil
+
+		default:
+			return nil, fmt.Errorf("task is not running: task status is %s", current.Status)
+		}
+	}
+}
+
+func finalizeExternalCancellation(store *storage.SQLiteStore, taskID string) error {
+	latest, err := store.GetTask(context.Background(), taskID)
+	if err != nil {
+		return fmt.Errorf("verify task state before finalizing cancellation: %w", err)
+	}
+	if latest.Status == storage.StatusCancelled {
+		return nil
+	}
+	if latest.Status != storage.StatusCancelling {
+		return fmt.Errorf("task is not running: task status is %s", latest.Status)
+	}
+	updated, err := store.UpdateTaskStatusIfCancelling(
+		context.Background(), taskID, storage.StatusCancelled,
+		latest.Result, "task cancelled by user",
+	)
+	if err != nil {
+		return fmt.Errorf("persist cancelled status: %w", err)
+	}
+	if updated {
+		return nil
+	}
+	latest, err = store.GetTask(context.Background(), taskID)
+	if err != nil {
+		return fmt.Errorf("verify task state after cancellation CAS: %w", err)
+	}
+	if latest.Status == storage.StatusCancelled {
+		return nil
+	}
+	return fmt.Errorf("unexpected task status %s after cancellation CAS", latest.Status)
+}
+
 func handleCancel(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("cancel", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -116,6 +197,25 @@ func handleCancel(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 
+	// 外部 CLI 取消先以 sidecar 公告意圖，使已排在 flock 佇列中的 runner 也能在 cmd.Start 前 fail-closed。
+	cancelIntentPath := taskCancelIntentPath(*dbPath, taskID)
+	intentFile, err := os.OpenFile(cancelIntentPath, os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: failed to record cancellation intent: %v\n", err)
+		return 1
+	}
+	if err := intentFile.Close(); err != nil {
+		_ = os.Remove(cancelIntentPath)
+		fmt.Fprintf(stderr, "error: failed to record cancellation intent: %v\n", err)
+		return 1
+	}
+	requestAccepted := false
+	defer func() {
+		if !requestAccepted {
+			_ = os.Remove(cancelIntentPath)
+		}
+	}()
+
 	store, err := storage.NewSQLiteStore(*dbPath)
 	if err != nil {
 		fmt.Fprintf(stderr, "error: failed to open storage: %v\n", err)
@@ -130,13 +230,12 @@ func handleCancel(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	policy := auth.NewPolicy([]string{task.Workspace})
-	eng := engine.NewEngine(store, policy)
-
-	if err := eng.CancelTask(taskID); err != nil {
+	task, err = requestExternalCancellation(store, taskID)
+	if err != nil {
 		fmt.Fprintf(stderr, "error: failed to cancel task: %v\n", err)
 		return 1
 	}
+	requestAccepted = true
 
 	// 進行跨行程排他握手：若執行端正處於啟動區間 (cmd.Start)，等候其完成 PGID 登記 (修復 G-01, H-01, I-01)
 	lockPath := taskLockPath(*dbPath, taskID)
@@ -179,6 +278,11 @@ func handleCancel(args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 	}
+	if err := finalizeExternalCancellation(store, taskID); err != nil {
+		fmt.Fprintf(stderr, "error: failed to cancel task: %v\n", err)
+		return 1
+	}
+	_ = os.Remove(cancelIntentPath)
 
 	fmt.Fprintf(stdout, "Task %s cancelled successfully\n", taskID)
 	return 0
