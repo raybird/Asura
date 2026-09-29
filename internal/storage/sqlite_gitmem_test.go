@@ -701,3 +701,69 @@ func TestCurrentSchema_DoesNotQuarantineClearedApprovedCompleteCandidate(t *test
 		t.Fatalf("current-schema complete candidate was quarantined: %s", got.PolicyVersion)
 	}
 }
+
+func TestLegacyMigration_ResumesAfterColumnAddedBeforeMarkerRecorded(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "interrupted_migration.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`
+	CREATE TABLE memory_candidates (
+		id TEXT PRIMARY KEY,
+		workspace TEXT NOT NULL,
+		repo_id TEXT NOT NULL,
+		ref_name TEXT NOT NULL,
+		base_sha TEXT NOT NULL,
+		head_sha TEXT NOT NULL,
+		commit_count INTEGER NOT NULL,
+		facts_summary TEXT NOT NULL,
+		draft_content TEXT NOT NULL,
+		status TEXT NOT NULL,
+		policy_version TEXT NOT NULL DEFAULT 'gitmem-v1',
+		approved_memory_id TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		approved_at DATETIME,
+		is_truncated INTEGER NOT NULL DEFAULT 0,
+		truncated_reason TEXT NOT NULL DEFAULT '',
+		is_user_edited INTEGER NOT NULL DEFAULT 0,
+		UNIQUE(workspace, repo_id, ref_name, base_sha, head_sha, policy_version)
+	);
+	INSERT INTO memory_candidates (
+		id, workspace, repo_id, ref_name, base_sha, head_sha,
+		commit_count, facts_summary, draft_content, status,
+		policy_version, approved_memory_id, created_at, approved_at
+	) VALUES (
+		'cand-interrupted', '/ws/interrupted', 'r1', 'refs/heads/main', 'base', 'head',
+		1, '{}', '', 'approved', 'gitmem-v1', 'mem-deleted',
+		'2026-09-25 10:00:00', '2026-09-25 10:05:00'
+	);
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	cand, err := store.GetCandidate(context.Background(), "/ws/interrupted", "cand-interrupted")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cand.PolicyVersion != "gitmem-v1-legacy-unknown" {
+		t.Fatalf("interrupted migration was not resumed: got policy %s", cand.PolicyVersion)
+	}
+	var markerCount int
+	if err := store.db.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE name = 'gitmem-legacy-completeness-v1'`).Scan(&markerCount); err != nil {
+		t.Fatal(err)
+	}
+	if markerCount != 1 {
+		t.Fatalf("expected durable migration marker, got count %d", markerCount)
+	}
+}

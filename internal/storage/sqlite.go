@@ -335,6 +335,11 @@ func (s *SQLiteStore) initSchema() error {
 
 	CREATE INDEX IF NOT EXISTS idx_provenance_workspace ON memory_provenance(workspace);
 	CREATE INDEX IF NOT EXISTS idx_provenance_candidate ON memory_provenance(candidate_id);
+
+	CREATE TABLE IF NOT EXISTS schema_migrations (
+		name TEXT PRIMARY KEY,
+		applied_at DATETIME NOT NULL
+	);
 	`
 	if _, err := s.db.Exec(indices); err != nil {
 		return fmt.Errorf("create indices, cron, and memory tables: %w", err)
@@ -345,8 +350,7 @@ func (s *SQLiteStore) initSchema() error {
 		return fmt.Errorf("check memory_candidates columns: %w", err)
 	}
 	if len(candCols) > 0 {
-		addedIsTruncated := !candCols["is_truncated"]
-		if addedIsTruncated {
+		if !candCols["is_truncated"] {
 			if _, err := s.db.Exec("ALTER TABLE memory_candidates ADD COLUMN is_truncated INTEGER NOT NULL DEFAULT 0"); err != nil {
 				return fmt.Errorf("add column is_truncated to memory_candidates: %w", err)
 			}
@@ -359,23 +363,6 @@ func (s *SQLiteStore) initSchema() error {
 		if !candCols["is_user_edited"] {
 			if _, err := s.db.Exec("ALTER TABLE memory_candidates ADD COLUMN is_user_edited INTEGER NOT NULL DEFAULT 0"); err != nil {
 				return fmt.Errorf("add column is_user_edited to memory_candidates: %w", err)
-			}
-		}
-		if addedIsTruncated {
-			// 舊 schema 若已清空 facts 且 Provenance 也不存在，無法安全推斷原擷取是否完整。
-			quarantineLegacyUnknown := `
-			UPDATE memory_candidates
-			SET policy_version = 'gitmem-v1-legacy-unknown'
-			WHERE status = 'approved'
-			  AND facts_summary = '{}'
-			  AND policy_version = 'gitmem-v1'
-			  AND NOT EXISTS (
-				SELECT 1 FROM memory_provenance p
-				WHERE p.candidate_id = memory_candidates.id
-			  );
-			`
-			if _, err := s.db.Exec(quarantineLegacyUnknown); err != nil {
-				return fmt.Errorf("quarantine legacy candidates with unknown completeness: %w", err)
 			}
 		}
 		// clear-candidates 會清空 candidate facts，因此舊資料也需從 provenance 回填 Partial 狀態。
@@ -421,18 +408,54 @@ func (s *SQLiteStore) initSchema() error {
 			return fmt.Errorf("quarantine legacy approved partial memories: %w", err)
 		}
 
-		quarantineLegacyUnknownMemories := `
-		UPDATE memories
-		SET source = 'git-approved-legacy-unknown'
-		WHERE source = 'git-approved'
-		  AND id IN (
-			SELECT approved_memory_id
-			FROM memory_candidates
-			WHERE policy_version = 'gitmem-v1-legacy-unknown'
-		  );
-		`
-		if _, err := s.db.Exec(quarantineLegacyUnknownMemories); err != nil {
-			return fmt.Errorf("quarantine legacy approved memories with unknown completeness: %w", err)
+		// 以持久化 migration marker 與隔離更新的同一交易保證 crash-safety。
+		// 若舊版在 ALTER TABLE 後崩潰，marker 仍不存在，下次啟動會重新執行隔離。
+		const legacyCompletenessMigration = "gitmem-legacy-completeness-v1"
+		var migrationApplied int
+		if err := s.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE name = ?)`, legacyCompletenessMigration).Scan(&migrationApplied); err != nil {
+			return fmt.Errorf("check legacy completeness migration: %w", err)
+		}
+		if migrationApplied == 0 {
+			tx, err := s.db.Begin()
+			if err != nil {
+				return fmt.Errorf("begin legacy completeness migration: %w", err)
+			}
+			defer tx.Rollback()
+
+			quarantineLegacyUnknown := `
+			UPDATE memory_candidates
+			SET policy_version = 'gitmem-v1-legacy-unknown'
+			WHERE status = 'approved'
+			  AND facts_summary = '{}'
+			  AND policy_version = 'gitmem-v1'
+			  AND NOT EXISTS (
+				SELECT 1 FROM memory_provenance p
+				WHERE p.candidate_id = memory_candidates.id
+			  );
+			`
+			if _, err := tx.Exec(quarantineLegacyUnknown); err != nil {
+				return fmt.Errorf("quarantine legacy candidates with unknown completeness: %w", err)
+			}
+
+			quarantineLegacyUnknownMemories := `
+			UPDATE memories
+			SET source = 'git-approved-legacy-unknown'
+			WHERE source = 'git-approved'
+			  AND id IN (
+				SELECT approved_memory_id
+				FROM memory_candidates
+				WHERE policy_version = 'gitmem-v1-legacy-unknown'
+			  );
+			`
+			if _, err := tx.Exec(quarantineLegacyUnknownMemories); err != nil {
+				return fmt.Errorf("quarantine legacy approved memories with unknown completeness: %w", err)
+			}
+			if _, err := tx.Exec(`INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)`, legacyCompletenessMigration, time.Now().UTC()); err != nil {
+				return fmt.Errorf("record legacy completeness migration: %w", err)
+			}
+			if err := tx.Commit(); err != nil {
+				return fmt.Errorf("commit legacy completeness migration: %w", err)
+			}
 		}
 	}
 	return nil

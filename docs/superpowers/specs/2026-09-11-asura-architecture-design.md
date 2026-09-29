@@ -262,6 +262,8 @@ Asura/
 4. **逃逸守護進程主動清理**：任務收尾主動回收 `agent-browser close --all`。
 5. **模型故障轉移池 (Model Failover Pool)**：主模型遭遇 429 或 410 時自動無縫切換備援清單。
 
+2026-09-29 更新：外部 CLI 取消在 SQLite 初始化前先建立以 Task ID 雜湊命名的取消意圖 sidecar；runner 取得同樣以雜湊命名的排他鎖後，必須在 `cmd.Start` 前同時檢查 sidecar 與 DB 狀態。取消端先以 DB CAS 登記 `cancelling`，鎖握手完成且取得不可變進程身分後才回收 PGID，確認回收後才寫入 `cancelled` 並清除 sidecar；握手或身分驗證失敗時保留取消意圖以 fail-closed。
+
 ---
 
 ## 8. 範圍、信任邊界與決策追蹤（2026-09-11）
@@ -298,12 +300,13 @@ Asura/
 
 | 日期 | 異動 |
 |---|---|
+| 2026-09-29 | 記錄外部 CLI 取消的 sidecar／flock／DB CAS 握手與 PGID 回收順序。 |
 | 2026-09-21 | Phase 3E (Issue 17) 完成 OpenCode / Codex 固定版本能力探測與 unsupported 矩陣，建立 Stage-aware 預估與 Fail-closed Preflight 准入控制，更新 D-08 驗證狀態。 |
 | 2026-09-11 | 依使用者授權整理文件；保留原案並將完成狀態與絕對保證改列待驗證，新增首版提案、信任邊界、D-01 至 D-09 及實作草案入口。技術行為尚未逐項核准。 |
 
 *文件版本：v1.2.0*
 *建立日期：2026-09-11*
-*更新日期：2026-09-23*
+*更新日期：2026-09-29*
 
 
 ## Phase 3F：有界自動專案記憶召回

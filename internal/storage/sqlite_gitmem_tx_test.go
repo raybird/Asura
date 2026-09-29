@@ -1364,3 +1364,36 @@ func TestAdvanceCheckpointForCandidateTx_RejectsUnsupportedExpectedStatus(t *tes
 		t.Fatalf("expected ErrCandidateStatusConflict, got: %v", err)
 	}
 }
+
+func TestAdvanceCheckpointTx_PropagatesAncestryErrors(t *testing.T) {
+	ctx := context.Background()
+	store := newTestGitMemStore(t)
+	checkpoint := &GitCheckpoint{
+		Workspace: "/workspace/ancestry-errors", RepoID: "repo-1", RefName: "refs/heads/main",
+		LastCapturedSHA: "old", UpdatedAt: time.Now().UTC(),
+	}
+	if err := store.SaveCheckpoint(ctx, checkpoint); err != nil {
+		t.Fatal(err)
+	}
+
+	sentinel := errors.New("git ancestry unavailable")
+	checkpoint.LastCapturedSHA = "new"
+	err := store.AdvanceCheckpointTx(ctx, checkpoint, "old", func(context.Context, string, string) (bool, error) {
+		return false, sentinel
+	})
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("expected forward ancestry error, got: %v", err)
+	}
+
+	calls := 0
+	err = store.AdvanceCheckpointTx(ctx, checkpoint, "old", func(context.Context, string, string) (bool, error) {
+		calls++
+		if calls == 1 {
+			return false, nil
+		}
+		return false, sentinel
+	})
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("expected reverse ancestry error, got: %v", err)
+	}
+}

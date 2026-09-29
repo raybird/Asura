@@ -524,7 +524,10 @@ func advanceCheckpointInTx(
 	if isAncestor != nil {
 		// 1. 檢查 targetSHA 是否為 currentSHA 之子裔（正向單調推進）
 		isDescendant, err := isAncestor(ctx, currentSHA, targetSHA)
-		if err == nil && isDescendant {
+		if err != nil {
+			return fmt.Errorf("verify target checkpoint ancestry: %w", err)
+		}
+		if isDescendant {
 			// target 比 current 更先進，安全前進！
 			_, err = tx.ExecContext(ctx, `
 				UPDATE git_checkpoints SET last_captured_sha = ?, updated_at = ?
@@ -537,7 +540,10 @@ func advanceCheckpointInTx(
 		}
 
 		// 2. target 不是 current 的後裔，檢查 current 是否已比 target 更新（current 是 target 的後裔）
-		isAhead, _ := isAncestor(ctx, targetSHA, currentSHA)
+		isAhead, err := isAncestor(ctx, targetSHA, currentSHA)
+		if err != nil {
+			return fmt.Errorf("verify current checkpoint ancestry: %w", err)
+		}
 		if isAhead {
 			// 庫中當前 SHA 已經超越了目標 SHA，為了單調性絕對不倒退！
 			// 安全跳過，保持庫中更新的 currentSHA

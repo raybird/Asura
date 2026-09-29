@@ -193,6 +193,7 @@ Feature: Git 變更感知與審核式專案記憶擷取
 | 2026-09-28 | 依 PR #24 第九輪 Review `5336599262` 修正 discarded Candidate 併行 Checkpoint race、legacy approved Partial migration，並補上 CLI PARTIAL／COMPLETE 輸出與回歸測試 | - |
 | 2026-09-28 | 依 PR #24 第十輪 Review `5338648211` 將 existing Candidate 狀態確認、force reopen 與 Checkpoint 前進收旂至同一交易，並隔離 legacy Partial 正式記憶的 bounded recall | - |
 | 2026-09-28 | 依 PR #24 第十一輪 Review `5339099994` 將舊 schema 中已失去 Partial 證據的 approved Candidate fail-safe 隔離為 legacy unknown，並強化 force 回傳狀態、storage 狀態白名單與 Git ancestry 錯誤傳遞 | - |
+| 2026-09-29 | 依 PR #24 第十二輪 Review `5339956094` 以 durable migration marker 修復 legacy unknown 隔離的 crash-safety，修復 H-01 跨行程取消握手競態，並完整傳遞 Checkpoint ancestry callback 錯誤 | - |
 
 ---
 **建立日期**: 2026-09-25  
