@@ -13,17 +13,17 @@
 
 ## 階段順序（唯一任務來源）
 
-以下為規劃依賴，並非可實作 Task。BADAPT 全部待核准，分批實作門檻未成立。先完成調查與 probe，再取得具體規格核准及提交基線；Large 由 decompose 在本檔細化 Phase／Task，不能把未核准的 production 工作標為待實作。
+以下為規劃依賴，尚未由 decompose 細化為可實作 Task。2026-09-29 BADAPT-001～012 行為劇本已獲核准；固定版本、安全能力與 fixture 基線仍需 probe。先完成調查及必要技術決策，再由 decompose 在本檔細化 Phase／Task。
 
 | 階段 | 驗收映射 | 產出 | 相依 | 可檢查完成判準 | 狀態 |
 |---|---|---|---|---|---|
 | I1 固定版本 contract probe | BADAPT-002、004、006、007、009 | 可重跑 probe、去敏輸出、能力矩陣與 I-TBD-1～6 決策 | 取得固定 binary 與可隔離環境；不改 production | README 列出的首要證據齊備；每項標已證明或 unsupported，安全失敗明確阻擋對應路徑 | 前置探測已記錄；live probe 受 I-TBD-9 阻擋 |
-| I1-G 規格定案 | BADAPT-001～012 | I-TBD-1～8 結論、核准表與規格基線 | I1；必要 model/provider 等決策有答案 | 使用者核准具體版本、行為與失敗路徑；有提交承載規格後才進 production | 待核准 |
-| I2-A 共同 conformance harness | BADAPT-001、002、004、006、007、009、010 | 共同 assertions、各 adapter fixture 入口 | I1-G、decompose | 測試能捕捉錯誤分類、partial、取消與重複呼叫；不 mock 掉被驗能力 | 待核准後拆解 |
-| I2-B OMP adapter | BADAPT-002、003、006、007、009、010 | OMP adapter 與 parser／process 測試 | I2-A | 真實 probe 與 fixture 一致；先紅後綠，其他 backend 呼叫為 0 | 待核准後拆解 |
-| I2-C Antigravity adapter | BADAPT-004～007、009、010 | Antigravity adapter 與相關測試 | I2-B 全綠 | auth/unavailable、partial、cancel 對共同契約，無 session 語意外洩 | 待核准後拆解 |
-| I3 註冊、CLI 與身份 | BADAPT-001、003、005、008、012 | Daemon 接線、CLI/status、身份整合測試 | I2-C | 預設不變、未知 ID 零程序啟動；重送／queue／restart 保留原身份及無額外 attempt | 待核准後拆解 |
-| I4 Context／Memory 與交付 | BADAPT-006、008～012 | 整合證據、常青文件、獨立 review | I3 | 所有回歸通過、文件與能力一致、獨立 review 完成後再提 PR | 待核准後拆解 |
+| I1-G 規格定案 | BADAPT-001～012 | I-TBD-1～9 結論、核准表與技術基線 | I1；必要 model/provider 等決策有答案 | 已核准的行為維持一致；固定版本與能力有 probe 證據，實質修訂逐項重新核准並提交基線 | 行為已核准；技術基線待定 |
+| I2-A 共同 conformance harness | BADAPT-001、002、004、006、007、009、010 | 共同 assertions、各 adapter fixture 入口 | I1-G、decompose | 測試能捕捉錯誤分類、partial、取消與重複呼叫；不 mock 掉被驗能力 | 待 probe 後拆解 |
+| I2-B OMP adapter | BADAPT-002、003、006、007、009、010 | OMP adapter 與 parser／process 測試 | I2-A | 真實 probe 與 fixture 一致；先紅後綠，其他 backend 呼叫為 0 | 待 probe 後拆解 |
+| I2-C Antigravity adapter | BADAPT-004～007、009、010 | Antigravity adapter 與相關測試 | I2-B 全綠 | auth/unavailable、partial、cancel 對共同契約，無 session 語意外洩 | 待 probe 後拆解 |
+| I3 註冊、CLI 與身份 | BADAPT-001、003、005、008、012 | Daemon 接線、CLI/status、身份整合測試 | I2-C | 預設不變、未知 ID 零程序啟動；重送／queue／restart 保留原身份及無額外 attempt | 待 probe 後拆解 |
+| I4 Context／Memory 與交付 | BADAPT-006、008～012 | 整合證據、常青文件、獨立 review | I3 | 所有回歸通過、文件與能力一致、獨立 review 完成後再提 PR | 待 probe 後拆解 |
 
 ## 測試策略
 
@@ -37,7 +37,7 @@
 
 ## 建檔檢查
 
-2026-09-29 對照 issue-checklist：四份文件、編號映射、metadata、待核准 gate 與唯一任務來源已建立。必要未知 I-TBD-1～9 尚未解決，因此只交付初始草案，不宣稱規劃完成。尚無產品驗證或獨立 review 證據。
+2026-09-29 對照 issue-checklist：四份文件、編號映射、metadata、核准 gate 與唯一任務來源已建立。必要未知 I-TBD-1～9 尚未解決，行為規格已核准，但技術規劃仍未完成。尚無產品驗證或獨立 review 證據。
 
 ### 2026-09-29 文件靜態檢查
 

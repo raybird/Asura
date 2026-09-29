@@ -4,7 +4,7 @@
 
 來源：[GitHub issue #25](https://github.com/raybird/Asura/issues/25)。2026-09-29 以工作區 `19cb3d40e3826e6e1754fbd1848cca9e3725cc60` 調查。目標是增加 OMP 與 Antigravity CLI adapter，同時保留 Asura 對 Task、Context、Memory、Pipeline、Scheduling 的所有權。
 
-本次為初始規格草案。issue 原文將 BADAPT 列為候選，並要求「根據 probe 完成 capability matrix 與 I-TBD-1～8 決策，提交使用者核准」。提供 issue 連結不視為核准新增行為。2026-09-29 僅完成現況調查及文件建置，尚未完成 contract probe 或 production 實作。2026-09-29 已完成 agy 版本／雜湊與環境前置探測，live probe 受網路及隔離環境限制，證據見技術分析。
+issue 原文將 BADAPT 列為候選；使用者於 2026-09-29 在本對話明確回覆「那麼 核准」，核准本文件當時的 BADAPT-001～012 行為範圍及失敗路徑。固定版本、能力矩陣及 fixture 尚待 probe 定案；若結果需要實質修改劇本，須對受影響項目重新核准。2026-09-29 已完成 agy 版本／雜湊與環境前置探測，live probe 受網路及隔離環境限制，證據見技術分析。
 
 ## 文件清單
 
@@ -42,7 +42,7 @@ README.md                            CLI、能力限制與安裝前提
 
 ## Gherkin 驗收劇本
 
-以下全為待核准草案；BADAPT-007 的 unknown-result 精確分類、BADAPT-008 的 adapter version 表達待 probe 後定案。
+以下行為劇本已核准；BADAPT-007 的 unknown-result 精確分類、BADAPT-008 的 adapter version 表達待 probe 後定案。
 
 ```gherkin
 Feature: 可替換的四後端執行契約
@@ -122,23 +122,23 @@ Feature: 可替換的四後端執行契約
 
 ## Gherkin 核准紀錄
 
-- **核准 commit**: 待提交（尚未核准）
-- **核准來源**: 尚無 BADAPT 核准；2026-09-29 使用者以 `$new-issue` 指向 issue #25，授權建檔。需求來源為 issue 本文，沒有補充留言。
+- **核准 commit**: `9195c4d419ec7906aeeecc2700d7e11b821b75bc`（承載獲核准的 BADAPT-001～012 劇本）
+- **核准來源**: 2026-09-29 使用者在本對話針對 issue #25 初始文件與下一步回覆「那麼 核准」。核准範圍為當時文件中的 BADAPT-001～012；I-TBD 的 probe 事實及未寫入的實質設計決策不由此推定核准。
 
 | Scenario | 核准日期 | 狀態 |
 |---|---|---|
-| BADAPT-001 | - | 待核准 |
-| BADAPT-002 | - | 待核准 |
-| BADAPT-003 | - | 待核准 |
-| BADAPT-004 | - | 待核准 |
-| BADAPT-005 | - | 待核准 |
-| BADAPT-006 | - | 待核准 |
-| BADAPT-007 | - | 待核准 |
-| BADAPT-008 | - | 待核准 |
-| BADAPT-009 | - | 待核准 |
-| BADAPT-010 | - | 待核准 |
-| BADAPT-011 | - | 待核准 |
-| BADAPT-012 | - | 待核准 |
+| BADAPT-001 | 2026-09-29 | 已核准 |
+| BADAPT-002 | 2026-09-29 | 已核准 |
+| BADAPT-003 | 2026-09-29 | 已核准 |
+| BADAPT-004 | 2026-09-29 | 已核准 |
+| BADAPT-005 | 2026-09-29 | 已核准 |
+| BADAPT-006 | 2026-09-29 | 已核准 |
+| BADAPT-007 | 2026-09-29 | 已核准 |
+| BADAPT-008 | 2026-09-29 | 已核准 |
+| BADAPT-009 | 2026-09-29 | 已核准 |
+| BADAPT-010 | 2026-09-29 | 已核准 |
+| BADAPT-011 | 2026-09-29 | 已核准 |
+| BADAPT-012 | 2026-09-29 | 已核准 |
 
 ## 風險與首要驗證
 
@@ -159,10 +159,10 @@ Feature: 可替換的四後端執行契約
 | I-TBD-5 | CLI retry/session/resume 關閉方式及 unknown-result 分類 | 待確認 | BADAPT-007、009；必要副作用 gate |
 | I-TBD-6 | auth、rate-limit、partial output、cancel 精確 mapping | 待確認 | BADAPT-002、004、007；由真實 evidence 建 fixtures |
 | I-TBD-7 | 正式 ID 為 omp／antigravity，是否額外接受 agy alias | 待確認 | BADAPT-003、005、008；建議先只接受正式 ID，避免新增同義身份 |
-| I-TBD-8 | BADAPT-001～012 最終 Gherkin 與 fixture/probe 基線 | 待確認 | 全部驗收待 probe 結論核准，不建立可實作 production Task |
+| I-TBD-8 | BADAPT-001～012 Gherkin 已核准；固定版本 fixture/probe 基線尚待建立 | 待確認 | 目前核准行為範圍；probe 若要求實質改劇本，受影響項標待重新核准 |
 | I-TBD-9 | shell 無法解析 npm registry，bwrap namespace 建立被拒；需可取得固定 binary 且可隔離的 probe 環境 | 待確認 | I-TBD-1～6 的前置條件；實際失敗證據見技術分析，無法完成 live contract probe |
 
-I-TBD-1～6 先由 probe 取得事實，需使用者選定的 model/provider 或無法隔離的環境條件再提問。I-TBD-7～8 與 probe 決策一起提交核准。沒有 gate 豁免。
+I-TBD-1～6 先由 probe 取得事實，需使用者選定的 model/provider 或無法隔離的環境條件再提問。I-TBD-7 及 I-TBD-8 的技術基線在 probe 後定案；若變更已核准行為，依核准紀錄逐項重新核准。沒有 gate 豁免。
 
 ## Timeline
 
@@ -170,9 +170,10 @@ I-TBD-1～6 先由 probe 取得事實，需使用者選定的 model/provider 或
 |---|---|---|
 | 2026-09-29 | 依 issue #25 建立初始文件與候選驗收，保留 probe 及核准門檻 | Codex |
 | 2026-09-29 | 完成版本／雜湊及環境前置探測；新增 I-TBD-9，live probe 受環境限制 | Codex |
+| 2026-09-29 | 使用者於本對話核准 BADAPT-001～012 當前劇本；probe 技術決策仍待定 | 使用者 |
 
 ---
 **建立日期**: 2026-09-29
 **分級**: Large
 **風險**: High
-**狀態**: 初始規格草案；live probe 受環境限制，待 I-TBD-1～9 與 BADAPT 核准
+**狀態**: BADAPT-001～012 已核准；live probe 受環境限制，待 I-TBD-1～9 技術基線
