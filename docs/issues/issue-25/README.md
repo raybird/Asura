@@ -4,7 +4,7 @@
 
 來源：[GitHub issue #25](https://github.com/raybird/Asura/issues/25)。2026-09-29 以工作區 `19cb3d40e3826e6e1754fbd1848cca9e3725cc60` 調查。目標是增加 OMP 與 Antigravity CLI adapter，同時保留 Asura 對 Task、Context、Memory、Pipeline、Scheduling 的所有權。
 
-issue 原文將 BADAPT 列為候選；使用者於 2026-09-29 在本對話明確回覆「那麼 核准」，核准本文件當時的 BADAPT-001～012 行為範圍及失敗路徑。固定版本、能力矩陣及 fixture 尚待 probe 定案；若結果需要實質修改劇本，須對受影響項目重新核准。2026-09-29 已完成 agy 版本／雜湊與環境前置探測，live probe 受網路及隔離環境限制，證據見技術分析。
+issue 原文將 BADAPT 列為候選；使用者於 2026-09-29 在本對話明確回覆「那麼 核准」，核准本文件當時的 BADAPT-001～012 行為範圍及失敗路徑。固定版本、能力矩陣及 fixture 尚待 probe 定案；若結果需要實質修改劇本，須對受影響項目重新核准。2026-09-29 網路與隔離環境已恢復，並完成 OMP 候選套件及 agy 最小非互動探測；完整安全契約仍待驗證，證據見技術分析。
 
 ## 文件清單
 
@@ -152,15 +152,15 @@ Feature: 可替換的四後端執行契約
 
 | 編號 | 事項 | 狀態 | 影響 |
 |---|---|---|---|
-| I-TBD-1 | OMP 固定版本、invocation、events、cancel；PATH 未找到 omp | 待確認 | BADAPT-002、003、007；先取得可重現安裝與 probe |
-| I-TBD-2 | Antigravity 固定版本與契約；本機 1.2.12 僅為候選 | 待確認 | BADAPT-004、005、007；版本／help 不代表行為證明 |
+| I-TBD-1 | OMP 候選 18.4.3 已取得；invocation、events、cancel 及指定 provider/model 待驗 | 待確認 | BADAPT-002、003、007；已用 Bun 1.4.2 啟動，模型憑證不足 |
+| I-TBD-2 | Antigravity 本機 CLI 1.2.12 完成最小非互動回應；內部 server 1.2.13，完整契約待驗 | 待確認 | BADAPT-004、005、007；簡單回應不證明安全或失敗路徑 |
 | I-TBD-3 | 兩者 read-only、sandbox、process tree 邊界 | 待確認 | BADAPT-002、004、006、007；必要安全 gate |
 | I-TBD-4 | CLI／adapter version 的 trace 表達，以及固定 model/provider 與 Context window 設定 | 待確認 | BADAPT-008、011；不得動態讀 default 造成身份漂移，版本不改既有 fingerprint |
 | I-TBD-5 | CLI retry/session/resume 關閉方式及 unknown-result 分類 | 待確認 | BADAPT-007、009；必要副作用 gate |
 | I-TBD-6 | auth、rate-limit、partial output、cancel 精確 mapping | 待確認 | BADAPT-002、004、007；由真實 evidence 建 fixtures |
 | I-TBD-7 | 正式 ID 為 omp／antigravity，是否額外接受 agy alias | 待確認 | BADAPT-003、005、008；建議先只接受正式 ID，避免新增同義身份 |
 | I-TBD-8 | BADAPT-001～012 Gherkin 已核准；固定版本 fixture/probe 基線尚待建立 | 待確認 | 目前核准行為範圍；probe 若要求實質改劇本，受影響項標待重新核准 |
-| I-TBD-9 | shell 無法解析 npm registry，bwrap namespace 建立被拒；需可取得固定 binary 且可隔離的 probe 環境 | 待確認 | I-TBD-1～6 的前置條件；實際失敗證據見技術分析，無法完成 live contract probe |
+| I-TBD-9 | npm DNS 與 bwrap namespace 已恢復；OMP 指定 provider/model 憑證及完整隔離 probe 尚缺 | 待確認 | I-TBD-1～6 的前置條件；已取得部分直接證據，未解除安全 gate |
 
 I-TBD-1～6 先由 probe 取得事實，需使用者選定的 model/provider 或無法隔離的環境條件再提問。I-TBD-7 及 I-TBD-8 的技術基線在 probe 後定案；若變更已核准行為，依核准紀錄逐項重新核准。沒有 gate 豁免。
 
@@ -171,9 +171,10 @@ I-TBD-1～6 先由 probe 取得事實，需使用者選定的 model/provider 或
 | 2026-09-29 | 依 issue #25 建立初始文件與候選驗收，保留 probe 及核准門檻 | Codex |
 | 2026-09-29 | 完成版本／雜湊及環境前置探測；新增 I-TBD-9，live probe 受環境限制 | Codex |
 | 2026-09-29 | 使用者於本對話核准 BADAPT-001～012 當前劇本；probe 技術決策仍待定 | 使用者 |
+| 2026-09-29 | 環境恢復後取得 OMP 18.4.3 候選套件及 agy 最小非互動回應；安全能力仍待 probe | Codex |
 
 ---
 **建立日期**: 2026-09-29
 **分級**: Large
 **風險**: High
-**狀態**: BADAPT-001～012 已核准；live probe 受環境限制，待 I-TBD-1～9 技術基線
+**狀態**: BADAPT-001～012 已核准；contract probe 部分完成，待 I-TBD-1～9 技術基線

@@ -17,7 +17,7 @@
 
 | 階段 | 驗收映射 | 產出 | 相依 | 可檢查完成判準 | 狀態 |
 |---|---|---|---|---|---|
-| I1 固定版本 contract probe | BADAPT-002、004、006、007、009 | 可重跑 probe、去敏輸出、能力矩陣與 I-TBD-1～6 決策 | 取得固定 binary 與可隔離環境；不改 production | README 列出的首要證據齊備；每項標已證明或 unsupported，安全失敗明確阻擋對應路徑 | 前置探測已記錄；live probe 受 I-TBD-9 阻擋 |
+| I1 固定版本 contract probe | BADAPT-002、004、006、007、009 | 可重跑 probe、去敏輸出、能力矩陣與 I-TBD-1～6 決策 | 取得固定 binary 與可隔離環境；不改 production | README 列出的首要證據齊備；每項標已證明或 unsupported，安全失敗明確阻擋對應路徑 | OMP 候選版本及 agy 最小非互動證據已記錄；安全、取消與錯誤路徑未完成，OMP provider/model 待定 |
 | I1-G 規格定案 | BADAPT-001～012 | I-TBD-1～9 結論、核准表與技術基線 | I1；必要 model/provider 等決策有答案 | 已核准的行為維持一致；固定版本與能力有 probe 證據，實質修訂逐項重新核准並提交基線 | 行為已核准；技術基線待定 |
 | I2-A 共同 conformance harness | BADAPT-001、002、004、006、007、009、010 | 共同 assertions、各 adapter fixture 入口 | I1-G、decompose | 測試能捕捉錯誤分類、partial、取消與重複呼叫；不 mock 掉被驗能力 | 待 probe 後拆解 |
 | I2-B OMP adapter | BADAPT-002、003、006、007、009、010 | OMP adapter 與 parser／process 測試 | I2-A | 真實 probe 與 fixture 一致；先紅後綠，其他 backend 呼叫為 0 | 待 probe 後拆解 |
@@ -32,7 +32,7 @@
 - BADAPT-001、006、008、011、012：CLI／Daemon／Pipeline 整合驗 0 calls、持久化 SQLite 重開、queue wake、fingerprint 衝突、sealed memory 與 admission 拒絕。偵測器應計數所有 backend，不只斷言被選者有執行。
 - BADAPT-010：依賴與原始碼靜態檢查加上共同契約測試；人工追蹤新增分支及 import，不能只搜尋某一種 if 字串。
 - 每個行為變更先記目標紅燈，再最小實作與全綠；單元／外迴圈同層時說明合併理由。重構 no-op 記原因，純文件以靜態查核取代紅燈。
-- 完整驗證入口：`go vet ./...`、`go test -count=1 -race ./...`、`go build ./cmd/asura`。保留 MBACK、TFACE、CTXWIN、RECALL、WEBMEM、GITMEM、Cron、queue/redelivery/cancel 測試。2026-09-29 本次僅建檔，未執行上述產品驗證。
+- 完整驗證入口：`go vet ./...`、`go test -count=1 -race ./...`、`go build ./cmd/asura`。保留 MBACK、TFACE、CTXWIN、RECALL、WEBMEM、GITMEM、Cron、queue/redelivery/cancel 測試。2026-09-29 僅更新規格與 probe 紀錄，未執行上述產品驗證。
 - 證據回填細化後的原 Task，含日期、版本／工作區、命令、exit code、原因及對應 BADAPT。測不到的真實外部行為揭露限制，不能填通過。
 
 ## 建檔檢查

@@ -63,4 +63,22 @@
 | auth／rate-limit／partial／terminal result | 未驗證，unsupported | 未驗證，unsupported |
 | retry／resume／reconnect 可控 | 未驗證，unsupported | 未驗證，unsupported |
 
-以上 unsupported 是尚未證明的保守狀態，不是宣稱 CLI 本身沒有能力。未執行帶模型或權限副作用的 live probe。下一個必要條件是能取得固定 OMP binary、允許隔離探測及存取指定 provider 的執行環境；不能以放寬權限或未隔離的實際工作區代替。
+以上 unsupported 是尚未證明的保守狀態，不是宣稱 CLI 本身沒有能力。當時未執行帶模型或權限副作用的 live probe；後續環境恢復情形見下節。
+
+## 2026-09-29 環境恢復後探測
+
+本次 CLI 只在 `/tmp/asura-issue25-probe/` 下的拋棄式工作目錄執行；`bwrap` 以唯讀根目錄及 probe 目錄的可寫 bind 限制檔案副作用。下表只記可重複確認的窄結論，未把 help 或簡單回應視為安全能力證據。
+
+| 命令／條件 | 結果 | 結論 |
+|---|---|---|
+| `curl -I --max-time 12 https://registry.npmjs.org/@oh-my-pi%2fpi-coding-agent` | exit 0，HTTP 200 | 先前 npm DNS 阻塞已解除 |
+| `bwrap --ro-bind / / --unshare-net --die-with-parent /bin/true` | exit 0 | 先前 namespace 阻塞已解除；尚須針對實際 CLI 驗證隔離效果 |
+| `npm view @oh-my-pi/pi-coding-agent version dist.integrity --json`；`npm pack @oh-my-pi/pi-coding-agent@18.4.3` | exit 0；版本 18.4.3；套件 integrity `sha512-+Xs6KR0SjtHx1e3oE44zqPmt54INevnDIeLN+bbro4Vs4nmZ4c0pWZlTRDgUfO46Dg1z2SjViNX43yjV6yY3ug==`；tarball SHA-256 `a08afb35432a118acf8f55583e22eef950fda9925ad6d76017cdd12c78f49902` | 取得可固定的 OMP 候選套件，尚未定案 production 版本 |
+| 本機 Bun 1.3.4 執行 OMP 18.4.3 `--version`；`npm install --prefix /tmp/asura-issue25-probe/bun bun@1.4.2` 後重試 | 舊 Bun exit 1，語法解析錯；Bun 1.4.2 exit 0，`omp/18.4.3` | 套件要求 Bun >=1.3.14；probe 應固定 Bun 版本，不把舊 runtime 的失敗歸為 adapter 錯誤 |
+| 隔離 HOME、無網路、固定 `--model openai/gpt-5.2` 的 OMP `--mode json --print 'Reply with OK only'` | exit 1；輸出 session event 後回報 `No API key found for openai` | 非互動入口可啟動，但尚無模型執行、結果或安全能力證據 |
+| 隔離 HOME、無網路的 `agy --mode plan --output-format json --print='Reply with OK only'` | timeout 15 秒 exit 124；要求 OAuth 登入，最後回報 authentication failed | 無登入的失敗可觀察；不據此定案共同 auth 分類 |
+| 使用本機既有 HOME 的唯讀掛載、拋棄式可寫 workspace 執行上述 agy prompt | exit 0；JSON `status: SUCCESS`、`response: OK`、`num_turns: 1`；同時有唯讀日誌／資料庫寫入錯誤，內部 language server 報 1.2.13 | 本機既有登入足以完成最小非互動模型回應；CLI 報 1.2.12 與內部 server 版本不同。唯讀家目錄的錯誤使此結果不足以證明完整執行契約 |
+| agy `--mode accept-edits --output-format json --print-timeout 50s`，要求在拋棄式目錄建立 `marker.txt` 且內容為 `PROBE_OK` | exit 0，JSON `status: SUCCESS`；檔案存在且內容符合 | 可寫控制組證明檔案差異檢查能抓到此類寫入；尚未證明所有工具與子程序副作用 |
+| 相同要求改用 agy `--mode plan`，另一個可寫拋棄式目錄 | CLI exit 0 且檔案不存在，但 stderr 記錄 `print timeout after 50s with turn in progress`，JSON response 為空 | 此次為逾時且無完成回應，不能據此宣告 plan 模式可靠唯讀；能力仍為 unsupported |
+
+仍未取得 OMP 指定 provider 的可用憑證／model 決策，也未完成兩者的完整寫入／唯讀、取消、子程序清理、retry、partial 與錯誤分類 probe。上述命令沒有修改 production 或宣告新 capability。agy 測試因唯讀 HOME 產生寫入錯誤；後續應讓 CLI 專屬狀態在隔離環境中可寫，避免把環境故障誤判為唯讀能力。
