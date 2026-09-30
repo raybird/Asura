@@ -1,0 +1,141 @@
+{
+  "date": "2026-09-30",
+  "case": "auth-missing",
+  "readonly_workspace": false,
+  "isolated_home": true,
+  "pid_namespace": true,
+  "version": "1.2.13",
+  "cli_sha256": "574b0234656c44564f3ff3b013225c86f14ae79b67d0f3b45f6aaf1b1625440e",
+  "script_sha256": "e4a7659975302c01f343ff6666ce08eb88e7c88eda75b75ad2434415f46dfbff",
+  "argv": [
+    "/home/kevin/.local/bin/agy",
+    "--mode",
+    "accept-edits",
+    "--model",
+    "gemini-3.8-flash-low",
+    "--disable-slash-commands",
+    "--dangerously-skip-permissions",
+    "--output-format",
+    "stream-json",
+    "--print-timeout",
+    "60s",
+    "--print=Reply with exactly PROBE_OK"
+  ],
+  "exit_code": 0,
+  "timed_out": false,
+  "marker": null,
+  "delayed_marker": null,
+  "cancellation": null,
+  "events": [
+    {
+      "event": "init",
+      "init": {
+        "model": "gemini-3.8-flash-low",
+        "cwd": "/tmp/asura-25-agy-_y_1_vbl/workspace",
+        "tools": [
+          "ask_custom_permission",
+          "ask_permission",
+          "ask_question",
+          "browser_click_element",
+          "browser_drag_pixel_to_pixel",
+          "browser_get_dom",
+          "browser_get_network_request",
+          "browser_input",
+          "browser_list_network_requests",
+          "browser_mouse_down",
+          "browser_mouse_up",
+          "browser_move_mouse",
+          "browser_press_key",
+          "browser_refresh_page",
+          "browser_resize_window",
+          "browser_scroll",
+          "browser_scroll_dom",
+          "browser_select_option",
+          "browser_subagent",
+          "call_mcp_tool",
+          "capture_browser_console_logs",
+          "capture_browser_screenshot",
+          "click_browser_pixel",
+          "command_status",
+          "define_subagent",
+          "delete_knowledge",
+          "execute_browser_javascript",
+          "find_by_name",
+          "finish",
+          "generate_image",
+          "grep_search",
+          "invoke_subagent",
+          "list_browser_pages",
+          "list_dir",
+          "list_permissions",
+          "list_resources",
+          "manage_inbox",
+          "manage_subagents",
+          "manage_task",
+          "multi_replace_file_content",
+          "notebook_edit",
+          "notebook_execution",
+          "open_browser_url",
+          "read_browser_page",
+          "read_resource",
+          "read_url_content",
+          "replace_file_content",
+          "run_command",
+          "schedule",
+          "search_web",
+          "sed_file",
+          "send_command_input",
+          "send_message",
+          "view_file",
+          "wait",
+          "wait_5_seconds",
+          "write_to_file"
+        ],
+        "permission_mode": "always-proceed"
+      }
+    },
+    {
+      "event": "step_update",
+      "step_update": {
+        "step_index": 0,
+        "state": "DONE",
+        "step_type": "user_input"
+      }
+    },
+    {
+      "event": "step_update",
+      "step_update": {
+        "step_index": 1,
+        "state": "DONE",
+        "step_type": "agent_response",
+        "text_delta": "PROBE_OK\n",
+        "duration_seconds": 1.3572985850000001,
+        "usage": {
+          "input_tokens": 12265,
+          "output_tokens": 4,
+          "thinking_tokens": 0,
+          "cache_read_tokens": 0,
+          "total_tokens": 12269
+        }
+      }
+    },
+    {
+      "event": "result",
+      "result": {
+        "status": "SUCCESS",
+        "response": "PROBE_OK\n",
+        "duration_seconds": 1.382331331,
+        "num_turns": 1,
+        "usage": {
+          "input_tokens": 12265,
+          "output_tokens": 4,
+          "thinking_tokens": 0,
+          "cache_read_tokens": 0,
+          "total_tokens": 12269
+        }
+      }
+    }
+  ],
+  "stderr": "",
+  "sanitization": "Opaque conversation IDs omitted. Token and long top-level credential fields checked and absent by probe."
+}

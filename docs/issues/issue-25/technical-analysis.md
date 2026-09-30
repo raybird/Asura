@@ -165,3 +165,32 @@ I-TBD-5 保留待確認。下一個必要證據是可計數的受控 transport f
 檔案結果與實際 tool exit 同時作判準；CLI 的 exit 0 代表模型完成回應，不能等同工具成功。正控制組證明兩個 marker 偵測器有效。本結果涵蓋 write tool 之外的 shell 寫入及一個 workspace 外路徑，並非所有工具／任意路徑的證明；可寫的拋棄式 auth／scratch 目錄不是產品工作區。production 仍須最小化可寫掛載並避免暴露主機 socket／額外可寫 mount。
 
 2026-09-30 code-simplify 檢查本次腳本增量：沿用既有 case 分支與拋棄式資源管理，沒有值得額外抽象的重複邏輯，維持 no-op；所有四份真實結果、語法與 JSON 靜態查核皆通過。
+
+## 2026-09-30 Antigravity 1.2.13 新基線
+
+使用者對固定模型選項回覆「1」，選定 `gemini-3.8-flash-low`。probe 開始前發現 binary 已由 1.2.12 更新為 1.2.13，SHA-256 `574b0234656c44564f3ff3b013225c86f14ae79b67d0f3b45f6aaf1b1625440e`；舊版本雜湊 guard 正確拒絕呼叫，改以新版本重測，不重用舊版本 capability。入口 [probe_agy.py](../../../scripts/issue-25/probe_agy.py) 固定 binary／model，以 memfd 提供唯讀 token，CLI 狀態放 tmpfs，使用 PID namespace 與拋棄式工作區。
+
+新增反例：
+
+- `--case short-timeout`，print-timeout 1ms：CLI exit 0、result SUCCESS、空 response，但 stderr 明確記錄 turn in progress／returning partial output。[fixture](probes/agy-1.2.13-timeout.json)。adapter 必須判斷 timeout 訊息及完整終止證據，不能只採 exit code／status；此案例沒有可保留的非空 partial，尚不證明文字 partial mapping。
+- `--case auth-missing` 只移除指定 token，仍成功；即使加 `--isolated-home` 也成功。[原設定](probes/agy-1.2.13-auth.json)、[空 HOME](probes/agy-1.2.13-auth-isolated.json)。兩者是登入隔離反例，不能當成 auth-error fixture。
+- 同時加入 `--isolated-home --isolated-ipc`，遮蔽 HOME、/tmp、/var/tmp、/run/user 並 unshare IPC：無 token 回報 exit 1、ERROR／authentication failed or timed out；帶 token 的相同設定回報 exit 0、SUCCESS／PROBE_OK。[無登入](probes/agy-1.2.13-auth-ipc.json)、[成功對照](probes/agy-1.2.13-smoke-ipc.json)。支持隱含登入與被遮蔽的主機狀態／IPC 相關；尚未定位單一來源，不將這個推論寫成確定的 keyring 或 server 行為。
+
+初次 namespace 控制組的寫入內容為 `PROBE_OK\n`，不是 prompt 要求的精確字串；它足以證明檔案差異偵測器有效，但不宣告模型精確遵循 prompt。[寫入](probes/agy-1.2.13-write.json)、[唯讀](probes/agy-1.2.13-readonly.json)、[延遲寫入](probes/agy-1.2.13-delayed.json)、[取消](probes/agy-1.2.13-cancel.json)。取消時 child PGID 與 invocation 不同，PID namespace 中 SIGKILL 後十秒觀察 child 不存活、無 DELAYED；取消前 marker 不存在，ready age 0.09 秒。這些初次控制組沒有完整 HOME／IPC 隔離，另行重跑相同安全案例，不把兩組環境混為一個 production 基線。
+
+所有本次 probe 只修改拋棄式狀態；未建立 production adapter。rate-limit、非空 partial、retry／resume、context window 及正式登入策略仍待驗。
+
+### 2026-09-30 完整隔離安全對照
+
+相同入口增加 `--isolated-home --isolated-ipc`，其餘固定 CLI／模型保持一致：
+
+| case（均增加上述隔離旗標） | 直接結果 | 證據 |
+|---|---|---|
+| `--case write` | exit 0，marker = PROBE_OK 加換行；檔案副作用偵測器有效 | [write-ipc](probes/agy-1.2.13-write-ipc.json) |
+| `--case write --readonly-workspace` | exit 0，完成回應包含唯讀拒絕，marker 不存在 | [readonly-ipc](probes/agy-1.2.13-readonly-ipc.json) |
+| `--case delayed-control` | exit 0，Python child 延遲寫入 DELAYED | [delayed-ipc](probes/agy-1.2.13-delayed-ipc.json) |
+| `--case cancel` | ready age 0.053 秒送 SIGKILL；child PGID 與主程序不同；exit -9，十秒內 child 不存活且無 DELAYED | [cancel-ipc](probes/agy-1.2.13-cancel-ipc.json) |
+
+2026-09-30 對此具體方案詢問是否將 bwrap／完整 HOME 與 IPC 隔離的執行期部署前提擴及 Antigravity（I-TBD-11）；先前 I-TBD-10 僅明列 OMP，因此未推定擴及核准。缺 binary／namespace 時模型呼叫前 unavailable。production 登入存放與 refresh 策略仍需明確設計，probe 的拋棄式 token 並不代表正式登入管理已完成。
+
+code-simplify 本次檢查只涉及新 probe：沿用直接 case 分支與拋棄式資源管理，沒有需新增抽象的重複邏輯，no-op。腳本 AST、15 份 agy JSON、14 份 OMP JSON、相對連結、核准 Gherkin 一致性與 git diff --check 通過。未執行產品 vet／race／build，未宣告 I1 全部完成。
