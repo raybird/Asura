@@ -32,6 +32,21 @@ jobs:
       - name: Install Pinned OpenCode 1.18.23
         run: npm install -g opencode-ai@1.18.23
 
+      - name: Install bubblewrap and verify namespaces
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap
+          # 2026-09-30: Ubuntu restricts unprivileged user namespaces; allow only bwrap.
+          sudo tee /etc/apparmor.d/asura-ci-bwrap > /dev/null <<'EOF'
+          abi <abi/4.0>,
+          include <tunables/global>
+          profile asura-ci-bwrap /usr/bin/bwrap flags=(unconfined) {
+            userns,
+          }
+          EOF
+          sudo apparmor_parser -r /etc/apparmor.d/asura-ci-bwrap
+          bwrap --unshare-pid --unshare-ipc --ro-bind / / --proc /proc --die-with-parent -- /usr/bin/true
+
       - name: Vet
         run: go vet ./...
 

@@ -63,6 +63,11 @@ func handleStatus(args []string, stdout, stderr io.Writer) int {
 
 	fmt.Fprintf(stdout, "Task ID:   %s\n", task.ID)
 	fmt.Fprintf(stdout, "Status:    %s\n", task.Status)
+	backendID := task.Backend
+	if backendID == "" {
+		backendID = "opencode"
+	}
+	fmt.Fprintf(stdout, "Backend:   %s\n", backendID)
 	if task.ExecutionMode != "" {
 		fmt.Fprintf(stdout, "Mode:      %s\n", task.ExecutionMode)
 	}
@@ -80,6 +85,9 @@ func handleStatus(args []string, stdout, stderr io.Writer) int {
 		if err := json.Unmarshal([]byte(task.PipelineTrace), &trace); err == nil && len(trace.Stages) > 0 {
 			var stageParts []string
 			for _, s := range trace.Stages {
+				if s.BackendVersion != "" {
+					fmt.Fprintf(stdout, "Backend version (%s): %s\n", s.Name, s.BackendVersion)
+				}
 				stageParts = append(stageParts, fmt.Sprintf("%s (%s, %dms)", s.Name, s.Status, s.DurationMs))
 			}
 			fmt.Fprintf(stdout, "Pipeline:  %s\n", strings.Join(stageParts, " -> "))

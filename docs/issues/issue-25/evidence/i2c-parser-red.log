@@ -1,0 +1,14 @@
+--- FAIL: TestNativeFixtures (0.00s)
+    --- FAIL: TestNativeFixtures/access-keyring (0.00s)
+        parser_test.go:42: result=&{BackendID: BackendVersion: Output: PartialOutput: Events:[] FailureClass:empty_result Usage:<nil> UsageSource: StartedAt:0001-01-01 00:00:00 +0000 UTC CompletedAt:0001-01-01 00:00:00 +0000 UTC} err=empty result
+    --- FAIL: TestNativeFixtures/access-expired (0.00s)
+        parser_test.go:42: result=&{BackendID: BackendVersion: Output: PartialOutput: Events:[] FailureClass:empty_result Usage:<nil> UsageSource: StartedAt:0001-01-01 00:00:00 +0000 UTC CompletedAt:0001-01-01 00:00:00 +0000 UTC} err=empty result
+    --- FAIL: TestNativeFixtures/access-partial (0.00s)
+        parser_test.go:42: result=&{BackendID: BackendVersion: Output: PartialOutput: Events:[] FailureClass:empty_result Usage:<nil> UsageSource: StartedAt:0001-01-01 00:00:00 +0000 UTC CompletedAt:0001-01-01 00:00:00 +0000 UTC} err=empty result
+    --- FAIL: TestNativeFixtures/access-failure (0.00s)
+        parser_test.go:42: result=&{BackendID: BackendVersion: Output: PartialOutput: Events:[] FailureClass:empty_result Usage:<nil> UsageSource: StartedAt:0001-01-01 00:00:00 +0000 UTC CompletedAt:0001-01-01 00:00:00 +0000 UTC} err=empty result
+    --- FAIL: TestNativeFixtures/side-effect-timeout (0.00s)
+        parser_test.go:42: result=&{BackendID: BackendVersion: Output: PartialOutput: Events:[] FailureClass:empty_result Usage:<nil> UsageSource: StartedAt:0001-01-01 00:00:00 +0000 UTC CompletedAt:0001-01-01 00:00:00 +0000 UTC} err=empty result
+FAIL
+FAIL	asura/internal/backend/antigravity	0.002s
+FAIL

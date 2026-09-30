@@ -1,0 +1,4 @@
+=== RUN   TestLiveAdapter
+    live_test.go:21: result &{BackendID:antigravity BackendVersion:1.2.13 Output: PartialOutput: Events:[] FailureClass:authentication_failed Usage:<nil> UsageSource: StartedAt:2026-09-30 14:27:20.863752467 +0800 CST m=+0.282519883 CompletedAt:2026-09-30 14:27:20.89277789 +0800 CST m=+0.311545302} error backend antigravity failed (authentication_failed): Antigravity login expired; update original CLI login
+--- FAIL: TestLiveAdapter (0.31s)
+FAIL

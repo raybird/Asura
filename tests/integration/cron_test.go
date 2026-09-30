@@ -375,10 +375,15 @@ func TestCRON003_CLICronManagement(t *testing.T) {
 	if !strings.Contains(stdout, "active") {
 		t.Fatalf("expected active status in list output, got: %s", stdout)
 	}
-	// 驗證包含主機本地日期與時刻格式 YYYY-MM-DD 03:00 (MUST FIX 7, MUST FIX 6)
-	today := time.Now().Local().Format("2006-01-")
-	if !strings.Contains(stdout, today) {
-		t.Fatalf("expected local date prefix %q in list output, got: %s", today, stdout)
+	// 2026-09-30：每日 03:00 的下一次觸發可跨月，以獨立日曆計算驗證完整日期。
+	now := time.Now().Local()
+	next := time.Date(now.Year(), now.Month(), now.Day(), 3, 0, 0, 0, now.Location())
+	if !now.Before(next) {
+		next = next.AddDate(0, 0, 1)
+	}
+	expectedDate := next.Format("2006-01-02")
+	if !strings.Contains(stdout, expectedDate) {
+		t.Fatalf("expected next local date %q in list output, got: %s", expectedDate, stdout)
 	}
 	if !strings.Contains(stdout, "03:00") {
 		t.Fatalf("expected local time 03:00 in list output, got: %s", stdout)
@@ -1180,4 +1185,3 @@ func TestCRON007_CLICronHistoryQuery(t *testing.T) {
 		t.Fatalf("expected newer run2 to appear before older run1 (ORDER BY triggered_at DESC), got: %s", stdout)
 	}
 }
-

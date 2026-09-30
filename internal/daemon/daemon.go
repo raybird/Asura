@@ -21,7 +21,9 @@ import (
 
 	"asura/internal/auth"
 	"asura/internal/backend"
+	"asura/internal/backend/antigravity"
 	"asura/internal/backend/codex"
+	"asura/internal/backend/omp"
 	"asura/internal/backend/opencode"
 	"asura/internal/contextwin"
 	"asura/internal/cron"
@@ -239,6 +241,20 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 				},
 			}))
 		}
+
+		// 2026-09-30：新增 adapter 僅在 composition root 註冊，預設身份維持 opencode。
+		onStarted := func(ctx context.Context, pgid int) {
+			if id := engine.TaskIDFromContext(ctx); id != "" {
+				_ = store.UpdateTaskPGID(context.Background(), id, pgid)
+			}
+		}
+		onExited := func(ctx context.Context, pgid int) {
+			if id := engine.TaskIDFromContext(ctx); id != "" {
+				_ = store.UpdateTaskPGID(context.Background(), id, 0)
+			}
+		}
+		_ = reg.Register(omp.NewAdapter(omp.AdapterConfig{OnProcessStarted: onStarted, OnProcessExited: onExited}))
+		_ = reg.Register(antigravity.NewAdapter(antigravity.AdapterConfig{OnProcessStarted: onStarted, OnProcessExited: onExited}))
 
 		oracleStage := pipeline.NewOracleStageWithBackend(readOnlyAdapter)
 		strikerStage := pipeline.NewStrikerStageWithBackend(strikerAdapter)
@@ -478,13 +494,13 @@ type IPCRequest struct {
 
 // IPCResponse 定義傳回用戶端之結果
 type IPCResponse struct {
-	Task             *storage.Task             `json:"task,omitempty"`
-	Projects         []string                  `json:"projects,omitempty"`
-	CronSchedule     *storage.CronSchedule     `json:"cron_schedule,omitempty"`
-	CronSchedules    []storage.CronSchedule    `json:"cron_schedules,omitempty"`
-	CronRuns         []storage.CronRun         `json:"cron_runs,omitempty"`
-	Memory           *storage.Memory           `json:"memory,omitempty"`
-	Memories         []storage.Memory          `json:"memories,omitempty"`
+	Task             *storage.Task              `json:"task,omitempty"`
+	Projects         []string                   `json:"projects,omitempty"`
+	CronSchedule     *storage.CronSchedule      `json:"cron_schedule,omitempty"`
+	CronSchedules    []storage.CronSchedule     `json:"cron_schedules,omitempty"`
+	CronRuns         []storage.CronRun          `json:"cron_runs,omitempty"`
+	Memory           *storage.Memory            `json:"memory,omitempty"`
+	Memories         []storage.Memory           `json:"memories,omitempty"`
 	MemoryPage       *storage.MemoryPage        `json:"memory_page,omitempty"`
 	Candidate        *storage.MemoryCandidate   `json:"candidate,omitempty"`
 	Candidates       []storage.CandidateSummary `json:"candidates,omitempty"`

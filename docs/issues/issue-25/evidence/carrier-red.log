@@ -1,0 +1,5 @@
+--- FAIL: TestTerminalErrorOverridesSuccess (0.00s)
+    parser_test.go:63: result &{BackendID: BackendVersion: Output:PARTIAL PartialOutput:PARTIAL Events:[] FailureClass: Usage:<nil> UsageSource:unknown StartedAt:0001-01-01 00:00:00 +0000 UTC CompletedAt:0001-01-01 00:00:00 +0000 UTC} error <nil>
+FAIL
+FAIL	asura/internal/backend/antigravity	0.001s
+FAIL

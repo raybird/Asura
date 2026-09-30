@@ -1,0 +1,157 @@
+{
+  "date": "2026-09-30",
+  "case": "cancel",
+  "readonly_workspace": false,
+  "isolated_home": true,
+  "isolated_ipc": true,
+  "pid_namespace": true,
+  "access_only": true,
+  "auth_source": "keyring",
+  "version": "1.2.13",
+  "cli_sha256": "574b0234656c44564f3ff3b013225c86f14ae79b67d0f3b45f6aaf1b1625440e",
+  "script_sha256": "691f95118d16596d24a1415dbf89c41e3ddfc4932cec3deb95e2f54d93162ff2",
+  "argv": [
+    "/tmp/asura-issue25-fixed-agy/antigravity",
+    "--mode",
+    "accept-edits",
+    "--model",
+    "gemini-3.8-flash-low",
+    "--disable-slash-commands",
+    "--dangerously-skip-permissions",
+    "--output-format",
+    "stream-json",
+    "--print-timeout",
+    "60s",
+    "--print=Run exactly /usr/bin/python3 delayed.py in the current directory using the terminal tool. Wait for completion then reply DONE. Do not modify the command or files."
+  ],
+  "exit_code": -9,
+  "timed_out": false,
+  "marker": null,
+  "delayed_marker": null,
+  "cancellation": {
+    "ready": true,
+    "processes_before_kill": [
+      {
+        "pid": 963278,
+        "ppid": 963238,
+        "pgid": 963278,
+        "state": "S"
+      },
+      {
+        "pid": 963279,
+        "ppid": 963278,
+        "pgid": 963278,
+        "state": "S"
+      },
+      {
+        "pid": 963280,
+        "ppid": 963279,
+        "pgid": 963278,
+        "state": "S"
+      },
+      {
+        "pid": 963297,
+        "ppid": 963280,
+        "pgid": 963297,
+        "state": "S"
+      },
+      {
+        "pid": 963768,
+        "ppid": 963280,
+        "pgid": 963768,
+        "state": "S"
+      },
+      {
+        "pid": 963769,
+        "ppid": 963768,
+        "pgid": 963768,
+        "state": "S"
+      }
+    ],
+    "child_alive_after_10s": false,
+    "ready_age_seconds": 0.006,
+    "marker_before_kill": false,
+    "observation_seconds": 10,
+    "delayed_marker_after": null
+  },
+  "events": [
+    {
+      "event": "init",
+      "conversation_id": "<redacted>",
+      "init": {
+        "model": "gemini-3.8-flash-low",
+        "cwd": "/tmp/asura-25-agy-7kmokqo3/workspace",
+        "tools": [
+          "ask_custom_permission",
+          "ask_permission",
+          "ask_question",
+          "browser_click_element",
+          "browser_drag_pixel_to_pixel",
+          "browser_get_dom",
+          "browser_get_network_request",
+          "browser_input",
+          "browser_list_network_requests",
+          "browser_mouse_down",
+          "browser_mouse_up",
+          "browser_move_mouse",
+          "browser_press_key",
+          "browser_refresh_page",
+          "browser_resize_window",
+          "browser_scroll",
+          "browser_scroll_dom",
+          "browser_select_option",
+          "browser_subagent",
+          "call_mcp_tool",
+          "capture_browser_console_logs",
+          "capture_browser_screenshot",
+          "click_browser_pixel",
+          "command_status",
+          "define_subagent",
+          "delete_knowledge",
+          "execute_browser_javascript",
+          "find_by_name",
+          "finish",
+          "generate_image",
+          "grep_search",
+          "invoke_subagent",
+          "list_browser_pages",
+          "list_dir",
+          "list_permissions",
+          "list_resources",
+          "manage_inbox",
+          "manage_subagents",
+          "manage_task",
+          "multi_replace_file_content",
+          "notebook_edit",
+          "notebook_execution",
+          "open_browser_url",
+          "read_browser_page",
+          "read_resource",
+          "read_url_content",
+          "replace_file_content",
+          "run_command",
+          "schedule",
+          "search_web",
+          "sed_file",
+          "send_command_input",
+          "send_message",
+          "view_file",
+          "wait",
+          "wait_5_seconds",
+          "write_to_file"
+        ],
+        "permission_mode": "always-proceed"
+      }
+    }
+  ],
+  "proxy_fault": null,
+  "proxy_connections": [],
+  "side_effect_count": 0,
+  "stderr": "",
+  "event_types": {
+    "init": 1,
+    "step_update": 3
+  },
+  "sanitization": "Opaque IDs redacted; intermediate events aggregated; credential values excluded.",
+  "probe_scope": "Real CLI/model; access-only authentication snapshot; HOME/tmp/IPC masks and PID namespace."
+}

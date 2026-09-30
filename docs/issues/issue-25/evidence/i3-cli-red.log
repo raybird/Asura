@@ -1,0 +1,5 @@
+--- FAIL: TestAskAcceptsExpandedBackendIDs (0.00s)
+    backend_expansion_test.go:16: omp rejected: error: unknown backend "omp" (supported: opencode, codex)
+FAIL
+FAIL	asura/cmd/asura	0.002s
+FAIL

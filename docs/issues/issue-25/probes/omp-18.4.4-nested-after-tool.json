@@ -1,0 +1,176 @@
+{
+  "date": "2026-09-30",
+  "case": "transport-after-tool",
+  "pid_namespace": true,
+  "readonly_workspace": false,
+  "script_sha256": "aff2a7b9e74957bb83897d167f074af38d36a2ff041a948cbd0fb15a44e232ea",
+  "version": "omp/18.4.4",
+  "cli_sha256": "ca9b8832ea05299f02db83a6f479ab92e4646af7f0140b54f9c2592c07803441",
+  "bun_version": "1.4.2",
+  "bun_sha256": "a83d263767d839e4d2649ca8e35d07159c7afc99afdc96d731ced29e056dda0c",
+  "argv": [
+    "/home/kevin/.bun/bin/bun",
+    "/home/kevin/.bun/install/global/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js",
+    "--model",
+    "openai-codex/gpt-6-luna",
+    "--thinking",
+    "low",
+    "--config",
+    "<probe>/config.json",
+    "--no-session",
+    "--no-lsp",
+    "--no-title",
+    "--no-extensions",
+    "--no-skills",
+    "--no-rules",
+    "--no-prewalk",
+    "--approval-mode",
+    "yolo",
+    "--tools",
+    "bash",
+    "--no-pty",
+    "--mode",
+    "json",
+    "--print",
+    "--",
+    "Run /usr/bin/python3 side_effect.py once, then report DONE."
+  ],
+  "config": {
+    "retry": {
+      "enabled": false,
+      "modelFallback": false,
+      "usageAwareFallback": false,
+      "waitForUsageReset": false,
+      "fallbackChains": {}
+    },
+    "memories": {
+      "enabled": false
+    },
+    "compaction": {
+      "enabled": false
+    },
+    "plan": {
+      "defaultOnStartup": false
+    }
+  },
+  "exit_code": 1,
+  "timed_out": false,
+  "marker": null,
+  "outside_marker": null,
+  "delayed_marker": null,
+  "cancellation": null,
+  "transport_requests": [
+    {
+      "method": "POST",
+      "path": "/codex/responses"
+    },
+    {
+      "method": "GET",
+      "path": "/codex/responses"
+    },
+    {
+      "method": "GET",
+      "path": "/codex/responses"
+    },
+    {
+      "method": "POST",
+      "path": "/codex/responses"
+    },
+    {
+      "method": "POST",
+      "path": "/codex/responses"
+    },
+    {
+      "method": "POST",
+      "path": "/codex/responses"
+    },
+    {
+      "method": "POST",
+      "path": "/codex/responses"
+    },
+    {
+      "method": "POST",
+      "path": "/codex/responses"
+    },
+    {
+      "method": "POST",
+      "path": "/codex/responses"
+    }
+  ],
+  "side_effect_count": 1,
+  "event_types": {
+    "session": 1,
+    "agent_start": 1,
+    "turn_start": 2,
+    "message_start": 4,
+    "message_end": 4,
+    "message_update": 3,
+    "tool_execution_start": 1,
+    "tool_execution_update": 2,
+    "tool_execution_end": 1,
+    "turn_end": 2,
+    "agent_end": 1
+  },
+  "events": [
+    {
+      "type": "message_end",
+      "role": "user",
+      "provider": null,
+      "model": null,
+      "stopReason": null,
+      "errorMessage": null,
+      "content": [
+        {
+          "type": "text",
+          "text": "Run /usr/bin/python3 side_effect.py once, then report DONE."
+        }
+      ]
+    },
+    {
+      "type": "message_end",
+      "role": "assistant",
+      "provider": "openai-codex",
+      "model": "gpt-6-luna",
+      "stopReason": "toolUse",
+      "errorMessage": null,
+      "content": [
+        {
+          "type": "toolCall",
+          "name": "bash",
+          "arguments": {
+            "i": "Probe side effect",
+            "command": "/usr/bin/python3 side_effect.py",
+            "pty": false,
+            "async": false
+          },
+          "intent": "Probe side effect"
+        }
+      ]
+    },
+    {
+      "type": "message_end",
+      "role": "toolResult",
+      "provider": null,
+      "model": null,
+      "stopReason": null,
+      "errorMessage": null,
+      "content": [
+        {
+          "type": "text",
+          "text": "SIDE_EFFECT_OK\n\n\nWall time: 0.05 seconds"
+        }
+      ]
+    },
+    {
+      "type": "message_end",
+      "role": "assistant",
+      "provider": "openai-codex",
+      "model": "gpt-6-luna",
+      "stopReason": "error",
+      "errorMessage": "PROBE_TRANSIENT_ERROR",
+      "content": []
+    }
+  ],
+  "stderr": "",
+  "probe_scope": "Real CLI with local synthetic OAuth/HTTP failure service; not real vendor quota or model evidence."
+}
