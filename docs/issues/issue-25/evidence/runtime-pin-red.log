@@ -1,0 +1,5 @@
+--- FAIL: TestRuntimePinnedAcrossSourceUpdate (0.01s)
+    run_test.go:137: result &{BackendID:probe BackendVersion: Output:UPDATED PartialOutput: Events:[] FailureClass: Usage:<nil> UsageSource: StartedAt:2026-09-30 14:20:46.557463812 +0800 CST m=+0.000284305 CompletedAt:2026-09-30 14:20:46.567468171 +0800 CST m=+0.010288683} error <nil>
+FAIL
+FAIL	asura/internal/backend/clisandbox	0.012s
+FAIL

@@ -13,7 +13,7 @@
 
 ## 階段順序（唯一任務來源）
 
-以下為規劃依賴，尚未由 decompose 細化為可實作 Task。2026-09-29 BADAPT-001～012 行為劇本已獲核准；固定版本、安全能力與 fixture 基線仍需 probe。先完成調查及必要技術決策，再由 decompose 在本檔細化 Phase／Task。
+2026-09-30：下表保留初始階段設計；目前任務與證據以本檔「細化任務與技術基線」為唯一來源。BADAPT-001～012 核准範圍不變。
 
 | 階段 | 驗收映射 | 產出 | 相依 | 可檢查完成判準 | 狀態 |
 |---|---|---|---|---|---|
@@ -50,7 +50,7 @@
 2026-09-30 使用系統 `/usr/bin/python3` 查核：Python 語法、四份 Markdown 相對連結、核准 commit 的 Gherkin 區塊完全相等、Scenario 與核准表集合相等、十份 JSON fixture 及控制組／取消／唯讀結果；全部 PASS。此為文件與 probe artifact 靜態查核，沒有用「主程序退出」或「子程序最後已退出」代替副作用判準。可重跑的語法／JSON 基本查核：
 
 ```bash
-/usr/bin/python3 -c "import ast,json; from pathlib import Path; ast.parse(Path('scripts/issue-25/probe_omp.py').read_text()); files=list(Path('docs/issues/issue-25/probes').glob('omp-*.json')); assert len(files)==14; [json.loads(p.read_text()) for p in files]; print('PASS: syntax and 14 JSON files')"
+/usr/bin/python3 -c "import ast,json; from pathlib import Path; ast.parse(Path('scripts/issue-25/probe_omp.py').read_text()); files=list(Path('docs/issues/issue-25/probes').glob('omp-*.json')); assert len(files)>=14; [json.loads(p.read_text()) for p in files]; print('PASS: syntax and JSON files')"
 git diff --check
 ```
 
@@ -82,3 +82,65 @@ I1 仍進行中。修正 OMP 平面設定無效反例，巢狀設定後受控 50
 2026-09-30 登入補測：OMP 缺 refresh 欄位 TypeError，保留空 refresh 字串則真實 PROBE_OK；Antigravity access token 已於 2026-09-18 過期，移除 refresh 後要求登入並失敗。已請使用者更新原 CLI 登入，僅 access-only 成功對照依賴此更新；不將舊 refresh-enabled 成功冒充新策略通過。
 
 2026-09-30 最終靜態查核：兩份 Python AST、47 份 JSON、巢狀憑證字串掃描、相對連結、核准 Gherkin 不變、probe 子程序清理與 git diff --check PASS。probe 調查未修改 production，故不適用產品紅綠測試；此結果不是完整產品驗收或獨立 review。
+
+
+## 2026-09-30 細化任務與技術基線
+
+沿用 README 風險策略；固定 OMP 18.4.4／Bun 1.4.2、Antigravity 1.2.13 與已選模型。正式身份只用 omp／antigravity，不增加 agy alias。版本回傳已驗 binary 的 CLI version，不改 fingerprint。unknown Context window 沿用既有 admission 政策，explicit override 仍有效，不用 catalog metadata 虛構實测窗口。登入採原 CLI 對應來源的 access-only 快照；期限失效回報 authentication failure，不續期或自動切換來源帳戶。OMP HOME/tmp/IPC 隔離是已核准快照與 bwrap 方案的實作細節。
+
+2026-09-30 第一版能力：workspace_write、structured_events、process_cancellation 有直接 probe；read_only_sandbox 保留 unsupported（主機 TCP／外部工具通道未證明）。Oracle／Critic 在 preflight 拒絕，Three-Face Stage 0 零模型呼叫，符合 BADAPT-006。native plan 或有限唯讀 fixture 不作 capability 替代。provider transport retries 與 Asura attempt 分開；Run 不自動重試、不 resume、不 fallback。Antigravity 未觀察到的 vendor quota carrier 不宣告已實測，unknown native failures 映射 execution failure。
+
+### Task I1 — 固定契約與安全調查
+- 產出與範圍：兩份 probe、去敏 fixture、設定反例及能力限制；不改產品。
+- 相依：無。
+- 驗收責任：BADAPT-002、004；支援 006、007、009。
+- 完成判準：能力逐項有直接證據或 unsupported；登入與副作用偵測有正反對照。
+- 驗證：technical-analysis.md 的真實 CLI／模型與受控故障證據；文件以 AST／JSON／連結／核准內容比對查核。
+- 狀態：✅ 調查完成；不代表產品驗收完成。
+- 證據：2026-09-30 access-only／keyring／完整隔離補測及既有失敗 fixture。
+
+### Task I2-A — 共同行為測試與隔離程序
+- 產出與範圍：adapter 共用的 Linux bwrap／memfd 程序邊界與共同失敗斷言，限 internal/backend 下；不增加上層分支。
+- 相依：I1 與上述技術基線。
+- 驗收責任：BADAPT-007、010；支援 003、005、009。
+- 完成判準：禁止唯讀角色、namespace unavailable 模型零呼叫、真實子程序取消與部分输出保留；fixed binary 與憑證來源不外洩。
+- 驗證：fixture parser 層與真實子程序層各自紅綠；probe 已有的能力證據不以 fake binary 取代。
+- 狀態：✅ 已完成；2026-09-30 驗證見 [持久化證據](evidence/README.md) 與 final-race.log。
+
+### Task I2-B — OMP adapter
+- 產出與範圍：internal/backend/omp 的 argv、巢狀設定、OAuth SQLite access-only 快照與 parser。
+- 相依：I2-A。
+- 驗收責任：BADAPT-003、009；支援 002、007、010。
+- 完成判準：固定模型、關閉 CLI retry/session、嚴格版本／雜湊，成功與失敗只產生一次執行，其他 backend 零呼叫。
+- 驗證：native fixture 的成功／429／partial／after-tool failure；auth expiry 前置拒絕；實際 sandbox runner 整合與取消。
+- 狀態：✅ 已完成；2026-09-30 驗證見 [持久化證據](evidence/README.md) 與 final-race.log。
+
+### Task I2-C — Antigravity adapter
+- 產出與範圍：internal/backend/antigravity 的原 CLI keyring/file access-only、argv、event/result 與 AGY_ERROR parser。
+- 相依：I2-B。
+- 驗收責任：BADAPT-005；支援 004、007、009、010。
+- 完成判準：未登入／過期／缺 bwrap／version mismatch fail-closed；SUCCESS/exit 0 timeout 為失敗且保留 partial；不 resume 或續期。
+- 驗證：真實 fixture 與已記錄 access-only 成功對照；parser／程序整合分層紅綠。
+- 狀態：✅ 已完成；2026-09-30 正式 adapter 真實模型通過，見 evidence/agy-new-login-live.log。
+
+### Task I3 — 註冊、CLI 與持久化身份
+- 產出與範圍：Daemon composition、ask/run 選項、status backend/version；沿用既有 Task schema、identity fingerprint 與 Pipeline trace。
+- 相依：I2-C。
+- 驗收責任：BADAPT-001、008、012；支援 003、005。
+- 完成判準：預設與 codex 契約不變；四 backend counters、unknown 0 external processes；重送／queue wake／restart 保留原身份且無新增 attempt；status/trace 顯示取得的版本。
+- 驗證：CLI／Daemon／SQLite reopen／queue 與 MBACK 回歸，最後 vet／race／build。
+- 狀態：✅ 已完成；2026-09-30 驗證見 [持久化證據](evidence/README.md) 與 final-race.log。
+
+### Task I4 — Context、Memory 與交付
+- 產出與範圍：Stage 0、sealed memory、admission 整合測試、README／架構常青文件、PR 與獨立 review。
+- 相依：I3。
+- 驗收責任：BADAPT-006、011；支援 010、012。
+- 完成判準：Three-Face 不支援能力及 admission 拒絕均零模型呼叫，memory 不重新選取；完整回歸／交付版本證據及独立 review 持久化。
+- 驗證：既有 TFACE／CTXWIN／RECALL／WEBMEM／GITMEM／Cron／queue／cancel 全部保留；fixture 不替代被驗安全能力。
+- 狀態：⏳ Stage 0／Context／Memory 與完整回歸已通過；PR 及獨立 review 待交付。
+
+## 2026-09-30 產品驗證
+
+`go test -count=1 -race ./...`、`go vet ./...` 與 `go build -o /tmp/asura-issue25 ./cmd/asura` 均 exit 0，原始輸出保存於 [evidence](evidence/README.md)。build 路徑避免覆寫工作區 binary。code-simplify 已檢查本次範圍，僅將 runtime overlay 的巢狀 append 改為明確複製再追加；所有契約保留，最終 race 同組通過。Cron 的既有日期斷言於跨月時失敗，局部測試修正後完整回歸通過，未變更排程功能。
+
+固定 runtime 在來源更新後仍執行已驗 bytes；每次呼叫建立私人 scratch 副本並驗 hash、唯讀掛載，結束即移除。新 adapter 不修改 Pipeline／Engine／Memory／Context 的 production 邏輯。2026-09-30 更新登入後，正式 Antigravity adapter live 通過，見 evidence/agy-new-login-live.log。

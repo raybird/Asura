@@ -1,0 +1,5 @@
+--- FAIL: TestUnsupportedRoles (0.00s)
+    run_test.go:14: role oracle: result=&{BackendID: BackendVersion: Output: PartialOutput: Events:[] FailureClass:execution_failed Usage:<nil> UsageSource: StartedAt:0001-01-01 00:00:00 +0000 UTC CompletedAt:0001-01-01 00:00:00 +0000 UTC} error=<nil>
+FAIL
+FAIL	asura/internal/backend/clisandbox	0.001s
+FAIL

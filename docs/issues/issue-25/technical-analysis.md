@@ -241,3 +241,32 @@ Antigravity 原 token expiry 為 2026-09-18T21:55:41.259302421+08:00，已過期
 2026-09-30 OMP 保留 `refresh: ""` 的 access-only smoke：exit 0、stopReason stop、精確 PROBE_OK；[成功對照](probes/omp-18.4.4-access-empty-refresh.json)。token expires 2026-10-10T01:35:58.549000+00:00。此對照只證明目前有效 token 可呼叫，過期／接近期限前置拒絕仍需產品測試。
 
 2026-09-30 code-simplify 檢查本次腳本增量：print timeout 改直接 mapping；其餘 case／proxy 與清理邊界不再抽象，no-op。歷史 script_sha256 如在執行結束計算，只代表該時檔案；新腳本於啟動時計算。fixture 保留實際 argv/config/binary hash，不回填歷史缺漏欄位。
+
+
+## 2026-09-30 更新登入來源與 Access-only 安全對照
+
+使用者回覆「已更新」。原 file token 的 expiry／mtime 未改變；透過 Secret Service 的 item attributes 確認 `service=gemini, username=antigravity` 的 keyring 登入，僅讀取本 CLI 對應項目。其 expiry 為 2026-09-30T14:13:18.45515217+08:00。probe 增加 `--auth-source keyring`，由 `secret-tool lookup service gemini username antigravity` 捕捉輸入至記憶體，不輸出憑證；移除 refresh_token，再把唯讀快照透過 memfd 放入隔離環境。成功 exit 0／SUCCESS／PROBE_OK 加換行，[登入成功對照](probes/agy-1.2.13-access-keyring.json)。先前舊檔仍過期的失敗不代表使用者更新登入失敗。正式 adapter 應採 CLI 對應 keyring 優先、缺項才查 file；不能 fallback 到其他登入服務。
+
+OMP 新增 `--isolated-home-ipc`，遮蔽 HOME、/tmp、/var/tmp、/run/user 並 unshare IPC，只重新掛載固定 Bun 與其 node_modules 依賴。單掛 CLI package 的初次嘗試缺 pi-natives，屬環境失敗而非行為紅燈；補掛依賴後重測。隔離內只帶 openai-codex access 與空 refresh 欄位。命令入口仍為 `/usr/bin/python3 scripts/issue-25/probe_omp.py --pid-namespace --access-only --isolated-home-ipc --case CASE`。
+
+| backend | case | 直接證據 |
+|---|---|---|
+| OMP | smoke | [access-smoke](probes/omp-18.4.4-access-smoke.json)，exit 0／PROBE_OK |
+| OMP | shell-write | [access-write](probes/omp-18.4.4-access-write.json)，marker PROBE_OK |
+| OMP | shell-write + readonly-workspace | [access-readonly](probes/omp-18.4.4-access-readonly.json)，EROFS／無 marker |
+| OMP | cancel | [access-cancel](probes/omp-18.4.4-access-cancel.json)，ready age 0.142 秒；十秒後 child 不存活／無 DELAYED |
+| Antigravity | write | [access-write](probes/agy-1.2.13-access-write.json)，marker PROBE_OK 加換行 |
+| Antigravity | write + readonly-workspace | [access-readonly](probes/agy-1.2.13-access-readonly.json)，無 marker，native response 記唯讀拒絕 |
+| Antigravity | cancel | [access-cancel](probes/agy-1.2.13-access-cancel.json)，ready age 0.006 秒；十秒後 child 不存活／無 DELAYED |
+
+Antigravity 命令為 `/usr/bin/python3 scripts/issue-25/probe_agy.py --binary-path /tmp/asura-issue25-fixed-agy/antigravity --auth-source keyring --access-only --isolated-home --isolated-ipc --case CASE`。上述是新登入策略直接證據；舊 refresh-enabled fixture 保留作歷史調查。原 CLI 的登入檔案與 keyring 均未改寫。token 有效期有限，production 須驗證期限並採有界執行，不依 token 過期後的自動登入或續期。
+
+
+2026-09-30 同一 access-only／完整隔離設定再驗延遲正控制：[OMP](probes/omp-18.4.4-access-delayed.json)、[Antigravity](probes/agy-1.2.13-access-delayed.json) 均 exit 0、DELAYED，支持取消時副作用偵測器有效。Antigravity [partial](probes/agy-1.2.13-access-partial.json) 仍 exit 0／SUCCESS、20 秒 timeout，保留 10,370 字元；[工具副作用後故障](probes/agy-1.2.13-access-failure.json) exit 3／ERROR，副作用一次。舊 evidence 不替代這組新設定對照。
+
+### 2026-09-30 技術基線待定的安全邊界
+
+檔案唯讀正反控制均成功，但 CLI 工具仍可連線主機 TCP／外部服務，尚未證明由這些通道轉交主機程序的寫入不會越過 mount namespace。不能把有限的 filesystem 對照擴大為完整 Oracle／Critic 能力。已核准 BADAPT-002、004、006 允許未證明能力標為 unsupported；第一版可只開放 Striker，Stage 0 拒絕 Three-Face。若需要第一版即支援唯讀角色，必要證據與網路隔離設計須先完成，不能以 native plan 模式代替。
+
+
+2026-09-30 正式 Go adapter 實測：OMP `go test` live opt-in 成功；Antigravity 在 Snap Go wrapper 執行測試時 keyring lookup exit 1 且無輸出，落至舊 file 的過期拒絕，不能記為模型成功。使用同一份 `go test -c` 編譯產物直接執行，keyring lookup 成功、native adapter PROBE_OK（22.56 秒）。此對照顯示 wrapper 執行環境差異，未定位唯一機制；不改憑證或為測試繞過 auth preflight。正式 adapter 用 `--print-timeout 0`，以登入 expiry／上層 context 作停止邊界；直接實測確認此 invocation 可完成。CLI native timeout fixture 仍用於故障分類。

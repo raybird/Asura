@@ -2123,7 +2123,14 @@ func TestDaemon_IPC_InvalidExecutionMode_Rejected(t *testing.T) {
 }
 
 // MBACK-004, MBACK-005: 驗證 Backend 納入 Fingerprint 計算，不同 Backend 被拒絕，相同 Backend Redelivery 命中既有 Task (0 重複執行)
+// 2026-09-30：BADAPT-008，沿用相同持久化身份測試並加入新 backend ID。
 func TestDaemon_BackendFingerprint_ConflictAndRedelivery(t *testing.T) {
+	for _, id := range []string{"opencode", "omp", "antigravity"} {
+		t.Run(id, func(t *testing.T) { testBackendFingerprintConflictAndRedelivery(t, id) })
+	}
+}
+
+func testBackendFingerprintConflictAndRedelivery(t *testing.T, backendID string) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "asura.db")
 	sockPath := filepath.Join(tmpDir, "asura.sock")
@@ -2162,12 +2169,12 @@ func TestDaemon_BackendFingerprint_ConflictAndRedelivery(t *testing.T) {
 		ID:        "req-backend-fp-001",
 		Workspace: tmpDir,
 		Prompt:    "hello multi-backend",
-		Backend:   "opencode",
+		Backend:   backendID,
 	})
 	if err != nil {
 		t.Fatalf("first submit with opencode failed: %v", err)
 	}
-	if task1.Backend != "opencode" {
+	if task1.Backend != backendID {
 		t.Errorf("expected task backend 'opencode', got %q", task1.Backend)
 	}
 
@@ -2208,7 +2215,7 @@ func TestDaemon_BackendFingerprint_ConflictAndRedelivery(t *testing.T) {
 		ID:        "req-backend-fp-001",
 		Workspace: tmpDir,
 		Prompt:    "hello multi-backend",
-		Backend:   "opencode",
+		Backend:   backendID,
 	})
 	if err != nil {
 		t.Fatalf("redelivery failed: %v", err)
@@ -2216,7 +2223,7 @@ func TestDaemon_BackendFingerprint_ConflictAndRedelivery(t *testing.T) {
 	if taskRedelivered.ID != task1.ID {
 		t.Errorf("expected same task ID %q, got %q", task1.ID, taskRedelivered.ID)
 	}
-	if taskRedelivered.Backend != "opencode" {
+	if taskRedelivered.Backend != backendID {
 		t.Errorf("expected backend 'opencode', got %q", taskRedelivered.Backend)
 	}
 	if currentRuns := atomic.LoadInt32(&runCount); currentRuns != initialRuns {
@@ -2470,7 +2477,14 @@ func TestDaemon_Start_FailClosedOnInitError(t *testing.T) {
 }
 
 // MBACK-012: 驗證 Task 在排隊喚醒執行時，依 Task 內記錄之 BackendID 執行，不重新套用預設值 opencode
+// 2026-09-30：BADAPT-008，三種非預設身份的同一 queue-wake 對照。
 func TestDaemon_QueueWake_PreservesBackend(t *testing.T) {
+	for _, id := range []string{"codex", "omp", "antigravity"} {
+		t.Run(id, func(t *testing.T) { testQueueWakePreservesBackend(t, id) })
+	}
+}
+
+func testQueueWakePreservesBackend(t *testing.T, backendID string) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "asura.db")
 	sockPath := filepath.Join(tmpDir, "q.sock")
@@ -2486,6 +2500,7 @@ func TestDaemon_QueueWake_PreservesBackend(t *testing.T) {
 	taskABlock := make(chan struct{})
 	var mu sync.Mutex
 	executedBackends := make(map[string]string)
+	executions := make(map[string]int)
 
 	runner := func(ctx context.Context, ws, p string) (string, error) {
 		taskID := engine.TaskIDFromContext(ctx)
@@ -2493,6 +2508,7 @@ func TestDaemon_QueueWake_PreservesBackend(t *testing.T) {
 		if task != nil {
 			mu.Lock()
 			executedBackends[taskID] = task.Backend
+			executions[taskID]++
 			mu.Unlock()
 		}
 
@@ -2543,7 +2559,7 @@ func TestDaemon_QueueWake_PreservesBackend(t *testing.T) {
 	taskB, err := client.Submit(context.Background(), engine.SubmitRequest{
 		Workspace: tmpDir,
 		Prompt:    "prompt-task-b",
-		Backend:   "codex",
+		Backend:   backendID,
 	})
 	if err != nil {
 		t.Fatalf("submit task B failed: %v", err)
@@ -2553,7 +2569,7 @@ func TestDaemon_QueueWake_PreservesBackend(t *testing.T) {
 	if taskB.Status != storage.StatusQueued {
 		t.Fatalf("expected task B to be Queued, got %s", taskB.Status)
 	}
-	if taskB.Backend != "codex" {
+	if taskB.Backend != backendID {
 		t.Errorf("expected initial task B backend to be 'codex', got %q", taskB.Backend)
 	}
 
@@ -2580,16 +2596,19 @@ func TestDaemon_QueueWake_PreservesBackend(t *testing.T) {
 	}
 
 	// 4. MBACK-012 核心斷言：Task B 在被喚醒後依然以其記錄之 "codex" backend 執行，絕無被重置為預設 "opencode"
-	if finalTaskB.Backend != "codex" {
+	if finalTaskB.Backend != backendID {
 		t.Errorf("expected final task B backend to be 'codex', got %q", finalTaskB.Backend)
 	}
 
 	mu.Lock()
 	backendRun := executedBackends[taskB.ID]
+	count := executions[taskB.ID]
 	mu.Unlock()
 
-	if backendRun != "codex" {
+	if count != 1 {
+		t.Fatalf("queued task executions %d", count)
+	}
+	if backendRun != backendID {
 		t.Errorf("expected task B to execute with backend 'codex', got %q", backendRun)
 	}
 }
-

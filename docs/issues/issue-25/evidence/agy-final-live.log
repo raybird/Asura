@@ -1,0 +1,4 @@
+=== RUN   TestLiveAdapter
+    live_test.go:21: result &{BackendID:antigravity BackendVersion:1.2.13 Output: PartialOutput: Events:[{Type:error Text: Tool: Status: Error:Antigravity result incomplete or unsuccessful Timestamp:2026-09-30 14:09:52.231026801 +0800 CST m=+45.059686916 Metadata:map[]}] FailureClass:cancelled Usage:<nil> UsageSource:unknown StartedAt:2026-09-30 14:09:07.324534093 +0800 CST m=+0.153194207 CompletedAt:2026-09-30 14:09:52.23103344 +0800 CST m=+45.059693551} error backend antigravity failed (cancelled): context deadline exceeded
+--- FAIL: TestLiveAdapter (45.06s)
+FAIL

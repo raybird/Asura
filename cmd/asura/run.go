@@ -18,6 +18,9 @@ import (
 	"time"
 
 	"asura/internal/auth"
+	"asura/internal/backend"
+	"asura/internal/backend/antigravity"
+	"asura/internal/backend/omp"
 	"asura/internal/backend/opencode"
 	"asura/internal/contextwin"
 	"asura/internal/engine"
@@ -115,7 +118,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 	workspace := fs.String("workspace", "", "target workspace directory")
 	allowedRoots := fs.String("allowed-roots", "", "comma-separated list of allowed root directories")
 	mode := fs.String("mode", string(pipeline.ModeDirect), "execution mode (direct or three-face)")
-	backendFlag := fs.String("backend", "opencode", "execution backend (opencode or codex)")
+	backendFlag := fs.String("backend", "opencode", "execution backend (opencode, codex, omp, antigravity)")
 
 	if err := fs.Parse(args); err != nil {
 		return 1
@@ -136,8 +139,8 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 	if bID == "" {
 		bID = "opencode"
 	}
-	if bID != "opencode" && bID != "codex" {
-		fmt.Fprintf(stderr, "error: unknown backend %q (supported: opencode, codex)\n", bID)
+	if bID != "opencode" && bID != "codex" && bID != "omp" && bID != "antigravity" {
+		fmt.Fprintf(stderr, "error: unknown backend %q (supported: opencode, codex, omp, antigravity)\n", bID)
 		return 1
 	}
 
@@ -318,6 +321,51 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 	strikerStage := pipeline.NewStrikerStage(runner)
 	criticStage := pipeline.NewCriticStage(runner)
 	orc := pipeline.NewOrchestrator(oracleStage, strikerStage, criticStage).WithContextBudget(contextCfg)
+	// 2026-09-30：新增 CLI adapter 在本地 composition root 接線；保留既有 shell runner。
+	if bID == "omp" || bID == "antigravity" {
+		beforeStart := func(c context.Context) (func(), error) {
+			lf, e := os.OpenFile(taskLockPath(*dbPath, currentTaskID), os.O_CREATE|os.O_RDWR, 0600)
+			if e != nil {
+				return nil, e
+			}
+			release := func() { _ = syscall.Flock(int(lf.Fd()), syscall.LOCK_UN); _ = lf.Close() }
+			if e = syscall.Flock(int(lf.Fd()), syscall.LOCK_EX); e != nil {
+				release()
+				return nil, e
+			}
+			if _, e = os.Stat(taskCancelIntentPath(*dbPath, currentTaskID)); e == nil {
+				release()
+				return nil, context.Canceled
+			} else if !os.IsNotExist(e) {
+				release()
+				return nil, e
+			}
+			task, e := store.GetTask(c, currentTaskID)
+			if e != nil {
+				release()
+				return nil, e
+			}
+			if task.Status == storage.StatusCancelling || task.Status == storage.StatusCancelled {
+				release()
+				return nil, context.Canceled
+			}
+			return release, nil
+		}
+		onStarted := func(c context.Context, pgid int) { _ = store.UpdateTaskPGID(context.Background(), currentTaskID, pgid) }
+		onExited := func(c context.Context, pgid int) { _ = store.UpdateTaskPGID(context.Background(), currentTaskID, 0) }
+		var selected backend.Backend
+		if bID == "omp" {
+			selected = omp.NewAdapter(omp.AdapterConfig{OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart})
+		} else {
+			selected = antigravity.NewAdapter(antigravity.AdapterConfig{OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart})
+		}
+		reg := backend.NewRegistry()
+		_ = reg.Register(selected)
+		oracleStage = pipeline.NewOracleStageWithBackend(selected)
+		strikerStage = pipeline.NewStrikerStageWithBackend(selected)
+		criticStage = pipeline.NewCriticStageWithBackend(selected)
+		orc = pipeline.NewOrchestrator(oracleStage, strikerStage, criticStage).WithRegistry(reg).WithContextBudget(contextCfg)
+	}
 
 	eng := engine.NewEngine(store, policy,
 		engine.WithRunner(runner),

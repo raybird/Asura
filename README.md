@@ -87,7 +87,11 @@ go build -o bin/asura ./cmd/asura
   "make test"
 ```
 
-2026-09-18：`ask` 與 `run` 支援 `--backend opencode|codex` 旗標（未指定預設為 `opencode`）。指定未知後端時將立即 fail-closed 拒絕，0 模型調用且絕不自動切換。Three-Face 模式下後端須支援唯讀沙箱（`CapReadOnlySandbox`），若能力不符立即拒絕。任務執行期間若部分失敗，保存現場並標記 Failed，絕無第二次自動容錯嘗試（No Automatic Failover）。
+2026-09-30：`ask` 與 `run` 支援 `--backend opencode|codex|omp|antigravity` 旗標（未指定預設為 `opencode`）。指定未知後端時將立即 fail-closed 拒絕，0 模型調用且絕不自動切換。Three-Face 模式下後端須支援唯讀沙箱（`CapReadOnlySandbox`），若能力不符立即拒絕。任務執行期間若部分失敗，保存現場並標記 Failed，絕無第二次自動容錯嘗試（No Automatic Failover）。
+
+2026-09-30：OMP 固定支援 CLI 18.4.4、Bun 1.4.2 與 `openai-codex/gpt-6-luna`；Antigravity 固定支援 CLI 1.2.13 與 `gemini-3.8-flash-low`。兩者需要 Linux `bwrap` 的 PID／IPC namespace；版本或隔離條件不符會在模型呼叫前拒絕。沿用原 CLI 登入，只傳入 access-only 快照，登入過期須在原 CLI 手動更新。OMP 不傳入可用的 refresh token；Antigravity 先讀原 CLI keyring，再讀原 CLI token 檔。
+
+2026-09-30：這兩個 backend 目前僅支援 Single Striker，不宣告唯讀 sandbox 能力，Three-Face 在 Stage 0 拒絕且不呼叫模型。Context window 未知時沿用既有政策；可用 `ASURA_CONTEXT_LIMIT` 指定限制。`status` 顯示任務保存的 backend 與 trace 中的版本。
 
 #### 查詢任務狀態 (status)
 ```bash

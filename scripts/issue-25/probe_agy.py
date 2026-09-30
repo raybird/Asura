@@ -22,6 +22,7 @@ parser.add_argument('--readonly-workspace', action='store_true')
 parser.add_argument('--isolated-home', action='store_true')
 parser.add_argument('--isolated-ipc', action='store_true')
 parser.add_argument('--access-only', action='store_true')
+parser.add_argument('--auth-source', choices=('file', 'keyring'), default='file')
 parser.add_argument('--binary-path', default='/home/kevin/.local/bin/agy')
 options = parser.parse_args()
 cli = Path(options.binary_path).resolve()
@@ -29,7 +30,8 @@ cli_sha = hashlib.sha256(cli.read_bytes()).hexdigest()
 if cli_sha != '574b0234656c44564f3ff3b013225c86f14ae79b67d0f3b45f6aaf1b1625440e':
     raise SystemExit('Binary differs from CLI 1.2.13 probe baseline')
 state = Path.home() / '.gemini/antigravity-cli'
-token = (state / 'antigravity-oauth-token').read_bytes()
+token = (subprocess.check_output(['secret-tool', 'lookup', 'service', 'gemini', 'username', 'antigravity'])
+         if options.auth_source == 'keyring' else (state / 'antigravity-oauth-token').read_bytes())
 original_token = token
 if options.access_only:
     credential = json.loads(token)
@@ -99,7 +101,7 @@ try:
         cli_args = [str(cli), '--mode', 'accept-edits', '--model', 'gemini-3.8-flash-low',
                     '--disable-slash-commands', '--dangerously-skip-permissions',
                     '--output-format', 'stream-json', '--print-timeout', print_timeout, '--print=' + prompt]
-        args = ['bwrap', '--unshare-pid', '--ro-bind', '/', '/', '--dev-bind', '/dev', '/dev',
+        args = ['bwrap', '--unshare-pid', '--ro-bind', '/', '/', '--dev', '/dev',
                 '--proc', '/proc', '--tmpfs', str(state), '--ro-bind-data', str(fd),
                 str(state / 'antigravity-oauth-token'), '--bind', str(root), str(root)]
         if options.isolated_ipc:
@@ -202,7 +204,7 @@ try:
             except ValueError:
                 events.append({'non_json': line})
         print(json.dumps({'date': datetime.date.today().isoformat(), 'case': options.case,
-                          'readonly_workspace': options.readonly_workspace, 'isolated_home': options.isolated_home, 'isolated_ipc': options.isolated_ipc, 'pid_namespace': True, 'access_only': options.access_only,
+                          'readonly_workspace': options.readonly_workspace, 'isolated_home': options.isolated_home, 'isolated_ipc': options.isolated_ipc, 'pid_namespace': True, 'access_only': options.access_only, 'auth_source': options.auth_source,
                           'version': subprocess.check_output([str(cli), '--version'], text=True).strip(),
                           'cli_sha256': cli_sha, 'script_sha256': script_sha,
                           'argv': cli_args, 'exit_code': process.returncode, 'timed_out': timed_out,

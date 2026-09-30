@@ -251,6 +251,8 @@ Asura/
 - **Codex Adapter**：封裝 Codex CLI 之 stdin/stdout 通訊。
 - **Agy Adapter**：原生適配本地 Antigravity CLI (`agy`)，提供無人值守指令封裝。
 
+2026-09-30：目前 Registry 提供 opencode（預設）、codex、omp、antigravity；新 adapter 邏輯限於 backend 套件及 CLI／Daemon composition。OMP 固定 18.4.4／Bun 1.4.2，Antigravity 固定 1.2.13，hash 驗證後複製 runtime 並唯讀掛載，避免來源更新競態。bwrap PID／IPC namespace、私人 HOME／tmp／dev 與 memfd access-only 登入隔離為必要前提；無支援或登入過期即拒絕。新 adapter 不宣告 read_only_sandbox，Three-Face 在 Stage 0 拒絕。provider transport retry 不視為 Asura 新 attempt；不增加 failover、resume 或自動更新登入。最後驗證日期：2026-09-30，證據見 [issue 25](../../issues/issue-25/evidence/README.md)。
+
 ### 7.2 異常防禦與故障轉移
 
 > [!NOTE]

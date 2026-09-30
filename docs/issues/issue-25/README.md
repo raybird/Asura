@@ -154,19 +154,19 @@ Feature: 可替換的四後端執行契約
 
 | 編號 | 事項 | 狀態 | 影響 |
 |---|---|---|---|
-| I-TBD-1 | OMP 18.4.4／Bun 1.4.2 固定 probe，指定 openai-codex/gpt-6-luna 的 OAuth 呼叫已成功；完整契約待驗 | 待確認 | BADAPT-002、003、007；可重跑腳本及 fixture 已保存，production 技術基線未定案 |
-| I-TBD-2 | Antigravity 已更新為 CLI 1.2.13；指定模型與 HOME／IPC 隔離登入對照通過，完整契約待驗 | 待確認 | BADAPT-004、005、007；簡單回應不證明安全或失敗路徑 |
-| I-TBD-3 | agy plan 已寫入；OMP 主 PGID 取消漏掉子程序；bwrap PID namespace 與唯讀掛載的窄對照已通過 | 待確認 | BADAPT-002、004、006、007；採用方案見 I-TBD-10；agy 1.2.13 完整隔離取消／唯讀窄對照已通過；其餘工具／路徑待驗，部署決策見 I-TBD-11 |
-| I-TBD-4 | OMP provider/model 已由使用者於 2026-09-30 指定；Antigravity gemini-3.8-flash-low 亦於 2026-09-30 由使用者選定；2026-09-30 使用者回覆「1」選定沿用原 CLI 登入、唯讀快照、過期後手動更新；trace 與 Context window 待定 | 待確認 | BADAPT-008、011；OMP catalog 272000 尚非實測窗口，版本不改既有 fingerprint |
-| I-TBD-5 | CLI retry/session/resume 關閉方式及 unknown-result 分類 | 待確認 | BADAPT-007、009；必要副作用 gate |
-| I-TBD-6 | auth、rate-limit、partial output、cancel 精確 mapping | 待確認 | BADAPT-002、004、007；由真實 evidence 建 fixtures |
-| I-TBD-7 | 正式 ID 為 omp／antigravity，是否額外接受 agy alias | 待確認 | BADAPT-003、005、008；建議先只接受正式 ID，避免新增同義身份 |
-| I-TBD-8 | BADAPT-001～012 Gherkin 已核准；固定版本 fixture/probe 基線尚待建立 | 待確認 | 目前核准行為範圍；probe 若要求實質改劇本，受影響項標待重新核准 |
-| I-TBD-9 | npm DNS、namespace 及 OMP 指定模型登入已可用；完整隔離契約待驗 | 待確認 | I-TBD-1～6 的前置條件已具部分證據，未解除全部安全 gate |
-| I-TBD-10 | OMP adapter 採用 bwrap 執行期依賴／PID namespace；不符合環境時模型呼叫前 unavailable | 已解決 | BADAPT-002、003、006、007；2026-09-30 使用者對明列方案回覆「1」，核准部署前提；完整能力仍須探測 |
-| I-TBD-11 | Antigravity 採用 bwrap／完整 HOME、暫存 socket 及 IPC 隔離；不支援時模型呼叫前 unavailable | 已解決 | BADAPT-004～007；2026-09-30 使用者對部署選項回覆「1」，核准此方案；完整能力仍須驗證 |
+| I-TBD-1 | 固定 OMP 18.4.4／Bun 1.4.2 與 openai-codex/gpt-6-luna；正式 adapter live 成功 | 已解決 | 2026-09-30；證據見 [技術分析](technical-analysis.md)、[任務](implementation-plan.md) 及 [驗證](evidence/README.md) |
+| I-TBD-2 | 固定 Antigravity 1.2.13 與 gemini-3.8-flash-low；新登入後正式 adapter live 成功 | 已解決 | 2026-09-30；證據見 [技術分析](technical-analysis.md)、[任務](implementation-plan.md) 及 [驗證](evidence/README.md) |
+| I-TBD-3 | PID／IPC namespace 取消與窄唯讀對照通過；未證明外部通道唯讀，read_only_sandbox 宣告 unsupported | 已解決 | 2026-09-30；證據見 [技術分析](technical-analysis.md)、[任務](implementation-plan.md) 及 [驗證](evidence/README.md) |
+| I-TBD-4 | 模型與 access-only／手動更新依使用者選項；版本不改 fingerprint；未知 Context window 沿用既有政策及 explicit override | 已解決 | 2026-09-30；證據見 [技術分析](technical-analysis.md)、[任務](implementation-plan.md) 及 [驗證](evidence/README.md) |
+| I-TBD-5 | OMP 巢狀設定關閉 CLI retry；兩者不啟用 session／resume；provider transport 與 Asura attempt 分別計數 | 已解決 | 2026-09-30；證據見 [技術分析](technical-analysis.md)、[任務](implementation-plan.md) 及 [驗證](evidence/README.md) |
+| I-TBD-6 | native fixture 保留 partial；timeout SUCCESS 仍失敗；已知 auth／quota carrier 分類，未知錯誤為 execution failure；vendor quota 未實測 | 已解決 | 2026-09-30；證據見 [技術分析](technical-analysis.md)、[任務](implementation-plan.md) 及 [驗證](evidence/README.md) |
+| I-TBD-7 | 正式 ID 僅 omp／antigravity，不新增 agy alias | 已解決 | 2026-09-30；證據見 [技術分析](technical-analysis.md)、[任務](implementation-plan.md) 及 [驗證](evidence/README.md) |
+| I-TBD-8 | 核准 Gherkin 不變；固定 fixture 與 product 回歸已保存 | 已解決 | 2026-09-30；證據見 [技術分析](technical-analysis.md)、[任務](implementation-plan.md) 及 [驗證](evidence/README.md) |
+| I-TBD-9 | 環境與 access-only 登入正反對照完成；版本或 namespace 不符在模型前拒絕 | 已解決 | 2026-09-30；證據見 [技術分析](technical-analysis.md)、[任務](implementation-plan.md) 及 [驗證](evidence/README.md) |
+| I-TBD-10 | 依使用者選項採 bwrap／PID namespace | 已解決 | 2026-09-30；證據見 [技術分析](technical-analysis.md)、[任務](implementation-plan.md) 及 [驗證](evidence/README.md) |
+| I-TBD-11 | 依使用者選項採完整 HOME／tmp／IPC 隔離 | 已解決 | 2026-09-30；證據見 [技術分析](technical-analysis.md)、[任務](implementation-plan.md) 及 [驗證](evidence/README.md) |
 
-I-TBD-1～6 先由 probe 取得事實，需使用者選定的 model/provider 或無法隔離的環境條件再提問。I-TBD-7 及 I-TBD-8 的技術基線在 probe 後定案；若變更已核准行為，依核准紀錄逐項重新核准。沒有 gate 豁免。
+沒有 gate 豁免。未證明的唯讀安全能力保留 unsupported；未實測 vendor quota 已揭露，不推定服務端所有失敗皆已覆蓋。
 
 ## Timeline
 
@@ -187,4 +187,4 @@ I-TBD-1～6 先由 probe 取得事實，需使用者選定的 model/provider 或
 **建立日期**: 2026-09-29
 **分級**: Large
 **風險**: High
-**狀態**: BADAPT-001～012 已核准；contract probe 部分完成，bwrap 部署前提已核准，完整技術基線待驗
+**狀態**: 實作與完整回歸已通過；待 PR 與獨立審查

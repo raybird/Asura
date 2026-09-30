@@ -24,6 +24,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--case", choices=("smoke", "prompt-shape", "auth-missing", "transport-failure", "transport-after-tool", "transport-partial", "transport-rate-limit", "write", "read-tools", "shell-write", "shell-outside", "delayed-control", "cancel"), required=True)
 parser.add_argument("--pid-namespace", action="store_true")
 parser.add_argument("--access-only", action="store_true")
+parser.add_argument("--isolated-home-ipc", action="store_true")
 parser.add_argument("--readonly-workspace", action="store_true")
 options = parser.parse_args()
 home = Path.home()
@@ -171,12 +172,17 @@ try:
                     "--config", str(root / "config.json"), "--no-session", "--no-lsp", "--no-title",
                     "--no-extensions", "--no-skills", "--no-rules", "--no-prewalk",
                     "--approval-mode", "yolo", *tools, "--mode", "json", "--print", "--", prompt]
-        args = ["bwrap", "--ro-bind", "/", "/", "--dev-bind", "/dev", "/dev", "--proc", "/proc",
+        args = ["bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc",
                 "--tmpfs", str(home / ".omp"), "--dir", str(home / ".omp/agent"),
                 "--bind-data", str(fd), str(home / ".omp/agent/agent.db"),
                 "--bind", str(root), str(root), "--die-with-parent", "--chdir", str(workspace),
                 "--clearenv", "--setenv", "HOME", str(home), "--setenv", "PATH", "/usr/bin:/bin",
                 "--", *cli_args]
+        if options.isolated_home_ipc:
+            mount_index = args.index("--tmpfs")
+            args[mount_index:mount_index] = ["--unshare-ipc", "--tmpfs", "/tmp", "--tmpfs", "/var/tmp", "--tmpfs", "/run/user", "--tmpfs", str(home),
+                                           "--dir", str(bun.parent), "--ro-bind", str(bun), str(bun),
+                                           "--dir", str(omp.parents[3]), "--ro-bind", str(omp.parents[3]), str(omp.parents[3])]
         if server:
             models = root / "models.yml"
             models.write_text(json.dumps({"providers": {"openai-codex": {
@@ -267,7 +273,7 @@ try:
                 events.append({"non_json": line})
         marker = workspace / "marker.txt"
         print(json.dumps({"date": datetime.date.today().isoformat(), "case": options.case,
-                          "pid_namespace": options.pid_namespace, "access_only": options.access_only,
+                          "pid_namespace": options.pid_namespace, "access_only": options.access_only, "isolated_home_ipc": options.isolated_home_ipc,
                           "readonly_workspace": options.readonly_workspace,
                           "script_sha256": script_sha,
                           "version": subprocess.check_output([str(bun), str(omp), "--version"], text=True).strip(),

@@ -51,7 +51,7 @@ func handleAsk(args []string, stdout, stderr io.Writer) int {
 	customID := fs.String("id", "", "optional custom task/request ID")
 	wait := fs.Bool("wait", false, "wait for task to complete")
 	mode := fs.String("mode", string(pipeline.ModeDirect), "execution mode (direct or three-face)")
-	backendFlag := fs.String("backend", "opencode", "execution backend (opencode or codex)")
+	backendFlag := fs.String("backend", "opencode", "execution backend (opencode, codex, omp, antigravity)")
 	memoryRecall := fs.String("memory-recall", "off", "project memory recall (off or bounded)")
 	var memoryIDs stringSliceFlag
 	fs.Var(&memoryIDs, "memory-id", "specify project memory ID to include in task context (can be repeated or comma-separated)")
@@ -78,8 +78,8 @@ func handleAsk(args []string, stdout, stderr io.Writer) int {
 	if bID == "" {
 		bID = "opencode"
 	}
-	if bID != "opencode" && bID != "codex" {
-		fmt.Fprintf(stderr, "error: unknown backend %q (supported: opencode, codex)\n", bID)
+	if bID != "opencode" && bID != "codex" && bID != "omp" && bID != "antigravity" {
+		fmt.Fprintf(stderr, "error: unknown backend %q (supported: opencode, codex, omp, antigravity)\n", bID)
 		return 1
 	}
 
