@@ -66,6 +66,30 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
       <button type="button" id="memory-add">新增記憶</button>
     </div>
 
+    <div id="git-section" class="card" style="margin-top:1rem;">
+      <h3>Git 候選記憶</h3>
+      <div id="git-msg" class="msg hidden"></div>
+      <label>擷取方式</label>
+      <label><input type="radio" name="git-mode" id="git-mode-range" checked style="width:auto;">固定 range</label>
+      <label><input type="radio" name="git-mode" id="git-mode-since" style="width:auto;">since-last</label>
+      <input id="git-range" placeholder="例如 HEAD~1..HEAD（首次需指定 range）">
+      <button type="button" id="git-capture">擷取 Git 變更</button>
+      <label for="git-status">候選狀態</label>
+      <select id="git-status"><option value="pending">待審核</option><option value="approved">已核准</option><option value="discarded">已捨棄</option></select>
+      <button type="button" id="git-reload" class="secondary">載入候選</button>
+      <div id="git-list"></div>
+      <button type="button" id="git-next" class="secondary hidden">下一頁</button>
+      <h4>來源與持久化狀態</h4>
+      <pre id="git-detail">(選取候選後可查看詳情)</pre>
+      <h4>Git 原始事實</h4>
+      <pre id="git-facts"></pre>
+      <label for="git-draft">候選草稿（核准前不進入正式記憶）</label>
+      <textarea id="git-draft" rows="6" disabled></textarea>
+      <button type="button" id="git-approve" disabled>確認核准草稿</button>
+      <button type="button" id="git-discard" class="danger" disabled>捨棄候選</button>
+      <p>Partial 候選不能核准。結果未知時請重新載入候選確認持久化狀態。切換專案或登出會清除未送出的編修。</p>
+    </div>
+
     <label for="memory-recall">自動召回</label>
     <select id="memory-recall"><option value="off">關閉</option><option value="bounded">啟用 bounded 召回</option></select>
     <button type="button" id="submit-btn">提交任務</button>
@@ -133,6 +157,7 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
   let taskGeneration = 0;
 
   function clearMemoryState() {
+    clearGitState();
     memoryGeneration++;
     taskGeneration++;
     selectedMemories.clear();
@@ -267,6 +292,179 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
     }
   });
 
+  // 2026-09-30 WEBGIT-005/009：內容純文字，所有候選回應與 action 綁定當次 workspace/session。
+  const gitList = document.getElementById('git-list');
+  const gitDetail = document.getElementById('git-detail');
+  const gitFacts = document.getElementById('git-facts');
+  const gitDraft = document.getElementById('git-draft');
+  const gitMsg = document.getElementById('git-msg');
+  const gitStatus = document.getElementById('git-status');
+  const gitRange = document.getElementById('git-range');
+  const gitModeRange = document.getElementById('git-mode-range');
+  const gitModeSince = document.getElementById('git-mode-since');
+  const gitCapture = document.getElementById('git-capture');
+  const gitApprove = document.getElementById('git-approve');
+  const gitDiscard = document.getElementById('git-discard');
+  const gitNext = document.getElementById('git-next');
+  const gitControllers = new Set();
+  let gitGeneration = 0;
+  let gitListToken = 0;
+  let gitDetailToken = 0;
+  let gitCursor = '';
+  let gitCandidate = null;
+  let gitBusy = false;
+
+  function clearGitDetail() {
+    gitDetailToken++;
+    gitCandidate = null;
+    gitDetail.textContent = '(選取候選後可查看詳情)';
+    gitFacts.textContent = '';
+    gitDraft.value = '';
+    gitDraft.disabled = true;
+    gitApprove.disabled = true;
+    gitDiscard.disabled = true;
+  }
+
+  function clearGitState() {
+    gitGeneration++;
+    gitListToken++;
+    for (const controller of gitControllers) controller.abort();
+    gitControllers.clear();
+    gitBusy = false;
+    gitCapture.disabled = false;
+    gitCursor = '';
+    gitRange.value = '';
+    gitRange.disabled = false;
+    gitModeRange.checked = true;
+    gitModeSince.checked = false;
+    gitStatus.value = 'pending';
+    gitList.replaceChildren();
+    gitNext.classList.add('hidden');
+    clearGitDetail();
+    clearMessage(gitMsg);
+  }
+
+  function gitScope() {
+    const generation = gitGeneration;
+    const session = sessionGeneration;
+    const workspace = projectSelect.value;
+    return { workspace, valid: () => workspace && !appSection.classList.contains('hidden') && workspace === projectSelect.value && generation === gitGeneration && session === sessionGeneration };
+  }
+
+  async function gitFetch(scope, url, options = {}) {
+    const controller = new AbortController();
+    gitControllers.add(controller);
+    try {
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      if (!scope.valid()) return null;
+      if (res.status === 401) { sessionExpired(); return null; }
+      if (!res.ok) {
+        showMessage(gitMsg, (url.includes('/capture') && res.status < 500 ? 'Capture：Rejected；' : '') + '操作失敗：' + res.status + '；請重新載入候選確認狀態。超大 detail 可用 CLI 查看。', true);
+        return null;
+      }
+      const data = await res.json();
+      return scope.valid() ? data : null;
+    } catch (err) {
+      if (scope.valid() && err.name !== 'AbortError') showMessage(gitMsg, '結果未知；請重新載入候選確認狀態。', true);
+      return null;
+    } finally { gitControllers.delete(controller); }
+  }
+
+  async function loadGitCandidates(cursor) {
+    if (gitBusy) return;
+    const scope = gitScope();
+    if (!scope.valid()) return;
+    const token = ++gitListToken;
+    const status = gitStatus.value;
+    clearGitDetail();
+    const pageScope = { workspace: scope.workspace, valid: () => scope.valid() && token === gitListToken && status === gitStatus.value };
+    const page = await gitFetch(pageScope, '/api/git-memory/candidates?workspace=' + encodeURIComponent(scope.workspace) + '&status=' + encodeURIComponent(status) + '&limit=20&cursor=' + encodeURIComponent(cursor || ''));
+    if (!page || token !== gitListToken || status !== gitStatus.value) return;
+    gitList.replaceChildren();
+    for (const candidate of page.items || []) {
+      const row = document.createElement('div');
+      const text = document.createElement('span');
+      text.textContent = candidate.id + ' — ' + candidate.status + ' / ' + (candidate.is_truncated ? 'Partial' : 'Complete') + ' — ' + candidate.summary;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = '查看候選';
+      button.addEventListener('click', () => { if (scope.valid() && token === gitListToken) showGitCandidate(candidate.id); });
+      row.appendChild(text);
+      row.appendChild(button);
+      gitList.appendChild(row);
+    }
+    gitCursor = page.next_cursor || '';
+    gitNext.classList.toggle('hidden', !gitCursor);
+  }
+
+  async function showGitCandidate(id) {
+    if (gitBusy) return;
+    const scope = gitScope();
+    clearGitDetail();
+    const token = gitDetailToken;
+    const detailScope = { workspace: scope.workspace, valid: () => scope.valid() && token === gitDetailToken };
+    const candidate = await gitFetch(detailScope, '/api/git-memory/candidates/' + encodeURIComponent(id) + '?workspace=' + encodeURIComponent(scope.workspace));
+    if (!candidate || token !== gitDetailToken) return;
+    gitCandidate = candidate;
+    gitDetail.textContent = JSON.stringify({ id: candidate.id, status: candidate.status, completeness: candidate.is_truncated ? 'Partial' : 'Complete', workspace: candidate.workspace, repo_id: candidate.repo_id, ref: candidate.ref_name, base_sha: candidate.base_sha, head_sha: candidate.head_sha, commit_count: candidate.commit_count, truncation_reason: candidate.truncated_reason || '', approved_memory_id: candidate.approved_memory_id || '', created_at: candidate.created_at }, null, 2);
+    gitFacts.textContent = candidate.facts_summary;
+    gitDraft.value = candidate.draft_content;
+    gitDraft.disabled = candidate.status !== 'pending' || candidate.is_truncated;
+    gitApprove.disabled = gitDraft.disabled;
+    gitDiscard.disabled = candidate.status !== 'pending';
+  }
+
+  function setGitBusy(busy) {
+    gitBusy = busy;
+    gitCapture.disabled = busy;
+    gitApprove.disabled = busy || !gitCandidate || gitCandidate.status !== 'pending' || gitCandidate.is_truncated;
+    gitDiscard.disabled = busy || !gitCandidate || gitCandidate.status !== 'pending';
+    gitDraft.disabled = gitApprove.disabled;
+  }
+
+  async function reviewGitCandidate(action) {
+    const scope = gitScope();
+    const candidate = gitCandidate;
+    if (gitBusy || !scope.valid() || !candidate || candidate.status !== 'pending' || (action === 'approve' && candidate.is_truncated)) return;
+    if (!window.confirm(action === 'approve' ? '確定將草稿核准為正式記憶？' : '確定捨棄這筆候選？')) return;
+    const body = { workspace: scope.workspace };
+    if (action === 'approve') body.content = gitDraft.value;
+    setGitBusy(true);
+    const result = await gitFetch(scope, '/api/git-memory/candidates/' + encodeURIComponent(candidate.id) + '/' + action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!scope.valid()) return;
+    setGitBusy(false);
+    if (!result) return;
+    clearGitDetail();
+    await loadGitCandidates('');
+    if (!scope.valid()) return;
+    showMessage(gitMsg, action === 'approve' ? '已核准，正式 Memory ID：' + result.approved_memory_id : '已捨棄候選', false);
+    if (action === 'approve') loadMemories('');
+  }
+
+  gitCapture.addEventListener('click', async () => {
+    const scope = gitScope();
+    if (gitBusy || !scope.valid()) return;
+    const body = { workspace: scope.workspace };
+    if (gitModeSince.checked) body.since_last = true;
+    else body.range = gitRange.value;
+    clearGitDetail();
+    gitListToken++;
+    setGitBusy(true);
+    const result = await gitFetch(scope, '/api/git-memory/capture', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!scope.valid()) return;
+    setGitBusy(false);
+    if (!result) return;
+    await loadGitCandidates('');
+    if (!scope.valid()) return;
+    showMessage(gitMsg, 'Capture：' + result.outcome + (result.reused ? ' / reused' : '') + '；候選 ID：' + (result.candidate_id || '(無)') + (result.detail_available ? '' : '；detail 超限或不可用，請用 CLI 查核。'), false);
+  });
+  document.getElementById('git-reload').addEventListener('click', () => loadGitCandidates(''));
+  gitNext.addEventListener('click', () => loadGitCandidates(gitCursor));
+  gitStatus.addEventListener('change', () => loadGitCandidates(''));
+  gitApprove.addEventListener('click', () => reviewGitCandidate('approve'));
+  gitDiscard.addEventListener('click', () => reviewGitCandidate('discard'));
+  for (const radio of [gitModeRange, gitModeSince]) radio.addEventListener('change', () => { gitRange.value = ''; gitRange.disabled = gitModeSince.checked; });
+
   let pendingRequest = null;
 
   function clearPendingRequest() {
@@ -370,6 +568,7 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
   logoutBtn.addEventListener('click', async () => {
     sessionGeneration++;
     clearMemoryState();
+    appSection.classList.add('hidden');
     try {
       await fetch('/api/logout', { method: 'POST' });
     } finally {

@@ -1,0 +1,4 @@
+=== RUN   TestWEBGITCrossOriginRead
+--- PASS: TestWEBGITCrossOriginRead (0.01s)
+PASS
+ok  	asura/tests/integration	0.013s

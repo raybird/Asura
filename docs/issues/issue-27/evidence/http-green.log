@@ -1,0 +1,22 @@
+=== RUN   TestWEBGITHTTPCancellation
+=== RUN   TestWEBGITHTTPCancellation/disconnect
+=== RUN   TestWEBGITHTTPCancellation/timeout
+--- PASS: TestWEBGITHTTPCancellation (10.09s)
+    --- PASS: TestWEBGITHTTPCancellation/disconnect (0.02s)
+    --- PASS: TestWEBGITHTTPCancellation/timeout (10.00s)
+=== RUN   TestWEBGITHTTPWorkflow
+--- PASS: TestWEBGITHTTPWorkflow (0.09s)
+=== RUN   TestWEBGITHTTPBoundaryAndBounds
+--- PASS: TestWEBGITHTTPBoundaryAndBounds (0.02s)
+=== RUN   TestWEBGITHTTPPaging
+--- PASS: TestWEBGITHTTPPaging (8.53s)
+=== RUN   TestWEBGITRecallAndSealedContext
+--- PASS: TestWEBGITRecallAndSealedContext (0.02s)
+=== RUN   TestWEBGITCaptureModesAndLegacyPayload
+--- PASS: TestWEBGITCaptureModesAndLegacyPayload (0.86s)
+=== RUN   TestWEBGITHTTPMalformedAndEscapingBounds
+--- PASS: TestWEBGITHTTPMalformedAndEscapingBounds (0.51s)
+=== RUN   TestWEBGITCrossOriginRead
+--- PASS: TestWEBGITCrossOriginRead (0.01s)
+PASS
+ok  	asura/tests/integration	20.128s

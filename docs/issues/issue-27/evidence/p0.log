@@ -1,0 +1,15 @@
+=== RUN   TestWEBGITIPCDisconnectProbe
+--- PASS: TestWEBGITIPCDisconnectProbe (0.98s)
+PASS
+ok  	asura/internal/daemon	0.987s
+=== RUN   TestWEBGITLegacyCapacityProbe
+    sqlite_gitmem_probe_test.go:32: 1000 candidates: list limited to 50; legacy detail loads 2 MiB draft + 2 MiB facts, bounded Web projection required
+--- PASS: TestWEBGITLegacyCapacityProbe (0.15s)
+=== RUN   TestApproveCandidateTx_PartialCandidateRejected
+--- PASS: TestApproveCandidateTx_PartialCandidateRejected (0.01s)
+PASS
+ok  	asura/internal/storage	0.159s
+=== RUN   TestCapture_SubdirectoryScopeIsolation
+--- PASS: TestCapture_SubdirectoryScopeIsolation (0.04s)
+PASS
+ok  	asura/internal/gitmem	0.044s

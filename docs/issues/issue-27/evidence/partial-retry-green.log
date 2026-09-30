@@ -1,0 +1,4 @@
+=== RUN   TestWEBGITApprovedPartialRejected
+--- PASS: TestWEBGITApprovedPartialRejected (0.01s)
+PASS
+ok  	asura/internal/storage	0.010s

@@ -10,11 +10,11 @@
 
 | Phase | 狀態 | 驗收 | 相依 | 產出與完成判準 |
 |---|---|---|---|---|
-| P0 授權與容量／取消契約 | 📝 待實作 | 001、002、004、007、011 | 使用者核准 | 建立拒絕組與成功對照，0 subprocess/writes；大量 SQLite 候選、超大欄位、Unix disconnect/真實 Git process 回收 probe，保存實際結果；未知未解除則不進 P1 |
-| P1 Bounded storage/IPC | 📝 待實作 | 002、004、007、008 | P0 | page/detail bounded SQL、cursor、reader/encoder limits；交易內容限制與冪等；紅綠測試證明不全量讀取、不跨 scope、不雙寫 |
-| P2 Web API/capture cancellation | 📝 待實作 | 001～004、006～008、011 | P1 | strict DTO、permission/error mapping，真實 HTTP→Unix IPC→Git/SQLite 取消，交易前取消無 checkpoint 變更 |
-| P3 Web UI/審核與隔離 | 📝 待實作 | 003、005、006、008、009 | P2 | 純文字來源與草稿、確認流程、generation/abort；可控制延遲的 browser 測試證明切換/登出隔離 |
-| P4 整合與交付 | 📝 待實作 | 010、012及全部 | P3 | real repo+HTTP+IPC+SQLite 驗收、recall/sealed context、正式 CI；更新 README，commit、PR 與持久化獨立 review |
+| P0 授權與容量／取消契約 | ✅ 已完成 | 001、002、004、007、011 | 使用者核准 | 建立拒絕組與成功對照，0 subprocess/writes；大量 SQLite 候選、超大欄位、Unix disconnect/真實 Git process 回收 probe，保存實際結果；未知未解除則不進 P1 |
+| P1 Bounded storage/IPC | ✅ 已完成 | 002、004、007、008 | P0 | page/detail bounded SQL、cursor、reader/encoder limits；交易內容限制與冪等；紅綠測試證明不全量讀取、不跨 scope、不雙寫 |
+| P2 Web API/capture cancellation | ✅ 已完成 | 001～004、006～008、011 | P1 | strict DTO、permission/error mapping，真實 HTTP→Unix IPC→Git/SQLite 取消，交易前取消無 checkpoint 變更 |
+| P3 Web UI/審核與隔離 | ✅ 已完成 | 003、005、006、008、009 | P2 | 純文字來源與草稿、確認流程、generation/abort；可控制延遲的 browser 測試證明切換/登出隔離 |
+| P4 整合與交付 | ✅ 本機實作與驗證完成；平台交付接續 | 010、012及全部 | P3 | real repo+HTTP+IPC+SQLite 驗收、recall/sealed context、正式 CI；更新 README，commit、PR 與持久化獨立 review |
 
 ## 測試策略
 
@@ -29,13 +29,13 @@
 
 ## 規劃查核
 
-2026-09-30 已完成程式碼盤點與既有相關測試查核，結果見 requirement-analysis。純文件不改變可執行行為，文件連結、Scenario/核准表集合與 metadata 以靜態檢查；新 Web 功能尚未實作或驗收。
+2026-09-30 已完成程式碼盤點與既有相關測試查核，結果見 requirement-analysis。純文件不改變可執行行為，文件連結、Scenario/核准表集合與 metadata 以靜態檢查；此段為規劃基準；2026-09-30 最終實作驗證見 evidence/verification.md。
 
 - [x] Large/High 分開評估，必要分析文件有實際調查與方案取捨。
-- [x] Scenario IDs 與待核准紀錄一一對應；未知保留，未冒充核准。
+- [x] Scenario IDs 與核准紀錄一一對應；核准來源已保存。
 - [x] 首要驗證對應授權最大風險；容量與取消另列 probe。
 - [x] 使用者核准 WEBGIT-001～012 與 J-TBD-1～8。
-- [ ] decompose 細化 Tasks，取得核准規格 commit baseline。
+- [x] decompose 細化 Tasks，核准規格基準為 `147954b`。
 - [ ] 實作、驗證、PR 與獨立 review；不自行 merge。
 
 ## 權威 Task 清單（2026-09-30）
@@ -44,11 +44,11 @@
 
 - 產出與最小範圍：現有 scope/Partial 契約、超大 legacy 欄位與 IPC capture disconnect probe；確認必要修改點，保留真實結果。
 - 相依：無
-- 責任驗收：WEBGIT-002、007、011
+- 支援驗收：WEBGIT-002、007、011
 - 完成判準：上述產出可重複驗證、對應必要檢查通過並保存 artifact。
 - 驗證：Daemon/storage/gitmem 真實契約測試；成功對照與拒絕組。
-- 狀態：📝 待實作
-- 證據：待執行。
+- 狀態：✅ 已完成（2026-09-30）
+- 證據：[驗證紀錄](evidence/verification.md) 對應章節與 raw logs。
 
 ### Task 1.1 — Bounded candidate storage 與交易
 
@@ -57,8 +57,8 @@
 - 責任驗收：WEBGIT-004、008
 - 完成判準：上述產出可重複驗證、對應必要檢查通過並保存 artifact。
 - 驗證：storage 單元紅綠測試含大量資料、同時間戳、超大 metadata/facts/draft。
-- 狀態：📝 待實作
-- 證據：待執行。
+- 狀態：✅ 已完成（2026-09-30）
+- 證據：[驗證紀錄](evidence/verification.md) 對應章節與 raw logs。
 
 ### Task 1.2 — Web bounded Daemon IPC
 
@@ -67,8 +67,8 @@
 - 責任驗收：WEBGIT-002、007
 - 完成判準：上述產出可重複驗證、對應必要檢查通過並保存 artifact。
 - 驗證：真實 Unix IPC 與 store 單元／整合紅綠。
-- 狀態：📝 待實作
-- 證據：待執行。
+- 狀態：✅ 已完成（2026-09-30）
+- 證據：[驗證紀錄](evidence/verification.md) 對應章節與 raw logs。
 
 ### Task 2.1 — Web Git API 與取消
 
@@ -77,8 +77,8 @@
 - 責任驗收：WEBGIT-001、003、006、011
 - 完成判準：上述產出可重複驗證、對應必要檢查通過並保存 artifact。
 - 驗證：HTTP 外迴圈、Daemon/Git 底層紅綠；不 mock 授權/原子 store。
-- 狀態：📝 待實作
-- 證據：待執行。
+- 狀態：✅ 已完成（2026-09-30）
+- 證據：[驗證紀錄](evidence/verification.md) 對應章節與 raw logs。
 
 ### Task 3.1 — Web 候選審核 UI
 
@@ -87,15 +87,15 @@
 - 責任驗收：WEBGIT-005、009
 - 完成判準：上述產出可重複驗證、對應必要檢查通過並保存 artifact。
 - 驗證：browser 惡意字串與 controlled delayed response；API approve/discard 對照。
-- 狀態：📝 待實作
-- 證據：待執行。
+- 狀態：✅ 已完成（2026-09-30）
+- 證據：[驗證紀錄](evidence/verification.md) 對應章節與 raw logs。
 
 ### Task 4.1 — Recall 與完整回歸交付
 
-- 產出與最小範圍：real HTTP/IPC/SQLite recall/sealed snapshot；文件、全套測試、CI、commit/PR/review。
+- 產出與最小範圍：real HTTP/IPC/SQLite recall/sealed snapshot；文件與全套測試；commit/PR/CI/review 由 dev-cycle 接續交付。
 - 相依：3.1
 - 責任驗收：WEBGIT-010、012
 - 完成判準：上述產出可重複驗證、對應必要檢查通過並保存 artifact。
-- 驗證：go vet、race tests、build、端到端驗收及獨立 review。
-- 狀態：📝 待實作
-- 證據：待執行。
+- 驗證：go vet、race tests、build、端到端驗收；獨立 review 與正式 CI 為後續交付 gate。
+- 狀態：✅ 本機實作與驗證完成（2026-09-30）；待平台交付 gate。
+- 證據：[驗證紀錄](evidence/verification.md)；正式 CI 與獨立審查結果以 PR 與 review artifact 為準。

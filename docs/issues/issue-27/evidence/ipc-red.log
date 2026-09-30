@@ -1,0 +1,6 @@
+=== RUN   TestWEBGITBoundedIPC
+    gitmem_bounded_test.go:48: missing bounded IPC: map[error:unknown action: git_memory_page]
+--- FAIL: TestWEBGITBoundedIPC (0.89s)
+FAIL
+FAIL	asura/internal/daemon	0.890s
+FAIL

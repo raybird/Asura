@@ -1,0 +1,15 @@
+AssertionError [ERR_ASSERTION]: Git review UI missing
+
+0 !== 1
+
+    at /home/kevin/Documents/RCodes/Asura/docs/issues/issue-27/evidence/ui-browser.cjs:38:12
+    at runNextTicks (node:internal/process/task_queues:65:5)
+    at process.processImmediate (node:internal/timers:453:9)
+    at process.callbackTrampoline (node:internal/async_hooks:130:17) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 0,
+  expected: 1,
+  operator: 'strictEqual',
+  diff: 'simple'
+}

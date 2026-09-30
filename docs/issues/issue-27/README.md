@@ -11,6 +11,7 @@ Web 僅作 adapter，Daemon 保持 Git、授權與原子狀態轉移 ownership�
 - [需求分析](requirement-analysis.md)
 - [技術分析與 J-TBD 提案](technical-analysis.md)
 - [權威實作計畫](implementation-plan.md)
+- [驗證證據](evidence/verification.md)
 
 ## 涉及檔案
 
@@ -23,6 +24,8 @@ internal/
 tests/integration/ # 新增 WEBGIT 驗收
 docs/issues/issue-27/ # 規格、計畫與證據
 README.md        # 交付時更新使用方式
+docs/superpowers/specs/2026-09-11-asura-architecture-design.md # Web 邊界與資料流
+.github/workflows/ci.yml # 新增真實 Chromium UI probe
 ```
 
 backend、pipeline、recall policy、Cron 與 candidate schema 不在本期修改範圍；若查核證明必要，先說明實際原因與範圍修訂。
@@ -107,7 +110,7 @@ Feature: Web Git candidate capture and review
 
 ## Gherkin 核准紀錄
 
-- **核准 commit**: 待提交
+- **核准 commit**: 147954b
 - **核准來源**: 2026-09-30 使用者回覆「核准」，核准 WEBGIT-001～012 與 J-TBD-1～8。
 
 | Scenario | 核准日期 | 狀態 |
@@ -151,4 +154,4 @@ Feature: Web Git candidate capture and review
 **建立日期**: 2026-09-30  
 **分級**: Large — 跨 Web、Daemon、storage 與 Git cancellation 整合  
 **風險**: High  
-**狀態**: 實作中
+**狀態**: 實作與本機驗證完成；待正式 CI、獨立審查與合併

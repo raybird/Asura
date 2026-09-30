@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"asura/internal/daemon"
+	"asura/internal/storage"
 )
 
 type Config struct {
@@ -83,6 +84,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.mu.Unlock()
 		http.SetCookie(w, &http.Cookie{Name: sessionCookie, Path: "/", MaxAge: -1, HttpOnly: true, Secure: s.secure, SameSite: http.SameSiteStrictMode})
 		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/git-memory/") {
+		if r.Header.Get("Origin") != "" && r.Header.Get("Origin") != s.origin {
+			http.Error(w, "forbidden origin", http.StatusForbidden)
+			return
+		}
+		s.handleGitMemory(w, r)
 		return
 	}
 	if r.URL.Path == "/api/memories" || strings.HasPrefix(r.URL.Path, "/api/memories/") {
@@ -304,7 +313,19 @@ func (s *Server) exchange(parent context.Context, req daemon.IPCRequest) (daemon
 	if err := json.NewEncoder(conn).Encode(req); err != nil {
 		return resp, err
 	}
-	err = json.NewDecoder(conn).Decode(&resp)
+	var reader io.Reader = conn
+	var bounded *io.LimitedReader
+	if strings.HasPrefix(req.Action, "git_memory_") {
+		bounded = &io.LimitedReader{R: conn, N: (1 << 20) + 1}
+		reader = bounded
+	}
+	err = json.NewDecoder(reader).Decode(&resp)
+	if bounded != nil && bounded.N < 1 {
+		return resp, storage.ErrGitTooLarge
+	}
+	if err != nil && ctx.Err() != nil {
+		return resp, ctx.Err()
+	}
 	return resp, err
 }
 

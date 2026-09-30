@@ -468,32 +468,36 @@ type CronAddRequest struct {
 
 // IPCRequest 定義用戶端提交之請求
 type IPCRequest struct {
-	MemoryRecall string          `json:"memory_recall,omitempty"`
-	Action       string          `json:"action,omitempty"`
-	RequestID    string          `json:"request_id,omitempty"`
-	TaskID       string          `json:"task_id,omitempty"`
-	Workspace    string          `json:"workspace,omitempty"`
-	Prompt       string          `json:"prompt,omitempty"`
-	Class        TaskClass       `json:"class,omitempty"`
-	CronID       string          `json:"cron_id,omitempty"`
-	CronAddReq   *CronAddRequest `json:"cron_add_req,omitempty"`
-	Limit        int             `json:"limit,omitempty"`
-	MemoryID     string          `json:"memory_id,omitempty"`
-	Cursor       string          `json:"cursor,omitempty"`
-	Content      string          `json:"content,omitempty"`
-	MemoryIDs    []string        `json:"memory_ids,omitempty"`
-	Mode         string          `json:"mode,omitempty"`
-	Backend      string          `json:"backend,omitempty"`
-	Range        string          `json:"range,omitempty"`
-	SinceLast    bool            `json:"since_last,omitempty"`
-	Force        bool            `json:"force,omitempty"`
-	AIDraft      bool            `json:"ai_draft,omitempty"`
-	CandidateID  string          `json:"candidate_id,omitempty"`
-	Status       string          `json:"status,omitempty"`
+	MemoryRecall    string          `json:"memory_recall,omitempty"`
+	Action          string          `json:"action,omitempty"`
+	RequestID       string          `json:"request_id,omitempty"`
+	TaskID          string          `json:"task_id,omitempty"`
+	Workspace       string          `json:"workspace,omitempty"`
+	Prompt          string          `json:"prompt,omitempty"`
+	Class           TaskClass       `json:"class,omitempty"`
+	CronID          string          `json:"cron_id,omitempty"`
+	CronAddReq      *CronAddRequest `json:"cron_add_req,omitempty"`
+	Limit           int             `json:"limit,omitempty"`
+	MemoryID        string          `json:"memory_id,omitempty"`
+	Cursor          string          `json:"cursor,omitempty"`
+	ContentProvided bool            `json:"content_provided,omitempty"`
+	Content         string          `json:"content,omitempty"`
+	MemoryIDs       []string        `json:"memory_ids,omitempty"`
+	Mode            string          `json:"mode,omitempty"`
+	Backend         string          `json:"backend,omitempty"`
+	Range           string          `json:"range,omitempty"`
+	SinceLast       bool            `json:"since_last,omitempty"`
+	Force           bool            `json:"force,omitempty"`
+	AIDraft         bool            `json:"ai_draft,omitempty"`
+	CandidateID     string          `json:"candidate_id,omitempty"`
+	Status          string          `json:"status,omitempty"`
 }
 
 // IPCResponse 定義傳回用戶端之結果
 type IPCResponse struct {
+	CandidatePage    *GitCandidatePage          `json:"candidate_page,omitempty"`
+	GitCapture       *GitCaptureReply           `json:"git_capture,omitempty"`
+	GitError         string                     `json:"git_error,omitempty"`
 	Task             *storage.Task              `json:"task,omitempty"`
 	Projects         []string                   `json:"projects,omitempty"`
 	CronSchedule     *storage.CronSchedule      `json:"cron_schedule,omitempty"`
@@ -1161,6 +1165,9 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				continue
 			}
 			_ = encoder.Encode(IPCResponse{})
+
+		case "git_memory_page", "git_memory_detail_bounded", "git_memory_capture_bounded", "git_memory_approve_bounded", "git_memory_discard_bounded":
+			d.handleBoundedGitMemory(connCtx, req, encoder)
 
 		case "git_memory_capture":
 			d.handleGitMemoryCapture(connCtx, req, encoder)

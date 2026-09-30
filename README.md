@@ -123,6 +123,10 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web \
 
 提交任務時可選取最多 32 個同專案記憶 ID，或明確開啟 `bounded` 自動召回；未選取且未開啟時保持原本的 off 行為。送出前顯示 Request ID，回應遺失可用「原請求重試」送出相同內容；若關閉頁面，請使用先前保存的 ID 重新登入查詢。Task 查詢頁會顯示當次保存的記憶與召回決策，刪除現存記憶不會改寫舊 Task 快照。
 
+2026-09-30：Web 的「Git 候選記憶」區域可指定固定 range 或 since-last 擷取、依 pending／approved／discarded 狀態分頁、查看來源與完整草稿，以及編修後確認核准或確認捨棄。Complete／Partial、reused 與拒絕結果會明確顯示；Partial 由服務端禁止核准。核准後顯示正式 `git-approved` Memory ID，可由既有「專案記憶」查看與召回；候選本身不進入 recall，舊 Task 快照不變。
+
+2026-09-30：候選每頁預設 20 筆、最多 50 筆，摘要最多 512 UTF-8 bytes；Web 草稿／核准內容最多 32 KiB、來源 facts 最多 256 KiB、HTTP JSON 最多 512 KiB，超限 detail 明確拒絕，可改用 CLI 查核。Capture 有 10 秒期限，離線會取消尚未完成的 Git 工作；回應遺失時重新載入候選確認真實狀態。切換 workspace、登出或 session 失效會清除未送出的編修；第一版不提供 force、ai_draft 或 bulk clear。
+
 #### 定時排程管理 (cron)
 ```bash
 # 新增定時排程（標準 5 欄位 Cron：分 時 日 月 週）

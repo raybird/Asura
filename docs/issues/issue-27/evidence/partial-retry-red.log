@@ -1,0 +1,6 @@
+=== RUN   TestWEBGITApprovedPartialRejected
+    sqlite_gitmem_bounded_test.go:214: approved Partial must reject: <nil>
+--- FAIL: TestWEBGITApprovedPartialRejected (0.01s)
+FAIL
+FAIL	asura/internal/storage	0.010s
+FAIL

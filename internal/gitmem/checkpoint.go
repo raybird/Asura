@@ -13,10 +13,11 @@ import (
 
 // CaptureOptions 包含擷取作業的參數選項
 type CaptureOptions struct {
-	RangeExpr string
-	SinceLast bool
-	Force     bool
-	AIDraft   bool
+	RangeExpr   string
+	SinceLast   bool
+	Force       bool
+	AIDraft     bool
+	HeadersOnly bool // 2026-09-30：Web capture 不讀 legacy 草稿/facts。
 }
 
 // CaptureResult 代表擷取作業的執行結果與候選中繼資料
@@ -68,6 +69,13 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 
 	if err := captureCtx.Err(); err != nil {
 		return nil, fmt.Errorf("capture deadline exceeded: %w", err)
+	}
+
+	getCandidate := s.store.GetCandidate
+	findCandidate := s.store.FindCandidateByRange
+	if opts.HeadersOnly {
+		getCandidate = s.store.GetGitCandidateHeader
+		findCandidate = s.store.FindGitCandidateHeader
 	}
 
 	// 1. AI 草稿生成模式 Preflight 檢查（GITMEM-009 / Fail-Closed 原則）
@@ -132,7 +140,7 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 	}
 
 	// 5. 擷取去重 (Capture Dedup)
-	existing, err := s.store.FindCandidateByRange(captureCtx, repoInfo.Workspace, facts.RepoID, facts.RefName, facts.BaseSHA, facts.HeadSHA, "gitmem-v1")
+	existing, err := findCandidate(captureCtx, repoInfo.Workspace, facts.RepoID, facts.RefName, facts.BaseSHA, facts.HeadSHA, "gitmem-v1")
 	if err != nil {
 		return nil, fmt.Errorf("check existing candidate: %w", err)
 	}
@@ -179,7 +187,7 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 			); err != nil {
 				if errors.Is(err, storage.ErrCandidateStatusConflict) {
 					// 發生並行狀態競爭（例如已被並行重開或並行核准），原子重讀最新持久化資料
-					freshCand, getErr := s.store.GetCandidate(captureCtx, repoInfo.Workspace, existing.ID)
+					freshCand, getErr := getCandidate(captureCtx, repoInfo.Workspace, existing.ID)
 					if getErr == nil && freshCand != nil {
 						if freshCand.Status == "approved" {
 							if err := advanceExistingCandidate(freshCand); err != nil {
@@ -206,7 +214,7 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 				}
 				return nil, fmt.Errorf("reopen discarded candidate: %w", err)
 			}
-			reopened, err := s.store.GetCandidate(captureCtx, repoInfo.Workspace, existing.ID)
+			reopened, err := getCandidate(captureCtx, repoInfo.Workspace, existing.ID)
 			if err != nil {
 				return nil, fmt.Errorf("reload reopened candidate: %w", err)
 			}
@@ -263,7 +271,7 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 
 					// MUST FIX 2: 遇到 CAS 並行狀態衝突（例如被另一個請求並行 Discard 或並行 Approve）
 					// 必須重新讀取最新持久化記錄，並嚴格依最新狀態重新跑狀態機分流！
-					fresh, getErr := s.store.GetCandidate(captureCtx, repoInfo.Workspace, existing.ID)
+					fresh, getErr := getCandidate(captureCtx, repoInfo.Workspace, existing.ID)
 					if getErr != nil || fresh == nil {
 						return nil, fmt.Errorf("%w: failed to reload fresh candidate on status conflict", storage.ErrCandidateStatusConflict)
 					}
@@ -305,7 +313,7 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 				}
 
 				// 升級成功，從資料庫重新載入最新狀態，保證本地物件與資料庫交易結果絕對一致（含 draft 與 is_user_edited）
-				if fresh, reloadErr := s.store.GetCandidate(captureCtx, repoInfo.Workspace, existing.ID); reloadErr == nil && fresh != nil {
+				if fresh, reloadErr := getCandidate(captureCtx, repoInfo.Workspace, existing.ID); reloadErr == nil && fresh != nil {
 					*existing = *fresh
 				} else {
 					existing.DraftContent = draft
@@ -406,10 +414,10 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 		TruncatedReason: facts.TruncatedReason,
 	}
 
-	persistedCand, err := s.store.SaveCandidateAndCheckpointTx(captureCtx, cand, newCP, expectedOldSHA, ancestryChecker)
+	persistedCand, err := s.store.SaveCandidateAndCheckpointTx(captureCtx, cand, newCP, expectedOldSHA, ancestryChecker, opts.HeadersOnly)
 	if err != nil {
 		if errors.Is(err, storage.ErrCandidateStatusConflict) {
-			existingCand, findErr := s.store.FindCandidateByRange(captureCtx, facts.Workspace, facts.RepoID, facts.RefName, facts.BaseSHA, facts.HeadSHA, "gitmem-v1")
+			existingCand, findErr := findCandidate(captureCtx, facts.Workspace, facts.RepoID, facts.RefName, facts.BaseSHA, facts.HeadSHA, "gitmem-v1")
 			if findErr == nil && existingCand != nil && existingCand.Status == "discarded" {
 				if !opts.Force {
 					return nil, fmt.Errorf("candidate for range %s..%s was already discarded; use --force to reopen", facts.BaseSHA[:min(8, len(facts.BaseSHA))], facts.HeadSHA[:min(8, len(facts.HeadSHA))])
@@ -421,7 +429,7 @@ func (s *CaptureService) Capture(ctx context.Context, workspace string, opts Cap
 				); err != nil {
 					return nil, fmt.Errorf("reopen discarded candidate on conflict: %w", err)
 				}
-				reopened, reloadErr := s.store.GetCandidate(captureCtx, repoInfo.Workspace, existingCand.ID)
+				reopened, reloadErr := getCandidate(captureCtx, repoInfo.Workspace, existingCand.ID)
 				if reloadErr != nil {
 					return nil, fmt.Errorf("reload reopened candidate on conflict: %w", reloadErr)
 				}

@@ -1,0 +1,6 @@
+=== RUN   TestWEBGITBoundedPageAndDetail
+    sqlite_gitmem_bounded_test.go:22: missing bounded candidate page/detail contract
+--- FAIL: TestWEBGITBoundedPageAndDetail (0.01s)
+FAIL
+FAIL	asura/internal/storage	0.009s
+FAIL

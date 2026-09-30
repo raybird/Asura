@@ -1,6 +1,6 @@
 # 技術分析與設計提案
 
-分析日期：2026-09-30。2026-09-30 使用者核准以下方案，數值是提案，尚非已驗證的容量結論。
+分析日期：2026-09-30。2026-09-30 使用者核准以下方案；限制與真實 fixture 驗證結果見 [驗證證據](evidence/verification.md)。
 
 ## 可行性與方案取捨
 
@@ -22,7 +22,7 @@
 | POST | /api/git-memory/candidates/{id}/approve | workspace、可選 content；approved_memory_id |
 | POST | /api/git-memory/candidates/{id}/discard | workspace；持久化 discarded 結果 |
 
-全部先驗 Host/session；POST 驗 Origin。Daemon 每次重驗 canonical workspace；所有 body/query strict allowlist、拒絕重複 query、不合法 UTF-8、未知欄位（包括 force/ai_draft）與 trailing JSON。Browser 不得指定 Git binary/argv/backend。Approve 不接受 provenance 欄位。
+全部先驗 Host/session；POST 驗 Origin，新候選 GET 若帶入 Origin 也須同源（WEBGIT-001），未帶入 Origin 的合法 GET 保持可用。Daemon 每次重驗 canonical workspace；所有 body/query strict allowlist、拒絕重複 query、不合法 UTF-8、未知欄位（包括 force/ai_draft）與 trailing JSON。Browser 不得指定 Git binary/argv/backend。Approve 不接受 provenance 欄位。
 
 HTTP：400 無效輸入/range/cursor、401 session、403 Host/Origin/撤權、404 同 scope 不存在或跨 scope ID、409 不可操作狀態/Partial、413 超限、422 不支援既有資料格式/非 Git capture、503 Daemon unavailable、504 timeout。Daemon 使用穩定錯誤分類，不把 raw 路徑或 Git stderr 暴露為跨 scope 資訊。Capture rejection 回傳明確錯誤分類；successful Complete/Partial 與 reused 分開表示。方法不符沿用既有 Web route 行為。
 
@@ -57,4 +57,4 @@ content 省略沿用 draft；明確提供時須非空、合法 UTF-8、最多 32
 
 ## 待驗證
 
-全部 J-TBD 已於 2026-09-30 核准；詳細 API field naming 可等價調整，但 byte/error/permission 語意改變需重新核准。大量候選 cursor、超大 facts/draft 及 HTTP capture disconnect 的真實 probe 尚未執行，須依計畫先取得證據再進主要實作。
+全部 J-TBD 已於 2026-09-30 核准；詳細 API field naming 可等價調整，但 byte/error/permission 語意改變需重新核准。大量候選 cursor、超大 facts/draft 及 HTTP capture disconnect 的真實 probe 已於 2026-09-30 完成，證據見 verification；CLI 既有契約另以回歸測試確認。

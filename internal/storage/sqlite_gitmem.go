@@ -376,6 +376,15 @@ func (s *SQLiteStore) ReopenDiscardedCandidate(ctx context.Context, workspace, i
 // DiscardCandidate 捨棄候選
 // 嚴格原子 CAS：限定 WHERE status = 'pending'，防止並行競爭將已 approved 之候選砸回 discarded
 func (s *SQLiteStore) DiscardCandidate(ctx context.Context, workspace, id string) error {
+	return s.discardCandidate(ctx, workspace, id, false)
+}
+
+// 2026-09-30 WEBGIT-004/008：Web 終態檢查只讀有界 status，不載入 legacy payload。
+func (s *SQLiteStore) DiscardGitCandidateBounded(ctx context.Context, workspace, id string) error {
+	return s.discardCandidate(ctx, workspace, id, true)
+}
+
+func (s *SQLiteStore) discardCandidate(ctx context.Context, workspace, id string, bounded bool) error {
 	query := `
 	UPDATE memory_candidates
 	SET status = 'discarded', approved_memory_id = '', approved_at = NULL
@@ -390,11 +399,32 @@ func (s *SQLiteStore) DiscardCandidate(ctx context.Context, workspace, id string
 		return fmt.Errorf("get rows affected: %w", err)
 	}
 	if rows == 0 {
-		cand, err := s.GetCandidate(ctx, workspace, id)
-		if err != nil {
-			return err
+		var cand *MemoryCandidate
+		if bounded {
+			var status string
+			err := s.db.QueryRowContext(ctx, `SELECT COALESCE(substr(CAST(status AS BLOB),1,4097),'') FROM memory_candidates WHERE workspace=? AND id=?`, workspace, id).Scan(&status)
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrCandidateNotFound
+			}
+			if err != nil {
+				return err
+			}
+			if err := boundedGitText(status, 4096); err != nil {
+				return err
+			}
+			cand = &MemoryCandidate{Status: status}
+		} else {
+			var err error
+			cand, err = s.GetCandidate(ctx, workspace, id)
+			if err != nil {
+				return err
+			}
 		}
+
 		if cand.Status == "approved" {
+			if bounded {
+				return ErrCandidateStatusConflict
+			}
 			return errors.New("cannot discard an already approved candidate; delete the formal memory instead")
 		}
 		if cand.Status == "discarded" {

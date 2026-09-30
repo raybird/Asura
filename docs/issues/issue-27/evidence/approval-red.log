@@ -1,0 +1,25 @@
+=== RUN   TestWEBGITBoundedApproval
+=== RUN   TestWEBGITBoundedApproval/large
+    sqlite_gitmem_bounded_test.go:130: want git memory data too large got <nil>
+=== RUN   TestWEBGITBoundedApproval/empty
+    sqlite_gitmem_bounded_test.go:130: want invalid git memory request got <nil>
+=== RUN   TestWEBGITBoundedApproval/oversized-edit
+    sqlite_gitmem_bounded_test.go:130: want git memory data too large got <nil>
+=== RUN   TestWEBGITBoundedApproval/partial
+    sqlite_gitmem_bounded_test.go:130: want candidate status conflict got cannot approve partial candidate partial (is_truncated=true): please retry capture to obtain a complete candidate before approving
+=== RUN   TestWEBGITBoundedApproval/discarded
+    sqlite_gitmem_bounded_test.go:130: want candidate status conflict got candidate discarded has been discarded; cannot approve discarded candidate without reopening
+=== RUN   TestWEBGITBoundedApproval/invalid
+    sqlite_gitmem_bounded_test.go:130: want git memory data unsupported got candidate invalid is no longer pending (concurrent modification)
+=== NAME  TestWEBGITBoundedApproval
+    sqlite_gitmem_bounded_test.go:136: rejected write 3 <nil>
+--- FAIL: TestWEBGITBoundedApproval (0.01s)
+    --- FAIL: TestWEBGITBoundedApproval/large (0.00s)
+    --- FAIL: TestWEBGITBoundedApproval/empty (0.00s)
+    --- FAIL: TestWEBGITBoundedApproval/oversized-edit (0.00s)
+    --- FAIL: TestWEBGITBoundedApproval/partial (0.00s)
+    --- FAIL: TestWEBGITBoundedApproval/discarded (0.00s)
+    --- FAIL: TestWEBGITBoundedApproval/invalid (0.00s)
+FAIL
+FAIL	asura/internal/storage	0.011s
+FAIL

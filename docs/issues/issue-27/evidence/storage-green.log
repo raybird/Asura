@@ -1,0 +1,18 @@
+=== RUN   TestWEBGITBoundedPageAndDetail
+=== RUN   TestWEBGITBoundedPageAndDetail/draft_content
+=== RUN   TestWEBGITBoundedPageAndDetail/facts_summary
+=== RUN   TestWEBGITBoundedPageAndDetail/repo_id
+=== RUN   TestWEBGITBoundedPageAndDetail/truncated_reason
+--- PASS: TestWEBGITBoundedPageAndDetail (0.03s)
+    --- PASS: TestWEBGITBoundedPageAndDetail/draft_content (0.00s)
+    --- PASS: TestWEBGITBoundedPageAndDetail/facts_summary (0.00s)
+    --- PASS: TestWEBGITBoundedPageAndDetail/repo_id (0.00s)
+    --- PASS: TestWEBGITBoundedPageAndDetail/truncated_reason (0.00s)
+=== RUN   TestApproveCandidateTx_EmptyContentRejected
+--- PASS: TestApproveCandidateTx_EmptyContentRejected (0.01s)
+=== RUN   TestApproveCandidateTx_PartialCandidateRejected
+--- PASS: TestApproveCandidateTx_PartialCandidateRejected (0.01s)
+=== RUN   TestApproveCandidateTx_AtomicStatusCAS_RejectsNonPending
+--- PASS: TestApproveCandidateTx_AtomicStatusCAS_RejectsNonPending (0.01s)
+PASS
+ok  	asura/internal/storage	0.054s

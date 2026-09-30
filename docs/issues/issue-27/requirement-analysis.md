@@ -28,4 +28,4 @@
 go test -count=1 -v ./internal/daemon ./internal/gitmem ./internal/storage -run 'TestDaemon_GitMemory_BoundedCandidatesListAndDetail|TestBoundedMemoryQueryCanceledOnIPCDisconnect|TestCaptureService_PartialCandidate_CannotBeApprovedUntilCompleteUpgrade|TestApproveCandidateTx_PartialCandidateRejected'
 ```
 
-exit 0；daemon 1.061s、gitmem 0.061s、storage 0.015s；四個頂層測試通過。Daemon list/detail fixture 有 50 筆、每筆 10 KiB draft。Disconnect 測試只覆蓋 memory page/detail，不能宣稱 capture HTTP disconnect 已驗收。超大 provenance、完整 capture disconnect 與大量游標遍歷 probe 尚待執行；計畫保留前置 gate，不偽造結果。
+exit 0；daemon 1.061s、gitmem 0.061s、storage 0.015s；四個頂層測試通過。Daemon list/detail fixture 有 50 筆、每筆 10 KiB draft。Disconnect 測試只覆蓋 memory page/detail，不能宣稱 capture HTTP disconnect 已驗收。立項查核當時，超大 provenance、完整 capture disconnect 與大量游標遍歷 probe 尚待執行；2026-09-30 後續實作已取得對應證據，見 [驗證紀錄](evidence/verification.md)。
