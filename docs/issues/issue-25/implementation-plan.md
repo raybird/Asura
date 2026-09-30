@@ -18,7 +18,7 @@
 | 階段 | 驗收映射 | 產出 | 相依 | 可檢查完成判準 | 狀態 |
 |---|---|---|---|---|---|
 | I1 固定版本 contract probe | BADAPT-002、004、006、007、009 | 可重跑 probe、去敏輸出、能力矩陣與 I-TBD-1～6 決策 | 取得固定 binary 與可隔離環境；不改 production | README 列出的首要證據齊備；每項標已證明或 unsupported，安全失敗明確阻擋對應路徑 | OMP 18.4.4 指定模型、主 PGID 取消失敗／PID namespace 回收及唯讀掛載證據已保存；retry、完整失敗與其他安全路徑待驗 |
-| I1-G 規格定案 | BADAPT-001～012 | I-TBD-1～10 結論、核准表與技術基線 | I1；必要 model/provider 等決策有答案 | 已核准的行為維持一致；固定版本與能力有 probe 證據，實質修訂逐項重新核准並提交基線 | 行為已核准；2026-09-30 新 bwrap 部署前提 I-TBD-10 待決 |
+| I1-G 規格定案 | BADAPT-001～012 | I-TBD-1～10 結論、核准表與技術基線 | I1；必要 model/provider 等決策有答案 | 已核准的行為維持一致；固定版本與能力有 probe 證據，實質修訂逐項重新核准並提交基線 | 行為已核准；2026-09-30 I-TBD-10 已核准；完整探測及技術基線仍待驗 |
 | I2-A 共同 conformance harness | BADAPT-001、002、004、006、007、009、010 | 共同 assertions、各 adapter fixture 入口 | I1-G、decompose | 測試能捕捉錯誤分類、partial、取消與重複呼叫；不 mock 掉被驗能力 | 待 probe 後拆解 |
 | I2-B OMP adapter | BADAPT-002、003、006、007、009、010 | OMP adapter 與 parser／process 測試 | I2-A | 真實 probe 與 fixture 一致；先紅後綠，其他 backend 呼叫為 0 | 待 probe 後拆解 |
 | I2-C Antigravity adapter | BADAPT-004～007、009、010 | Antigravity adapter 與相關測試 | I2-B 全綠 | auth/unavailable、partial、cancel 對共同契約，無 session 語意外洩 | 待 probe 後拆解 |
@@ -50,7 +50,7 @@
 2026-09-30 使用系統 `/usr/bin/python3` 查核：Python 語法、四份 Markdown 相對連結、核准 commit 的 Gherkin 區塊完全相等、Scenario 與核准表集合相等、十份 JSON fixture 及控制組／取消／唯讀結果；全部 PASS。此為文件與 probe artifact 靜態查核，沒有用「主程序退出」或「子程序最後已退出」代替副作用判準。可重跑的語法／JSON 基本查核：
 
 ```bash
-/usr/bin/python3 -c "import ast,json; from pathlib import Path; ast.parse(Path('scripts/issue-25/probe_omp.py').read_text()); files=list(Path('docs/issues/issue-25/probes').glob('*.json')); assert len(files)==10; [json.loads(p.read_text()) for p in files]; print('PASS: syntax and 10 JSON files')"
+/usr/bin/python3 -c "import ast,json; from pathlib import Path; ast.parse(Path('scripts/issue-25/probe_omp.py').read_text()); files=list(Path('docs/issues/issue-25/probes').glob('*.json')); assert len(files)==14; [json.loads(p.read_text()) for p in files]; print('PASS: syntax and 14 JSON files')"
 git diff --check
 ```
 
@@ -59,3 +59,9 @@ git diff --check
 ### 2026-09-30 I1 Retry 追查補充
 
 已追查固定套件 source 的 provider 與 session recovery 邊界，命令、source 雜湊及限制見 [技術分析](technical-analysis.md#2026-09-30-retry-靜態追查)。結果：CLI retry 關閉不等於 provider 無 recovery；工具完成後有 replay guard 的靜態線索，但未取得 transport 故障時的真實 request／工具計數證據，I1 仍未完成。純調查未改 production，不適用產品紅綠測試；本次查核 source 路徑與符號存在，文件 diff 無 whitespace error。I-TBD-10 部署選項仍等待使用者答覆。
+
+### 2026-09-30 I1 Shell 補測及決策更新
+
+I-TBD-10 已獲使用者「1」核准，解除 bwrap 部署決策阻塞。新增 shell 在 workspace 及外部獨立暫存目錄的正／唯讀控制組，共四份真實 fixture，命令與結果見 [Shell 邊界補測](technical-analysis.md#2026-09-30-shell-寫入邊界補測)。兩個正控制組均寫入 PROBE_OK；兩個唯讀控制組均有 EROFS 與 marker 不存在，CLI 均正常完成。對應 BADAPT-002、006 的安全調查，未宣告完整能力；retry／partial／Antigravity 仍待驗。腳本精煉 no-op；Python AST、14 份 JSON 與 git diff --check PASS，核准版本 Gherkin 不變。尚未執行產品 vet／race／build。
+
+Antigravity 的固定正式模型未選定，2026-09-30 已詢問使用者採用先前 probe 的 gemini-3.8-flash-low 或先查看清單；這會影響 I-TBD-4 及 BADAPT-011，不能將僅用於 probe 的模型直接視為正式設定。

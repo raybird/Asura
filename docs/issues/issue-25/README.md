@@ -163,7 +163,7 @@ Feature: 可替換的四後端執行契約
 | I-TBD-7 | 正式 ID 為 omp／antigravity，是否額外接受 agy alias | 待確認 | BADAPT-003、005、008；建議先只接受正式 ID，避免新增同義身份 |
 | I-TBD-8 | BADAPT-001～012 Gherkin 已核准；固定版本 fixture/probe 基線尚待建立 | 待確認 | 目前核准行為範圍；probe 若要求實質改劇本，受影響項標待重新核准 |
 | I-TBD-9 | npm DNS、namespace 及 OMP 指定模型登入已可用；完整隔離契約待驗 | 待確認 | I-TBD-1～6 的前置條件已具部分證據，未解除全部安全 gate |
-| I-TBD-10 | 是否接受 OMP adapter 新增 bwrap 執行期依賴／namespace 前提；不符合環境時模型呼叫前 unavailable | 待確認 | BADAPT-002、003、006、007；2026-09-30 已提出具直接對照證據的方案，等待部署範圍決策 |
+| I-TBD-10 | OMP adapter 採用 bwrap 執行期依賴／PID namespace；不符合環境時模型呼叫前 unavailable | 已解決 | BADAPT-002、003、006、007；2026-09-30 使用者對明列方案回覆「1」，核准部署前提；完整能力仍須探測 |
 
 I-TBD-1～6 先由 probe 取得事實，需使用者選定的 model/provider 或無法隔離的環境條件再提問。I-TBD-7 及 I-TBD-8 的技術基線在 probe 後定案；若變更已核准行為，依核准紀錄逐項重新核准。沒有 gate 豁免。
 
@@ -177,9 +177,10 @@ I-TBD-1～6 先由 probe 取得事實，需使用者選定的 model/provider 或
 | 2026-09-29 | 環境恢復後取得 OMP 18.4.3 候選套件及 agy 最小非互動回應；安全能力仍待 probe | Codex |
 | 2026-09-29 | agy plan 模式於隔離工作區實際寫入，排除該模式的唯讀能力宣告 | Codex |
 | 2026-09-30 | 使用者指定 OMP 的 openai-codex/gpt-6-luna；完成真實呼叫、寫入與取消 probe，新增 I-TBD-10 部署方案決策 | 使用者／Codex |
+| 2026-09-30 | 使用者回覆「1」，核准 OMP bwrap 隔離部署方案及不支援環境的 unavailable 行為 | 使用者 |
 
 ---
 **建立日期**: 2026-09-29
 **分級**: Large
 **風險**: High
-**狀態**: BADAPT-001～012 已核准；contract probe 部分完成，等待 I-TBD-10 部署決策及完整技術基線
+**狀態**: BADAPT-001～012 已核准；contract probe 部分完成，bwrap 部署前提已核准，完整技術基線待驗

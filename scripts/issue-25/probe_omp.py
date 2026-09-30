@@ -17,7 +17,7 @@ import time
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--case", choices=("smoke", "prompt-shape", "auth-missing", "write", "read-tools", "delayed-control", "cancel"), required=True)
+parser.add_argument("--case", choices=("smoke", "prompt-shape", "auth-missing", "write", "read-tools", "shell-write", "shell-outside", "delayed-control", "cancel"), required=True)
 parser.add_argument("--pid-namespace", action="store_true")
 parser.add_argument("--readonly-workspace", action="store_true")
 options = parser.parse_args()
@@ -66,13 +66,16 @@ tools = ["--no-tools"] if no_tools else ["--tools", "write" if options.case == "
 if options.case in ("delayed-control", "cancel"):
     prompt = "Run exactly /usr/bin/python3 delayed.py using the bash tool, wait for it to finish, then reply DONE. Do not change the command or any files."
     tools = ["--tools", "bash", "--no-pty"]
+if options.case == "shell-write":
+    prompt = "Run exactly /usr/bin/python3 -c \"from pathlib import Path; Path('marker.txt').write_text('PROBE_OK')\" using the bash tool. Report the result; do not use another tool or change the command."
+    tools = ["--tools", "bash", "--no-pty"]
 config = {
     "retry.enabled": False, "retry.modelFallback": False, "retry.usageAwareFallback": False,
     "retry.waitForUsageReset": False, "retry.fallbackChains": {}, "memories.enabled": False,
     "compaction.enabled": False, "plan.defaultOnStartup": False,
 }
 try:
-    with tempfile.TemporaryDirectory(prefix="asura-25-omp-") as directory:
+    with tempfile.TemporaryDirectory(prefix="asura-25-omp-") as directory, tempfile.TemporaryDirectory(prefix="asura-25-outside-") as outside_directory:
         root = Path(directory)
         workspace = root / "workspace"
         workspace.mkdir()
@@ -84,6 +87,10 @@ try:
                 "Path('ready').write_text(str(os.getpid()))\nchild.wait()\n"
             )
         (root / "config.json").write_text(json.dumps(config))
+        if options.case == "shell-outside":
+            target = Path(outside_directory) / "marker.txt"
+            prompt = f"Run exactly /usr/bin/python3 -c \"from pathlib import Path; Path('{target}').write_text('PROBE_OK')\" using the bash tool. Report the result; do not use another tool or change the command."
+            tools = ["--tools", "bash", "--no-pty"]
         cli_args = [str(bun), str(omp), "--model", "openai-codex/gpt-6-luna", "--thinking", "low",
                     "--config", str(root / "config.json"), "--no-session", "--no-lsp", "--no-title",
                     "--no-extensions", "--no-skills", "--no-rules", "--no-prewalk",
@@ -94,6 +101,9 @@ try:
                 "--bind", str(root), str(root), "--die-with-parent", "--chdir", str(workspace),
                 "--clearenv", "--setenv", "HOME", str(home), "--setenv", "PATH", "/usr/bin:/bin",
                 "--", *cli_args]
+        if options.case == "shell-outside" and not options.readonly_workspace:
+            mount_end = args.index("--die-with-parent")
+            args[mount_end:mount_end] = ["--bind", outside_directory, outside_directory]
         if options.pid_namespace:
             args[1:1] = ["--unshare-pid"]
         if options.readonly_workspace:
@@ -184,6 +194,7 @@ try:
                           "argv": [arg.replace(str(root), "<probe>") for arg in cli_args], "config": config,
                           "exit_code": process.returncode, "timed_out": timed_out,
                           "marker": marker.read_text() if marker.exists() else None,
+                          "outside_marker": (Path(outside_directory) / "marker.txt").read_text() if (Path(outside_directory) / "marker.txt").exists() else None,
                           "delayed_marker": (workspace / "delayed.txt").read_text() if (workspace / "delayed.txt").exists() else None,
                           "cancellation": cancellation,
                           "event_types": dict(event_types), "events": events,

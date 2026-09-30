@@ -146,3 +146,22 @@ rg -n 'CODEX_MAX_RETRIES|codexSseMaxAttempts|canSafelyReplayWebsocketOverSse|try
 - `pi-coding-agent/src/session/turn-recovery.ts` 的 committed-text stream stall 路徑明確檢查 autoRetryEnabled，但不能將這一條件推廣至上述全部 provider 路徑。
 
 I-TBD-5 保留待確認。下一個必要證據是可計數的受控 transport failure，分別在輸出前、部分輸出後及真實工具副作用後觀察 request／工具次數、最終 failure 與 partial 保留；此靜態分析不作為安全 gate 通過，也不要求修改已核准劇本。
+
+### 2026-09-30 部署方案核准
+
+使用者對前述選項回覆「1」，接受 OMP adapter 新增 bwrap 執行期依賴、PID namespace 及唯讀掛載；缺少 binary 或 namespace 不可用時，在模型呼叫前回報 unavailable。I-TBD-10 已解決，此核准不將尚未探測的能力標為通過。
+
+## 2026-09-30 Shell 寫入邊界補測
+
+以下四次均為 OMP 18.4.4／Bun 1.4.2、openai-codex/gpt-6-luna 的真實模型與 bash tool 呼叫。入口 `/usr/bin/python3 scripts/issue-25/probe_omp.py`；固定雜湊、argv、config、腳本雜湊及完整 tool result 保存於 fixture。
+
+| 參數 | 結果 | 證據 |
+|---|---|---|
+| `--case shell-write --pid-namespace` | CLI exit 0，Python command 成功，workspace marker = PROBE_OK | [正控制組](probes/omp-18.4.4-shell-control.json) |
+| `--case shell-write --pid-namespace --readonly-workspace` | CLI exit 0，tool command exit 1／EROFS，workspace marker 不存在 | [唯讀控制組](probes/omp-18.4.4-shell-readonly.json) |
+| `--case shell-outside --pid-namespace` | 外部獨立暫存目錄明確可寫掛載，CLI exit 0，outside marker = PROBE_OK | [外部正控制組](probes/omp-18.4.4-outside-control.json) |
+| `--case shell-outside --pid-namespace --readonly-workspace` | 外部目錄由根目錄唯讀掛載保護，CLI exit 0，tool command exit 1／EROFS，outside marker 不存在 | [外部唯讀控制組](probes/omp-18.4.4-outside-readonly.json) |
+
+檔案結果與實際 tool exit 同時作判準；CLI 的 exit 0 代表模型完成回應，不能等同工具成功。正控制組證明兩個 marker 偵測器有效。本結果涵蓋 write tool 之外的 shell 寫入及一個 workspace 外路徑，並非所有工具／任意路徑的證明；可寫的拋棄式 auth／scratch 目錄不是產品工作區。production 仍須最小化可寫掛載並避免暴露主機 socket／額外可寫 mount。
+
+2026-09-30 code-simplify 檢查本次腳本增量：沿用既有 case 分支與拋棄式資源管理，沒有值得額外抽象的重複邏輯，維持 no-op；所有四份真實結果、語法與 JSON 靜態查核皆通過。
