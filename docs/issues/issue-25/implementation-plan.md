@@ -146,3 +146,7 @@ I1 仍進行中。修正 OMP 平面設定無效反例，巢狀設定後受控 50
 固定 runtime 在來源更新後仍執行已驗 bytes；每次呼叫建立私人 scratch 副本並驗 hash、唯讀掛載，結束即移除。新 adapter 不修改 Pipeline／Engine／Memory／Context 的 production 邏輯。2026-09-30 更新登入後，正式 Antigravity adapter live 通過，見 evidence/agy-new-login-live.log。
 
 2026-09-30 獨立 review RETURN 的三項問題已修正，原報告保留；詳見 technical-analysis.md 的依賴契約及 evidence/review-fix-{red,green}.log。補修範圍完成 code-simplify 檢查，保留 snapshot／mount 與錯誤分類的清楚相依順序；review-final-race、review-final-vet、review-final-build 同組完整命令均 exit 0，OMP 新依賴快照的真實模型通過。PR #26 已建立；下一步對修復提交重新獨立審查。
+
+## 2026-09-30 GitHub 第一輪審查修復
+
+GitHub review #5362647041 對 HEAD 6ac6419 判定 RETURN：Actions run 36680280757 缺 bwrap，Race 失敗，Web UI probe／Build skipped。先前本機完整回歸證據只適用該本機環境，不能代表正式 CI 全綠；BADAPT-012 與 I4 交付重新開啟。最小修改在 ci.yml 安裝 bubblewrap，並在 race 前實際驗 PID／IPC namespace；不以 skip 取代回歸。完成證據為新 HEAD 的正式 Actions Race、Web UI probe、Build 全部 success，之後等待 GitHub reviewer 下一輪審查。code-simplify 檢查此設定修改，無額外抽象或重複邏輯需精煉。

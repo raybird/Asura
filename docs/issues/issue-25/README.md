@@ -187,4 +187,4 @@ Feature: 可替換的四後端執行契約
 **建立日期**: 2026-09-29
 **分級**: Large
 **風險**: High
-**狀態**: 實作與完整回歸已通過；待 PR 與獨立審查
+**狀態**: GitHub review #5362647041 RETURN；修正 CI runtime prerequisite，等待新 HEAD 正式 CI 與再次審查

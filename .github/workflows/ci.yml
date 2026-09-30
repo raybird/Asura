@@ -32,6 +32,12 @@ jobs:
       - name: Install Pinned OpenCode 1.18.23
         run: npm install -g opencode-ai@1.18.23
 
+      - name: Install bubblewrap and verify namespaces
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap
+          bwrap --unshare-pid --unshare-ipc --ro-bind / / --proc /proc --die-with-parent -- /usr/bin/true
+
       - name: Vet
         run: go vet ./...
 
