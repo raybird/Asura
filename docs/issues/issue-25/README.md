@@ -157,14 +157,14 @@ Feature: 可替換的四後端執行契約
 | I-TBD-1 | OMP 18.4.4／Bun 1.4.2 固定 probe，指定 openai-codex/gpt-6-luna 的 OAuth 呼叫已成功；完整契約待驗 | 待確認 | BADAPT-002、003、007；可重跑腳本及 fixture 已保存，production 技術基線未定案 |
 | I-TBD-2 | Antigravity 已更新為 CLI 1.2.13；指定模型與 HOME／IPC 隔離登入對照通過，完整契約待驗 | 待確認 | BADAPT-004、005、007；簡單回應不證明安全或失敗路徑 |
 | I-TBD-3 | agy plan 已寫入；OMP 主 PGID 取消漏掉子程序；bwrap PID namespace 與唯讀掛載的窄對照已通過 | 待確認 | BADAPT-002、004、006、007；採用方案見 I-TBD-10；agy 1.2.13 完整隔離取消／唯讀窄對照已通過；其餘工具／路徑待驗，部署決策見 I-TBD-11 |
-| I-TBD-4 | OMP provider/model 已由使用者於 2026-09-30 指定；Antigravity gemini-3.8-flash-low 亦於 2026-09-30 由使用者選定；trace、production 登入狀態策略與 Context window 待定 | 待確認 | BADAPT-008、011；OMP catalog 272000 尚非實測窗口，版本不改既有 fingerprint |
+| I-TBD-4 | OMP provider/model 已由使用者於 2026-09-30 指定；Antigravity gemini-3.8-flash-low 亦於 2026-09-30 由使用者選定；2026-09-30 使用者回覆「1」選定沿用原 CLI 登入、唯讀快照、過期後手動更新；trace 與 Context window 待定 | 待確認 | BADAPT-008、011；OMP catalog 272000 尚非實測窗口，版本不改既有 fingerprint |
 | I-TBD-5 | CLI retry/session/resume 關閉方式及 unknown-result 分類 | 待確認 | BADAPT-007、009；必要副作用 gate |
 | I-TBD-6 | auth、rate-limit、partial output、cancel 精確 mapping | 待確認 | BADAPT-002、004、007；由真實 evidence 建 fixtures |
 | I-TBD-7 | 正式 ID 為 omp／antigravity，是否額外接受 agy alias | 待確認 | BADAPT-003、005、008；建議先只接受正式 ID，避免新增同義身份 |
 | I-TBD-8 | BADAPT-001～012 Gherkin 已核准；固定版本 fixture/probe 基線尚待建立 | 待確認 | 目前核准行為範圍；probe 若要求實質改劇本，受影響項標待重新核准 |
 | I-TBD-9 | npm DNS、namespace 及 OMP 指定模型登入已可用；完整隔離契約待驗 | 待確認 | I-TBD-1～6 的前置條件已具部分證據，未解除全部安全 gate |
 | I-TBD-10 | OMP adapter 採用 bwrap 執行期依賴／PID namespace；不符合環境時模型呼叫前 unavailable | 已解決 | BADAPT-002、003、006、007；2026-09-30 使用者對明列方案回覆「1」，核准部署前提；完整能力仍須探測 |
-| I-TBD-11 | 是否將 bwrap／完整 HOME、暫存 socket 及 IPC 隔離的部署前提擴及 Antigravity；不支援時模型呼叫前 unavailable | 待確認 | BADAPT-004～007；2026-09-30 完整隔離登入與安全對照已保存，等待部署決策 |
+| I-TBD-11 | Antigravity 採用 bwrap／完整 HOME、暫存 socket 及 IPC 隔離；不支援時模型呼叫前 unavailable | 已解決 | BADAPT-004～007；2026-09-30 使用者對部署選項回覆「1」，核准此方案；完整能力仍須驗證 |
 
 I-TBD-1～6 先由 probe 取得事實，需使用者選定的 model/provider 或無法隔離的環境條件再提問。I-TBD-7 及 I-TBD-8 的技術基線在 probe 後定案；若變更已核准行為，依核准紀錄逐項重新核准。沒有 gate 豁免。
 
@@ -180,6 +180,8 @@ I-TBD-1～6 先由 probe 取得事實，需使用者選定的 model/provider 或
 | 2026-09-30 | 使用者指定 OMP 的 openai-codex/gpt-6-luna；完成真實呼叫、寫入與取消 probe，新增 I-TBD-10 部署方案決策 | 使用者／Codex |
 | 2026-09-30 | 使用者回覆「1」，核准 OMP bwrap 隔離部署方案及不支援環境的 unavailable 行為 | 使用者 |
 | 2026-09-30 | 使用者對 Antigravity 模型選項回覆「1」，選定 gemini-3.8-flash-low | 使用者 |
+| 2026-09-30 | 使用者對正式登入選項回覆「1」，選定原 CLI 登入／唯讀快照／過期後手動更新；不持久化自動續期 | 使用者 |
+| 2026-09-30 | 使用者對 Antigravity 部署選項回覆「1」，核准 bwrap／HOME／IPC 隔離及 unavailable 行為 | 使用者 |
 
 ---
 **建立日期**: 2026-09-29

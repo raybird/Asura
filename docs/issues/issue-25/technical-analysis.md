@@ -108,7 +108,7 @@ timeout 45s bwrap --ro-bind / / --dev-bind /dev /dev --proc /proc \
 
 可重跑入口為 [probe_omp.py](../../../scripts/issue-25/probe_omp.py)。腳本比對固定 CLI／Bun 雜湊，建立拋棄式工作區；只將指定 provider 的 OAuth credential 透過 memfd 放入隔離環境，未將 credential 寫入檔案或更動使用者的 OMP 設定。輸出保留實際 argv、config、版本、exit code、message、程序群組與檔案差異；去除 opaque message ID/signature，聚合其他事件種類，保存前檢查 credential 值未出現在輸出。這是 probe 方法，production 的登入／狀態目錄策略仍待定案。
 
-共同參數固定模型與 low thinking，關閉 session、extensions、skills、rules、prewalk、memories、compaction、CLI retry/model fallback。`retry.enabled=false` **不代表 provider 內部 reconnect/retry 已證明關閉**；套件的 Codex transport 仍有獨立 recovery 路徑，I-TBD-5 保留待驗。
+共同參數固定模型與 low thinking，以 flags 關閉 session、extensions、skills、rules、prewalk。NOTE（2026-09-30）：原平面設定沒有真正關閉 memories、compaction、CLI retry/model fallback；下方歷史 fixture 保留當時實際設定，新巢狀設定與重測見後節。`retry.enabled=false` **不代表 provider 內部 reconnect/retry 已證明關閉**；套件的 Codex transport 仍有獨立 recovery 路徑，I-TBD-5 保留待驗。
 
 | 命令（`/usr/bin/python3 scripts/issue-25/probe_omp.py` 後接參數） | 直接結果與證據 | 可支持的結論 |
 |---|---|---|
@@ -194,3 +194,50 @@ I-TBD-5 保留待確認。下一個必要證據是可計數的受控 transport f
 2026-09-30 對此具體方案詢問是否將 bwrap／完整 HOME 與 IPC 隔離的執行期部署前提擴及 Antigravity（I-TBD-11）；先前 I-TBD-10 僅明列 OMP，因此未推定擴及核准。缺 binary／namespace 時模型呼叫前 unavailable。production 登入存放與 refresh 策略仍需明確設計，probe 的拋棄式 token 並不代表正式登入管理已完成。
 
 code-simplify 本次檢查只涉及新 probe：沿用直接 case 分支與拋棄式資源管理，沒有需新增抽象的重複邏輯，no-op。腳本 AST、15 份 agy JSON、14 份 OMP JSON、相對連結、核准 Gherkin 一致性與 git diff --check 通過。未執行產品 vet／race／build，未宣告 I1 全部完成。
+
+
+## 2026-09-30 設定修正與失敗契約補測
+
+OMP 設定查找使用巢狀路徑，原 `retry.enabled` 平面 key 無效。[平面設定反例](probes/omp-18.4.4-flat-config-retry.json) 在受控 HTTP 503 下有 41 次 request、6 次 auto_retry_start，90 秒後由 probe 終止。新設定採 `retry: {enabled: false, modelFallback: false, usageAwareFallback: false, waitForUsageReset: false, fallbackChains: {}}`，以及巢狀 memories／compaction／plan 設定。不能再將歷史 fixture 視為 retry 已關閉的證據。
+
+入口 `/usr/bin/python3 scripts/issue-25/probe_omp.py --pid-namespace --case CASE`：
+
+| CASE | 直接結果 | fixture |
+|---|---|---|
+| transport-failure | exit 1，8 次 transport request、無 auto_retry_start、1 次 agent_start | [transport](probes/omp-18.4.4-nested-transport.json) |
+| transport-after-tool | 真實 bash 工具副作用一次，後續 503；exit 1，9 次 request、無 auto_retry_start | [after-tool](probes/omp-18.4.4-nested-after-tool.json) |
+| transport-partial | SSE 部分文字後 response.failed；exit 1，保留 PARTIAL_BEFORE_FAILURE，stopReason error | [partial](probes/omp-18.4.4-nested-partial.json) |
+| transport-rate-limit | 受控 HTTP 429；exit 1，ChatGPT rate limit exceeded，8 次 request、無 auto_retry_start | [rate-limit](probes/omp-18.4.4-nested-rate-limit.json) |
+
+上述為真實 CLI、合成 OAuth 與本機受控服務，沒有呼叫真實模型，不證明帳戶配額或服務所有故障行為。transport recovery 仍存在，request 次數不是 Asura attempt 次數。使用新設定另跑真實模型 smoke、shell-write、delayed-control、cancel、shell-write readonly；[smoke](probes/omp-18.4.4-nested-smoke.json)、[write](probes/omp-18.4.4-nested-write.json)、[delayed](probes/omp-18.4.4-nested-delayed.json)、[cancel](probes/omp-18.4.4-nested-cancel.json)、[readonly](probes/omp-18.4.4-nested-readonly.json)。前三者分別 PROBE_OK、PROBE_OK、DELAYED；取消 ready age 0.152 秒、十秒後 child 不存活且無 marker；唯讀 EROFS、無 marker。
+
+### Antigravity 固定 binary、partial 與 transport 故障
+
+主機 CLI 再次自動更新為 1.2.14，hash guard 拒絕。從官方 release 下載固定 1.2.13：`gh release download 1.2.13 --repo google-antigravity/antigravity-cli --pattern agy_cli_linux_x64.tar.gz --dir /tmp/asura-issue25-fixed-agy`。來源 [官方資產](https://github.com/google-antigravity/antigravity-cli/releases/download/1.2.13/agy_cli_linux_x64.tar.gz)，archive SHA-256 `b0f195d37973be7b08c3b705d7fbbcd948dacb4a3c2176ee52ca29f7159bdc21` 與 release asset digest 一致，binary SHA-256 仍為 `574b0234656c44564f3ff3b013225c86f14ae79b67d0f3b45f6aaf1b1625440e`。固定 binary／目錄 chmod 555，probe 以 `--binary-path` 指定並在 HOME／tmp 遮蔽後唯讀掛載 binary。
+
+入口 `/usr/bin/python3 scripts/issue-25/probe_agy.py --binary-path /tmp/asura-issue25-fixed-agy/antigravity --isolated-home --isolated-ipc --case CASE`：
+
+| CASE | 直接結果 | fixture |
+|---|---|---|
+| partial（8 秒早期設定） | exit 0／SUCCESS、空 response、stderr timeout | [8s](probes/agy-1.2.13-partial-8s.json) |
+| partial（20 秒目前設定） | exit 0／SUCCESS，11,197 字元 response，PARTIAL_START 開頭；stderr 明列 returning partial output | [20s](probes/agy-1.2.13-partial-20s.json) |
+| side-effect-timeout | 工具副作用一次，12 秒 timeout；exit 0／SUCCESS、空 response | [side-effect](probes/agy-1.2.13-side-effect-timeout.json) |
+| proxy-smoke | 真實服務 PROBE_OK，exit 0，18 次 CONNECT | [proxy-control](probes/agy-1.2.13-proxy-smoke.json) |
+| proxy-failure | 工具副作用後關閉 TLS tunnel 並拒絕後續 CONNECT；exit 3／ERROR、副作用一次、34 次 CONNECT（19 次在故障後） | [proxy-failure](probes/agy-1.2.13-proxy-failure.json) |
+
+proxy 不解密 TLS，也不保存憑證、headers 或 request payload。故障結果含原生 AGY_ERROR：status UNKNOWN、grpc error_code 2、retryable false。此案例有 transport reconnect，但沒有觀察到工具副作用重複；不推論所有 retry／vendor 故障均安全。timeout 即使 exit 0／SUCCESS，也必須分類為失敗並保留非空 partial。中間事件只聚合種類與計數，保留 init/result；opaque conversation/session/error ID 去敏。正式 vendor rate-limit 未實測，不虛構該證據。
+
+### 正式登入策略核准
+
+2026-09-30 使用者對選項回覆「1」，選定沿用原 CLI 登入、唯讀快照、過期後手動更新。production 不持久化自動續期。實作須移除快照 refresh credential，驗證期限並拒絕過期登入；避免複製 refresh token 後隔離續期使原登入失效。CLI token 寫入 tmpfs 不等於此策略已完成，尚須 access-only／過期對照。
+
+
+### 2026-09-30 Access-only 登入對照與必要更新
+
+入口為上述 smoke 命令加 `--access-only`。直接刪除 OMP refresh 欄位造成 CLI `b.refresh.trim` TypeError，不能作為正式快照形狀；[反例](probes/omp-18.4.4-access-missing-refresh.json) 保留終端錯誤與 stack，省略巨大的 bundled source excerpt。接續以空字串保留欄位。
+
+Antigravity 原 token expiry 為 2026-09-18T21:55:41.259302421+08:00，已過期；移除 refresh_token 後 CLI exit 1、要求登入並於 60 秒後 authentication timed out。[fixture](probes/agy-1.2.13-access-expired.json)，OAuth URL 的 state／code challenge 已去敏。先前帶 refresh 的成功 probe 不能重用為 access-only 成功對照。2026-09-30 已請使用者用原 CLI 更新登入；未完成前，I1-G 的此項成功證據待補。正式 adapter 必須前置判斷期限，不能以 CLI 自動登入等待作為執行路徑。
+
+2026-09-30 OMP 保留 `refresh: ""` 的 access-only smoke：exit 0、stopReason stop、精確 PROBE_OK；[成功對照](probes/omp-18.4.4-access-empty-refresh.json)。token expires 2026-10-10T01:35:58.549000+00:00。此對照只證明目前有效 token 可呼叫，過期／接近期限前置拒絕仍需產品測試。
+
+2026-09-30 code-simplify 檢查本次腳本增量：print timeout 改直接 mapping；其餘 case／proxy 與清理邊界不再抽象，no-op。歷史 script_sha256 如在執行結束計算，只代表該時檔案；新腳本於啟動時計算。fixture 保留實際 argv/config/binary hash，不回填歷史缺漏欄位。

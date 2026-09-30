@@ -2,8 +2,11 @@
 """2026-09-30：以隔離狀態及指定 OAuth provider 探測 OMP，不保存憑證。"""
 
 import argparse
+import base64
 from collections import Counter
 import datetime
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import threading
 import hashlib
 import json
 import os
@@ -16,9 +19,11 @@ import tempfile
 import time
 
 
+script_sha = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 parser = argparse.ArgumentParser()
-parser.add_argument("--case", choices=("smoke", "prompt-shape", "auth-missing", "write", "read-tools", "shell-write", "shell-outside", "delayed-control", "cancel"), required=True)
+parser.add_argument("--case", choices=("smoke", "prompt-shape", "auth-missing", "transport-failure", "transport-after-tool", "transport-partial", "transport-rate-limit", "write", "read-tools", "shell-write", "shell-outside", "delayed-control", "cancel"), required=True)
 parser.add_argument("--pid-namespace", action="store_true")
+parser.add_argument("--access-only", action="store_true")
 parser.add_argument("--readonly-workspace", action="store_true")
 options = parser.parse_args()
 home = Path.home()
@@ -48,16 +53,78 @@ if not auth.execute("SELECT count(*) FROM auth_credentials").fetchone()[0]:
 credential_strings = []
 for (data,) in auth.execute("SELECT data FROM auth_credentials"):
     credential_strings.extend(value for value in json.loads(data).values() if isinstance(value, str) and len(value) > 20)
+if options.access_only:
+    for row_id, data in auth.execute("SELECT id, data FROM auth_credentials").fetchall():
+        credential = json.loads(data)
+        credential["refresh"] = ""
+        auth.execute("UPDATE auth_credentials SET data=? WHERE id=?", (json.dumps(credential), row_id))
+    auth.commit()
 if options.case == "auth-missing":
     auth.execute("DELETE FROM auth_credentials")
     auth.commit()
+transport_requests = []
+server = None
+if options.case in ("transport-failure", "transport-after-tool", "transport-partial", "transport-rate-limit"):
+    for (row_id,) in auth.execute("SELECT id FROM auth_credentials").fetchall():
+        dummy = {"access": "e30." + base64.urlsafe_b64encode(json.dumps({"https://api.openai.com/auth": {"chatgpt_account_id": "probe-account"}}).encode()).decode().rstrip("=") + ".probe", "refresh": "probe-refresh-token",
+                 "expires": int(time.time() * 1000) + 86400000, "accountId": "probe-account"}
+        auth.execute("UPDATE auth_credentials SET data=? WHERE id=?", (json.dumps(dummy), row_id))
+    auth.commit()
+    tool_response_sent = [False]
+    class FailureHandler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers.get("Content-Length", "0")))
+            transport_requests.append({"method": self.command, "path": self.path})
+            body = b'{"error":{"message":"PROBE_TRANSIENT_ERROR","type":"server_error"}}'
+            status, content_type = 503, "application/json"
+            if options.case == "transport-rate-limit":
+                status = 429
+                body = b'{"error":{"message":"PROBE_RATE_LIMIT","type":"rate_limit_error"}}'
+            if options.case == "transport-after-tool" and self.command == "POST" and not tool_response_sent[0]:
+                tool_response_sent[0] = True
+                item = {"type": "function_call", "id": "fc_probe", "call_id": "call_probe", "name": "bash",
+                        "arguments": json.dumps({"i": "Probe side effect", "command": "/usr/bin/python3 side_effect.py", "pty": False, "async": False})}
+                events = [
+                    {"type": "response.created", "response": {"id": "resp_probe", "status": "in_progress", "output": []}},
+                    {"type": "response.output_item.added", "output_index": 0, "item": {**item, "arguments": ""}},
+                    {"type": "response.function_call_arguments.delta", "item_id": "fc_probe", "output_index": 0, "delta": item["arguments"]},
+                    {"type": "response.output_item.done", "output_index": 0, "item": item},
+                    {"type": "response.completed", "response": {"id": "resp_probe", "status": "completed", "output": [item], "usage": {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2}}},
+                ]
+                body = "".join("data: " + json.dumps(event) + "\n\n" for event in events).encode()
+                status, content_type = 200, "text/event-stream"
+            if options.case == "transport-partial" and self.command == "POST":
+                events = [
+                    {"type": "response.created", "response": {"id": "resp_partial", "status": "in_progress", "output": []}},
+                    {"type": "response.output_item.added", "output_index": 0, "item": {"type": "message", "id": "msg_partial", "role": "assistant", "content": []}},
+                    {"type": "response.content_part.added", "item_id": "msg_partial", "output_index": 0, "content_index": 0, "part": {"type": "output_text", "text": ""}},
+                    {"type": "response.output_text.delta", "item_id": "msg_partial", "output_index": 0, "content_index": 0, "delta": "PARTIAL_BEFORE_FAILURE"},
+                    {"type": "response.failed", "response": {"id": "resp_partial", "status": "failed", "error": {"code": "server_error", "message": "PROBE_PARTIAL_FAILURE"}}},
+                ]
+                body = "".join("data: " + json.dumps(event) + "\n\n" for event in events).encode()
+                status, content_type = 200, "text/event-stream"
+            try:
+                self.send_response(status)
+                self.send_header("Content-Type", content_type)
+                self.send_header("Content-Length", str(len(body)))
+                if status == 429:
+                    self.send_header("Retry-After", "0")
+                self.end_headers()
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+        do_GET = do_POST
+        def log_message(self, *args):
+            pass
+    server = HTTPServer(("127.0.0.1", 0), FailureHandler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
 fd = os.memfd_create("omp-probe-auth")
 os.write(fd, auth.serialize())
 os.lseek(fd, 0, os.SEEK_SET)
 source.close()
 
 prompt = "Reply with exactly PROBE_OK"
-no_tools = options.case in ("smoke", "prompt-shape", "auth-missing")
+no_tools = options.case in ("smoke", "prompt-shape", "auth-missing", "transport-failure", "transport-partial", "transport-rate-limit")
 if options.case == "prompt-shape":
     prompt = "--not-a-flag\nThis prompt includes spaces and a newline. Reply with exactly PROMPT_OK."
 elif not no_tools:
@@ -66,13 +133,17 @@ tools = ["--no-tools"] if no_tools else ["--tools", "write" if options.case == "
 if options.case in ("delayed-control", "cancel"):
     prompt = "Run exactly /usr/bin/python3 delayed.py using the bash tool, wait for it to finish, then reply DONE. Do not change the command or any files."
     tools = ["--tools", "bash", "--no-pty"]
+if options.case == "transport-after-tool":
+    prompt = "Run /usr/bin/python3 side_effect.py once, then report DONE."
+    tools = ["--tools", "bash", "--no-pty"]
 if options.case == "shell-write":
     prompt = "Run exactly /usr/bin/python3 -c \"from pathlib import Path; Path('marker.txt').write_text('PROBE_OK')\" using the bash tool. Report the result; do not use another tool or change the command."
     tools = ["--tools", "bash", "--no-pty"]
 config = {
-    "retry.enabled": False, "retry.modelFallback": False, "retry.usageAwareFallback": False,
-    "retry.waitForUsageReset": False, "retry.fallbackChains": {}, "memories.enabled": False,
-    "compaction.enabled": False, "plan.defaultOnStartup": False,
+    "retry": {"enabled": False, "modelFallback": False, "usageAwareFallback": False,
+              "waitForUsageReset": False, "fallbackChains": {}},
+    "memories": {"enabled": False}, "compaction": {"enabled": False},
+    "plan": {"defaultOnStartup": False},
 }
 try:
     with tempfile.TemporaryDirectory(prefix="asura-25-omp-") as directory, tempfile.TemporaryDirectory(prefix="asura-25-outside-") as outside_directory:
@@ -85,6 +156,11 @@ try:
                 "child = subprocess.Popen(['/usr/bin/python3', '-c', \"import time; from pathlib import Path; time.sleep(8); Path('delayed.txt').write_text('DELAYED')\"])\n"
                 "Path('child.pid').write_text(str(child.pid))\n"
                 "Path('ready').write_text(str(os.getpid()))\nchild.wait()\n"
+            )
+        if options.case == "transport-after-tool":
+            (workspace / "side_effect.py").write_text(
+                "from pathlib import Path\np = Path('side_effect.txt')\n"
+                "p.write_text(str(int(p.read_text()) + 1 if p.exists() else 1))\nprint('SIDE_EFFECT_OK')\n"
             )
         (root / "config.json").write_text(json.dumps(config))
         if options.case == "shell-outside":
@@ -101,6 +177,13 @@ try:
                 "--bind", str(root), str(root), "--die-with-parent", "--chdir", str(workspace),
                 "--clearenv", "--setenv", "HOME", str(home), "--setenv", "PATH", "/usr/bin:/bin",
                 "--", *cli_args]
+        if server:
+            models = root / "models.yml"
+            models.write_text(json.dumps({"providers": {"openai-codex": {
+                "baseUrl": f"http://127.0.0.1:{server.server_port}",
+                "modelOverrides": {"gpt-6-luna": {"baseUrl": f"http://127.0.0.1:{server.server_port}"}}}}}))
+            mount_end = args.index("--die-with-parent")
+            args[mount_end:mount_end] = ["--ro-bind", str(models), str(home / ".omp/agent/models.yml")]
         if options.case == "shell-outside" and not options.readonly_workspace:
             mount_end = args.index("--die-with-parent")
             args[mount_end:mount_end] = ["--bind", outside_directory, outside_directory]
@@ -184,9 +267,9 @@ try:
                 events.append({"non_json": line})
         marker = workspace / "marker.txt"
         print(json.dumps({"date": datetime.date.today().isoformat(), "case": options.case,
-                          "pid_namespace": options.pid_namespace,
+                          "pid_namespace": options.pid_namespace, "access_only": options.access_only,
                           "readonly_workspace": options.readonly_workspace,
-                          "script_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                          "script_sha256": script_sha,
                           "version": subprocess.check_output([str(bun), str(omp), "--version"], text=True).strip(),
                           "cli_sha256": cli_sha,
                           "bun_version": subprocess.check_output([str(bun), "--version"], text=True).strip(),
@@ -196,8 +279,12 @@ try:
                           "marker": marker.read_text() if marker.exists() else None,
                           "outside_marker": (Path(outside_directory) / "marker.txt").read_text() if (Path(outside_directory) / "marker.txt").exists() else None,
                           "delayed_marker": (workspace / "delayed.txt").read_text() if (workspace / "delayed.txt").exists() else None,
-                          "cancellation": cancellation,
+                          "cancellation": cancellation, "transport_requests": transport_requests,
+                          "side_effect_count": int((workspace / "side_effect.txt").read_text()) if (workspace / "side_effect.txt").exists() else 0,
                           "event_types": dict(event_types), "events": events,
                           "stderr": stderr.decode(errors="replace")}, ensure_ascii=False, indent=2))
 finally:
     os.close(fd)
+    if server:
+        server.shutdown()
+        server.server_close()

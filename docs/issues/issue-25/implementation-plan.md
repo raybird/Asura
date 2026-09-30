@@ -18,7 +18,7 @@
 | 階段 | 驗收映射 | 產出 | 相依 | 可檢查完成判準 | 狀態 |
 |---|---|---|---|---|---|
 | I1 固定版本 contract probe | BADAPT-002、004、006、007、009 | 可重跑 probe、去敏輸出、能力矩陣與 I-TBD-1～6 決策 | 取得固定 binary 與可隔離環境；不改 production | README 列出的首要證據齊備；每項標已證明或 unsupported，安全失敗明確阻擋對應路徑 | OMP 18.4.4 指定模型、主 PGID 取消失敗／PID namespace 回收及唯讀掛載證據已保存；retry、完整失敗與其他安全路徑待驗 |
-| I1-G 規格定案 | BADAPT-001～012 | I-TBD-1～11 結論、核准表與技術基線 | I1；必要 model/provider 等決策有答案 | 已核准的行為維持一致；固定版本與能力有 probe 證據，實質修訂逐項重新核准並提交基線 | 行為已核准；2026-09-30 I-TBD-10 已核准；完整探測及技術基線仍待驗 |
+| I1-G 規格定案 | BADAPT-001～012 | I-TBD-1～11 結論、核准表與技術基線 | I1；必要 model/provider 等決策有答案 | 已核准的行為維持一致；固定版本與能力有 probe 證據，實質修訂逐項重新核准並提交基線 | 行為已核准；2026-09-30 I-TBD-10、11 已核准；完整探測及技術基線仍待驗 |
 | I2-A 共同 conformance harness | BADAPT-001、002、004、006、007、009、010 | 共同 assertions、各 adapter fixture 入口 | I1-G、decompose | 測試能捕捉錯誤分類、partial、取消與重複呼叫；不 mock 掉被驗能力 | 待 probe 後拆解 |
 | I2-B OMP adapter | BADAPT-002、003、006、007、009、010 | OMP adapter 與 parser／process 測試 | I2-A | 真實 probe 與 fixture 一致；先紅後綠，其他 backend 呼叫為 0 | 待 probe 後拆解 |
 | I2-C Antigravity adapter | BADAPT-004～007、009、010 | Antigravity adapter 與相關測試 | I2-B 全綠 | auth/unavailable、partial、cancel 對共同契約，無 session 語意外洩 | 待 probe 後拆解 |
@@ -71,3 +71,14 @@ Antigravity 的固定正式模型未選定，2026-09-30 已詢問使用者採用
 使用者對固定模型選項回覆「1」，採 gemini-3.8-flash-low，解除模型選擇缺項。CLI 已更新至 1.2.13，舊 hash guard 拒絕後建立新探測腳本與去敏 JSON；新版本、命令、反例及限制見 [新基線](technical-analysis.md#2026-09-30-antigravity-1213-新基線)。發現 exit 0／SUCCESS 仍可能為逾時；移除 token／隔離 HOME 仍成功，直到完整 HOME／IPC 隔離才得到有效 auth 正反對照。對應 BADAPT-004、006、007 的調查；retry、非空 partial 等未完成，I1 仍進行中。
 
 2026-09-30 完整 HOME／IPC 隔離後重跑寫入、唯讀、延遲與取消控制組，直接結果及15份 agy fixture 見新基線。控制組通過，僅支持已測案例；I-TBD-11 的 Antigravity 部署範圍決策待答。code-simplify no-op，AST／29份 JSON／Markdown links／核准 Gherkin／diff check PASS；產品測試與完整 I1 仍未完成。
+
+
+### 2026-09-30 設定與失敗補測
+
+I1 仍進行中。修正 OMP 平面設定無效反例，巢狀設定後受控 503／429／partial／工具副作用故障不再出現 CLI auto_retry_start；provider transport 仍多次請求。重跑真實模型寫入、唯讀、延遲與取消。Antigravity 固定官方 1.2.13 binary，取得非空 timeout partial 及真實服務工具副作用後的 TLS transport failure；副作用一次，transport reconnect 19 次。命令、scope、原始計數與限制見 [補測](technical-analysis.md#2026-09-30-設定修正與失敗契約補測)。BADAPT-002、004、006、007、009 的調查證據增加，未宣告 production 驗收完成。
+
+2026-09-30 使用者回覆「1」核准 I-TBD-4 登入策略：沿用原 CLI 登入／唯讀快照／過期後手動更新。接續驗證 access-only 與過期拒絕，之後定案 I1-G 與拆解後續實作。未執行產品 vet／race／build。
+
+2026-09-30 登入補測：OMP 缺 refresh 欄位 TypeError，保留空 refresh 字串則真實 PROBE_OK；Antigravity access token 已於 2026-09-18 過期，移除 refresh 後要求登入並失敗。已請使用者更新原 CLI 登入，僅 access-only 成功對照依賴此更新；不將舊 refresh-enabled 成功冒充新策略通過。
+
+2026-09-30 最終靜態查核：兩份 Python AST、47 份 JSON、巢狀憑證字串掃描、相對連結、核准 Gherkin 不變、probe 子程序清理與 git diff --check PASS。probe 調查未修改 production，故不適用產品紅綠測試；此結果不是完整產品驗收或獨立 review。

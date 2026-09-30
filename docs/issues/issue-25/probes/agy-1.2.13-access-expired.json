@@ -1,0 +1,57 @@
+{
+  "date": "2026-09-30",
+  "case": "smoke",
+  "readonly_workspace": false,
+  "isolated_home": true,
+  "isolated_ipc": true,
+  "pid_namespace": true,
+  "access_only": true,
+  "version": "1.2.13",
+  "cli_sha256": "574b0234656c44564f3ff3b013225c86f14ae79b67d0f3b45f6aaf1b1625440e",
+  "script_sha256": "9592ef0bb1660c0795de797f1a0747bd3b339d917f1e8c2906e9a22f0d4a59b8",
+  "argv": [
+    "/tmp/asura-issue25-fixed-agy/antigravity",
+    "--mode",
+    "accept-edits",
+    "--model",
+    "gemini-3.8-flash-low",
+    "--disable-slash-commands",
+    "--dangerously-skip-permissions",
+    "--output-format",
+    "stream-json",
+    "--print-timeout",
+    "60s",
+    "--print=Reply with exactly PROBE_OK"
+  ],
+  "exit_code": 1,
+  "timed_out": false,
+  "marker": null,
+  "delayed_marker": null,
+  "cancellation": null,
+  "events": [
+    {
+      "event": "result",
+      "result": {
+        "conversation_id": "",
+        "status": "ERROR",
+        "response": "",
+        "error": "authentication failed or timed out",
+        "duration_seconds": 0,
+        "num_turns": 0,
+        "usage": {
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "thinking_tokens": 0,
+          "cache_read_tokens": 0,
+          "total_tokens": 0
+        }
+      }
+    }
+  ],
+  "proxy_fault": null,
+  "proxy_connections": [],
+  "side_effect_count": 0,
+  "stderr": "Authentication required. Please visit the URL to log in:\n  <OAuth authorization URL redacted>\n\nWaiting for authentication (timeout 60s)...\nOr, paste the authorization code here and press Enter:\nError: authentication timed out.\nerror: authentication failed or timed out\n",
+  "sanitization": "OAuth authorization URL (state/code challenge) redacted.",
+  "probe_scope": "Real CLI using access-only snapshot; refresh credential removed. Antigravity source access token expired on 2026-09-18; not a valid-access control."
+}
