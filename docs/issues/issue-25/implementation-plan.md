@@ -150,3 +150,5 @@ I1 仍進行中。修正 OMP 平面設定無效反例，巢狀設定後受控 50
 ## 2026-09-30 GitHub 第一輪審查修復
 
 GitHub review #5362647041 對 HEAD 6ac6419 判定 RETURN：Actions run 36680280757 缺 bwrap，Race 失敗，Web UI probe／Build skipped。先前本機完整回歸證據只適用該本機環境，不能代表正式 CI 全綠；BADAPT-012 與 I4 交付重新開啟。最小修改在 ci.yml 安裝 bubblewrap，並在 race 前實際驗 PID／IPC namespace；不以 skip 取代回歸。完成證據為新 HEAD 的正式 Actions Race、Web UI probe、Build 全部 success，之後等待 GitHub reviewer 下一輪審查。code-simplify 檢查此設定修改，無額外抽象或重複邏輯需精煉。
+
+2026-09-30：8cdc01d 的正式 run 36682045784 成功安裝 bubblewrap，但 namespace probe 因 uid map Permission denied 失敗，後續 gate skipped。依 [Ubuntu user namespace 規範](https://ubuntu.com/blog/ubuntu-23-10-restricted-unprivileged-user-namespaces) 在暫時 CI runner 安裝僅匹配 /usr/bin/bwrap 的 AppArmor userns profile；保留實際 probe 為必要 gate，未停用全系統限制，產品執行期不改主機設定。
