@@ -130,3 +130,19 @@ timeout 45s bwrap --ro-bind / / --dev-bind /dev /dev --proc /proc \
 候選方案為：OMP adapter 在 adapter 邊界使用 bwrap 做程序包含與角色寫入權限；必要 binary 或 namespace 不可用時，在模型呼叫前分類 unavailable，無 fallback。Engine／Pipeline 的共同契約維持不變。2026-09-30 已將「採用此部署前提」或「暫緩 OMP 接線，另評估取消方案」送交使用者決定；尚未推定核准。
 
 本次未建立 production adapter，也未執行產品 vet/race/build。腳本及 fixture 的靜態查核不能替代 BADAPT 完整驗收；rate-limit、partial failure、retry、所有工具的寫入邊界及 Antigravity 的取消仍未完成。
+
+## 2026-09-30 Retry 靜態追查
+
+本次僅讀取本機 OMP 18.4.4 隨附原始碼，未新增模型呼叫。`pi-ai/src/providers/openai-codex-responses.ts` SHA-256 為 `c35700fd2ec64987fbe06967f707a13ecff3939bc4271362d06f7bb01c1fc714`；這是 source 的識別，不宣稱與 CLI bundle 已完成逐碼對應。可重複查核：
+
+```bash
+sha256sum /home/kevin/.bun/install/global/node_modules/@oh-my-pi/pi-ai/src/providers/openai-codex-responses.ts
+rg -n 'CODEX_MAX_RETRIES|codexSseMaxAttempts|canSafelyReplayWebsocketOverSse|tryRetryProviderError|tryRecoverPreviousResponseNotFound' /home/kevin/.bun/install/global/node_modules/@oh-my-pi/pi-ai/src/providers/openai-codex-responses.ts
+```
+
+- provider 固定 `CODEX_MAX_RETRIES = 5`；SSE 未提供 `codexSseMaxAttempts` 時預設最多六次 request attempt。這與 Asura execution attempt 是不同層級，不能直接等同 BADAPT-009 的第二次 execution。
+- `#tryRetryProviderError` 會檢查 streamed text/thinking、可見內容、abort 及 replay flag；完成 function/computer/custom tool call 時將 `canSafelyReplayWebsocketOverSse` 設為 false。這些保護是靜態線索，未證明已執行工具後的整體 session 不會重送。
+- expired previous response、WebSocket reconnect／SSE replay 及異常 tool-call recovery 各有獨立路徑；只設定 CLI `retry.enabled=false` 不足以宣稱所有 provider recovery 已停用。
+- `pi-coding-agent/src/session/turn-recovery.ts` 的 committed-text stream stall 路徑明確檢查 autoRetryEnabled，但不能將這一條件推廣至上述全部 provider 路徑。
+
+I-TBD-5 保留待確認。下一個必要證據是可計數的受控 transport failure，分別在輸出前、部分輸出後及真實工具副作用後觀察 request／工具次數、最終 failure 與 partial 保留；此靜態分析不作為安全 gate 通過，也不要求修改已核准劇本。

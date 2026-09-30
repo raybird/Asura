@@ -55,3 +55,7 @@ git diff --check
 ```
 
 2026-09-30 查核 `/proc/*/cwd`，沒有 probe 工作區的存活程序。採用 bwrap 的新增部署前提 I-TBD-10 尚待使用者決定；未據此啟動 I2 或宣告 OMP 的完整 capability。
+
+### 2026-09-30 I1 Retry 追查補充
+
+已追查固定套件 source 的 provider 與 session recovery 邊界，命令、source 雜湊及限制見 [技術分析](technical-analysis.md#2026-09-30-retry-靜態追查)。結果：CLI retry 關閉不等於 provider 無 recovery；工具完成後有 replay guard 的靜態線索，但未取得 transport 故障時的真實 request／工具計數證據，I1 仍未完成。純調查未改 production，不適用產品紅綠測試；本次查核 source 路徑與符號存在，文件 diff 無 whitespace error。I-TBD-10 部署選項仍等待使用者答覆。
