@@ -1,0 +1,146 @@
+{
+  "date": "2026-09-30",
+  "case": "cancel",
+  "pid_namespace": true,
+  "script_sha256": "f5fc00ecfb4675ee5ce0ee301e9e87d1ea803cab06194d9174d3dacfa854c166",
+  "version": "omp/18.4.4",
+  "cli_sha256": "ca9b8832ea05299f02db83a6f479ab92e4646af7f0140b54f9c2592c07803441",
+  "bun_version": "1.4.2",
+  "bun_sha256": "a83d263767d839e4d2649ca8e35d07159c7afc99afdc96d731ced29e056dda0c",
+  "argv": [
+    "/home/kevin/.bun/bin/bun",
+    "/home/kevin/.bun/install/global/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js",
+    "--model",
+    "openai-codex/gpt-6-luna",
+    "--thinking",
+    "low",
+    "--config",
+    "<probe>/config.json",
+    "--no-session",
+    "--no-lsp",
+    "--no-title",
+    "--no-extensions",
+    "--no-skills",
+    "--no-rules",
+    "--no-prewalk",
+    "--approval-mode",
+    "yolo",
+    "--tools",
+    "bash",
+    "--no-pty",
+    "--mode",
+    "json",
+    "--print",
+    "Run exactly /usr/bin/python3 delayed.py using the bash tool, wait for it to finish, then reply DONE. Do not change the command or any files."
+  ],
+  "config": {
+    "retry.enabled": false,
+    "retry.modelFallback": false,
+    "retry.usageAwareFallback": false,
+    "retry.waitForUsageReset": false,
+    "retry.fallbackChains": {},
+    "memories.enabled": false,
+    "compaction.enabled": false,
+    "plan.defaultOnStartup": false
+  },
+  "exit_code": -9,
+  "timed_out": false,
+  "marker": null,
+  "delayed_marker": null,
+  "cancellation": {
+    "ready": true,
+    "child_alive_after_10s": false,
+    "groups_before_kill": {
+      "invocation": 135244,
+      "delayed_parent": 135356,
+      "delayed_child": 135356
+    },
+    "processes_before_kill": [
+      {
+        "pid": 135244,
+        "ppid": 135243,
+        "pgid": 135244,
+        "state": "S"
+      },
+      {
+        "pid": 135245,
+        "ppid": 135244,
+        "pgid": 135244,
+        "state": "S"
+      },
+      {
+        "pid": 135246,
+        "ppid": 135245,
+        "pgid": 135244,
+        "state": "S"
+      },
+      {
+        "pid": 135356,
+        "ppid": 135246,
+        "pgid": 135356,
+        "state": "S"
+      },
+      {
+        "pid": 135357,
+        "ppid": 135356,
+        "pgid": 135356,
+        "state": "S"
+      }
+    ],
+    "marker_before_kill": false,
+    "ready_age_seconds": 0.096,
+    "delayed_marker": null
+  },
+  "events": [
+    {
+      "type": "message_end",
+      "role": "user",
+      "provider": null,
+      "model": null,
+      "stopReason": null,
+      "errorMessage": null,
+      "content": [
+        {
+          "type": "text",
+          "text": "Run exactly /usr/bin/python3 delayed.py using the bash tool, wait for it to finish, then reply DONE. Do not change the command or any files."
+        }
+      ]
+    },
+    {
+      "type": "message_end",
+      "role": "assistant",
+      "provider": "openai-codex",
+      "model": "gpt-6-luna",
+      "stopReason": "toolUse",
+      "errorMessage": null,
+      "content": [
+        {
+          "type": "toolCall",
+          "name": "bash",
+          "arguments": {
+            "i": "Running requested script",
+            "command": "/usr/bin/python3 delayed.py",
+            "timeout": 0,
+            "cwd": "/tmp/asura-25-omp-flnr5s22/workspace",
+            "pty": false,
+            "async": false,
+            "name": null,
+            "ready": null
+          },
+          "intent": "Running requested script"
+        }
+      ]
+    }
+  ],
+  "stderr": "",
+  "event_types": {
+    "session": 1,
+    "agent_start": 1,
+    "turn_start": 1,
+    "message_start": 2,
+    "message_end": 2,
+    "message_update": 57,
+    "tool_execution_start": 1
+  },
+  "sanitization": "Opaque message IDs/signatures omitted; non-message event types aggregated. Credential values checked and absent."
+}

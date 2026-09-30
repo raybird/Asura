@@ -17,8 +17,8 @@
 
 | 階段 | 驗收映射 | 產出 | 相依 | 可檢查完成判準 | 狀態 |
 |---|---|---|---|---|---|
-| I1 固定版本 contract probe | BADAPT-002、004、006、007、009 | 可重跑 probe、去敏輸出、能力矩陣與 I-TBD-1～6 決策 | 取得固定 binary 與可隔離環境；不改 production | README 列出的首要證據齊備；每項標已證明或 unsupported，安全失敗明確阻擋對應路徑 | OMP 候選版本及 agy plan 寫入反例已記錄；取消與錯誤路徑未完成，OMP provider/model 待定 |
-| I1-G 規格定案 | BADAPT-001～012 | I-TBD-1～9 結論、核准表與技術基線 | I1；必要 model/provider 等決策有答案 | 已核准的行為維持一致；固定版本與能力有 probe 證據，實質修訂逐項重新核准並提交基線 | 行為已核准；技術基線待定 |
+| I1 固定版本 contract probe | BADAPT-002、004、006、007、009 | 可重跑 probe、去敏輸出、能力矩陣與 I-TBD-1～6 決策 | 取得固定 binary 與可隔離環境；不改 production | README 列出的首要證據齊備；每項標已證明或 unsupported，安全失敗明確阻擋對應路徑 | OMP 18.4.4 指定模型、主 PGID 取消失敗／PID namespace 回收及唯讀掛載證據已保存；retry、完整失敗與其他安全路徑待驗 |
+| I1-G 規格定案 | BADAPT-001～012 | I-TBD-1～10 結論、核准表與技術基線 | I1；必要 model/provider 等決策有答案 | 已核准的行為維持一致；固定版本與能力有 probe 證據，實質修訂逐項重新核准並提交基線 | 行為已核准；2026-09-30 新 bwrap 部署前提 I-TBD-10 待決 |
 | I2-A 共同 conformance harness | BADAPT-001、002、004、006、007、009、010 | 共同 assertions、各 adapter fixture 入口 | I1-G、decompose | 測試能捕捉錯誤分類、partial、取消與重複呼叫；不 mock 掉被驗能力 | 待 probe 後拆解 |
 | I2-B OMP adapter | BADAPT-002、003、006、007、009、010 | OMP adapter 與 parser／process 測試 | I2-A | 真實 probe 與 fixture 一致；先紅後綠，其他 backend 呼叫為 0 | 待 probe 後拆解 |
 | I2-C Antigravity adapter | BADAPT-004～007、009、010 | Antigravity adapter 與相關測試 | I2-B 全綠 | auth/unavailable、partial、cancel 對共同契約，無 session 語意外洩 | 待 probe 後拆解 |
@@ -42,3 +42,16 @@
 ### 2026-09-29 文件靜態檢查
 
 使用 Python 檢查四份 Markdown 的相對連結均存在、README 有 BADAPT-001～012 共 12 個 Scenario 且核准表完全相等、無 HTML placeholder；結果 PASS。`git diff --check` exit 0，但新文件未追蹤，不以此命令宣稱已檢查新檔內容。產品測試、live contract probe 與獨立 review 仍未完成。
+
+### 2026-09-30 OMP probe 證據
+
+固定 binary、實際命令與各結果見 [技術分析](technical-analysis.md#2026-09-30-omp-指定模型與取消邊界)及 `probes/omp-18.4.4-*.json`。這些是真實 CLI probe；不是產品驗收全綠，也未建立 production adapter。
+
+2026-09-30 使用系統 `/usr/bin/python3` 查核：Python 語法、四份 Markdown 相對連結、核准 commit 的 Gherkin 區塊完全相等、Scenario 與核准表集合相等、十份 JSON fixture 及控制組／取消／唯讀結果；全部 PASS。此為文件與 probe artifact 靜態查核，沒有用「主程序退出」或「子程序最後已退出」代替副作用判準。可重跑的語法／JSON 基本查核：
+
+```bash
+/usr/bin/python3 -c "import ast,json; from pathlib import Path; ast.parse(Path('scripts/issue-25/probe_omp.py').read_text()); files=list(Path('docs/issues/issue-25/probes').glob('*.json')); assert len(files)==10; [json.loads(p.read_text()) for p in files]; print('PASS: syntax and 10 JSON files')"
+git diff --check
+```
+
+2026-09-30 查核 `/proc/*/cwd`，沒有 probe 工作區的存活程序。採用 bwrap 的新增部署前提 I-TBD-10 尚待使用者決定；未據此啟動 I2 或宣告 OMP 的完整 capability。

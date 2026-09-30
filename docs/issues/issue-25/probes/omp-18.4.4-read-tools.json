@@ -1,0 +1,226 @@
+{
+  "date": "2026-09-30",
+  "case": "read-tools",
+  "version": "omp/18.4.4",
+  "cli_sha256": "ca9b8832ea05299f02db83a6f479ab92e4646af7f0140b54f9c2592c07803441",
+  "bun_version": "1.4.2",
+  "bun_sha256": "a83d263767d839e4d2649ca8e35d07159c7afc99afdc96d731ced29e056dda0c",
+  "argv": [
+    "/home/kevin/.bun/bin/bun",
+    "/home/kevin/.bun/install/global/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js",
+    "--model",
+    "openai-codex/gpt-6-luna",
+    "--thinking",
+    "low",
+    "--config",
+    "<probe>/config.json",
+    "--no-session",
+    "--no-lsp",
+    "--no-title",
+    "--no-extensions",
+    "--no-skills",
+    "--no-rules",
+    "--no-prewalk",
+    "--approval-mode",
+    "yolo",
+    "--tools",
+    "read,grep,glob",
+    "--mode",
+    "json",
+    "--print",
+    "Create marker.txt in the current directory containing exactly PROBE_OK. Use a tool to actually write it; do not merely describe the action."
+  ],
+  "config": {
+    "retry.enabled": false,
+    "retry.modelFallback": false,
+    "retry.usageAwareFallback": false,
+    "retry.waitForUsageReset": false,
+    "retry.fallbackChains": {},
+    "memories.enabled": false,
+    "compaction.enabled": false,
+    "plan.defaultOnStartup": false
+  },
+  "exit_code": 0,
+  "timed_out": false,
+  "marker": null,
+  "events": [
+    {
+      "type": "message_end",
+      "role": "user",
+      "provider": null,
+      "model": null,
+      "stopReason": null,
+      "errorMessage": null,
+      "content": [
+        {
+          "type": "text",
+          "text": "Create marker.txt in the current directory containing exactly PROBE_OK. Use a tool to actually write it; do not merely describe the action."
+        }
+      ]
+    },
+    {
+      "type": "message_end",
+      "role": "assistant",
+      "provider": "openai-codex",
+      "model": "gpt-6-luna",
+      "stopReason": "toolUse",
+      "errorMessage": null,
+      "content": [
+        {
+          "type": "toolCall",
+          "name": "read",
+          "arguments": {
+            "i": "Inspecting workspace files",
+            "path": "."
+          },
+          "intent": "Inspecting workspace files"
+        }
+      ]
+    },
+    {
+      "type": "message_end",
+      "role": "toolResult",
+      "provider": null,
+      "model": null,
+      "stopReason": null,
+      "errorMessage": null,
+      "content": [
+        {
+          "type": "text",
+          "text": "(empty directory)"
+        }
+      ]
+    },
+    {
+      "type": "message_end",
+      "role": "assistant",
+      "provider": "openai-codex",
+      "model": "gpt-6-luna",
+      "stopReason": "toolUse",
+      "errorMessage": null,
+      "content": [
+        {
+          "type": "toolCall",
+          "name": "read",
+          "arguments": {
+            "i": "Checking available write tools",
+            "path": "omp://"
+          },
+          "intent": "Checking available write tools"
+        }
+      ]
+    },
+    {
+      "type": "message_end",
+      "role": "toolResult",
+      "provider": null,
+      "model": null,
+      "stopReason": null,
+      "errorMessage": null,
+      "content": [
+        {
+          "type": "text",
+          "text": "# Documentation\n\n134 files available:\n\n- [ERRATA-GPT5-HARMONY.md](omp://ERRATA-GPT5-HARMONY.md)\n- [adding-a-provider.md](omp://adding-a-provider.md)\n- [advisor-watchdog.md](omp://advisor-watchdog.md)\n- [agent-hub.md](omp://agent-hub.md)\n- [ai-schema-normalize.md](omp://ai-schema-normalize.md)\n- [approval-mode.md](omp://approval-mode.md)\n- [auth-broker-gateway.md](omp://auth-broker-gateway.md)\n- [bash-tool-runtime.md](omp://bash-tool-runtime.md)\n- [blob-artifact-architecture.md](omp://blob-artifact-architecture.md)\n- [cli-reference.md](omp://cli-reference.md)\n- [collab.md](omp://collab.md)\n- [compaction.md](omp://compaction.md)\n- [computer-use.md](omp://computer-use.md)\n- [config-usage.md](omp://config-usage.md)\n- [context-files.md](omp://context-files.md)\n- [custom-tools.md](omp://custom-tools.md)\n- [environment-variables.md](omp://environment-variables.md)\n- [extension-loading.md](omp://extension-loading.md)\n- [extensions.md](omp://extensions.md)\n- [fs-scan-cache-architecture.md](omp://fs-scan-cache-architecture.md)\n- [gemini-manifest-extensions.md](omp://gemini-manifest-extensions.md)\n- [handoff-generation-pipeline.md](omp://handoff-generation-pipeline.md)\n- [hooks.md](omp://hooks.md)\n- [install-id.md](omp://install-id.md)\n- [keybindings.md](omp://keybindings.md)\n- [local-models.md](omp://local-models.md)\n- [lsp-config.md](omp://lsp-config.md)\n- [macos-signing-notarization.md](omp://macos-signing-notarization.md)\n- [magic-keywords.md](omp://magic-keywords.md)\n- [marketplace.md](omp://marketplace.md)\n- [mcp-config.md](omp://mcp-config.md)\n- [mcp-protocol-transports.md](omp://mcp-protocol-transports.md)\n- [mcp-runtime-lifecycle.md](omp://mcp-runtime-lifecycle.md)\n- [mcp-server-tool-authoring.md](omp://mcp-server-tool-authoring.md)\n- [memory.md](omp://memory.md)\n- [mnemosyne-memory-backend.md](omp://mnemosyne-memory-backend.md)\n- [models.md](omp://models.md)\n- [native-crates.md](omp://native-crates.md)\n- [natives-addon-loader-runtime.md](omp://natives-addon-loader-runtime.md)\n- [natives-architecture.md](omp://natives-architecture.md)\n- [natives-binding-contract.md](omp://natives-binding-contract.md)\n- [natives-build-release-debugging.md](omp://natives-build-release-debugging.md)\n- [natives-media-system-utils.md](omp://natives-media-system-utils.md)\n- [natives-rust-task-cancellation.md](omp://natives-rust-task-cancellation.md)\n- [natives-shell-pty-process.md](omp://natives-shell-pty-process.md)\n- [natives-text-search-pipeline.md](omp://natives-text-search-pipeline.md)\n- [non-compaction-retry-policy.md](omp://non-compaction-retry-policy.md)\n- [notebook-tool-runtime.md](omp://notebook-tool-runtime.md)\n- [omptype-guide.md](omp://omptype-guide.md)\n- [plugin-manager-installer-plumbing.md](omp://plugin-manager-installer-plumbing.md)\n- [porting-from-pi-mono.md](omp://porting-from-pi-mono.md)\n- [porting-to-natives.md](omp://porting-to-natives.md)\n- [prewalk.md](omp://prewalk.md)\n- [provider-compat-reference.md](omp://provider-compat-reference.md)\n- [provider-endpoint-constraints.md](omp://provider-endpoint-constraints.md)\n- [provider-quirks.md](omp://provider-quirks.md)\n- [provider-streaming-internals.md](omp://provider-streaming-internals.md)\n- [providers.md](omp://providers.md)\n- [python-repl.md](omp://python-repl.md)\n- [resolve-tool-runtime.md](omp://resolve-tool-runtime.md)\n- [rpc.md](omp://rpc.md)\n- [rulebook-matching-pipeline.md](omp://rulebook-matching-pipeline.md)\n- [sdk.md](omp://sdk.md)\n- [secrets.md](omp://secrets.md)\n- [session-operations-export-share-fork-resume.md](omp://session-operations-export-share-fork-resume.md)\n- [session-switching-and-recent-listing.md](omp://session-switching-and-recent-listing.md)\n- [session-tree-plan.md](omp://session-tree-plan.md)\n- [session.md](omp://session.md)\n- [settings.md](omp://settings.md)\n- [skills.md](omp://skills.md)\n- [skills/authoring-extensions.md](omp://skills/authoring-extensions.md)\n- [skills/authoring-hooks.md](omp://skills/authoring-hooks.md)\n- [skills/authoring-marketplaces.md](omp://skills/authoring-marketplaces.md)\n- [skills/examples/hello-extension/README.md](omp://skills/examples/hello-extension/README.md)\n- [skills/examples/mini-marketplace/README.md](omp://skills/examples/mini-marketplace/README.md)\n- [skills/examples/safety-hook/README.md](omp://skills/examples/safety-hook/README.md)\n- [slash-command-internals.md](omp://slash-command-internals.md)\n- [stream.md](omp://stream.md)\n- [system-prompt-customization.md](omp://system-prompt-customization.md)\n- [task-agent-discovery.md](omp://task-agent-discovery.md)\n- [theme.md](omp://theme.md)\n- [toolconv/anthropic.md](omp://toolconv/anthropic.md)\n- [toolconv/deepseek.md](omp://toolconv/deepseek.md)\n- [toolconv/gemini.md](omp://toolconv/gemini.md)\n- [toolconv/gemma.md](omp://toolconv/gemma.md)\n- [toolconv/glm-4.5.md](omp://toolconv/glm-4.5.md)\n- [toolconv/harmony.md](omp://toolconv/harmony.md)\n- [toolconv/hermes.md](omp://toolconv/hermes.md)\n- [toolconv/kimi-k2.md](omp://toolconv/kimi-k2.md)\n- [toolconv/minimax.md](omp://toolconv/minimax.md)\n- [toolconv/pi-native.md](omp://toolconv/pi-native.md)\n- [toolconv/qwen3.md](omp://toolconv/qwen3.md)\n- [toolconv/xml.md](omp://toolconv/xml.md)\n- [tools/ask.md](omp://tools/ask.md)\n- [tools/ast-edit.md](omp://tools/ast-edit.md)\n- [tools/ast-grep.md](omp://tools/ast-grep.md)\n- [tools/bash.md](omp://tools/bash.md)\n- [tools/browser.md](omp://tools/browser.md)\n- [tools/checkpoint.md](omp://tools/checkpoint.md)\n- [tools/computer.md](omp://tools/computer.md)\n- [tools/context-notes.md](omp://tools/context-notes.md)\n- [tools/debug.md](omp://tools/debug.md)\n- [tools/edit.md](omp://tools/edit.md)\n- [tools/eval.md](omp://tools/eval.md)\n- [tools/find.md](omp://tools/find.md)\n- [tools/generate_image.md](omp://tools/generate_image.md)\n- [tools/github.md](omp://tools/github.md)\n- [tools/glob.md](omp://tools/glob.md)\n- [tools/grep.md](omp://tools/grep.md)\n- [tools/ida.md](omp://tools/ida.md)\n- [tools/learn.md](omp://tools/learn.md)\n- [tools/lsp.md](omp://tools/lsp.md)\n- [tools/manage_skill.md](omp://tools/manage_skill.md)\n- [tools/memory_edit.md](omp://tools/memory_edit.md)\n- [tools/new-context.md](omp://tools/new-context.md)\n- [tools/read.md](omp://tools/read.md)\n- [tools/recall.md](omp://tools/recall.md)\n- [tools/reflect.md](omp://tools/reflect.md)\n- [tools/retain.md](omp://tools/retain.md)\n- [tools/rewind.md](omp://tools/rewind.md)\n- [tools/security_scan.md](omp://tools/security_scan.md)\n- [tools/task.md](omp://tools/task.md)\n- [tools/todo.md](omp://tools/todo.md)\n- [tools/tts.md](omp://tools/tts.md)\n- [tools/wait.md](omp://tools/wait.md)\n- [tools/web_search.md](omp://tools/web_search.md)\n- [tools/write.md](omp://tools/write.md)\n- [tree.md](omp://tree.md)\n- [ttsr-injection-lifecycle.md](omp://ttsr-injection-lifecycle.md)\n- [tui-core-renderer.md](omp://tui-core-renderer.md)\n- [tui-runtime-internals.md](omp://tui-runtime-internals.md)\n- [tui.md](omp://tui.md)\n- [user-facing-packages.md](omp://user-facing-packages.md)\n- [vibe-mode.md](omp://vibe-mode.md)"
+        }
+      ]
+    },
+    {
+      "type": "message_end",
+      "role": "assistant",
+      "provider": "openai-codex",
+      "model": "gpt-6-luna",
+      "stopReason": "toolUse",
+      "errorMessage": null,
+      "content": [
+        {
+          "type": "toolCall",
+          "name": "read",
+          "arguments": {
+            "i": "Reading file writing instructions",
+            "path": "omp://tools/write.md"
+          },
+          "intent": "Reading file writing instructions"
+        }
+      ]
+    },
+    {
+      "type": "message_end",
+      "role": "toolResult",
+      "provider": null,
+      "model": null,
+      "stopReason": null,
+      "errorMessage": null,
+      "content": [
+        {
+          "type": "text",
+          "text": "# write\n\n> Create or overwrite a file, writable internal resource, archive entry, SQLite row, or merge-conflict resolution.\n\n## Source\n- Entry: `packages/coding-agent/src/tools/write.ts`\n- Model-facing prompt: `packages/coding-agent/src/prompts/tools/write.md`\n- Key collaborators:\n  - `packages/utils/src/ar` (`@oh-my-pi/pi-utils/ar`) — unified archive registry: `parseArchivePathCandidates()` parses archive selectors, `readArchiveEntries()`/`writeArchive()` rewrite containers atomically.\n  - `packages/coding-agent/src/tools/sqlite-reader.ts` — detect SQLite paths and perform row insert/update/delete.\n  - `packages/coding-agent/src/tools/conflict-detect.ts` — parse `conflict://` URIs, register/validate regions, and expand side tokens.\n  - `packages/coding-agent/src/internal-urls/router.ts` / `packages/coding-agent/src/tools/xdev.ts` — writable internal resources and `xd://` tool-device dispatch.\n  - `packages/coding-agent/src/lsp/index.ts` — format-on-write and diagnostics writethrough.\n  - `packages/coding-agent/src/tools/auto-generated-guard.ts` — block overwriting generated files.\n  - `packages/coding-agent/src/tools/fs-cache-invalidation.ts` — invalidate shared FS scan caches after writes.\n  - `packages/coding-agent/src/tools/plan-mode-guard.ts` — resolve paths and enforce plan-mode write policy.\n\n## Inputs\n| Field | Type | Required | Description |\n| --- | --- | --- | --- |\n| `path` | `string` | Yes | Target path. Plain paths write files. Writable internal URLs delegate to their handler. `xd://<device>` dispatches a mounted tool using JSON in `content`. `archive.ext:inner/path` writes an archive entry for `.zip` and ZIP-format aliases (`.jar`, `.war`, `.ear`, `.apk`, …), `.tar`, `.tar.gz`/`.tgz`, `.tar.zst`/`.tzst`, or `.asar`. `db.sqlite:table` inserts a row; `db.sqlite:table:key` updates/deletes one. `conflict://<id>` resolves a registered conflict and `conflict://*` performs a bulk resolution. A copied `[path#TAG]` wrapper is accepted and removed. |\n| `content` | `string` | Except `proc://<id>/kill` | Full replacement file/archive/internal-resource content, conflict replacement, or SQLite row payload. Ignored for `/kill`. SQLite non-delete writes must parse as a JSON5 object; empty or whitespace-only content deletes a keyed row. For `xd://`, this is the mounted tool's JSON argument object. |\n\nWorked examples:\n\n```text\npath: \"src/generated/config.json\"\ncontent: \"{\\n  \\\"enabled\\\": true\\n}\\n\"\n```\n\n```text\npath: \"fixtures/archive.zip:templates/email.txt\"\ncontent: \"hello\\n\"\n```\n\n```text\npath: \"data/app.sqlite:users:42\"\ncontent: \"{name: 'Ada', active: true}\"\n```\n\n## Outputs\nSingle-shot result.\n\n- Success always returns at least one text block, except that an `xd://` dispatch preserves the mounted tool's own content/error result.\n  - Plain file write: `Successfully wrote <chars> bytes to <relative-path>` (the count is `cleanContent.length`, not encoded byte length).\n  - Internal URL write: handler-provided receipt/status text when present; otherwise `Successfully wrote <chars> bytes to <url>`. File-backed URL writes (`local://`, `vault://`) name the URL too, never the backing path.\n  - Archive write: `Successfully wrote <chars> bytes to <relative-archive-path>:<entry-path>`.\n  - SQLite write: one of `Inserted row into <table>`, `Updated row '<key>' in <table>`, `No row updated ...`, `Deleted row ...`, `No row deleted ...`.\n  - Conflict resolution: conflict-specific success text, with fresh hashline snapshot headers when applicable. Bulk resolution can return `isError: true` after some files succeeded and others failed.\n- During execution, `onUpdate` may emit `Writing <chars> bytes to <path>...`; `xd://` forwards the mounted tool's updates.\n- If hashline prefixes were copied from `read` output and stripped first, the first text block gets an extra note.\n- In hashline display mode, plain file writes (including ACP bridge writes) and conflict resolutions prepend a fresh `[<relative-path>#TAG]` header (`[<url>#TAG]` for file-backed URL writes) so the next `edit` has a current snapshot tag without an extra `read`. Bulk conflict resolutions append a `Snapshots:` block listing one header per successfully written file.\n- Plain file writes may also return `details.diagnostics` plus `details.meta.diagnostics` when LSP diagnostics-on-write is enabled, and `details.madeExecutable` when a newly written shebang file is chmodded executable.\n- Plain/archive/conflict results set `details.resolvedPath` when backed by a file. SQLite writes additionally set `details.meta.source` to the database file through `sourcePath(...)`. Internal URL writes return empty `details`; device dispatch sets `details.xdev`.\n\n## Flow\n1. `WriteTool.execute()` unwraps a copied `[path#TAG]` argument and peels a valid read selector from internal URLs so write and read address the same resource. Malformed/range selectors on writable URLs are rejected.\n2. In hashline display mode it strips pasted `[PATH#HASH]` headers and `LINE:` prefixes from `content`.\n3. It validates URI-like targets. Unknown schemes and common `xd://` misspellings fail instead of becoming local filenames; prefix with `./` to deliberately create a URI-looking POSIX filename.\n4. If `path` is an internal URL whose handler exposes `write`, the tool delegates to it. `xd://` validates and dispatches JSON to the mounted tool while preserving its result and approval tier; `local://` falls through to the session-local filesystem path.\n5. `conflict://...` is handled next. Scope reads such as `conflict://<id>/ours` are read-only; writable conflict URIs omit the scope. Registered on-disk markers are revalidated before replacement.\n6. It calls `#resolveArchiveWritePath()`. Candidate archive files are checked longest-first; when none exists, the shortest candidate archive path is used for creating a new container.\n7. Archive writes call `enforcePlanModeWrite(..., { op: exists ? \"update\" : \"create\" })`, then `#writeArchiveEntry()`.\n   - The parent directory is created recursively.\n   - Existing entries are loaded through `readArchiveEntries()`, the target is replaced in the entry map, and `writeArchive()` serializes a complete replacement.\n   - The replacement is written to a sibling temporary path and renamed over the destination. Existing archive symlinks are resolved first so the target is updated rather than replacing the symlink.\n   - ZIP-format aliases remain ZIP. Tar gzip compression is selected for `.tar.gz`/`.tgz`, zstd for `.tar.zst`/`.tzst`; `.asar` containers are rewritten through the same boundary. Read-only formats (`.7z`, `.rar`, …) are rejected.\n   - `invalidateFsScanAfterWrite()` runs on the archive file path.\n8. If not an archive, it tries SQLite candidates. Existing non-SQLite files suppress SQLite interpretation.\n9. SQLite writes call `enforcePlanModeWrite(..., { op: \"update\" })`, then `#writeSqliteRow()`.\n   - The database must already exist.\n   - It opens Bun SQLite with `{ create: false, strict: true }` and `PRAGMA busy_timeout = 3000`.\n   - Whitespace-only `content` with a row key deletes a row.\n   - Non-empty `content` is parsed with `Bun.JSON5.parse()`, must be an object, and is routed to insert/update helpers.\n   - The scan cache is invalidated and the connection closes in `finally`.\n10. Otherwise it treats `path` as a plain filesystem file.\n   - It rejects high-confidence mis-dispatched read targets: a missing selector-shaped filename with empty content, or a missing semicolon-joined list of selector paths. Existing literal paths win; non-empty content is the escape hatch for a single deliberate selector-shaped filename.\n   - Plan-mode policy and path resolution run before mutation. Existing files pass the generated-file guard.\n   - ACP bridge `writeTextFile` is tried first when available; otherwise the session writethrough writes the content. LSP settings may format, synchronize, and diagnose the write.\n   - A leading shebang may add execute bits. The filesystem scan cache is invalidated.\n11. The tool returns text plus optional diagnostics, executable, resolved-path, or device-dispatch metadata.\n\n## Modes / Variants\n### Plain file path\n- Target is any path that does not resolve as an archive selector and does not resolve as an existing-or-new SQLite selector.\n- Existing files are overwritten.\n- `write.ts` does not call `fs.mkdir()` on this path; explicit parent-directory creation only exists in the archive branch, but `Bun.write()` itself creates missing parent directories for plain file writes.\n\nExample:\n\n```text\npath: \"tmp/output.txt\"\ncontent: \"hello\\n\"\n```\n\n### Archive entry write\n- Selector syntax: `archive.ext:inner/path`.\n- Supported suffixes: `.zip` and ZIP-format aliases (`.jar`, `.war`, `.ear`, `.apk`, and the other zip-family extensions), `.tar`, `.tar.gz`/`.tgz`, `.tar.zst`/`.tzst`, and `.asar`.\n- The inner path is normalized to `/`, strips empty and `.` segments, rejects `..`, and rejects directory targets ending in `/`.\n- Rewrites the whole archive through a temporary file and rename after replacing one entry.\n- Creates the parent directory for the archive file if needed.\n\nExample:\n\n```text\npath: \"build/assets.tar.gz:css/app.css\"\ncontent: \"body { color: black; }\\n\"\n```\n\n### SQLite table insert\n- Selector syntax: `db.sqlite:table`.\n- `content` must parse as a JSON5 object.\n- Empty object is allowed and becomes `INSERT INTO <table> DEFAULT VALUES`.\n- Query parameters are rejected for SQLite writes.\n\nExample:\n\n```text\npath: \"data/app.db:users\"\ncontent: \"{name: 'Ada', active: true}\"\n```\n\n### SQLite row update / delete\n- Selector syntax: `db.sqlite:table:key`.\n- Non-empty `content` updates the row.\n- Empty or whitespace-only `content` deletes the row.\n- Row lookup uses the single-column primary key if present; otherwise it falls back to `rowid`. Composite primary keys and `WITHOUT ROWID` tables are rejected for key-based writes.\n\nExample update:\n\n```text\npath: \"data/app.sqlite:users:42\"\ncontent: \"{email: 'ada@example.com'}\"\n```\n\nExample delete:\n\n```text\npath: \"data/app.sqlite:users:42\"\ncontent: \"\"\n```\n\n### Writable internal resources and tool devices\n- `agent://<id>` with non-empty `content` sends a message to that peer (delivery receipt text); `agent://all` broadcasts to visible live peers. This write is read-approved and allowed in plan mode and `deviceOnlyWrite` when messaging is available. `agent://` reads remain output artifacts.\n- `proc://<id>` sends `content` to service stdin (Enter appended unless already newline-terminated); empty content sends Enter, never cancels. `write({ path: \"proc://<id>/kill\" })` cancels a job or owned subagent, or stops a service; `content` is optional and ignored. `proc://<id>/mode` requires `content` of `persist` or `session` to toggle persistence, or `detached` to restart without a PTY and persist beyond the broker. Proc writes require exec approval and are unavailable in `deviceOnlyWrite` sessions; proc reads do not consume job delivery. `/kill` and `/mode` are write-only.\n- A registered internal handler with a `write` hook owns its resource semantics (for example, `cfg://`, `agent://`, `proc://`). File-backed schemes (`local://`, `vault://`) have no hook: the router locates the target file (`local://` in the session-local artifact sandbox, `vault://` under the vault root) and the write follows the plain-file path.\n- `xd://` lists/dispatches tool devices mounted behind `write`. Read `xd://<name>` first for its generated input documentation, then pass one JSON object as `content`. The device's own schema, updates, result blocks, error flag, renderer metadata, and approval tier are preserved.\n- Unknown URI-like schemes are refused to prevent silent local-file creation. Use `./scheme://...` only when that filename is intentional.\n- Registered read-only schemes (no write policy: `artifact://`, `skill://`, `history://`, …) are denied at the approval gate (`<scheme>:// URLs are read-only`) without prompting; `edit` and `ast_edit` targets are denied the same way. A trailing line selector on a write, edit, or bash URL target (`local://notes.md:5`) is refused rather than dropped; only `:raw`/`:conflicts` are peeled.\n\n### Merge-conflict resolution\n- First read `<file>:conflicts`; this registers session-stable ids. `conflict://<N>` replaces only that recorded marker block and rejects stale/missing regions.\n- A line exactly equal to `@ours`, `@theirs`, `@base`, or `@both` expands to the recorded side (`@both` is ours then theirs). `@base` requires a diff3 base. Other content is literal.\n- `conflict://*` with ordinary content applies the same replacement/token expansion to every registered conflict. Per-id directive content such as `1: @ours\\n2: @theirs` resolves only the listed ids; every non-empty directive line must use one side token and ids may not repeat.\n- Bulk processing is all-or-nothing per file, applied bottom-up. Other files can still succeed; partial cross-file success returns `isError: true`, while an all-failed pass throws. Successful ids are invalidated and failed-file ids remain registered for retry.\n- `/ours`, `/theirs`, `/base`, and `/both` URI scopes are read-only.\n\n\n## Side Effects\n- Filesystem\n  - Creates or overwrites plain files.\n  - Rewrites entire archive files atomically through a temporary sibling and rename when writing an entry.\n  - Explicitly creates parent directories for archive files; the plain-file backend also supports missing parents.\n  - Mutates existing SQLite databases; never creates a new SQLite DB.\n  - Resolves conflict markers in files for `conflict://...` writes.\n  - May chmod a shebang file executable after a successful plain-file write.\n- Subprocesses / native bindings\n  - Uses Bun SQLite bindings via `bun:sqlite`.\n  - Uses the unified archive utilities in `packages/utils/src/ar`: tar serialization plus gzip/zstd framing for compressed tars, `node:zlib`-backed DEFLATE framing for ZIP, and an ASAR encoder.\n  - May talk to configured LSP servers through `packages/coding-agent/src/lsp/index.ts`.\n- Session state\n  - Invalidates shared filesystem scan cache entries through `invalidateFsScanAfterWrite()`.\n  - Enforces plan-mode write restrictions before mutating the target.\n  - Updates file mutation/snapshot state for plain files and conflict resolutions; resolved conflict ids are invalidated.\n  - `xd://` dispatches a mounted tool and may therefore have that tool's documented side effects.\n- Background work / cancellation\n  - Marks the tool `concurrency = \"exclusive\"` in `WriteTool`.\n  - The write body is wrapped with `untilAborted`; LSP writethrough can schedule deferred diagnostics fetches after a timeout.\n\n## Limits & Caps\n- Plain/internal file content has no tool-level byte cap beyond in-memory handling. Archive rewrites inherit archive utility caps: tar/tgz input `256 MiB`, each existing member `64 MiB`, and ZIP output must fit non-ZIP64 32-bit entry/count/offset limits.\n- Generated-file detection reads at most `CHECK_BYTE_COUNT = 1024` bytes and `HEADER_LINE_LIMIT = 40` header lines from an existing file in `packages/coding-agent/src/tools/auto-generated-guard.ts`.\n- SQLite writes set `PRAGMA busy_timeout = 3000`.\n- LSP writethrough uses a `5_000` ms operation timeout in `runLspWritethrough()` and may schedule a deferred diagnostics fetch with `AbortSignal.timeout(25_000)` in `scheduleDeferredDiagnosticsFetch()`.\n- Shebang executable handling depends on host filesystem chmod support.\n\n## Errors\n- Invalid archive subpaths throw `ToolError` with messages such as:\n  - `Archive write path must target a file inside the archive`\n  - `Archive write path must target a file, not a directory`\n  - `Archive path cannot contain '..'`\n- SQLite path parsing throws on unsupported forms:\n  - `SQLite write paths do not support query parameters`\n  - `SQLite write path must target a table`\n  - `SQLite row writes require a non-empty row key`\n- Missing SQLite DBs surface as `SQLite database '<path>' not found`.\n- SQLite content errors include invalid JSON5, non-object payloads, unknown columns, non-scalar values, empty update objects, composite primary keys, and `WITHOUT ROWID` key lookups.\n- Existing plain files may be rejected by `assertEditableFile()` when they look generated.\n- A file-backed URL write whose target is an existing directory fails with `<scheme>:// URL must resolve to a file: <url>`.\n- URI-like unknown targets and malformed/missing `xd://` devices fail rather than writing local files; mounted devices surface their own schema/tool errors.\n- Empty writes to missing selector-shaped targets and semicolon-joined selector lists are rejected as likely read/write mis-dispatches.\n- Conflict scope writes are read-only; invalid/stale ids, malformed bulk directives, missing `@base`, and stale marker locations surface `ToolError`.\n- Archive read/write failures and unexpected SQLite exceptions are wrapped in `ToolError(error.message)`.\n- If no LSP server matches or LSP formatting/diagnostics times out, file writes still complete; diagnostics may be omitted.\n\n## Notes\n- Archive path detection runs before SQLite detection. A path that matches an archive selector is never treated as SQLite.\n- SQLite detection declines when an existing file with a `.sqlite` / `.db` suffix lacks SQLite magic bytes; the path falls back to a plain file write.\n- Archive rewriting uses the unified `readArchiveEntries()` / `writeArchive()` boundary and a temp-file rename. String members are encoded as UTF-8.\n- The prompt forbids two common anti-patterns: using `write` for routine edits that should use `edit`, and creating `*.md` / `README` files unless explicitly requested. It also forbids emojis unless requested.\n- Plain file and internal URL writes report `cleanContent.length` as “bytes”, which is UTF-16 code units in JS, not an on-disk byte measurement.\n- `stripWriteContent()` only removes hashline prefixes when the session’s file display mode has `hashLines` enabled; otherwise content is written unchanged.\n\n- The tool has `strict = true`, `loadMode = \"essential\"`, and exclusive concurrency. Its renderer shows a 12-line streaming preview and a 6-line completed preview by default; `xd://` results delegate rendering to the mounted device."
+        }
+      ]
+    },
+    {
+      "type": "message_end",
+      "role": "assistant",
+      "provider": "openai-codex",
+      "model": "gpt-6-luna",
+      "stopReason": "toolUse",
+      "errorMessage": null,
+      "content": [
+        {
+          "type": "toolCall",
+          "name": "grep",
+          "arguments": {
+            "i": "Finding marker file",
+            "pattern": "^",
+            "path": "marker.txt",
+            "case": null,
+            "gitignore": false,
+            "skip": null
+          },
+          "intent": "Finding marker file"
+        }
+      ]
+    },
+    {
+      "type": "message_end",
+      "role": "toolResult",
+      "provider": null,
+      "model": null,
+      "stopReason": null,
+      "errorMessage": null,
+      "content": [
+        {
+          "type": "text",
+          "text": "Path not found: marker.txt"
+        }
+      ]
+    },
+    {
+      "type": "message_end",
+      "role": "assistant",
+      "provider": "openai-codex",
+      "model": "gpt-6-luna",
+      "stopReason": "stop",
+      "errorMessage": null,
+      "content": [
+        {
+          "type": "text",
+          "text": "I can’t create the file with the available tools: this interface provides read/search tools, but no file-writing tool."
+        }
+      ]
+    }
+  ],
+  "stderr": "",
+  "event_types": {
+    "session": 1,
+    "agent_start": 1,
+    "turn_start": 5,
+    "message_start": 10,
+    "message_end": 10,
+    "message_update": 104,
+    "tool_execution_start": 4,
+    "tool_execution_end": 4,
+    "turn_end": 5,
+    "agent_end": 1
+  },
+  "sanitization": "Opaque message IDs/signatures omitted; non-message event types aggregated. Credential values checked and absent."
+}

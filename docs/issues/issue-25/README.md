@@ -6,6 +6,8 @@
 
 issue 原文將 BADAPT 列為候選；使用者於 2026-09-29 在本對話明確回覆「那麼 核准」，核准本文件當時的 BADAPT-001～012 行為範圍及失敗路徑。固定版本、能力矩陣及 fixture 尚待 probe 定案；若結果需要實質修改劇本，須對受影響項目重新核准。2026-09-29 網路與隔離環境已恢復，並完成 OMP 候選套件及 agy 最小非互動探測；完整安全契約仍待驗證，證據見技術分析。
 
+2026-09-30 使用者指定 `openai-codex / gpt-6-luna`，OMP 18.4.4 的真實呼叫已成功。取消 probe 發現 shell 子程序脫離主 PGID，SIGKILL 後仍有延遲寫入；PID namespace 的對照則成功回收。採用 bwrap 作為 adapter 執行期依賴的新增部署前提待使用者決定，尚未開始 production 實作。
+
 ## 文件清單
 
 - [需求分析](requirement-analysis.md)
@@ -152,15 +154,16 @@ Feature: 可替換的四後端執行契約
 
 | 編號 | 事項 | 狀態 | 影響 |
 |---|---|---|---|
-| I-TBD-1 | OMP 候選 18.4.3 已取得；invocation、events、cancel 及指定 provider/model 待驗 | 待確認 | BADAPT-002、003、007；已用 Bun 1.4.2 啟動，模型憑證不足 |
+| I-TBD-1 | OMP 18.4.4／Bun 1.4.2 固定 probe，指定 openai-codex/gpt-6-luna 的 OAuth 呼叫已成功；完整契約待驗 | 待確認 | BADAPT-002、003、007；可重跑腳本及 fixture 已保存，production 技術基線未定案 |
 | I-TBD-2 | Antigravity 本機 CLI 1.2.12 完成最小非互動回應；內部 server 1.2.13，完整契約待驗 | 待確認 | BADAPT-004、005、007；簡單回應不證明安全或失敗路徑 |
-| I-TBD-3 | agy 1.2.12 `--mode plan` 已觀測到工作區寫入；OMP 及兩者其他 sandbox／process tree 邊界待驗 | 待確認 | BADAPT-002、004、006、007；agy 不宣告 plan 唯讀，Three-Face 須 fail-closed |
-| I-TBD-4 | CLI／adapter version 的 trace 表達，以及固定 model/provider 與 Context window 設定 | 待確認 | BADAPT-008、011；不得動態讀 default 造成身份漂移，版本不改既有 fingerprint |
+| I-TBD-3 | agy plan 已寫入；OMP 主 PGID 取消漏掉子程序；bwrap PID namespace 與唯讀掛載的窄對照已通過 | 待確認 | BADAPT-002、004、006、007；採用方案見 I-TBD-10；其餘工具／路徑及 agy cancellation 待驗 |
+| I-TBD-4 | OMP provider/model 已由使用者於 2026-09-30 指定；CLI／adapter trace、登入狀態隔離與 Context window 待定 | 待確認 | BADAPT-008、011；OMP catalog 272000 尚非實測窗口，版本不改既有 fingerprint |
 | I-TBD-5 | CLI retry/session/resume 關閉方式及 unknown-result 分類 | 待確認 | BADAPT-007、009；必要副作用 gate |
 | I-TBD-6 | auth、rate-limit、partial output、cancel 精確 mapping | 待確認 | BADAPT-002、004、007；由真實 evidence 建 fixtures |
 | I-TBD-7 | 正式 ID 為 omp／antigravity，是否額外接受 agy alias | 待確認 | BADAPT-003、005、008；建議先只接受正式 ID，避免新增同義身份 |
 | I-TBD-8 | BADAPT-001～012 Gherkin 已核准；固定版本 fixture/probe 基線尚待建立 | 待確認 | 目前核准行為範圍；probe 若要求實質改劇本，受影響項標待重新核准 |
-| I-TBD-9 | npm DNS 與 bwrap namespace 已恢復；OMP 指定 provider/model 憑證及完整隔離 probe 尚缺 | 待確認 | I-TBD-1～6 的前置條件；已取得部分直接證據，未解除安全 gate |
+| I-TBD-9 | npm DNS、namespace 及 OMP 指定模型登入已可用；完整隔離契約待驗 | 待確認 | I-TBD-1～6 的前置條件已具部分證據，未解除全部安全 gate |
+| I-TBD-10 | 是否接受 OMP adapter 新增 bwrap 執行期依賴／namespace 前提；不符合環境時模型呼叫前 unavailable | 待確認 | BADAPT-002、003、006、007；2026-09-30 已提出具直接對照證據的方案，等待部署範圍決策 |
 
 I-TBD-1～6 先由 probe 取得事實，需使用者選定的 model/provider 或無法隔離的環境條件再提問。I-TBD-7 及 I-TBD-8 的技術基線在 probe 後定案；若變更已核准行為，依核准紀錄逐項重新核准。沒有 gate 豁免。
 
@@ -173,9 +176,10 @@ I-TBD-1～6 先由 probe 取得事實，需使用者選定的 model/provider 或
 | 2026-09-29 | 使用者於本對話核准 BADAPT-001～012 當前劇本；probe 技術決策仍待定 | 使用者 |
 | 2026-09-29 | 環境恢復後取得 OMP 18.4.3 候選套件及 agy 最小非互動回應；安全能力仍待 probe | Codex |
 | 2026-09-29 | agy plan 模式於隔離工作區實際寫入，排除該模式的唯讀能力宣告 | Codex |
+| 2026-09-30 | 使用者指定 OMP 的 openai-codex/gpt-6-luna；完成真實呼叫、寫入與取消 probe，新增 I-TBD-10 部署方案決策 | 使用者／Codex |
 
 ---
 **建立日期**: 2026-09-29
 **分級**: Large
 **風險**: High
-**狀態**: BADAPT-001～012 已核准；contract probe 部分完成，待 I-TBD-1～9 技術基線
+**狀態**: BADAPT-001～012 已核准；contract probe 部分完成，等待 I-TBD-10 部署決策及完整技術基線

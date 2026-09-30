@@ -53,17 +53,17 @@
 
 2026-09-29 網頁工具讀取 [OMP package metadata](https://raw.githubusercontent.com/can1357/oh-my-pi/main/packages/coding-agent/package.json) 顯示套件名稱 `@oh-my-pi/pi-coding-agent`、版本 `18.4.3`、bin 名稱 `omp`。這是可變 main 的來源線索，未選為 probe release 基線，也沒有安裝或執行該版本。
 
-### 能力矩陣狀態
+### 能力矩陣狀態（2026-09-30）
 
-| 能力 | OMP | Antigravity 1.2.12 |
+| 能力 | OMP 18.4.4 | Antigravity 1.2.12 |
 |---|---|---|
-| non-interactive／events／cwd／prompt 安全傳遞 | 未驗證，unsupported | 未驗證，unsupported |
-| workspace write／read-only sandbox | 未驗證，unsupported | accept-edits 及 plan 均觀測到工作區寫入；plan 不具已證明的唯讀能力 |
-| process cancellation／無延遲副作用 | 未驗證，unsupported | 未驗證，unsupported |
-| auth／rate-limit／partial／terminal result | 未驗證，unsupported | 未驗證，unsupported |
+| non-interactive／events／cwd／prompt 安全傳遞 | JSON events、指定模型及帶旗標形狀的 argv prompt 已有真實證據；stdin 等其他路徑未驗 | 簡單非互動回應有證據；其餘未驗證，unsupported |
+| workspace write／read-only sandbox | 寫入控制組有效；受限工具及 OS 唯讀掛載有窄證據，其他路徑未驗，未宣告完整能力 | accept-edits 及 plan 均觀測到工作區寫入；plan 不具已證明的唯讀能力 |
+| process cancellation／無延遲副作用 | 單一 PGID 失敗；PID namespace 的窄對照通過，部署前提待決，未宣告完整能力 | 未驗證，unsupported |
+| auth／rate-limit／partial／terminal result | auth 缺漏與簡單正常終態有證據；rate-limit、partial failure 等未驗，unsupported | 未驗證，unsupported |
 | retry／resume／reconnect 可控 | 未驗證，unsupported | 未驗證，unsupported |
 
-以上 unsupported 是尚未證明的保守狀態，不是宣稱 CLI 本身沒有能力。當時未執行帶模型或權限副作用的 live probe；後續環境恢復情形見下節。
+以上 unsupported 是尚未證明的保守狀態，不是宣稱 CLI 本身沒有能力。2026-09-29 前置探測尚未執行帶模型或權限副作用的 live probe；2026-09-30 的實際探測與限制見下節。
 
 ## 2026-09-29 環境恢復後探測
 
@@ -96,4 +96,37 @@ timeout 45s bwrap --ro-bind / / --dev-bind /dev /dev --proc /proc \
   3< /home/kevin/.gemini/antigravity-cli/antigravity-oauth-token
 ```
 
-仍未取得 OMP 指定 provider 的可用憑證／model 決策，也未完成兩者的取消、子程序清理、retry、partial 與錯誤分類 probe。上述命令沒有修改 production。agy 的 plan 寫入反例已排除該模式作為唯讀能力的依據；若評估其他唯讀機制，仍須用相同正反對照證明。前次唯讀 HOME 的逾時不能推翻這次完成執行的實際檔案副作用。
+截至 2026-09-29，仍未取得 OMP 指定 provider 的可用憑證／model 決策，也未完成兩者的取消、子程序清理、retry、partial 與錯誤分類 probe。上述命令沒有修改 production。agy 的 plan 寫入反例已排除該模式作為唯讀能力的依據；若評估其他唯讀機制，仍須用相同正反對照證明。前次唯讀 HOME 的逾時不能推翻這次完成執行的實際檔案副作用。
+
+## 2026-09-30 OMP 指定模型與取消邊界
+
+使用者於 2026-09-30 指定 `openai-codex / gpt-6-luna`。本機已安裝 OMP 18.4.4、Bun 1.4.2，且有該 provider 的 OAuth 登入。最小真實呼叫回報相同 provider/model，成功輸出 `PROBE_OK`；此路徑不需另設 OpenAI API key。18.4.4 是本次固定探測基線，先前 18.4.3 證據不混用。
+
+- CLI：`/home/kevin/.bun/install/global/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js`，SHA-256 `ca9b8832ea05299f02db83a6f479ab92e4646af7f0140b54f9c2592c07803441`。
+- Bun 1.4.2：SHA-256 `a83d263767d839e4d2649ca8e35d07159c7afc99afdc96d731ced29e056dda0c`；OS 為 Linux 6.8.0-142-generic、x86_64。
+- `omp models openai-codex --json --no-extensions` 有精確 selector `openai-codex/gpt-6-luna`；catalog 宣告 contextWindow 272000，這是 OMP metadata，尚非實測模型窗口，也未定案 Asura 的窗口設定。
+
+可重跑入口為 [probe_omp.py](../../../scripts/issue-25/probe_omp.py)。腳本比對固定 CLI／Bun 雜湊，建立拋棄式工作區；只將指定 provider 的 OAuth credential 透過 memfd 放入隔離環境，未將 credential 寫入檔案或更動使用者的 OMP 設定。輸出保留實際 argv、config、版本、exit code、message、程序群組與檔案差異；去除 opaque message ID/signature，聚合其他事件種類，保存前檢查 credential 值未出現在輸出。這是 probe 方法，production 的登入／狀態目錄策略仍待定案。
+
+共同參數固定模型與 low thinking，關閉 session、extensions、skills、rules、prewalk、memories、compaction、CLI retry/model fallback。`retry.enabled=false` **不代表 provider 內部 reconnect/retry 已證明關閉**；套件的 Codex transport 仍有獨立 recovery 路徑，I-TBD-5 保留待驗。
+
+| 命令（`/usr/bin/python3 scripts/issue-25/probe_omp.py` 後接參數） | 直接結果與證據 | 可支持的結論 |
+|---|---|---|
+| `--case smoke --pid-namespace` | exit 0、正常 stop、`PROBE_OK`；[fixture](probes/omp-18.4.4-smoke.json) | 指定 OAuth provider／模型的非互動呼叫可用 |
+| `--case prompt-shape --pid-namespace` | exit 0；帶 `--not-a-flag`、空白與換行的 prompt 原樣出現在 user event，回應 `PROMPT_OK`；[fixture](probes/omp-18.4.4-prompt-shape.json) | argv 的 `--` 終止符能保護此 prompt，不由 shell 展開 |
+| `--case auth-missing --pid-namespace` | exit 1；`No API key found for openai-codex`，沒有 assistant event；[fixture](probes/omp-18.4.4-auth-missing.json) | 缺少指定 provider 登入的真實失敗可觀察 |
+| `--case write` | exit 0；真實 write tool 建立 `marker.txt`，內容 `PROBE_OK`；[fixture](probes/omp-18.4.4-write-control.json) | 寫入偵測器的正控制組有效 |
+| `--case read-tools` | exit 0；僅 read/grep/glob，正常回報缺寫入工具，檔案不存在；[fixture](probes/omp-18.4.4-read-tools.json) | 本案例受限工具組未寫入，尚非完整唯讀沙箱能力 |
+| `--case delayed-control` | exit 0；真實 bash tool 啟動 Python child，延遲寫入 `DELAYED`；[fixture](probes/omp-18.4.4-delayed-control.json) | 延遲副作用偵測器的正控制組有效 |
+| `--case cancel` | exit -9；ready 後 0.057 秒送 SIGKILL，送出前無 marker；主 PGID 128114、shell/child PGID 128392；觀察後仍出現 `DELAYED`；[fixture](probes/omp-18.4.4-cancel-pgid.json) | **殺主程序群組不足以取消 OMP shell 子程序**。十秒後 child 已退出仍不能判定安全，因副作用已發生 |
+| `--case delayed-control --pid-namespace` | exit 0；namespace 內仍完成延遲寫入；[fixture](probes/omp-18.4.4-delayed-control-pidns.json) | namespace 不會使正控制組失效 |
+| `--case cancel --pid-namespace` | exit -9；ready 後 0.096 秒送 SIGKILL，十秒觀察窗內 child 不存活且無 marker；[fixture](probes/omp-18.4.4-cancel-pidns.json) | 此案例中 PID namespace 能涵蓋脫離 PGID 的子程序；完整生命週期契約仍待驗 |
+| `--case write --readonly-workspace --pid-namespace` | exit 0；真實 write tool 得到 `EROFS`，檔案不存在，完成回應；[fixture](probes/omp-18.4.4-readonly-write.json) | 工作區唯讀掛載有效；shell、workspace 外路徑及其他工具仍需負控制組 |
+
+### 2026-09-30 新部署前提的待決方案
+
+既有 Asura 以單一 PGID SIGKILL 取消，見 `internal/engine/cancel.go` 與 `internal/backend/opencode/process.go`。上述反例證明 OMP 不能直接套用該方式並宣告 `CapProcessCancellation`。探測中的 `bwrap --unshare-pid` 及工作區唯讀掛載提供可行的安全邊界，但會新增 production 執行期依賴與 namespace 權限前提。
+
+候選方案為：OMP adapter 在 adapter 邊界使用 bwrap 做程序包含與角色寫入權限；必要 binary 或 namespace 不可用時，在模型呼叫前分類 unavailable，無 fallback。Engine／Pipeline 的共同契約維持不變。2026-09-30 已將「採用此部署前提」或「暫緩 OMP 接線，另評估取消方案」送交使用者決定；尚未推定核准。
+
+本次未建立 production adapter，也未執行產品 vet/race/build。腳本及 fixture 的靜態查核不能替代 BADAPT 完整驗收；rate-limit、partial failure、retry、所有工具的寫入邊界及 Antigravity 的取消仍未完成。
