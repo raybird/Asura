@@ -29,6 +29,7 @@ type PinnedFile struct{ Path, SHA256 string }
 
 type Config struct {
 	PinnedFiles                       []PinnedFile
+	PinnedTrees                       []PinnedFile
 	AuthReadOnly                      bool
 	ID, Version, Home, AuthTarget     string
 	Auth                              func(context.Context) (Authentication, error)
@@ -100,6 +101,12 @@ func Run(ctx context.Context, req *backend.ExecutionRequest, cfg Config) (*backe
 			return fail(backend.FailureUnsupported, errors.New("workspace overlaps protected runtime or HOME"))
 		}
 	}
+	for _, path := range cfg.ReadOnlyPaths {
+		rel, e := filepath.Rel(path, workspace)
+		if e == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+			return fail(backend.FailureUnsupported, errors.New("workspace overlaps protected runtime"))
+		}
+	}
 	probe := exec.CommandContext(ctx, bwrap, "--unshare-pid", "--unshare-ipc", "--ro-bind", "/", "/", "--proc", "/proc", "--die-with-parent", "--", "/usr/bin/true")
 	if err = probe.Run(); err != nil {
 		if ctx.Err() != nil {
@@ -110,6 +117,9 @@ func Run(ctx context.Context, req *backend.ExecutionRequest, cfg Config) (*backe
 	auth, err := cfg.Auth(ctx)
 	expiry := auth.Expiry
 	if err != nil {
+		if ctx.Err() != nil {
+			return fail(backend.FailureCancelled, ctx.Err())
+		}
 		return fail(backend.FailureAuth, err)
 	}
 	if !expiry.After(time.Now()) {
@@ -133,6 +143,15 @@ func Run(ctx context.Context, req *backend.ExecutionRequest, cfg Config) (*backe
 	}
 	defer os.RemoveAll(root)
 
+	pinnedTrees := make(map[string]string)
+	for i, tree := range cfg.PinnedTrees {
+		path := filepath.Join(root, fmt.Sprintf("tree-%d", i))
+		hash, e := SnapshotTree(tree.Path, path)
+		if e != nil || hash != tree.SHA256 {
+			return fail(backend.FailureUnavailable, errors.New("dependency snapshot differs from fixed contract"))
+		}
+		pinnedTrees[tree.Path] = path
+	}
 	pinned := make(map[string]string, len(cfg.PinnedFiles))
 	for i, file := range cfg.PinnedFiles {
 		source, e := os.Open(file.Path)
@@ -176,6 +195,10 @@ func Run(ctx context.Context, req *backend.ExecutionRequest, cfg Config) (*backe
 		}
 	}
 	mountArgs := append([]string(nil), args[:mountEnd]...)
+	for _, tree := range cfg.PinnedTrees {
+		path := pinnedTrees[tree.Path]
+		mountArgs = append(mountArgs, "--ro-bind", path, path, "--ro-bind", path, tree.Path)
+	}
 	for _, file := range cfg.PinnedFiles {
 		path := pinned[file.Path]
 		mountArgs = append(mountArgs, "--ro-bind", path, path, "--ro-bind", path, file.Path)
@@ -196,9 +219,15 @@ func Run(ctx context.Context, req *backend.ExecutionRequest, cfg Config) (*backe
 	cmd.WaitDelay = 2 * time.Second
 	var unlock func()
 	if cfg.BeforeStart != nil {
-		unlock, err = cfg.BeforeStart(ctx)
+		unlock, err = cfg.BeforeStart(runCtx)
 		if err != nil {
-			return fail(backend.FailureCancelled, err)
+			if ctx.Err() == nil && runCtx.Err() != nil {
+				return fail(backend.FailureAuth, errors.New("CLI login expired before execution"))
+			}
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return fail(backend.FailureCancelled, err)
+			}
+			return fail(backend.FailureExecution, err)
 		}
 	}
 	release := func() {
@@ -208,6 +237,12 @@ func Run(ctx context.Context, req *backend.ExecutionRequest, cfg Config) (*backe
 		}
 	}
 	defer release()
+	if ctx.Err() != nil {
+		return fail(backend.FailureCancelled, ctx.Err())
+	}
+	if runCtx.Err() != nil {
+		return fail(backend.FailureAuth, errors.New("CLI login expired before execution"))
+	}
 	if err = cmd.Start(); err != nil {
 		return fail(backend.FailureUnavailable, err)
 	}

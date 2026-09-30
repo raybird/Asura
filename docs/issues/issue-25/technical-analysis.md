@@ -270,3 +270,7 @@ Antigravity 命令為 `/usr/bin/python3 scripts/issue-25/probe_agy.py --binary-p
 
 
 2026-09-30 正式 Go adapter 實測：OMP `go test` live opt-in 成功；Antigravity 在 Snap Go wrapper 執行測試時 keyring lookup exit 1 且無輸出，落至舊 file 的過期拒絕，不能記為模型成功。使用同一份 `go test -c` 編譯產物直接執行，keyring lookup 成功、native adapter PROBE_OK（22.56 秒）。此對照顯示 wrapper 執行環境差異，未定位唯一機制；不改憑證或為測試繞過 auth preflight。正式 adapter 用 `--print-timeout 0`，以登入 expiry／上層 context 作停止邊界；直接實測確認此 invocation 可完成。CLI native timeout fixture 仍用於故障分類。
+
+## 2026-09-30 獨立審查修復的依賴契約
+
+原本只 pin CLI 入口與 Bun 不能阻止主機更新 node_modules。正式 OMP 現在複製完整原安裝樹並驗 SHA256 `e8b948577c8d65212f00068a6dc55d293724786d698d8d18438f67d6545f5b4b`，再掛載不可寫的副本。此基線為僅安裝 @oh-my-pi/pi-coding-agent 18.4.4 的原 Bun global node_modules；增加其他 global 套件或依賴 bytes 改變也會 unavailable，需獨立安裝相符樹。樹包含約 1.2 GB，因此每次 Run 有同量私人 scratch 空間及 copy／hash 成本，取消後清除，不保存登入。固定樹僅適用已探測 Linux x64 安裝，不宣告跨平台相容。使用新版 snapshot 的正式 model path 7.54 秒 PASS，见 evidence/omp-tree-live.log。

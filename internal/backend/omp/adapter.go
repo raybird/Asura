@@ -90,7 +90,7 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 		Auth: func(c context.Context) (clisandbox.Authentication, error) {
 			return snapshot(c, filepath.Join(a.cfg.Home, ".omp/agent/agent.db"))
 		},
-		Program: []string{a.cfg.BunPath, a.cfg.BinaryPath}, PinnedFiles: []clisandbox.PinnedFile{{Path: a.cfg.BunPath, SHA256: bunHash}, {Path: a.cfg.BinaryPath, SHA256: cliHash}}, ReadOnlyPaths: []string{a.cfg.BunPath, modules}, Settings: []byte(settings),
+		Program: []string{a.cfg.BunPath, a.cfg.BinaryPath}, PinnedFiles: []clisandbox.PinnedFile{{Path: a.cfg.BunPath, SHA256: bunHash}, {Path: a.cfg.BinaryPath, SHA256: cliHash}}, PinnedTrees: []clisandbox.PinnedFile{{Path: modules, SHA256: "e8b948577c8d65212f00068a6dc55d293724786d698d8d18438f67d6545f5b4b"}}, ReadOnlyPaths: []string{a.cfg.BunPath, modules}, Settings: []byte(settings),
 		Args: func(config string) []string {
 			return []string{"--model", Model, "--thinking", "low", "--config", config, "--no-session", "--no-lsp", "--no-title", "--no-extensions", "--no-skills", "--no-rules", "--no-prewalk", "--approval-mode", "yolo", "--mode", "json", "--print", "--", req.Prompt}
 		},

@@ -1,0 +1,5 @@
+--- FAIL: TestReviewProtectedWorkspaceAndStartFailure (0.01s)
+    review_test.go:25: runtime overlap result &{BackendID:probe BackendVersion: Output: PartialOutput: Events:[] FailureClass: Usage:<nil> UsageSource: StartedAt:2026-09-30 14:40:38.75113429 +0800 CST m=+0.000324177 CompletedAt:2026-09-30 14:40:38.762702941 +0800 CST m=+0.011892828} err <nil>
+FAIL
+FAIL	asura/internal/backend/clisandbox	0.013s
+FAIL

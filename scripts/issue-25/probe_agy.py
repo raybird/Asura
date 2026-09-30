@@ -191,10 +191,18 @@ try:
             stdout, stderr = process.communicate()
         # Reject output containing the full token or long credential fields.
         sensitive = [token.strip(), original_token.strip()]
-        try:
-            sensitive += [v.encode() for v in json.loads(token).values() if isinstance(v, str) and len(v) > 20]
-        except (ValueError, AttributeError):
-            pass
+        # 2026-09-30：keyring 的 access／refresh 位於巢狀 token，兩份來源都要掃描。
+        def collect_sensitive(value):
+            if isinstance(value, dict):
+                for item in value.values():
+                    collect_sensitive(item)
+            elif isinstance(value, list):
+                for item in value:
+                    collect_sensitive(item)
+            elif isinstance(value, str) and len(value) > 20:
+                sensitive.append(value.encode())
+        for payload in (token, original_token):
+            collect_sensitive(json.loads(payload))
         if any(v and (v in stdout or v in stderr) for v in sensitive):
             raise SystemExit('Credential in output; refusing to save evidence')
         events = []

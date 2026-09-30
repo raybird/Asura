@@ -16,3 +16,5 @@
 固定 CLI 探測與能力正反對照見 ../probes/。fixture、mock dispatch counter 與原生模型路徑各自驗證不同責任，不把 mock 當作安全能力證據。Antigravity vendor quota 僅有合成 carrier 測試，未宣告真實服務 quota 已重現。
 
 2026-09-30 更新：原 CLI keyring 到期日更新為 2026-09-30 15:33，正式 adapter `go test -c -o /tmp/issue25-agy-final.test ./internal/backend/antigravity` 後以 `ASURA_ISSUE25_LIVE=1 ASURA_ISSUE25_AGY=/tmp/asura-issue25-fixed-agy/antigravity /tmp/issue25-agy-final.test -test.run TestLiveAdapter -test.v` 直接執行，18.49 秒 PASS；見 agy-new-login-live.log。final-race／final-vet／final-build 對應 implementation-plan.md 的完整命令；測試內容為本次交付 production，後續只補文件與證據。
+
+2026-09-30 獨立審查修復：review-3ca5712.md 的三項 MUST FIX 已局部修正。OMP 全 dependency tree 複製後摘要固定（含 relative path、檔案 bytes、execute bit 與內部 symlink；跨樹連結拒絕），唯讀掛載私人副本；工作區與 runtime 雙向重疊拒絕；BeforeStart I/O 為 execution failure，context 取消／access expiry 分別分類。review-fix-red 是原 runner 的實際重疊反例，green 為同一斷言加啟動前失敗與副本測試。`go test ./internal/backend/clisandbox -count=1`、新 OMP 正式 adapter live 7.54 秒 PASS（omp-tree-live.log）。同組完整命令另保存 review-final-race／vet／build；準備階段取消與到期分類亦已補檢查。

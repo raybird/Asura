@@ -144,3 +144,5 @@ I1 仍進行中。修正 OMP 平面設定無效反例，巢狀設定後受控 50
 `go test -count=1 -race ./...`、`go vet ./...` 與 `go build -o /tmp/asura-issue25 ./cmd/asura` 均 exit 0，原始輸出保存於 [evidence](evidence/README.md)。build 路徑避免覆寫工作區 binary。code-simplify 已檢查本次範圍，僅將 runtime overlay 的巢狀 append 改為明確複製再追加；所有契約保留，最終 race 同組通過。Cron 的既有日期斷言於跨月時失敗，局部測試修正後完整回歸通過，未變更排程功能。
 
 固定 runtime 在來源更新後仍執行已驗 bytes；每次呼叫建立私人 scratch 副本並驗 hash、唯讀掛載，結束即移除。新 adapter 不修改 Pipeline／Engine／Memory／Context 的 production 邏輯。2026-09-30 更新登入後，正式 Antigravity adapter live 通過，見 evidence/agy-new-login-live.log。
+
+2026-09-30 獨立 review RETURN 的三項問題已修正，原報告保留；詳見 technical-analysis.md 的依賴契約及 evidence/review-fix-{red,green}.log。補修範圍完成 code-simplify 檢查，保留 snapshot／mount 與錯誤分類的清楚相依順序；review-final-race、review-final-vet、review-final-build 同組完整命令均 exit 0，OMP 新依賴快照的真實模型通過。PR #26 已建立；下一步對修復提交重新獨立審查。
