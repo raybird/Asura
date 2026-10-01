@@ -19,6 +19,11 @@ var (
 // 遵循 INT-005 與同步契約：cancel -> kill/verify process group -> persist terminal state -> return success
 // 確認回收成功才宣告完成；若 timeout、identity unknown 或回收失敗，回錯並保留追蹤資訊
 func (e *Engine) CancelTask(taskID string) error {
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+		defer cancel()
+		_ = e.store.CompleteTaskUtility(ctx, taskID)
+	}()
 	var (
 		cancel context.CancelFunc
 		doneCh chan struct{}
@@ -224,4 +229,3 @@ reap:
 		return fmt.Errorf("unexpected task status %s before finalizing cancellation", latest.Status)
 	}
 }
-

@@ -2,6 +2,7 @@ package recall
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strings"
 	"time"
@@ -31,9 +32,13 @@ func DefaultPolicy() Policy {
 }
 
 type Selection struct {
-	ID     string `json:"id"`
-	Score  int    `json:"score"`
-	Reason string `json:"reason"`
+	LexicalRank int    `json:"lexical_rank"`
+	WeightPPM   int64  `json:"weight_ppm"`
+	FinalScore  int64  `json:"final_score_scaled"`
+	Provenance  string `json:"provenance"`
+	ID          string `json:"id"`
+	Score       int    `json:"score"`
+	Reason      string `json:"reason"`
 }
 
 type Budget struct {
@@ -44,6 +49,9 @@ type Budget struct {
 }
 
 type Decision struct {
+	RecallID           string            `json:"recall_id,omitempty"`
+	UtilityPolicy      string            `json:"utility_policy,omitempty"`
+	UtilityVersion     string            `json:"utility_version,omitempty"`
 	Mode               string            `json:"mode"`
 	PolicyVersion      string            `json:"policy_version"`
 	Policy             Policy            `json:"policy"`
@@ -60,6 +68,8 @@ type Decision struct {
 }
 
 type Input struct {
+	UtilityPolicy      string
+	UtilityAggregates  map[string]storage.UtilityAggregate
 	Workspace          string
 	Prompt             string
 	ExplicitIDs        []string
@@ -79,8 +89,15 @@ func Select(ctx context.Context, in Input) (Result, error) {
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
+	utilityPolicy := in.UtilityPolicy
+	if utilityPolicy == "" {
+		utilityPolicy = "observe"
+	}
+	if utilityPolicy != "observe" && utilityPolicy != "apply" {
+		return Result{}, errors.New("invalid utility policy")
+	}
 	policy := DefaultPolicy()
-	result := Result{Decision: Decision{Mode: "bounded", PolicyVersion: PolicyVersion, Policy: policy,
+	result := Result{Decision: Decision{Mode: "bounded", UtilityPolicy: utilityPolicy, UtilityVersion: storage.UtilityVersion, PolicyVersion: PolicyVersion, Policy: policy,
 		ExplicitIDs: append([]string{}, in.ExplicitIDs...), AutoIDs: []string{}, Selected: []Selection{},
 		CandidateTruncated: in.CandidateTruncated, Skipped: map[string]int{}, ContextConfig: in.ContextConfig}}
 	d := &result.Decision
@@ -116,8 +133,11 @@ func Select(ctx context.Context, in Input) (Result, error) {
 	}
 	d.CandidatesRead = len(candidates)
 	type scored struct {
-		memory storage.Memory
-		score  int
+		memory      storage.Memory
+		score       int
+		lexicalRank int
+		weight      int64
+		finalScore  int64
 	}
 	ranked := []scored{}
 	for _, m := range candidates {
@@ -152,7 +172,7 @@ func Select(ctx context.Context, in Input) (Result, error) {
 			d.Skipped["no_match"]++
 			continue
 		}
-		ranked = append(ranked, scored{m, score})
+		ranked = append(ranked, scored{memory: m, score: score})
 	}
 	sort.Slice(ranked, func(i, j int) bool {
 		if ranked[i].score != ranked[j].score {
@@ -160,6 +180,29 @@ func Select(ctx context.Context, in Input) (Result, error) {
 		}
 		return ranked[i].memory.ID < ranked[j].memory.ID
 	})
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
+	for i := range ranked {
+		ranked[i].lexicalRank = i + 1
+		ranked[i].weight = 1000000
+		if utilityPolicy == "apply" {
+			weight, err := storage.UtilityWeightPPM(in.UtilityAggregates[ranked[i].memory.ID])
+			if err != nil {
+				return Result{}, err
+			}
+			ranked[i].weight = weight
+		}
+		ranked[i].finalScore = int64(ranked[i].score) * ranked[i].weight
+	}
+	if utilityPolicy == "apply" {
+		sort.Slice(ranked, func(i, j int) bool {
+			if ranked[i].finalScore != ranked[j].finalScore {
+				return ranked[i].finalScore > ranked[j].finalScore
+			}
+			return ranked[i].memory.ID < ranked[j].memory.ID
+		})
+	}
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
@@ -190,7 +233,7 @@ func Select(ctx context.Context, in Input) (Result, error) {
 		result.Memories = trial
 		d.Budget = budget
 		d.AutoIDs = append(d.AutoIDs, candidate.memory.ID)
-		d.Selected = append(d.Selected, Selection{ID: candidate.memory.ID, Score: candidate.score, Reason: "lexical_overlap"})
+		d.Selected = append(d.Selected, Selection{ID: candidate.memory.ID, Score: candidate.score, Reason: "lexical_overlap", LexicalRank: candidate.lexicalRank, WeightPPM: candidate.weight, FinalScore: candidate.finalScore, Provenance: "estimated"})
 	}
 	if err := ctx.Err(); err != nil {
 		return Result{}, err

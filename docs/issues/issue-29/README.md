@@ -157,7 +157,7 @@ And MEM、CTXMEM、RECALL、WEBMEM、GITMEM、WEBGIT、CTXWIN、TFACE、MBACK、
 
 ## Gherkin 核准紀錄
 
-- **核准 commit**: 待提交
+- **核准 commit**: 95ac2347e2857aa9b7a6d7f8b7ad11e1b1165805
 - **核准來源**: 2026-10-01 對話：使用者回覆「核准」，核准前一回合交付的 UFL-001～012 與 K-TBD-1～10 設計提案；依 dev-cycle 持續推進。
 
 | Scenario | 核准日期 | 狀態 |
@@ -192,6 +192,10 @@ And MEM、CTXMEM、RECALL、WEBMEM、GITMEM、WEBGIT、CTXWIN、TFACE、MBACK、
 | TBD-1 | 核准 UFL-001～012 及 K-TBD-1～10 的具體方案 | 已解決 | 2026-10-01 使用者「核准」，可依相依順序執行 |
 | TBD-2 | 真實 Critic probe 的 backend/model 與可用性 | 已解決 | 2026-10-01 沿用已設定 OpenCode 1.18.31 / openai/gpt-5.6-sol；可信度仍待 probe |
 
+## 驗證證據
+
+2026-10-01：P0～P4 完成，紅綠、固定模型 9/9、10k/100k 容量、精煉、vet/race/build 見 [verification.md](evidence/verification.md)。正式 CI 與独立 review 於 P5 取得後回填。
+
 ## Timeline
 
 | 日期 | 異動 | 負責人 |
@@ -203,4 +207,4 @@ And MEM、CTXMEM、RECALL、WEBMEM、GITMEM、WEBGIT、CTXWIN、TFACE、MBACK、
 **建立日期**: 2026-10-01
 **分級**: Large — 跨 storage、Daemon、engine、pipeline、recall 與 CLI
 **風險**: High
-**狀態**: 實作中 — P0 契約與可信度 probe
+**狀態**: 實作完成，交付驗證與獨立審查中

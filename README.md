@@ -229,6 +229,21 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web \
 - 查詢及選取期限 250ms，逾時或資料庫錯誤拒絕提交。`status` 的 `Recall` 提供選取來源、排序分數、政策、estimated budget 與略過原因計數，不保存未選候選全文。
 - 重啟沿用既有政策：未完成任務標為中斷失敗，快照保留，不自動重跑。
 
+#### 記憶效用回饋與稽核
+
+2026-10-01：bounded recall 建立唯一 `recall_id`，與 Task 的 sealed context 同交易保存；相同 Request ID 重送沿用原決策。Daemon 預設 `ASURA_MEMORY_UTILITY_POLICY=observe`，維持 `lexical-v1` 排序；設定為 `apply` 才對未來 auto recall 套用 `utility-v1` down-weight。非法 policy 會拒絕啟動。
+
+```bash
+ASURA_MEMORY_UTILITY_POLICY=apply ./bin/asura daemon --allowed-roots /path/to/project
+./bin/asura memory utility --workspace /path/to/project <memory-id> --limit 20
+```
+
+2026-10-01：有效樣本為 used+unused；少於 5 筆或全部 unknown 時 multiplier=1。達 5 筆後 multiplier=1−0.5×unused/(used+unused)，以 millionths 向下取整降權量，範圍 0.5～1；final score 同分依 ID 升序。explicit 不降權，既有 256 候選、Top-K、query、prompt budget 與 250ms recall deadline 不變。`status` 的 Recall 保存 policy、lexical score/rank、weight、final score 與 estimated provenance，Utility 顯示 pending/error/complete；legacy 無事件顯示 unavailable。
+
+2026-10-01：Three-Face 利用既有 Critic 呼叫回報 used/unused/unknown；屬模型 estimated 訊號，不能當作實際因果效用。捏造／重複／非 auto ID 或不合法 usage 區塊全部轉 unknown；Direct 不新增模型呼叫，取消／無可靠 Critic 訊號保持 unknown。assessment 與 aggregate 同交易、防重複，可由 ledger 重建。執行後 UFL 錯誤不改主 Task 結果、不重跑 stage；重啟以每批 100 events 補寫。admission audit 寫入失敗或 apply 權重讀取失敗拒絕提交。
+
+2026-10-01：utility 查詢限定已授權 exact canonical workspace，單頁預設 20、最多 100 observations，以 `--cursor` 接續；cursor 最多 512 bytes、回應最多 64 KiB。刪除記憶不復活，同 scope 保留歷史 audit。第一版無 GC，DB 總量仍隨事件增長。真實模型 probe 只提供固定版本、有限 fixture 的一致性證據，見 [Issue 29](docs/issues/issue-29/README.md)。
+
 #### 固定三面管線 (Three-Face Fixed Pipeline)
 2026-09-17：
 - **模式語意與向後相容**：
@@ -320,4 +335,4 @@ new-issue ──► decompose (僅 Large) ──► execute-task (BDD + TDD) ─
 
 ---
 
-*最新更新日期：2026-09-25*
+*最新更新日期：2026-10-01*

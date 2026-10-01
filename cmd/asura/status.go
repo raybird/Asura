@@ -59,6 +59,7 @@ func handleStatus(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "error: %v\n", err)
 			return 1
 		}
+		task.UtilityStatus, task.UtilityError, _ = store.TaskUtilityStatus(context.Background(), task.ID)
 	}
 
 	fmt.Fprintf(stdout, "Task ID:   %s\n", task.ID)
@@ -78,6 +79,11 @@ func handleStatus(args []string, stdout, stderr io.Writer) int {
 		if err := json.Unmarshal([]byte(task.ResolvedContext), &sealed); err == nil && sealed.Recall != nil {
 			encoded, _ := json.Marshal(sealed.Recall)
 			fmt.Fprintf(stdout, "Recall:    %s\n", encoded)
+			status := task.UtilityStatus
+			if status == "" || sealed.Recall.RecallID == "" {
+				status = "unavailable"
+			}
+			fmt.Fprintf(stdout, "Utility:   %s %s\n", status, task.UtilityError)
 		}
 	}
 	if task.PipelineTrace != "" {

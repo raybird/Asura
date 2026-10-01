@@ -10,11 +10,11 @@
 
 | Phase | 狀態 | 對應驗收 | 產出 | 相依 | 完成判準 |
 |---|---|---|---|---|---|
-| P0 契約與可信度 probe | 📝 待實作 | 003、004、005、011 | 正反 fixture、固定版本模型輸出、ID validation／呼叫數證據 | 規格核准、probe backend/model 可用 | technical-analysis K-TBD-10 判準；失敗不進 apply |
-| P1 immutable ledger | 📝 待實作 | 001、002、003、006、009、011 | migration、Task/event 原子寫入、bounded recovery | P0 契約成立 | rollback/restart/redelivery 不產生孤兒或重複；sealed snapshot 不變 |
-| P2 assessment 與 aggregate | 📝 待實作 | 004、005、006、008、009、011 | optional Critic usage、驗證、交易聚合、重建 | P1 | missing/invalid unknown；Direct 0 extra calls；重建 count 與 ledger 相符 |
-| P3 audit 與容量 | 📝 待實作 | 003、010、011 | CLI/IPC/status、10k/100k fixture 與 query plan | P2 | scope fail-closed、limit/cursor/field/response bounds、bounded recovery 證據 |
-| P4 opt-in apply | 📝 待實作 | 001、002、007、008、011 | utility-v1 multiplier 與 sealed score | P0 可信度成立、P3 | neutral/threshold/floor/tie golden fixture，observe 完全相容，deadline 未放寬 |
+| P0 契約與可信度 probe | ✅ 已完成 | 003、004、005、011 | 正反 fixture、固定版本模型輸出、ID validation／呼叫數證據 | 規格核准、probe backend/model 可用 | technical-analysis K-TBD-10 判準；失敗不進 apply |
+| P1 immutable ledger | ✅ 已完成 | 001、002、003、006、009、011 | migration、Task/event 原子寫入、bounded recovery | P0 契約成立 | rollback/restart/redelivery 不產生孤兒或重複；sealed snapshot 不變 |
+| P2 assessment 與 aggregate | ✅ 已完成 | 004、005、006、008、009、011 | optional Critic usage、驗證、交易聚合、重建 | P1 | missing/invalid unknown；Direct 0 extra calls；重建 count 與 ledger 相符 |
+| P3 audit 與容量 | ✅ 已完成 | 003、010、011 | CLI/IPC/status、10k/100k fixture 與 query plan | P2 | scope fail-closed、limit/cursor/field/response bounds、bounded recovery 證據 |
+| P4 opt-in apply | ✅ 已完成 | 001、002、007、008、011 | utility-v1 multiplier 與 sealed score | P0 可信度成立、P3 | neutral/threshold/floor/tie golden fixture，observe 完全相容，deadline 未放寬 |
 | P5 交付 | 📝 待實作 | 012 與全部 | 常青文件、固定 BASE/HEAD、PR、獨立 review | P1～P4 | 完整回歸、正式 CI 與持久化 review evidence |
 
 ## 使用方式對照
@@ -32,69 +32,69 @@
 
 ## 規劃證據與檢查清單
 
-2026-10-01：以基準程式碼與 GitHub issue 原文比對；README 所有 UFL-001～012 均待核准，沒有把規劃授權當 production 授權。四份文件的本地連結、12 個 Scenario／核准列及 fence 靜態檢查通過；git diff --check 通過。基準 `go test ./internal/recall ./internal/pipeline ./internal/storage ./internal/daemon ./cmd/asura` exit 0，五個 package 全綠；此為既有行為基線，非 UFL 驗收。沒有 production 修改，紅綠測試不適用。
+2026-10-01：以基準程式碼與 GitHub issue 原文比對；建立時 README 所有 UFL-001～012 均待核准；使用者於 2026-10-01 核准後才實作，沒有把規劃授權當 production 授權。四份文件的本地連結、12 個 Scenario／核准列及 fence 靜態檢查通過；git diff --check 通過。基準 `go test ./internal/recall ./internal/pipeline ./internal/storage ./internal/daemon ./cmd/asura` exit 0，五個 package 全綠；此為既有行為基線，非 UFL 驗收。沒有 production 修改，紅綠測試不適用。
 
 - [x] 確認基準、需求來源、模組邊界與 Large／High 分級。
 - [x] 盤點 recall、Task admission、Critic schema、storage SQL bounds 與 trace persistence。
 - [x] 提出 K-TBD-1～10、比較 ledger/JSON 與 aggregate 策略。
 - [x] 2026-10-01 使用者核准具體契約，probe 沿用現有 OpenCode 設定。
-- [ ] 核准後在本檔 decompose、取得 probe 與實作證據。
+- [x] 2026-10-01 在本檔拆解，P0～P4 證據見 evidence/verification.md。
 
 ## 核准後責任 Task（2026-10-01）
 
 ### Task P0.1 — Critic optional usage 契約與可信度 probe
 
-- 狀態：📝 待實作
+- 狀態：✅ 已完成
 - 產出與最小範圍：pipeline optional raw usage、allowlist 驗證；唯讀 3 fixtures × 3 固定模型 probe
 - 相依：無
 - 責任驗收：UFL-004
 - 完成判準：invalid 區塊全 unknown、legacy review 合法；模型可判定例至少 8/9 一致；保留輸入輸出
 - 驗證策略：pipeline stage 單元紅綠、實際模型 probe；Direct 整合在 P2.1
-- 證據：待執行回填。
+- 證據：2026-10-01 [verification.md](evidence/verification.md) 的紅燈、最小實作、精煉、race／probe 紀錄。
 
 ### Task P1.1 — immutable ledger 與原子 admission
 
-- 狀態：📝 待實作
+- 狀態：✅ 已完成
 - 產出與最小範圍：storage migration、ledger、Daemon canonical admission
 - 相依：P0.1 契約驗證通過
 - 責任驗收：UFL-002、UFL-003
 - 完成判準：Task/event 交易原子、redelivery 唯一、sealed 不變、scope 隔離
 - 驗證策略：SQLite fault/restart 單元與 Daemon 整合紅綠
-- 證據：待執行回填。
+- 證據：2026-10-01 [verification.md](evidence/verification.md) 的紅燈、最小實作、精煉、race／probe 紀錄。
 
 ### Task P2.1 — assessment／aggregate／recovery
 
-- 狀態：📝 待實作
+- 狀態：✅ 已完成
 - 產出與最小範圍：engine terminal hook、storage 原子 assessment／aggregate、bounded recovery／rebuild
 - 相依：P1.1
 - 責任驗收：UFL-005、UFL-006、UFL-009、UFL-011
 - 完成判準：Direct 額外模型呼叫 0、retry count 一次、取消 unknown、錯誤不改主結果、deleted 不復活
 - 驗證策略：storage 單元與 engine/Daemon 整合紅綠、cache 與 ledger 獨立對照
-- 證據：待執行回填。
+- 證據：2026-10-01 [verification.md](evidence/verification.md) 的紅燈、最小實作、精煉、race／probe 紀錄。
 
 ### Task P3.1 — bounded utility audit 與容量
 
-- 狀態：📝 待實作
+- 狀態：✅ 已完成
 - 產出與最小範圍：Daemon IPC、CLI memory utility/status、10k/100k probe
 - 相依：P2.1
 - 責任驗收：UFL-010
 - 完成判準：授權與 keyset/query/field/64KiB bounds、索引與 bounded recovery
 - 驗證策略：storage query plan/容量 probe、IPC/CLI 整合紅綠
-- 證據：待執行回填。
+- 證據：2026-10-01 [verification.md](evidence/verification.md) 的紅燈、最小實作、精煉、race／probe 紀錄。
 
 ### Task P4.1 — observe/apply 與 sealed ranking
 
-- 狀態：📝 待實作
+- 狀態：✅ 已完成
 - 產出與最小範圍：recall multiplier、Daemon 設定入口、sealed score
 - 相依：P3.1、P0.1 可信度通過
 - 責任驗收：UFL-001、UFL-007、UFL-008
 - 完成判準：預設 lexical 相容、threshold 5、floor .5、unknown neutral、explicit 不降權、250ms 不放寬
 - 驗證策略：golden selector 單元與 Daemon sealed/redelivery 整合紅綠
-- 證據：待執行回填。
+- 證據：2026-10-01 [verification.md](evidence/verification.md) 的紅燈、最小實作、精煉、race／probe 紀錄。
 
 ### Task P5.1 — 固定版本交付與獨立審查
 
-- 狀態：📝 待實作
+- 狀態：⏳ 進行中
 - 產出與最小範圍：常青文件、完整回歸、提交、PR、正式 CI、獨立 review
 - 相依：P4.1
 - 責任驗收：UFL-012

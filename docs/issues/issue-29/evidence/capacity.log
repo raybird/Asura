@@ -1,0 +1,10 @@
+=== RUN   TestUtilityCapacityProbe
+=== RUN   TestUtilityCapacityProbe/10000
+    sqlite_utility_probe_test.go:135: events=10000 writes=571.970894ms rebuild=422.310726ms query20=512.76µs aggregate256=8.969101ms recovery100=67.529506ms bytes=16272360 logical_writes_per_event=4+aggregate plan=SEARCH utility_assessments USING INDEX utility_scope_memory_time (workspace=? AND memory_id=? AND (observed_at,recall_id)<(?,?))
+=== RUN   TestUtilityCapacityProbe/100000
+    sqlite_utility_probe_test.go:135: events=100000 writes=7.663565816s rebuild=3.57353013s query20=273.023µs aggregate256=5.755877ms recovery100=348.797296ms bytes=163691664 logical_writes_per_event=4+aggregate plan=SEARCH utility_assessments USING INDEX utility_scope_memory_time (workspace=? AND memory_id=? AND (observed_at,recall_id)<(?,?))
+--- PASS: TestUtilityCapacityProbe (16.24s)
+    --- PASS: TestUtilityCapacityProbe/10000 (1.44s)
+    --- PASS: TestUtilityCapacityProbe/100000 (14.80s)
+PASS
+ok  	asura/internal/storage	16.244s

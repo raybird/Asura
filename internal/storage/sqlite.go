@@ -81,6 +81,8 @@ type CronRun struct {
 
 // Task 代表本機執行的任務實體
 type Task struct {
+	UtilityStatus   string     `json:"utility_status,omitempty"`
+	UtilityError    string     `json:"utility_error,omitempty"`
 	ID              string     `json:"id"`
 	RequestID       string     `json:"request_id,omitempty"`
 	Fingerprint     string     `json:"fingerprint,omitempty"`
@@ -142,6 +144,10 @@ func NewSQLiteStore(dbPath string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("init schema: %w", err)
 	}
 
+	if err := store.initUtilitySchema(); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("init utility schema: %w", err)
+	}
 	return store, nil
 }
 
@@ -492,7 +498,9 @@ func (s *SQLiteStore) getTableColumns(tableName string) (map[string]bool, error)
 }
 
 // CreateTask 將新任務寫入資料庫
-func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
+func (s *SQLiteStore) createTask(ctx context.Context, task *Task, executor interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}) error {
 	if task == nil {
 		return errors.New("task cannot be nil")
 	}
@@ -527,7 +535,7 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 		backendID = "opencode"
 	}
 
-	_, err := s.db.ExecContext(ctx, query,
+	_, err := executor.ExecContext(ctx, query,
 		task.ID,
 		task.RequestID,
 		task.Fingerprint,

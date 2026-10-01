@@ -40,10 +40,11 @@ const (
 
 // CriticReview 代表 Critic 審查輸出實體
 type CriticReview struct {
-	Verdict  ReviewVerdict     `json:"verdict"`
-	Findings []string          `json:"findings"`
-	Summary  string            `json:"summary"`
-	Metadata map[string]string `json:"metadata,omitempty"`
+	MemoryUsage []MemoryUsage     `json:"memory_usage,omitempty"`
+	Verdict     ReviewVerdict     `json:"verdict"`
+	Findings    []string          `json:"findings"`
+	Summary     string            `json:"summary"`
+	Metadata    map[string]string `json:"metadata,omitempty"`
 }
 
 // StageStatus 代表單一管線 Stage 的執行狀態
