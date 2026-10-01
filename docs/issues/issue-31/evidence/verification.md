@@ -19,9 +19,14 @@
 ## P5-T1 — 性能與完整回歸
 - `/usr/bin/time -v go test ./internal/storage -run TestLifecycleLargeDataProbe -count=1 -v` exit 0：[performance.log](performance.log)。10k/100k legacy migration、relations fixture，五次 recall/detail 答案均正確；migration <30 秒、各 query <2 秒。EXPLAIN 使用 idx_memory_active。time 記 Max RSS，包含 go tool/build 及測試子程序，不宣稱純 Daemon RSS；本機 Go 1.27.1 linux/amd64、Linux 6.8.0-142-generic，fixture 在臨時 SQLite，非生產效能承諾。
 - `go vet ./...` exit 0：[vet.log](vet.log)。
-- `go test -count=1 -race ./...` exit 0：[regression.log](regression.log)。全部套件，未刪除／跳過既有測試。
+- `go test -count=1 -race ./...` exit 0：[regression.log](regression.log)。全部套件，未刪除／跳過既有測試；逾時 fixture 後續發現缺欄位而提前 SQL error，該項不可沿用為取消能力證據，已用下列紅綠重新取得。
 - `go build ./cmd/asura` exit 0；`git diff --check` exit 0。
 - 最後 Go 變動為 migration rollback 新測試及 CLI help 字串，完整 race 使用稍早相同 production 邏輯；新增測試已獨立 race 綠燈，CLI 以最終來源重新通過。manifest 為最終來源；此差異明確揭露。
+
+## 既有逾時 fixture 修正
+2026-10-01 自檢發現 `TestRECALL_QueryDeadline` 的慢速 memories view 缺新增 metadata 欄位，會提早 SQL missing-column，原成功不能證明取消能力。只補 view 欄位並增加判準自檢，不改既有業務斷言。
+
+保留新的 deadline guard，暫恢復舊 view：`go test -race ./tests/integration -run TestRECALL_QueryDeadline -count=1 -v` exit 1，query=no such column lifecycle、context=nil：[query-fixture-red.log](query-fixture-red.log)。補齊 view 後相同命令 exit 0：[query-deadline.log](query-deadline.log)。直接查詢必須真正耗盡 context.DeadlineExceeded，Daemon 250ms 逾時仍拒絕且釋放單連線給 off Task。沒有 production code 修改；完整回歸其他項保持有效，此項改引用最終 fixture 紅綠。
 
 ## code-simplify
 2026-10-01 使用 code-simplify 檢查本次變更一次，no-op：shared transaction helper 已供 manual/Git 共用；IPC wrapper 保留不同回傳型別與既有公開 API。沒有可證明安全且實質更簡單的修改，不新增抽象或範圍外重構。最小實作綠燈與完整回歸同時作最終綠燈。

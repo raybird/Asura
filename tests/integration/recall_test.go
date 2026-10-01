@@ -492,8 +492,17 @@ func TestRECALL_QueryDeadline(t *testing.T) {
 	if _, err = db.Exec(`DROP TABLE memories; CREATE VIEW memories AS
  WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<10000000)
  SELECT printf('%08d',x) AS id, '` + strings.ReplaceAll(f.projA, "'", "''") + `' AS workspace,
- 'SQLite' AS content, 'manual' AS source, '2026-09-22' AS created_at FROM n`); err != nil {
+ 'SQLite' AS content, 'manual' AS source, '2026-09-22' AS created_at,
+ 'active' AS lifecycle, 0 AS is_durable, '2026-09-22' AS lifecycle_changed_at FROM n`); err != nil {
 		t.Fatal(err)
+	}
+	// 2026-10-01：確認慢速 fixture 真正耗盡 deadline，避免 schema 錯誤造成假綠燈。
+	queryCtx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	_, _, queryErr := f.store.RecallCandidates(queryCtx, f.projA)
+	contextErr := queryCtx.Err()
+	cancel()
+	if queryErr == nil || contextErr != context.DeadlineExceeded {
+		t.Fatalf("slow fixture did not exercise cancellation: query=%v context=%v", queryErr, contextErr)
 	}
 	started := time.Now()
 	if _, msg := recallSubmit(t, f.sockPath, f.projA, "timeout", "bounded", "SQLite", nil); msg != "memory recall unavailable" {

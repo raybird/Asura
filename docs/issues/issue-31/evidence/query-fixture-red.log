@@ -1,0 +1,6 @@
+=== RUN   TestRECALL_QueryDeadline
+    recall_test.go:504: slow fixture did not exercise cancellation: query=SQL logic error: no such column: lifecycle (1) context=<nil>
+--- FAIL: TestRECALL_QueryDeadline (0.11s)
+FAIL
+FAIL	asura/tests/integration	0.124s
+FAIL
