@@ -477,6 +477,10 @@ type CronAddRequest struct {
 
 // IPCRequest 定義用戶端提交之請求
 type IPCRequest struct {
+	Supersedes      string          `json:"supersedes,omitempty"`
+	IsDurable       bool            `json:"is_durable,omitempty"`
+	OperationID     string          `json:"operation_id,omitempty"`
+	Reason          string          `json:"reason,omitempty"`
 	MemoryRecall    string          `json:"memory_recall,omitempty"`
 	Action          string          `json:"action,omitempty"`
 	RequestID       string          `json:"request_id,omitempty"`
@@ -504,6 +508,7 @@ type IPCRequest struct {
 
 // IPCResponse 定義傳回用戶端之結果
 type IPCResponse struct {
+	MemoryDetail     *storage.MemoryDetail      `json:"memory_detail,omitempty"`
 	UtilityPage      *storage.UtilityPage       `json:"utility_page,omitempty"`
 	CandidatePage    *GitCandidatePage          `json:"candidate_page,omitempty"`
 	GitCapture       *GitCaptureReply           `json:"git_capture,omitempty"`
@@ -820,11 +825,12 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				snapshots := make([]engine.ProjectMemorySnapshot, 0, len(resolvedMemories))
 				for _, m := range resolvedMemories {
 					snapshots = append(snapshots, engine.ProjectMemorySnapshot{
-						ID:        m.ID,
-						Workspace: m.Workspace,
-						Content:   m.Content,
-						Source:    m.Source,
-						CreatedAt: m.CreatedAt,
+						LifecycleMetadata: m.LifecycleMetadata,
+						ID:                m.ID,
+						Workspace:         m.Workspace,
+						Content:           m.Content,
+						Source:            m.Source,
+						CreatedAt:         m.CreatedAt,
 					})
 				}
 				execCtx = &engine.ExecutionContext{
@@ -1049,6 +1055,9 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			}
 			_ = encoder.Encode(IPCResponse{CronRuns: runs})
 
+		case "memory_durable", "memory_detail":
+			_ = encoder.Encode(d.lifecycleQuery(connCtx, req))
+
 		case "memory_add":
 			if req.Workspace == "" || req.Content == "" {
 				_ = encoder.Encode(IPCResponse{Error: "workspace and content are required"})
@@ -1071,11 +1080,12 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				Source:    "manual",
 				CreatedAt: time.Now().UTC(),
 			}
-			if err := d.store.CreateMemory(context.Background(), mem); err != nil {
+			created, err := d.store.CreateMemoryWithOptions(connCtx, mem, storage.CreateMemoryOptions{Supersedes: req.Supersedes, Durable: req.IsDurable, OperationID: req.OperationID, Reason: req.Reason})
+			if err != nil {
 				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("create memory: %v", err)})
 				continue
 			}
-			_ = encoder.Encode(IPCResponse{Memory: &mem})
+			_ = encoder.Encode(IPCResponse{Memory: created})
 
 		case "memory_list":
 			if req.Workspace == "" {

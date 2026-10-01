@@ -1,0 +1,9 @@
+--- FAIL: TestLifecycleLegacyMetadata (0.01s)
+    sqlite_lifecycle_test.go:28: MLIFE-001 legacy metadata: {"id":"a","workspace":"/a","content":"old","source":"manual","created_at":"2026-10-01T06:17:18.975695596Z"}
+FAIL
+FAIL	asura/internal/storage	0.013s
+--- FAIL: TestLifecycleIPCAtomicRecall (0.93s)
+    lifecycle_ipc_test.go:54: MLIFE-002 retry created another successor: map[memory:{"id":"mem-1790835439897183060-796032f1fa966c68","workspace":"/tmp/TestLifecycleIPCAtomicRecall720207404/001","content":"sqlite new","source":"manual","created_at":"2026-10-01T06:17:19.897187412Z"}] / map[memory:{"id":"mem-1790835439897466358-be1ef6c47a0f62ab","workspace":"/tmp/TestLifecycleIPCAtomicRecall720207404/001","content":"sqlite new","source":"manual","created_at":"2026-10-01T06:17:19.897467589Z"}]
+FAIL
+FAIL	asura/internal/daemon	0.935s
+FAIL

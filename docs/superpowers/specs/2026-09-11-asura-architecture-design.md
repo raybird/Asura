@@ -352,3 +352,16 @@ observe 預設完全沿用 lexical-v1 排序；apply 以 used+unused>=5 才使�
 Task/event admission 或 apply 權重讀取錯誤 fail-closed；執行後 UFL persistence 不改主結果。assessment 與 cache 聚合共用交易／唯一鍵；recovery 僅處理 terminal Task，每批至多 100 events，不重跑模型。重建在交易高水位內 keyset 讀取每批 100 observations，原子替換 aggregate。immutable audit 無 memory cascade，不因刪除正式 memory 失去歷史 identity。
 
 CLI/IPC utility audit 每次經 canonical authorization，keyset cursor 綁定 workspace+memory ID。SQL bounded projection、單頁 100、cursor 512 bytes、server/client JSON 64 KiB 邊界；large/invalid legacy metadata 明確失敗。legacy Task 不補建事件。無 GC、事件保留使 DB 持續增長；重建的大交易仍會暫占單一連線，並非無成本操作。細節與可信度／容量證據見 [Issue 29](../../issues/issue-29/README.md)。
+
+
+## Phase 3L：Memory Lifecycle & Supersession Foundation
+
+最後驗證日期：2026-10-01。
+
+Daemon 擁有 lifecycle transition，沿用 exact canonical authorization。memories 加 active/superseded、is_durable 與 lifecycle_changed_at；legacy 預設 active/non-durable，ID/content 不變。migration 在 BEGIN IMMEDIATE 寫鎖下探測欄位、加 schema 並回填時間，同交易保存 marker，可安全重開。
+
+memory_relations 對 scoped predecessor 與 successor 各有唯一鍵；只允許新 memory 取代 active predecessor。manual operation ledger 保存 scoped operation ID 與 payload fingerprint，Git approval 以 candidate identity 冪等。memory、relation、predecessor CAS、operation ledger，以及 Git candidate/provenance 共用 transaction；失敗全回滾，不建立 DAG 或復活 API。
+
+Recall SQL 使用 (workspace,lifecycle,id) 索引，在 bounded LIMIT 前排除 superseded；explicit recall 仍可使用未刪舊版本。新 sealed snapshot／recall audit 保存 lifecycle metadata；legacy JSON 在讀取時解讀為 active/non-durable，不改 persisted Task。UFL 以新 memory ID 隔離，durable 不加分。硬刪保留不含內容的 relation/operation identity；deleted chain 節點可由同 scope bounded detail 逐節稽核。
+
+CLI/IPC 提供 add options、durable、detail；detail 不遞迴展開全鏈、不展開 provenance facts_summary。content 64 KiB、總 JSON 128 KiB、deadline 2 秒；超限拒絕。Web 不新增 lifecycle UI，Git service options 可安全指定 supersedes，Partial 仍拒絕。ledger 無自動 GC，資料總量持續增長；10k/100k 本地 probe 與驗收證據見 [Issue 31](../../issues/issue-31/README.md)。

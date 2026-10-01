@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"asura/internal/daemon"
+	"asura/internal/storage"
 )
 
 // reorderArgs 將以 "-" 開頭之旗標及其取值提前，non-flag 位置參數置後，避免 flag.FlagSet 遇位置參數提早中止解析
@@ -21,7 +22,7 @@ func reorderArgs(args []string) []string {
 		arg := args[i]
 		if strings.HasPrefix(arg, "-") {
 			flags = append(flags, arg)
-			if !strings.Contains(arg, "=") && i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+			if arg != "--durable" && arg != "-durable" && !strings.Contains(arg, "=") && i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
 				flags = append(flags, args[i+1])
 				i++
 			}
@@ -34,7 +35,7 @@ func reorderArgs(args []string) []string {
 
 func handleMemory(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "error: memory subcommands: add, list, get, remove, capture, candidates, candidate, approve, discard, clear-candidates, utility")
+		fmt.Fprintln(stderr, "error: memory subcommands: add, list, get, remove, durable, detail, capture, candidates, candidate, approve, discard, clear-candidates, utility")
 		return 1
 	}
 
@@ -44,6 +45,9 @@ func handleMemory(args []string, stdout, stderr io.Writer) int {
 	if subcmd == "utility" {
 		return handleMemoryUtility(subargs, stdout, stderr)
 	}
+	if subcmd == "durable" || subcmd == "detail" {
+		return handleMemoryLifecycle(subcmd, subargs, stdout, stderr)
+	}
 	switch subcmd {
 	case "add":
 		fs := flag.NewFlagSet("memory add", flag.ContinueOnError)
@@ -51,6 +55,10 @@ func handleMemory(args []string, stdout, stderr io.Writer) int {
 		sockPath := fs.String("socket", DefaultSocketPath(), "path to daemon unix socket")
 		workspace := fs.String("workspace", "", "target workspace directory (required)")
 		content := fs.String("content", "", "memory content (required)")
+		supersedes := fs.String("supersedes", "", "predecessor memory id")
+		operation := fs.String("operation-id", "", "stable retry operation id")
+		durable := fs.Bool("durable", false, "protect from future automatic retention")
+		reason := fs.String("reason", "", "lifecycle reason")
 
 		if err := fs.Parse(reorderArgs(subargs)); err != nil {
 			return 1
@@ -74,7 +82,7 @@ func handleMemory(args []string, stdout, stderr io.Writer) int {
 		}
 		defer client.Close()
 
-		mem, err := client.AddMemory(context.Background(), absWs, *content)
+		mem, err := client.AddMemoryWithOptions(context.Background(), absWs, *content, storage.CreateMemoryOptions{Supersedes: *supersedes, OperationID: *operation, Durable: *durable, Reason: *reason})
 		if err != nil {
 			fmt.Fprintf(stderr, "error: %v\n", err)
 			return 1

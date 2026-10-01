@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 
 // ApproveOptions 包含核准候選記憶時的自訂參數
 type ApproveOptions struct {
+	Lifecycle  CreateMemoryOptions
 	Bounded    bool   // 2026-09-30：Web SQL/content hard bounds，不改 CLI 契約。
 	ContentSet bool   // 2026-09-30：區分未提供與明確空內容。
 	Content    string // 可選的使用者自訂或編修後的正式記憶內文
@@ -36,6 +38,17 @@ func (s *SQLiteStore) ApproveCandidateTx(ctx context.Context, workspace, candida
 		_ = tx.Rollback()
 	}()
 
+	if opts.Lifecycle.OperationID != "" {
+		return "", errors.New("Git approval uses candidate retry identity")
+	}
+	if err := ValidateLifecycleOptions(CreateMemoryOptions{Supersedes: opts.Lifecycle.Supersedes, OperationID: "git", Durable: opts.Lifecycle.Durable, Reason: opts.Lifecycle.Reason}); err != nil {
+		return "", err
+	}
+	operationID := fmt.Sprintf("git-%x", sha256.Sum256([]byte(candidateID)))
+	requestBytes, _ := json.Marshal(struct {
+		Lifecycle CreateMemoryOptions
+	}{opts.Lifecycle})
+	requestFingerprint := fmt.Sprintf("git-request-%x", sha256.Sum256(requestBytes))
 	// 1. 查詢並驗證候選狀態
 	queryCand := `
 	SELECT id, workspace, repo_id, ref_name, base_sha, head_sha,
@@ -64,6 +77,21 @@ func (s *SQLiteStore) ApproveCandidateTx(ctx context.Context, workspace, candida
 	cand.IsUserEdited = (isUserEditedInt == 1)
 	cand.IsTruncated = (isTruncatedInt == 1)
 
+	if cand.Status == "approved" {
+		var prior string
+		err := tx.QueryRowContext(ctx, "SELECT fingerprint FROM memory_operations WHERE workspace=? AND operation_id=?", workspace, operationID).Scan(&prior)
+		if err == nil {
+			if prior != requestFingerprint {
+				return "", ErrLifecycleConflict
+			}
+		} else if errors.Is(err, sql.ErrNoRows) {
+			if opts.Lifecycle.Supersedes != "" || opts.Lifecycle.Durable || opts.Lifecycle.Reason != "" {
+				return "", ErrLifecycleConflict
+			}
+		} else {
+			return "", err
+		}
+	}
 	if opts.Bounded {
 		if err := validateGitCandidate(&cand); err != nil {
 			return "", err
@@ -132,12 +160,15 @@ func (s *SQLiteStore) ApproveCandidateTx(ctx context.Context, workspace, candida
 	}
 
 	// 4. 寫入正式記憶 (memories)
-	insertMem := `
-	INSERT INTO memories (id, workspace, content, source, created_at)
-	VALUES (?, ?, ?, 'git-approved', ?)
-	`
-	if _, err := tx.ExecContext(ctx, insertMem, memoryID, workspace, finalContent, now); err != nil {
-		return "", fmt.Errorf("insert into memories: %w", err)
+	creationOptions := opts.Lifecycle
+	creationOptions.OperationID = operationID
+	createdID, err := createLifecycleMemoryTx(ctx, tx, Memory{ID: memoryID, Workspace: workspace, Content: finalContent, Source: "git-approved", CreatedAt: now}, creationOptions)
+	if err != nil {
+		return "", err
+	}
+	memoryID = createdID
+	if _, err = tx.ExecContext(ctx, "UPDATE memory_operations SET fingerprint=? WHERE workspace=? AND operation_id=?", requestFingerprint, workspace, operationID); err != nil {
+		return "", err
 	}
 
 	// 5. 解析 commit SHAs JSON

@@ -3,7 +3,7 @@
 ## 概述
 建立 active / superseded、durable 與單一 successor chain，保留歷史 Task、Git provenance 與 UFL identity。來源：[GitHub issue 31](https://github.com/raybird/Asura/issues/31)。基準 main：`1b21d587a738b871e1dde48abceb17a8ce8c1bb2`。
 
-2026-10-01 來源狀態為「立項提案；先完成 L-TBD 與 MLIFE 驗收核准，再進 production implementation」。本次 dev-cycle 授權調查與建檔，不視為候選行為已核准。
+2026-10-01 來源狀態為「立項提案；先完成 L-TBD 與 MLIFE 驗收核准，再進 production implementation」。初次 dev-cycle 先調查建檔；使用者於 2026-10-01 回覆「審查通過」後核准全部規格並開始實作。
 
 ## 文件清單
 - [requirement-analysis.md](requirement-analysis.md)
@@ -33,89 +33,89 @@
 
 ## MLIFE-001 — Legacy compatibility
 
-Given Phase 3K database 升級至 Phase 3L  
-When 尚未使用 lifecycle 新能力  
-Then 所有現有 memory 都視為 active / non-durable  
+Given Phase 3K database 升級至 Phase 3L
+When 尚未使用 lifecycle 新能力
+Then 所有現有 memory 都視為 active / non-durable
 And bounded recall 結果與 Phase 3K 相同
 
 ## MLIFE-002 — Atomic supersession
 
-Given active memory A  
-When 新增 memory B 並指定 supersedes=A  
-Then B 建立成功  
-And A 原子轉為 superseded  
-And A.superseded_by=B  
+Given active memory A
+When 新增 memory B 並指定 supersedes=A
+Then B 建立成功
+And A 原子轉為 superseded
+And A.superseded_by=B
 And 不存在只成功一半的狀態
 
 ## MLIFE-003 — Auto recall excludes superseded memory
 
-Given A 已被 B supersede  
-When 新 bounded recall 查詢同時匹配 A 與 B  
-Then A 不進 auto candidate  
+Given A 已被 B supersede
+When 新 bounded recall 查詢同時匹配 A 與 B
+Then A 不進 auto candidate
 And B 依正常 lexical + utility policy 參與排序
 
 ## MLIFE-004 — Explicit historical recall
 
-Given A 已被 B supersede  
-When 使用者明確指定 A  
-Then A 仍可加入 sealed context  
-And audit 明確標示 superseded  
+Given A 已被 B supersede
+When 使用者明確指定 A
+Then A 仍可加入 sealed context
+And audit 明確標示 superseded
 And 顯示 successor B
 
 ## MLIFE-005 — Supersession chain
 
-Given `A <- B <- C`  
-When 執行新的 auto recall  
-Then A/B 均不參與  
-And C 為唯一 active version  
+Given `A <- B <- C`
+When 執行新的 auto recall
+Then A/B 均不參與
+And C 為唯一 active version
 And A/B/C 歷史 chain 可完整 audit
 
 ## MLIFE-006 — No resurrection
 
-Given A 被 B supersede  
-When B 後續被 delete  
-Then A 不自動恢復 active  
+Given A 被 B supersede
+When B 後續被 delete
+Then A 不自動恢復 active
 And A 仍維持 superseded historical state
 
 ## MLIFE-007 — Durable does not change ranking
 
-Given 兩筆 lexical / utility 完全相同的 memories  
-And 其中一筆 durable  
-When bounded recall 執行  
-Then durable 不取得額外 score boost  
+Given 兩筆 lexical / utility 完全相同的 memories
+And 其中一筆 durable
+When bounded recall 執行
+Then durable 不取得額外 score boost
 And 既有 deterministic tie-breaker 不改變
 
 ## MLIFE-008 — Durable can be explicitly superseded
 
-Given durable memory A  
-When 使用者明確建立 B supersedes A  
-Then 操作允許  
-And A 保留 durable historical metadata  
+Given durable memory A
+When 使用者明確建立 B supersedes A
+Then 操作允許
+And A 保留 durable historical metadata
 And B 成為 active successor
 
 ## MLIFE-009 — Workspace isolation
 
-Given workspace A/B  
-When A 嘗試 supersede B 的 memory ID  
-Then fail-closed  
-And 不洩漏該 ID 是否存在  
+Given workspace A/B
+When A 嘗試 supersede B 的 memory ID
+Then fail-closed
+And 不洩漏該 ID 是否存在
 And 兩邊 lifecycle 均不改變
 
 ## MLIFE-010 — Sealed Task reproducibility
 
-Given Task T 已使用 memory A  
-When 之後 A 被 B supersede  
-Then T 的 sealed memory snapshot 保持 A  
-And status / redelivery 仍重現原 Task  
+Given Task T 已使用 memory A
+When 之後 A 被 B supersede
+Then T 的 sealed memory snapshot 保持 A
+And status / redelivery 仍重現原 Task
 And 不以 B 重算歷史 Context
 
 ## MLIFE-011 — UFL isolation
 
-Given A 已累積 utility observations  
-When B supersedes A  
-Then A 的歷史 telemetry 保留  
-And B observation count=0  
-And B weight=neutral  
+Given A 已累積 utility observations
+When B supersedes A
+Then A 的歷史 telemetry 保留
+And B observation count=0
+And B weight=neutral
 And 不繼承 A 的 utility
 
 ## MLIFE-012 — Full regression
@@ -150,7 +150,7 @@ go build ./cmd/asura
 
 
 ## Gherkin 核准紀錄
-- **核准 commit**: 待提交
+- **核准 commit**: 56871b8de89bb8dc774185780fd48e4667b10d88
 - **核准來源**: 使用者於 2026-10-01 對本地 MLIFE 與 L-TBD 提案回覆「審查通過」。
 
 | Scenario | 核准日期 | 狀態 |
@@ -189,7 +189,7 @@ go build ./cmd/asura
 | 2026-10-01 | 依立項提案完成現況調查與候選規格建檔，保留待核准狀態 | Codex |
 
 ---
-**建立日期**: 2026-10-01  
-**分級**: Large — 跨 storage、daemon、sealed context、recall 與 CLI，新增持久化契約  
-**風險**: High  
-**狀態**: 實作中
+**建立日期**: 2026-10-01
+**分級**: Large — 跨 storage、daemon、sealed context、recall 與 CLI，新增持久化契約
+**風險**: High
+**狀態**: 實作與驗證完成，待獨立審查

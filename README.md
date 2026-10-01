@@ -244,6 +244,28 @@ ASURA_MEMORY_UTILITY_POLICY=apply ./bin/asura daemon --allowed-roots /path/to/pr
 
 2026-10-01：utility 查詢限定已授權 exact canonical workspace，回應明列 utility policy 與當前有效 weight（observe 固定 1.0），單頁預設 20、最多 100 observations，以 `--cursor` 接續；cursor 最多 512 bytes、回應最多 64 KiB。刪除記憶不復活，同 scope 保留歷史 audit。第一版無 GC，DB 總量仍隨事件增長。真實模型 probe 只提供固定版本、有限 fixture 的一致性證據，見 [Issue 29](docs/issues/issue-29/README.md)。
 
+### 記憶生命週期與版本取代
+
+最後驗證日期：2026-10-01。
+
+正式記憶預設 `active`／non-durable。建立 successor 時使用：
+
+```bash
+./bin/asura memory add --workspace /path/to/project --content '新的決策' \
+  --supersedes <old-memory-id> --operation-id <stable-operation-id> --durable
+./bin/asura memory durable --workspace /path/to/project <memory-id>
+./bin/asura memory detail --workspace /path/to/project <memory-id>
+```
+
+`--supersedes` 必須搭配穩定的 `--operation-id`；相同 operation 與 payload 重試回原 ID，不同 payload 拒絕。已刪 successor 的重試不會重建記憶。取代以單一交易建立新記憶並將舊記憶標為 `superseded`，舊內容保持不變；一條 chain 僅有一個 active 版本。`--reason` 可補取代理由，最多 1024 bytes；operation ID 最多 128 bytes，relation ID 最多 256 bytes。
+
+Auto recall 在候選掃描前排除 superseded，不占 Top-K 或 prompt budget。顯式 `--memory-id` 仍可使用尚未刪除的 superseded 記憶，sealed snapshot 與 bounded recall audit 會保存接受時的 lifecycle／successor。後續 supersede、delete、重啟或重送不改舊 Task。
+
+Durable 只保護未來自動 retention，不提高 lexical／utility 排名，也不固定進 Top-K；仍可顯式 supersede 或 remove。本期沒有自動 GC 或解除 durable 操作。successor utility 從零 observations／neutral weight 開始，predecessor 的 UFL 歷史保留。
+
+Detail 回傳 lifecycle、durable、直接 predecessor／successor、Git provenance identity、utility aggregate 與時間。每次需 exact canonical workspace 授權；跨 scope 與不存在 ID 使用相同錯誤。content 最多 65536 bytes、完整 JSON 最多 131072 bytes，超限拒絕；查詢 deadline 2 秒。remove 沿用硬刪內容，relation ledger 保留無內容的歷史 ID／理由；可逐節 detail 稽核已刪 chain 節點，successor 消失不復活 predecessor。詳見 [Issue 31](docs/issues/issue-31/README.md)。
+
+
 #### 固定三面管線 (Three-Face Fixed Pipeline)
 2026-09-17：
 - **模式語意與向後相容**：

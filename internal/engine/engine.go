@@ -26,11 +26,26 @@ type RunnerFunc func(ctx context.Context, workspace string, prompt string) (stri
 
 // ProjectMemorySnapshot 代表密封進 Context 的單筆記憶快照
 type ProjectMemorySnapshot struct {
+	storage.LifecycleMetadata
 	ID        string    `json:"id"`
 	Workspace string    `json:"workspace"`
 	Content   string    `json:"content"`
 	Source    string    `json:"source"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// 2026-10-01：舊 sealed JSON 只在讀取時補預設，不重寫持久化內容。
+func (m *ProjectMemorySnapshot) UnmarshalJSON(data []byte) error {
+	type snapshot ProjectMemorySnapshot
+	var decoded snapshot
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	if decoded.Lifecycle == "" {
+		decoded.Lifecycle = "active"
+	}
+	*m = ProjectMemorySnapshot(decoded)
+	return nil
 }
 
 // ExecutionContext 代表任務執行時之完整密封上下文

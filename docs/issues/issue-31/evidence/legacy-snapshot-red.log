@@ -1,0 +1,5 @@
+--- FAIL: TestLifecycleLegacySealedSnapshot (0.00s)
+    lifecycle_test.go:12: MLIFE-001 legacy snapshot default [{LifecycleMetadata:{Lifecycle: IsDurable:false SupersededBy: LifecycleChangedAt:} ID:a Workspace:/a Content:old Source:manual CreatedAt:2026-09-01 00:00:00 +0000 UTC}]
+FAIL
+FAIL	asura/internal/engine	0.002s
+FAIL

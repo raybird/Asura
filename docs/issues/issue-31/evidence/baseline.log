@@ -1,0 +1,4 @@
+ok  	asura/internal/storage	3.476s
+ok  	asura/internal/daemon	24.151s
+ok  	asura/internal/engine	1.504s
+ok  	asura/internal/recall	0.003s

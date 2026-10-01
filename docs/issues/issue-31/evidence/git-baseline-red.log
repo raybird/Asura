@@ -1,0 +1,5 @@
+--- FAIL: TestLifecycleGitApprovalAtomic (0.01s)
+    sqlite_lifecycle_test.go:279: L6 changed lifecycle ignored: <nil>
+FAIL
+FAIL	asura/internal/storage	0.013s
+FAIL

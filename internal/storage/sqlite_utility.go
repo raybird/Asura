@@ -22,6 +22,7 @@ type UtilitySelection struct {
 }
 
 type UtilityRecall struct {
+	LifecycleAudit     json.RawMessage    `json:"lifecycle_audit,omitempty"`
 	Policy             json.RawMessage    `json:"policy"`
 	ContextConfig      json.RawMessage    `json:"context_config"`
 	CandidatesRead     int                `json:"candidates_read"`

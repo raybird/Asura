@@ -103,7 +103,7 @@ func (d *Daemon) handleBoundedGitMemory(ctx context.Context, req IPCRequest, enc
 			reply(gitFailure(storage.ErrGitRequest))
 			return
 		}
-		id, err := d.store.ApproveCandidateTx(ctx, scope, req.CandidateID, storage.ApproveOptions{Bounded: true, Content: req.Content, ContentSet: req.ContentProvided})
+		id, err := d.store.ApproveCandidateTx(ctx, scope, req.CandidateID, storage.ApproveOptions{Lifecycle: storage.CreateMemoryOptions{Supersedes: req.Supersedes, Durable: req.IsDurable, Reason: req.Reason}, Bounded: true, Content: req.Content, ContentSet: req.ContentProvided})
 		if err != nil {
 			reply(gitFailure(err))
 			return
