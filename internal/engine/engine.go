@@ -275,6 +275,11 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 		task.MemoryRefs = req.MemoryIDs
 	}
 
+	defer func() {
+		utilityCtx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+		defer cancel()
+		_ = e.store.CompleteTaskUtility(utilityCtx, task.ID)
+	}()
 	alreadyCreated := false
 	if req.ID != "" {
 		existing, err := e.store.GetTask(ctx, req.ID)

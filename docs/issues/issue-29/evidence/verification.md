@@ -1,0 +1,75 @@
+# Issue 29 驗證證據
+
+驗證日期：2026-10-01。核准規格：`95ac2347e2857aa9b7a6d7f8b7ad11e1b1165805`；工作區的核准 SHA 回填及執行證據更新不改驗收語意。被測 Go 檔案與 go.mod/go.sum 以 [tested-files.sha256](tested-files.sha256) 固定，`sha256sum -c docs/issues/issue-29/evidence/tested-files.sha256` 可重驗；交付提交由 Git 保存完整內容。文件更新不等同程式測試。
+
+## 紅燈與最小實作
+
+| Task | 真實紅燈命令 | exit／目標失敗原因 | 綠燈與映射 |
+|---|---|---|---|
+| P0.1 | `go test ./internal/pipeline -run 'TestCriticUtility' -count=1` | 1；7 個 usage 案例皆沒有 memory_usage，prompt 缺 schema/allowlist | pipeline race／archived replay；UFL-004 |
+| P1.1 內層 | `go test ./internal/storage -run '^TestUtilityLedgerAdmission$' -count=1` | 1；SQL no such table: recall_events，缺持久化 event | storage race；UFL-002 |
+| P1.1 外層 | `go test ./internal/daemon -run '^TestUtilityRecallIdentity$' -count=1` | 1；sealed 決策沒有 recall_id、utility policy/version/weight | daemon race；UFL-002、003 |
+| P2.1 | `go test ./internal/engine -run '^TestDirectUtilityUnknown$' -count=1` | 1；success/failed 均 calls=1、aggregate=map[]，缺 utility observation | engine/storage race；UFL-005、006、009、011 |
+| P3.1 | `go test ./internal/daemon -run '^TestUtilityIPCIsolation$' -count=1` | 1；真實 IPC 回傳 unknown action: memory_utility；另揭露 empty trace SQL NULL，已修正 coalesce | daemon/CLI/storage race；UFL-003、010 |
+| P4.1 | `go test ./internal/recall -run '^TestUtilityApplyRanking$' -count=1` | 1；應 a,z 實際 z,a，weight 仍 1.0 | recall race；UFL-001、007、008 |
+
+P0 的 Stage 單元測試直接執行 Prepare/Execute 與 optional parser；同一層檢核不重複紅燈，真實模型 probe 另驗估計一致性。P1 有 admission 與儲存不同失敗面，保留兩層紅燈。P2 以真實 Engine+SQLite 驗 Direct observation 缺失；再補 storage retry/rollback/rebuild 與 Three-Face/terminal fixture 查核各失敗面。P3 的真實 IPC+SQLite 覆蓋外部 page 契約，storage/CLI 測試補 bounds 與 decoder 失敗，沒有另宣稱未執行的單元紅燈。P4 selector golden 紅燈與 storage 數值案例分別驗排序、整數公式；Daemon redelivery 整合保護 sealed policy，不以模型自評當排序正確性的來源。
+
+## 具體失敗面
+
+- `TestCriticUtilityContract`：missing、wrong type、fabricated、explicit-only、duplicate、invalid state 全 unknown；合法模型訊號 estimated，核心 verdict 保留。
+- `TestUtilityAdmissionRollback`：event INSERT trigger failure 不能留下 Task；duplicate RequestID 不能增 event。
+- `TestUtilityAtomicRetryRebuild`：重送三次只算一次、conflict 拒絕、跨 scope 不計數、aggregate trigger failure 全交易 rollback；刻意損毀 cache 後由 ledger 重建相同 counts/time。
+- `TestUtilityRecoveryAndDeletion`／`TestUtilityTerminalOutcomes`：重啟兩次一次計數、tombstone audit、cancelled unknown、有效 Critic verdict failed 可 estimated、Critic stage failed unknown。
+- `TestUtilityFailureStatus`：UFL 寫入錯誤後主 Task 仍 completed，audit 為 error。
+- `TestDirectUtilityUnknown`：success/failed 皆單一模型呼叫、unknown=1；原取消、partial output 與 queue 回歸在完整 integration 套件。
+- `TestUtilityPageBounds`／`TestUtilityIPCIsolation`／`TestUtilityClientRejectsOversize`／`TestMemoryUtilityCLI`：keyset、錯 scope cursor、limit、legacy 超大 timestamp、canonical alias、授權範圍內跨 scope 相同不存在錯誤、unauthorized、daemon unavailable、client 64KiB cap、CLI 非零錯誤。
+- `TestUtilitySealedRedelivery`：真實 IPC Task 執行後刪 memory、重啟改 apply，同 RequestID 回傳相同 Task/context/observe policy/content，模型 calls=1、observed=1。
+- `TestUtilityWeight`／`TestUtilityApplyRanking`／`TestUtilityObserveAndExplicit`：threshold 5、floor、rounding、最大 int64 不溢位、unknown neutral、observe lexical、explicit 排除權重、final tie 與原 lexical rank。
+
+## Critic 真實模型 probe
+
+命令：`ASURA_UFL_PROBE_DIR="$PWD/docs/issues/issue-29/evidence/critic-probe" go test ./internal/pipeline -run '^TestUtilityLiveProbe$' -count=1 -v`。exit 0，112.534s，OpenCode 1.18.31／openai/gpt-5.6-sol、pure、所有工具 deny、臨時 workspace。3 個人工明確 fixture 各跑 3 次，used/unused/unknown 9/9 一致；原始 prompt/JSONL/review 保存在 [critic-probe/](critic-probe/)，執行輸出 [critic-probe.log](critic-probe.log)。
+
+模型 probe 於 P0 執行；後續新增 optional 欄位 8192-byte cap 不改 probe prompt 或 allowlist。`go test -race ./internal/pipeline -count=1` exit 0（[critic-replay.log](critic-replay.log)），9 份原始回應再由最終 parser 重播。這是 fixture 一致性與 parser 相容證據，不能證明實際因果效用，也不能代表其他模型已通過。
+
+## 容量與對照組
+
+命令：`ASURA_UFL_CAPACITY_PROBE=1 go test ./internal/storage -run '^TestUtilityCapacityProbe$' -count=1 -v`。exit 0，16.244s；[capacity.log](capacity.log) 保存實際兩組數值。100k events 下 query20=273.023µs、aggregate256=5.755877ms、rebuild=3.57353013s、recovery100=348.797296ms，DB+WAL+SHM=163691664 bytes。
+
+固定 fixture 一個 event 一個 auto observation，4 筆 ledger/task 邏輯寫入再加 aggregate；對照組以整數已知 ceil(N/256) 驗單筆 observed count，刻意刪 100 assessments、重建 cache 後 recovery 恢復總數 N。EXPLAIN 必須命中 utility_scope_memory_time 且不能 SCAN utility_assessments。這些判準在少計／漏 recovery／全表 query 時會紅；並非僅看到 query 成功就宣稱通過。recovery100 並非 recall admission，因此不套 250ms admission 判準；同一 probe 明確要求 aggregate256<=250ms。
+
+容量 fixture 不承諾最壞 contention latency、四 auto 的實際 DB 總量或任意數量的 explicit；既有 SQLite busy_timeout=10000 與單一連線仍可能延後 lock cancellation。應用 query 使用 context deadline；不把它宣稱成 OS 級即時中斷保證。retention 無 GC，DB 持續增長。
+
+## 精煉與最終驗證
+
+2026-10-01 使用 code-simplify：把 online aggregation／ledger rebuild 共用的 count 更新收斂為 `incrementUtilityAggregate`，避免兩份 SQL 分歧；reason 使用直接 if，保留跨模組、JSON、store API 契約。保留 pipeline／storage 在各自信任邊界再次驗證 usage，這是防禦查核，不合併為模型可信度來源。精煉後 storage/race 與容量 probe 通過；未擴大無關範圍。
+
+- `go vet ./...`：exit 0，空錯誤輸出見 [vet.log](vet.log)。
+- `go build -o /tmp/asura-issue-29 ./cmd/asura`：exit 0。
+- `go test -race ./internal/daemon ./cmd/asura -run 'Utility|StatusRecall' -count=1`：exit 0，[client-cli-race.log](client-cli-race.log)。
+- `go test -race ./internal/daemon -run Utility -count=1`：exit 0，[daemon-race.log](daemon-race.log)，含最後新增 sealed redelivery 整合。
+- 精煉後完整 `go test -count=1 -race ./...`：exit 0，所有 package 全綠，integration 263.278s；[race.log](race.log)。之後只新增 pipeline archived/oversize fixture 與 Daemon sealed redelivery 測試，兩個 package 最終增量 race 亦全綠；此完整 log 綁定 b618f23 的 production code；後續 audit policy 澄清的增量檢查如下，正式 CI 再覆蓋最新全範圍。
+- 正式 CI 結果與版本見下節；獨立 review 的判定以同目錄持久化報告為準。
+
+## 2026-10-01 稽核 policy 澄清
+
+review 與自我檢查發現 store 的 potential weight 在 observe IPC 中未區別是否生效。`go test ./internal/daemon -run '^TestUtilityCurrentPolicyAudit$' -count=1` exit 1：observe 預期 observe/1000000，實際空 policy/500000；apply 也缺 policy。
+
+最小修改：UtilityPage 加 policy，Daemon observe 固定回傳有效 weight=1000000、apply 保留 derived weight；不改排序、formula 或 ledger。`go test -race ./internal/daemon ./internal/storage ./cmd/asura -run 'Utility|StatusRecall' -count=1` exit 0（[policy-audit-race.log](policy-audit-race.log)）；`go vet ./...` exit 0（[policy-vet.log](policy-vet.log)）；build exit 0。code-simplify 再檢查這個局部修正為 no-op，直述三個政策分支已是最小必要範圍，沒有新增抽象；沿用有效綠燈。真實 IPC 同一 5-unused aggregate 在 observe/apply 分別為1.0/0.5，與獨立字面期望相符。最新正式 CI／review 待取得後記平台證據。
+
+## 2026-10-01 正式 CI 並行開庫修復
+
+[CI 36806217857](https://github.com/raybird/Asura/actions/runs/36806217857) 在 06b6cfe 失敗；完整錯誤見 [ci-failure.log](ci-failure.log)。原有 Git capture WaitDelay 100ms 測試本機 race 重跑30次 exit 0（[ci-gitmem-repro.log](ci-gitmem-repro.log)），保留既有契約與測試。原有 CLI CancelIsolation race 重跑20次 exit 1，重現 migration marker UNIQUE 衝突（[ci-cli-repro.log](ci-cli-repro.log)）。
+
+新增16連線 barrier 測試，在未修復的06b6cfe storage程式跑30次 exit 1（[migration-claims-red.log](migration-claims-red.log)）；最小修復把 marker claim 移到隔離交易的第一個寫入，ON CONFLICT DO NOTHING，僅取得 claim 者隔離，未取得者直接提交。保留已完成 marker fast path，隔離失敗與 marker 一起 rollback，不改 migration 的隔離範圍。這是交付驗證揭露的必要啟動可靠性修復，非新增使用者行為。
+
+修復後新 concurrent/trigger rollback/retry 測試10次 race exit 0（[migration-claims.log](migration-claims.log)）；storage全套race exit 0（[migration-storage.log](migration-storage.log)）；CLI CancelIsolation20次race exit 0（[migration-cli.log](migration-cli.log)）。既有完整migration/新完整candidate/restart案例亦包含於storage全套。code-simplify 檢查為 no-op，claim與更新同一transaction，未加入抽象或修改Git等待時間。正式完整CI需於新HEAD重跑，未把本機增量視為正式CI通過。
+
+2026-10-01 修復提交 `cbbed9250ef809416961480e2321b2a58e99112f` 的完整本機 `go test -race ./... -count=1` exit 0，integration 278.995s（[final-race.log](final-race.log)）；`go vet ./...` 與 `go build -o /tmp/asura-issue-29 ./cmd/asura` exit 0。183檔source manifest全數一致；後續交付文件不改被測source。
+
+## 2026-10-01 正式交付結果
+
+修復提交 `cbbed9250ef809416961480e2321b2a58e99112f` 的 [CI 36807429281](https://github.com/raybird/Asura/actions/runs/36807429281) conclusion=success；vet、完整race、Web memory/Git browser probes、CLI build全部成功。[final-ci.json](final-ci.json) 保存job/step實際狀態。首輪失敗與後續修復證據均保留，沒有豁免或修改原Git WaitDelay。
+
+後續僅交付文件與review報告；source manifest一致時重用上述source驗證，文件以diff/連結/狀態查核驗證。最終獨立review必須覆蓋固定BASE至交付文件HEAD；有效PASS與報告新增提交的對應由PR固定列出。未合併PR，不宣稱issue已結案。

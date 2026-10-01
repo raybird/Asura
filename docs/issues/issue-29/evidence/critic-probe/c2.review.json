@@ -1,0 +1,25 @@
+{
+  "memory_usage": [
+    {
+      "memory_id": "used-memory",
+      "state": "used",
+      "provenance": "estimated"
+    },
+    {
+      "memory_id": "unused-memory",
+      "state": "unused",
+      "provenance": "estimated"
+    },
+    {
+      "memory_id": "unknown-memory",
+      "state": "unknown",
+      "provenance": "estimated"
+    }
+  ],
+  "verdict": "pass",
+  "findings": [],
+  "summary": "The output concisely explains prompt admission by stating that 617 output tokens are reserved and correctly excludes irrelevant release-note guidance.",
+  "metadata": {
+    "stage": "critic"
+  }
+}

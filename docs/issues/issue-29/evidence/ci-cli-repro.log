@@ -1,0 +1,5 @@
+--- FAIL: TestCLI_CancelIsolation (2.02s)
+    cli_test.go:208: task A did not start or did not register PGID in time, task in DB: <nil>, getErr: task not found, stdout: , stderr: error: failed to initialize storage: init schema: record legacy completeness migration: constraint failed: UNIQUE constraint failed: schema_migrations.name (1555)
+FAIL
+FAIL	asura/tests/integration	13.123s
+FAIL

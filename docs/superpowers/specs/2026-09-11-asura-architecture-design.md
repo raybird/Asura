@@ -339,3 +339,16 @@ Web Task submit 僅接受 ID、workspace、prompt、explicit `memory_ids` 與 `m
 2026-09-30：Candidate page 採 created_at DESC/id ASC keyset，cursor 綁定 scope/status，SQL LIMIT limit+1，單頁最多 50。SQL byte sentinel 投影限制 metadata、draft/facts；capture 重用只讀 metadata，不載入 legacy 大草稿。Detail draft 最多 32 KiB、facts 最多 256 KiB、escaped JSON 最多 512 KiB；Web IPC reader 另有 1 MiB 上限。Web approve 在交易內驗證 pending/Complete 與有效內容大小，重送保留原批准 ID，即使正式 memory 已刪除也不復活。CLI 既有完整查詢契約保持不變。
 
 2026-09-30：HTTP context/deadline 關閉 request 專用 Unix socket，Daemon connCtx 傳入 capture，沿用 Git process group kill；尚未提交的交易取消不推進 checkpoint，已提交交易不倒退。UI 以 workspace/session generation、list/detail token 與 AbortController 隔離遲到回應，全部 Git/memory 字串僅以純文字呈現。既有 Task snapshot 與 lexical-v1 recall 不改寫。詳細驗收與證據見 [Issue 27](../../issues/issue-27/README.md)。
+
+
+## Phase 3K：Memory Utility Feedback Loop Foundation
+
+最後驗證日期：2026-10-01。
+
+Daemon／storage 擁有 recall event、assessment、aggregate 與 policy；backend 僅於既有 Critic 呼叫提供受限 estimated usage。Task admission 交易原子保存 sealed context 與 metadata-only ledger，Request ID 去重先於 recall；不保存未選候選全文。explicit identity 保存在 selections，event audit 不重複複製完整 explicit ID 清單。
+
+observe 預設完全沿用 lexical-v1 排序；apply 以 used+unused>=5 才使用 [0.5,1] multiplier，採整數 millionths 保存實際 weight/final score，final 同分 ID 升序。unknown 不進分母、explicit 不降權、歷史 Task 不重算。250ms recall context 同時涵蓋有界候選讀取、至多 256 個 aggregate lookup 與 selector。
+
+Task/event admission 或 apply 權重讀取錯誤 fail-closed；執行後 UFL persistence 不改主結果。assessment 與 cache 聚合共用交易／唯一鍵；recovery 僅處理 terminal Task，每批至多 100 events，不重跑模型。重建在交易高水位內 keyset 讀取每批 100 observations，原子替換 aggregate。immutable audit 無 memory cascade，不因刪除正式 memory 失去歷史 identity。
+
+CLI/IPC utility audit 每次經 canonical authorization，keyset cursor 綁定 workspace+memory ID。SQL bounded projection、單頁 100、cursor 512 bytes、server/client JSON 64 KiB 邊界；large/invalid legacy metadata 明確失敗。legacy Task 不補建事件。無 GC、事件保留使 DB 持續增長；重建的大交易仍會暫占單一連線，並非無成本操作。細節與可信度／容量證據見 [Issue 29](../../issues/issue-29/README.md)。

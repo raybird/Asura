@@ -34,6 +34,30 @@ func (d *Daemon) recallMemories(workspace, prompt, mode string, ids []string, ex
 	if err != nil {
 		return recall.Result{}, err
 	}
+	utilityPolicy := d.cfg.UtilityPolicy
+	if utilityPolicy == "" {
+		utilityPolicy = "observe"
+	}
+	var aggregates map[string]storage.UtilityAggregate
+	if utilityPolicy == "apply" {
+		aggregateIDs := make([]string, 0, len(candidates))
+		explicitSet := map[string]bool{}
+		for _, id := range ids {
+			explicitSet[id] = true
+		}
+		for _, m := range explicit {
+			explicitSet[m.ID] = true
+		}
+		for _, m := range candidates {
+			if !explicitSet[m.ID] {
+				aggregateIDs = append(aggregateIDs, m.ID)
+			}
+		}
+		aggregates, err = d.store.UtilityAggregates(ctx, workspace, aggregateIDs)
+		if err != nil {
+			return recall.Result{}, err
+		}
+	}
 	estimator := contextwin.NewHeuristicEstimator(d.cfg.ContextConfig.ReserveRatio)
 	admission := contextwin.NewAdmissionEngine(contextwin.NewStaticCatalog(), estimator)
 	base := memoryContext(workspace, prompt, explicit)
@@ -55,8 +79,15 @@ func (d *Daemon) recallMemories(workspace, prompt, mode string, ids []string, ex
 			FirstStage:       admission.EvaluateStage(stage, stagePrompt, "", d.cfg.ContextConfig),
 		}
 	}
-	return recall.Select(ctx, recall.Input{Workspace: workspace, Prompt: prompt, ExplicitIDs: ids, Candidates: candidates,
+	result, err := recall.Select(ctx, recall.Input{UtilityPolicy: utilityPolicy, UtilityAggregates: aggregates, Workspace: workspace, Prompt: prompt, ExplicitIDs: ids, Candidates: candidates,
 		CandidateTruncated: truncated, ContextConfig: d.cfg.ContextConfig, Measure: measure})
+	if err != nil {
+		return recall.Result{}, err
+	}
+	result.Decision.RecallID = engine.GenerateTaskID()
+	result.Decision.UtilityPolicy = utilityPolicy
+	result.Decision.UtilityVersion = storage.UtilityVersion
+	return result, nil
 }
 
 func memoryContext(workspace, prompt string, memories []storage.Memory) *engine.ExecutionContext {

@@ -37,6 +37,14 @@ func handleDaemon(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
+	utilityPolicy := os.Getenv("ASURA_MEMORY_UTILITY_POLICY")
+	if utilityPolicy == "" {
+		utilityPolicy = "observe"
+	}
+	if utilityPolicy != "observe" && utilityPolicy != "apply" {
+		fmt.Fprintln(stderr, "error: invalid utility policy")
+		return 1
+	}
 	var roots []string
 	if *allowedRoots != "" {
 		for _, r := range strings.Split(*allowedRoots, ",") {
@@ -69,6 +77,7 @@ func handleDaemon(args []string, stdout, stderr io.Writer) int {
 	defer store.Close()
 
 	cfg := daemon.Config{
+		UtilityPolicy: utilityPolicy,
 		SocketPath:    *sockPath,
 		MaxWorkers:    *workers,
 		MaxQueue:      *queue,

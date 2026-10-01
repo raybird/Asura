@@ -60,6 +60,7 @@ type OpenCodeRuntimeConfig struct {
 
 // Config 定義 Daemon 運行參數
 type Config struct {
+	UtilityPolicy  string
 	SocketPath     string
 	MaxWorkers     int
 	MaxCronWorkers int
@@ -356,6 +357,9 @@ func (d *Daemon) dispatchCronTask(ctx context.Context, cronID, workspace, prompt
 // Start 競爭取得 Unix Domain Socket 擁有權並開始監聽
 // 遵循 SCN-003 與 R-01：以 flock 原子排他鎖消除 TOCTOU 競爭，確保單一擁有權無雙重 Daemon
 func (d *Daemon) Start() error {
+	if d.cfg.UtilityPolicy != "" && d.cfg.UtilityPolicy != "observe" && d.cfg.UtilityPolicy != "apply" {
+		return errors.New("invalid utility policy")
+	}
 	if d.initErr != nil {
 		return fmt.Errorf("daemon start aborted due to initialization error: %w", d.initErr)
 	}
@@ -398,6 +402,11 @@ func (d *Daemon) Start() error {
 	// 5. 執行重啟恢復：將前次未完成的殘留任務安全轉移為 failed，揭露中斷原因（SCN-006）
 	if d.store != nil {
 		_, _ = d.store.RecoverInterruptedTasks(context.Background())
+		utilityCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := d.store.RecoverUtility(utilityCtx); err != nil {
+			fmt.Fprintf(os.Stderr, "utility recovery pending: %v\n", err)
+		}
+		cancel()
 	}
 
 	// 6. 對齊排程時鐘：過期者重算未來觸發時間，絕不補跑歷史（CRON-004）
@@ -495,6 +504,7 @@ type IPCRequest struct {
 
 // IPCResponse 定義傳回用戶端之結果
 type IPCResponse struct {
+	UtilityPage      *storage.UtilityPage       `json:"utility_page,omitempty"`
 	CandidatePage    *GitCandidatePage          `json:"candidate_page,omitempty"`
 	GitCapture       *GitCaptureReply           `json:"git_capture,omitempty"`
 	GitError         string                     `json:"git_error,omitempty"`
@@ -640,6 +650,10 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			if err := d.authorizeTask(task); err != nil {
 				_ = encoder.Encode(IPCResponse{Error: err.Error()})
 				continue
+			}
+			task.UtilityStatus, task.UtilityError, err = d.store.TaskUtilityStatus(connCtx, task.ID)
+			if err != nil {
+				task.UtilityStatus = "unavailable"
 			}
 			_ = encoder.Encode(IPCResponse{Task: task})
 
@@ -1139,6 +1153,9 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				continue
 			}
 			_ = encoder.Encode(json.RawMessage(payload))
+
+		case "memory_utility":
+			d.handleUtilityQuery(connCtx, req, encoder)
 
 		case "memory_remove":
 			if req.Workspace == "" || req.MemoryID == "" {

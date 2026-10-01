@@ -34,13 +34,16 @@ func reorderArgs(args []string) []string {
 
 func handleMemory(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "error: memory subcommands: add, list, get, remove, capture, candidates, candidate, approve, discard, clear-candidates")
+		fmt.Fprintln(stderr, "error: memory subcommands: add, list, get, remove, capture, candidates, candidate, approve, discard, clear-candidates, utility")
 		return 1
 	}
 
 	subcmd := args[0]
 	subargs := args[1:]
 
+	if subcmd == "utility" {
+		return handleMemoryUtility(subargs, stdout, stderr)
+	}
 	switch subcmd {
 	case "add":
 		fs := flag.NewFlagSet("memory add", flag.ContinueOnError)
