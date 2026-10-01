@@ -194,7 +194,7 @@ And MEM、CTXMEM、RECALL、WEBMEM、GITMEM、WEBGIT、CTXWIN、TFACE、MBACK、
 
 ## 驗證證據
 
-2026-10-01：P0～P4 完成，紅綠、固定模型 9/9、10k/100k 容量、精煉、vet/race/build 見 [verification.md](evidence/verification.md)。正式 CI 與独立 review 於 P5 取得後回填。
+2026-10-01：P0～P4 完成，紅綠、固定模型 9/9、10k/100k 容量、精煉、vet/race/build 見 [verification.md](evidence/verification.md)。正式 CI 與獨立 review 於 P5 取得後回填。
 
 ## Timeline
 

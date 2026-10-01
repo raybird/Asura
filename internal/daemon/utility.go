@@ -30,6 +30,13 @@ func (d *Daemon) handleUtilityQuery(ctx context.Context, req IPCRequest, encoder
 		_ = encoder.Encode(IPCResponse{Error: err.Error()})
 		return
 	}
+	page.UtilityPolicy = d.cfg.UtilityPolicy
+	if page.UtilityPolicy == "" {
+		page.UtilityPolicy = "observe"
+	}
+	if page.UtilityPolicy == "observe" {
+		page.WeightPPM = 1000000
+	}
 	b, err := json.Marshal(IPCResponse{UtilityPage: &page})
 	if err != nil || len(b)+1 > 65536 {
 		_ = encoder.Encode(IPCResponse{Error: "utility response too large"})

@@ -242,7 +242,7 @@ ASURA_MEMORY_UTILITY_POLICY=apply ./bin/asura daemon --allowed-roots /path/to/pr
 
 2026-10-01：Three-Face 利用既有 Critic 呼叫回報 used/unused/unknown；屬模型 estimated 訊號，不能當作實際因果效用。捏造／重複／非 auto ID 或不合法 usage 區塊全部轉 unknown；Direct 不新增模型呼叫，取消／無可靠 Critic 訊號保持 unknown。assessment 與 aggregate 同交易、防重複，可由 ledger 重建。執行後 UFL 錯誤不改主 Task 結果、不重跑 stage；重啟以每批 100 events 補寫。admission audit 寫入失敗或 apply 權重讀取失敗拒絕提交。
 
-2026-10-01：utility 查詢限定已授權 exact canonical workspace，單頁預設 20、最多 100 observations，以 `--cursor` 接續；cursor 最多 512 bytes、回應最多 64 KiB。刪除記憶不復活，同 scope 保留歷史 audit。第一版無 GC，DB 總量仍隨事件增長。真實模型 probe 只提供固定版本、有限 fixture 的一致性證據，見 [Issue 29](docs/issues/issue-29/README.md)。
+2026-10-01：utility 查詢限定已授權 exact canonical workspace，回應明列 utility policy 與當前有效 weight（observe 固定 1.0），單頁預設 20、最多 100 observations，以 `--cursor` 接續；cursor 最多 512 bytes、回應最多 64 KiB。刪除記憶不復活，同 scope 保留歷史 audit。第一版無 GC，DB 總量仍隨事件增長。真實模型 probe 只提供固定版本、有限 fixture 的一致性證據，見 [Issue 29](docs/issues/issue-29/README.md)。
 
 #### 固定三面管線 (Three-Face Fixed Pipeline)
 2026-09-17：

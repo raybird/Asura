@@ -20,10 +20,11 @@ type UtilityObservation struct {
 }
 
 type UtilityPage struct {
-	Aggregate  UtilityAggregate     `json:"aggregate"`
-	Items      []UtilityObservation `json:"items"`
-	NextCursor string               `json:"next_cursor,omitempty"`
-	WeightPPM  int64                `json:"weight_ppm"`
+	UtilityPolicy string               `json:"utility_policy,omitempty"`
+	Aggregate     UtilityAggregate     `json:"aggregate"`
+	Items         []UtilityObservation `json:"items"`
+	NextCursor    string               `json:"next_cursor,omitempty"`
+	WeightPPM     int64                `json:"weight_ppm"`
 }
 
 type utilityCursor struct {

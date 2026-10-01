@@ -49,5 +49,11 @@ P0 的 Stage 單元測試直接執行 Prepare/Execute 與 optional parser；同�
 - `go build -o /tmp/asura-issue-29 ./cmd/asura`：exit 0。
 - `go test -race ./internal/daemon ./cmd/asura -run 'Utility|StatusRecall' -count=1`：exit 0，[client-cli-race.log](client-cli-race.log)。
 - `go test -race ./internal/daemon -run Utility -count=1`：exit 0，[daemon-race.log](daemon-race.log)，含最後新增 sealed redelivery 整合。
-- 精煉後完整 `go test -count=1 -race ./...`：exit 0，所有 package 全綠，integration 263.278s；[race.log](race.log)。之後只新增 pipeline archived/oversize fixture 與 Daemon sealed redelivery 測試，兩個 package 最終增量 race 亦全綠；production code 沒有後續修改。
+- 精煉後完整 `go test -count=1 -race ./...`：exit 0，所有 package 全綠，integration 263.278s；[race.log](race.log)。之後只新增 pipeline archived/oversize fixture 與 Daemon sealed redelivery 測試，兩個 package 最終增量 race 亦全綠；此完整 log 綁定 b618f23 的 production code；後續 audit policy 澄清的增量檢查如下，正式 CI 再覆蓋最新全範圍。
 - 正式 CI 與獨立 review：P5 尚待執行，不冒充通過。
+
+## 2026-10-01 稽核 policy 澄清
+
+review 與自我檢查發現 store 的 potential weight 在 observe IPC 中未區別是否生效。`go test ./internal/daemon -run '^TestUtilityCurrentPolicyAudit$' -count=1` exit 1：observe 預期 observe/1000000，實際空 policy/500000；apply 也缺 policy。
+
+最小修改：UtilityPage 加 policy，Daemon observe 固定回傳有效 weight=1000000、apply 保留 derived weight；不改排序、formula 或 ledger。`go test -race ./internal/daemon ./internal/storage ./cmd/asura -run 'Utility|StatusRecall' -count=1` exit 0（[policy-audit-race.log](policy-audit-race.log)）；`go vet ./...` exit 0（[policy-vet.log](policy-vet.log)）；build exit 0。code-simplify 再檢查這個局部修正為 no-op，直述三個政策分支已是最小必要範圍，沒有新增抽象；沿用有效綠燈。真實 IPC 同一 5-unused aggregate 在 observe/apply 分別為1.0/0.5，與獨立字面期望相符。最新正式 CI／review 待取得後記平台證據。

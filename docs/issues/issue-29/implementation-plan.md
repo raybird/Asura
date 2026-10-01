@@ -77,7 +77,7 @@
 - 狀態：✅ 已完成
 - 產出與最小範圍：Daemon IPC、CLI memory utility/status、10k/100k probe
 - 相依：P2.1
-- 責任驗收：UFL-010
+- 責任驗收：UFL-010；支援 UFL-001 當前 policy/effective weight 的明確稽核。
 - 完成判準：授權與 keyset/query/field/64KiB bounds、索引與 bounded recovery
 - 驗證策略：storage query plan/容量 probe、IPC/CLI 整合紅綠
 - 證據：2026-10-01 [verification.md](evidence/verification.md) 的紅燈、最小實作、精煉、race／probe 紀錄。

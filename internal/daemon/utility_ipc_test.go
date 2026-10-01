@@ -7,6 +7,7 @@ import (
 	"asura/internal/storage"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -141,5 +142,60 @@ func TestUtilitySealedRedelivery(t *testing.T) {
 	page, err := client.MemoryUtility(context.Background(), ws, "m", 20, "")
 	if err != nil || page.Aggregate.Observed != 1 || page.Aggregate.Unknown != 1 {
 		t.Fatalf("redelivery counted %+v %v", page, err)
+	}
+}
+
+func TestUtilityCurrentPolicyAudit(t *testing.T) {
+	ws := t.TempDir()
+	s, err := storage.NewSQLiteStore(filepath.Join(t.TempDir(), "db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err = s.CreateMemory(context.Background(), storage.Memory{ID: "m", Workspace: ws, Content: "sqlite"}); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 5; i++ {
+		id := fmt.Sprintf("r%d", i)
+		raw := `{"workspace":` + quoted(ws) + `,"recall":{"recall_id":` + quoted(id) + `,"mode":"bounded","utility_policy":"observe","utility_version":"utility-v1","auto_ids":["m"],"selected":[{"id":"m","score":1,"weight_ppm":1000000,"final_score_scaled":1000000}]}}`
+		if err = s.CreateTask(context.Background(), &storage.Task{ID: id, Workspace: ws, Status: storage.StatusCompleted, ResolvedContext: raw}); err != nil {
+			t.Fatal(err)
+		}
+		if err = s.PersistUtility(context.Background(), ws, id, []storage.UtilityAssessment{{MemoryID: "m", State: "unused", Provenance: "estimated"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct {
+		mode string
+		want int64
+	}{{"observe", 1000000}, {"apply", 500000}} {
+		t.Run(tc.mode, func(t *testing.T) {
+			sock := filepath.Join(t.TempDir(), "daemon.sock")
+			d := daemon.NewDaemon(daemon.Config{SocketPath: sock, UtilityPolicy: tc.mode}, s, auth.NewPolicy([]string{ws}))
+			if err = d.Start(); err != nil {
+				t.Fatal(err)
+			}
+			defer d.Close()
+			c, err := net.Dial("unix", sock)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer c.Close()
+			if err = json.NewEncoder(c).Encode(daemon.IPCRequest{Action: "memory_utility", Workspace: ws, MemoryID: "m", Limit: 1}); err != nil {
+				t.Fatal(err)
+			}
+			var wire struct {
+				Page struct {
+					Policy string `json:"utility_policy"`
+					Weight int64  `json:"weight_ppm"`
+				} `json:"utility_page"`
+			}
+			if err = json.NewDecoder(c).Decode(&wire); err != nil {
+				t.Fatal(err)
+			}
+			if wire.Page.Policy != tc.mode || wire.Page.Weight != tc.want {
+				t.Fatalf("UFL-001/010 current effective policy expected %s/%d, got %+v", tc.mode, tc.want, wire)
+			}
+		})
 	}
 }
