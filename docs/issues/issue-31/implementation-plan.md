@@ -60,8 +60,8 @@
 - 驗收責任：MLIFE-012；L-TBD-10。
 - 完成判準：核准門檻、完整 regression 與常青文件檢查通過。
 - 驗證：依下方測試策略取得對應紅綠證據；P1 純刻畫、P5 文件使用等價靜態證據。
-- 狀態：✅ 已完成
-- 證據：[verification.md](evidence/verification.md)，依本 Task 對應章節查核。
+- 狀態：⏳ 修正與本地驗證完成；正式 CI／第二輪審查依 PR 最新結果判定
+- 證據：[verification.md](evidence/verification.md)；2026-10-01 正式 CI 紅燈，最新修正與證據見 [ci-fix](evidence/ci-fix/README.md)。
 
 ## 使用方式對照
 現有 memory add/list/delete 保持預設語意；新增 add --supersedes/--operation-id/--durable、durable、detail 的提案參見 technical-analysis。2026-10-01 核准後已更新產品 README。
@@ -73,6 +73,7 @@
 - P2/P4：storage 失敗注入和外部 IPC 紅燈為不同失敗面，保留雙迴圈；只有同層且沒有額外整合責任時才記理由合併。
 - 每個 production Task 保存驗收 ID、命令、exit code、失敗原因、最小實作綠燈與 code-simplify 後綠燈。沒有重構時明列 no-op。
 - MLIFE-012：`go vet ./...`、`go test -count=1 -race ./...`、`go build ./cmd/asura`；保留來源列出的全部既有功能 regression，不刪測試。
+- 2026-10-01 依使用者 CI review 允許，10k/100k probe 以 `go test -tags lifecycleperf -count=1 -timeout 2m -run '^TestLifecycleLargeDataProbe$' -v ./internal/storage` 獨立非 race 執行，CI 保留相同門檻與結果／EXPLAIN／RSS；一般 correctness race 不執行環境敏感性能門檻。
 - Probe 使用獨立 fixture 預期答案；記 fixture 數量、查詢計畫、實際耗時與資源。這是本地性能測試，不假稱生產觀測。
 
 ## 建檔檢查與證據

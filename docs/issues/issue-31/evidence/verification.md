@@ -1,5 +1,7 @@
 # Issue 31 驗證證據
 
+2026-10-01 更新：b350357 的正式 CI 失敗，歷史本地 PASS 不作最新版本的放行依據。P5-T1 回退與修正證據見 [ci-fix/README.md](ci-fix/README.md)；正式 CI 與新一輪審查以 PR #32 對應最新 HEAD 的結果為準。
+
 執行日期：2026-10-01。核准基準 `56871b8de89bb8dc774185780fd48e4667b10d88`，實作工作區 `issue-31-memory-lifecycle`；被測 Go 來源完整 SHA-256 見 [tested-source.sha256](tested-source.sha256)。提交後來源相同才沿用證據。沒有真實模型或 AI adapter 調用。
 
 ## P1-T1 — 既有刻畫

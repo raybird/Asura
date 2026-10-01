@@ -1,3 +1,5 @@
+//go:build lifecycleperf
+
 package storage
 
 import (

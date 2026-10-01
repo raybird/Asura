@@ -7,8 +7,10 @@ import (
 	"asura/internal/pipeline"
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"modernc.org/sqlite"
 	"net"
 	"path/filepath"
 	"strings"
@@ -481,28 +483,50 @@ func TestRECALL_ExplicitOverrunAndCriticOverrun(t *testing.T) {
 	})
 }
 
+var recallDeadlineFunctionOnce sync.Once
+
 func TestRECALL_QueryDeadline(t *testing.T) {
+	// 2026-10-01：有限等待的 SQLite UDF 取代大量遞迴計算；每次最多等待 400ms。
+	recallDeadlineFunctionOnce.Do(func() {
+		sqlite.MustRegisterScalarFunction("asura_recall_deadline_fixture", 0, func(*sqlite.FunctionContext, []driver.Value) (driver.Value, error) {
+			time.Sleep(400 * time.Millisecond)
+			return "SQLite", nil
+		})
+	})
 	f := setupMemoryFixture(t)
 	db, err := sql.Open("sqlite", f.dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	// 2026-09-22：以慢速真實 SQLite view 取代 fixture 表，強制查詢期間超時。
+	// 2026-10-01：只查一列，透過真正 SQLite 執行受控等待，不依賴 CPU／race 吞吐量。
 	if _, err = db.Exec(`DROP TABLE memories; CREATE VIEW memories AS
- WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<10000000)
- SELECT printf('%08d',x) AS id, '` + strings.ReplaceAll(f.projA, "'", "''") + `' AS workspace,
- 'SQLite' AS content, 'manual' AS source, '2026-09-22' AS created_at,
- 'active' AS lifecycle, 0 AS is_durable, '2026-09-22' AS lifecycle_changed_at FROM n`); err != nil {
+ SELECT 'deadline-fixture' AS id, '` + strings.ReplaceAll(f.projA, "'", "''") + `' AS workspace,
+ asura_recall_deadline_fixture() AS content, 'manual' AS source, '2026-10-01' AS created_at,
+ 'active' AS lifecycle, 0 AS is_durable, '2026-10-01' AS lifecycle_changed_at`); err != nil {
 		t.Fatal(err)
 	}
+	controlCtx, controlCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	controlStarted := time.Now()
+	candidates, truncated, controlErr := f.store.RecallCandidates(controlCtx, f.projA)
+	controlCancel()
+	if controlErr != nil || truncated || len(candidates) != 1 || candidates[0].ID != "deadline-fixture" || candidates[0].Content != "SQLite" {
+		t.Fatalf("fixture positive control failed: %+v truncated=%v err=%v", candidates, truncated, controlErr)
+	}
+	if elapsed := time.Since(controlStarted); elapsed > 3*time.Second {
+		t.Fatalf("fixture control too slow: %s", elapsed)
+	}
 	// 2026-10-01：確認慢速 fixture 真正耗盡 deadline，避免 schema 錯誤造成假綠燈。
+	queryStarted := time.Now()
 	queryCtx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	_, _, queryErr := f.store.RecallCandidates(queryCtx, f.projA)
 	contextErr := queryCtx.Err()
 	cancel()
 	if queryErr == nil || contextErr != context.DeadlineExceeded {
 		t.Fatalf("slow fixture did not exercise cancellation: query=%v context=%v", queryErr, contextErr)
+	}
+	if elapsed := time.Since(queryStarted); elapsed > 3*time.Second {
+		t.Fatalf("fixture cancellation too slow: %s", elapsed)
 	}
 	started := time.Now()
 	if _, msg := recallSubmit(t, f.sockPath, f.projA, "timeout", "bounded", "SQLite", nil); msg != "memory recall unavailable" {

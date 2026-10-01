@@ -1,0 +1,8 @@
+=== RUN   TestRECALL_QueryDeadline
+--- PASS: TestRECALL_QueryDeadline (1.39s)
+=== RUN   TestRECALL_QueryDeadline
+--- PASS: TestRECALL_QueryDeadline (1.37s)
+=== RUN   TestRECALL_QueryDeadline
+--- PASS: TestRECALL_QueryDeadline (1.38s)
+PASS
+ok  	asura/tests/integration	5.155s

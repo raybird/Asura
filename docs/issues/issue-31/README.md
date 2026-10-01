@@ -182,6 +182,9 @@ go build ./cmd/asura
 | TBD-2 | 確認 retry operation ID 與刪除後 relation audit 的外部語意 | 已解決 | 2026-10-01 核准 technical-analysis 提案 |
 | TBD-3 | 確認 bounded detail 上限與性能驗收門檻 | 已解決 | 2026-10-01 核准提案上限與本機 probe 門檻 |
 
+## CI 審查回退
+2026-10-01 使用者於 [GitHub review](https://github.com/raybird/Asura/pull/32#pullrequestreview-5375935986) 指出最新正式 CI 失敗；先前本地 PASS 不足以放行最新版本。回退 P5-T1，修正 [性能 blocker](https://github.com/raybird/Asura/pull/32#discussion_r4152671417) 與 [取消 fixture blocker](https://github.com/raybird/Asura/pull/32#discussion_r4152671420)。採使用者允許的分離方案，10k/100k 性能門檻改為獨立非 race CI 步驟，30 秒／2 秒門檻不變；standard race 保留全部 correctness 測試。
+
 ## Timeline
 | 日期 | 異動 | 負責人 |
 |---|---|---|
@@ -192,4 +195,4 @@ go build ./cmd/asura
 **建立日期**: 2026-10-01
 **分級**: Large — 跨 storage、daemon、sealed context、recall 與 CLI，新增持久化契約
 **風險**: High
-**狀態**: 實作與驗證完成，待獨立審查
+**狀態**: 修正與本地驗證完成，等待正式 CI／第二輪審查

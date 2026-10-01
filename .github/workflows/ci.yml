@@ -53,6 +53,10 @@ jobs:
       - name: Test with Race Detector
         run: go test -count=1 -race -v ./...
 
+      # 2026-10-01：性能門檻獨立執行，避免 race instrumentation 影響耗時。
+      - name: Lifecycle performance probe
+        run: /usr/bin/time -v go test -tags lifecycleperf -count=1 -timeout 2m -run '^TestLifecycleLargeDataProbe$' -v ./internal/storage
+
       - name: Web memory UI probe
         run: |
           node docs/issues/issue-21/evidence/ui-probe.cjs

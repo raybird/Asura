@@ -38,4 +38,6 @@ SQLite transaction 可容納 memory、lifecycle relation、Git provenance 與 re
 
 2026-10-01 已核准的可觀察行為：operation ID 必填與衝突、deleted relation tombstone、durable 不提供解除、CLI/IPC 命名與 response/performance 上限。所有 bounds 為本提案，不宣稱來自既有契約。reason 為選填，預設記錄操作類型；Git provenance 保持原欄位。
 
+2026-10-01 依使用者 CI 審查允許，性能 probe 與標準 correctness race 分離：CI 以 lifecycleperf tag 獨立非 race 執行；原 30 秒 migration／2 秒 query 與正確性斷言保留，沒有門檻豁免。
+
 大資料門檻須在指定執行環境驗收；若基準不適合門檻，先取得決策，不降低測試 assertion 製造綠燈。
