@@ -1,0 +1,6 @@
+=== RUN   TestWEBGITBoundedIPC
+--- PASS: TestWEBGITBoundedIPC (0.92s)
+=== RUN   TestWEBGITIPCDisconnectProbe
+--- PASS: TestWEBGITIPCDisconnectProbe (0.94s)
+PASS
+ok  	asura/internal/daemon	1.865s

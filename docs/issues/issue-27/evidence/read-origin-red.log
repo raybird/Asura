@@ -1,0 +1,6 @@
+=== RUN   TestWEBGITCrossOriginRead
+    web_git_memory_test.go:429: cross Origin read 200 {"items":[{"id":"known","workspace":"","repo_id":"","ref_name":"","base_sha":"","head_sha":"","commit_count":0,"summary":"secret","status":"pending","policy_version":"","created_at":"2026-09-30T01:00:00Z","is_truncated":false}]}
+--- FAIL: TestWEBGITCrossOriginRead (0.01s)
+FAIL
+FAIL	asura/tests/integration	0.013s
+FAIL

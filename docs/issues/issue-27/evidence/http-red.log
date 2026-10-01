@@ -1,0 +1,12 @@
+=== RUN   TestWEBGITHTTPWorkflow
+    web_git_memory_test.go:55: capture contract missing: 404 404 page not found
+--- FAIL: TestWEBGITHTTPWorkflow (0.02s)
+=== RUN   TestWEBGITHTTPBoundaryAndBounds
+    web_git_memory_test.go:160: scope 404 404 page not found
+--- FAIL: TestWEBGITHTTPBoundaryAndBounds (0.01s)
+=== RUN   TestWEBGITHTTPPaging
+    web_git_memory_test.go:210: page 404 bytes 19
+--- FAIL: TestWEBGITHTTPPaging (0.04s)
+FAIL
+FAIL	asura/tests/integration	0.068s
+FAIL

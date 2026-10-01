@@ -330,3 +330,12 @@ ExecutionContext 的可選 `recall` 保存政策、explicit/auto IDs、選中分
 最後驗證日期：2026-09-24。
 
 Web Task submit 僅接受 ID、workspace、prompt、explicit `memory_ids` 與 `memory_recall`，由 Daemon 依原指紋、記憶解析、bounded selector 與密封流程處理；預設 off。介面送出前顯示 Request ID，回應遺失時以同一 ID 和 payload 重送。專案或 session 切換會清除記憶內容、選取與待重送資料，並以世代值丟棄遲到的 UI 回應。歷史稽核只依 Task 保存的 `resolved_context` 與 `pipeline_trace` 呈現簡要決策，不重查現存記憶；首版沿用既有 Task status IPC，因此該舊路徑的完整 context/result 大小限制仍須另案處理。詳細驗收與證據見 [Issue 21](../../issues/issue-21/README.md)。
+
+
+## Phase 3J：Web Git Memory Capture & Review
+
+2026-09-30：`/api/git-memory/capture`、`/api/git-memory/candidates` 與 detail/approve/discard 共用 session、Host、變更方法 Origin 邊界。Web 僅透過五個 bounded Git IPC 呼叫 Daemon；Daemon 每次重新驗證 canonical workspace，並重用既有 capture service、candidate store、checkpoint 與 approve/discard 原子狀態轉移。Web 不直接執行 Git 或存取 SQLite。
+
+2026-09-30：Candidate page 採 created_at DESC/id ASC keyset，cursor 綁定 scope/status，SQL LIMIT limit+1，單頁最多 50。SQL byte sentinel 投影限制 metadata、draft/facts；capture 重用只讀 metadata，不載入 legacy 大草稿。Detail draft 最多 32 KiB、facts 最多 256 KiB、escaped JSON 最多 512 KiB；Web IPC reader 另有 1 MiB 上限。Web approve 在交易內驗證 pending/Complete 與有效內容大小，重送保留原批准 ID，即使正式 memory 已刪除也不復活。CLI 既有完整查詢契約保持不變。
+
+2026-09-30：HTTP context/deadline 關閉 request 專用 Unix socket，Daemon connCtx 傳入 capture，沿用 Git process group kill；尚未提交的交易取消不推進 checkpoint，已提交交易不倒退。UI 以 workspace/session generation、list/detail token 與 AbortController 隔離遲到回應，全部 Git/memory 字串僅以純文字呈現。既有 Task snapshot 與 lexical-v1 recall 不改寫。詳細驗收與證據見 [Issue 27](../../issues/issue-27/README.md)。

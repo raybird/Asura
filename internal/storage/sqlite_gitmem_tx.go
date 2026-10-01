@@ -14,7 +14,9 @@ import (
 
 // ApproveOptions 包含核准候選記憶時的自訂參數
 type ApproveOptions struct {
-	Content string // 可選的使用者自訂或編修後的正式記憶內文
+	Bounded    bool   // 2026-09-30：Web SQL/content hard bounds，不改 CLI 契約。
+	ContentSet bool   // 2026-09-30：區分未提供與明確空內容。
+	Content    string // 可選的使用者自訂或編修後的正式記憶內文
 }
 
 func generateMemoryID() string {
@@ -42,6 +44,9 @@ func (s *SQLiteStore) ApproveCandidateTx(ctx context.Context, workspace, candida
 	FROM memory_candidates
 	WHERE workspace = ? AND id = ?
 	`
+	if opts.Bounded {
+		queryCand = `SELECT ` + candidateIdentityColumns + `,commit_count,` + candidatePayloadColumns + `,COALESCE(substr(CAST(status AS BLOB),1,4097),''),COALESCE(substr(CAST(approved_memory_id AS BLOB),1,257),''),is_user_edited,is_truncated FROM memory_candidates WHERE workspace=? AND id=?`
+	}
 	var cand MemoryCandidate
 	var isUserEditedInt int
 	var isTruncatedInt int
@@ -58,6 +63,26 @@ func (s *SQLiteStore) ApproveCandidateTx(ctx context.Context, workspace, candida
 	}
 	cand.IsUserEdited = (isUserEditedInt == 1)
 	cand.IsTruncated = (isTruncatedInt == 1)
+
+	if opts.Bounded {
+		if err := validateGitCandidate(&cand); err != nil {
+			return "", err
+		}
+		if cand.IsTruncated {
+			return "", ErrCandidateStatusConflict
+		}
+		if cand.Status == "approved" && cand.ApprovedMemoryID != "" {
+			return cand.ApprovedMemoryID, nil
+		}
+		if cand.Status != "pending" {
+			return "", ErrCandidateStatusConflict
+		}
+		if opts.ContentSet {
+			if err := ValidateGitApprovalContent(opts.Content); err != nil {
+				return "", err
+			}
+		}
+	}
 
 	// MUST FIX 1: 嚴格禁止核准 Partial Candidate（避免未處理變更永久遺漏至正式記憶庫）
 	if cand.IsTruncated {
@@ -98,6 +123,12 @@ func (s *SQLiteStore) ApproveCandidateTx(ctx context.Context, workspace, candida
 	}
 	if strings.TrimSpace(finalContent) == "" {
 		return "", errors.New("cannot approve candidate with empty content: draft is empty and no edited content provided")
+	}
+
+	if opts.Bounded {
+		if err := ValidateGitApprovalContent(finalContent); err != nil {
+			return "", err
+		}
 	}
 
 	// 4. 寫入正式記憶 (memories)
@@ -183,6 +214,7 @@ func (s *SQLiteStore) SaveCandidateAndCheckpointTx(
 	checkpoint *GitCheckpoint,
 	expectedOldSHA string,
 	isAncestor CheckpointAncestryCheckFunc,
+	headersOnly ...bool,
 ) (*MemoryCandidate, error) {
 	if cand == nil {
 		return nil, errors.New("candidate cannot be nil")
@@ -251,26 +283,36 @@ func (s *SQLiteStore) SaveCandidateAndCheckpointTx(
 	  AND base_sha = ? AND head_sha = ? AND policy_version = ?
 	`
 	var persisted MemoryCandidate
-	var approvedAt sql.NullTime
-	var persistedIsTruncatedInt int
-	var persistedIsUserEditedInt int
-	err = tx.QueryRowContext(ctx, selectCand,
-		cand.Workspace, cand.RepoID, cand.RefName, cand.BaseSHA, cand.HeadSHA, cand.PolicyVersion,
-	).Scan(
-		&persisted.ID, &persisted.Workspace, &persisted.RepoID, &persisted.RefName, &persisted.BaseSHA, &persisted.HeadSHA,
-		&persisted.CommitCount, &persisted.FactsSummary, &persisted.DraftContent, &persisted.Status,
-		&persisted.PolicyVersion, &persisted.ApprovedMemoryID, &persisted.CreatedAt, &approvedAt,
-		&persistedIsTruncatedInt, &persisted.TruncatedReason, &persistedIsUserEditedInt,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("scan persisted candidate: %w", err)
-	}
-	if approvedAt.Valid {
-		persisted.ApprovedAt = &approvedAt.Time
-	}
-	persisted.IsTruncated = (persistedIsTruncatedInt == 1)
-	persisted.IsUserEdited = (persistedIsUserEditedInt == 1)
+	headerOnly := len(headersOnly) > 0 && headersOnly[0]
+	if headerOnly {
+		row := tx.QueryRowContext(ctx, `SELECT `+candidateHeaderColumns+` FROM memory_candidates WHERE workspace=? AND repo_id=? AND ref_name=? AND base_sha=? AND head_sha=? AND policy_version=?`, cand.Workspace, cand.RepoID, cand.RefName, cand.BaseSHA, cand.HeadSHA, cand.PolicyVersion)
+		header, err := scanGitCandidate(row)
+		if err != nil {
+			return nil, err
+		}
+		persisted = *header
+	} else {
+		var approvedAt sql.NullTime
+		var persistedIsTruncatedInt int
+		var persistedIsUserEditedInt int
+		err = tx.QueryRowContext(ctx, selectCand,
+			cand.Workspace, cand.RepoID, cand.RefName, cand.BaseSHA, cand.HeadSHA, cand.PolicyVersion,
+		).Scan(
+			&persisted.ID, &persisted.Workspace, &persisted.RepoID, &persisted.RefName, &persisted.BaseSHA, &persisted.HeadSHA,
+			&persisted.CommitCount, &persisted.FactsSummary, &persisted.DraftContent, &persisted.Status,
+			&persisted.PolicyVersion, &persisted.ApprovedMemoryID, &persisted.CreatedAt, &approvedAt,
+			&persistedIsTruncatedInt, &persisted.TruncatedReason, &persistedIsUserEditedInt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scan persisted candidate: %w", err)
+		}
+		if approvedAt.Valid {
+			persisted.ApprovedAt = &approvedAt.Time
+		}
+		persisted.IsTruncated = (persistedIsTruncatedInt == 1)
+		persisted.IsUserEdited = (persistedIsUserEditedInt == 1)
 
+	}
 	// insert-if-absent 衝突時，只有 pending 或 approved 候選可參與 Checkpoint 推進。
 	if persisted.Status != "pending" && persisted.Status != "approved" {
 		return nil, fmt.Errorf("%w: candidate %s was already discarded; cannot advance checkpoint without force reopen", ErrCandidateStatusConflict, persisted.ID)
@@ -292,7 +334,11 @@ func (s *SQLiteStore) SaveCandidateAndCheckpointTx(
 		}
 		var finalDraft string
 		var isUserEditedInt int
-		if err := tx.QueryRowContext(ctx, "SELECT draft_content, is_user_edited FROM memory_candidates WHERE workspace = ? AND id = ?", cand.Workspace, persisted.ID).Scan(&finalDraft, &isUserEditedInt); err != nil {
+		draftQuery := "SELECT draft_content, is_user_edited FROM memory_candidates WHERE workspace = ? AND id = ?"
+		if headerOnly {
+			draftQuery = "SELECT '', is_user_edited FROM memory_candidates WHERE workspace = ? AND id = ?"
+		}
+		if err := tx.QueryRowContext(ctx, draftQuery, cand.Workspace, persisted.ID).Scan(&finalDraft, &isUserEditedInt); err != nil {
 			return nil, fmt.Errorf("reload draft after partial upgrade: %w", err)
 		}
 		persisted.DraftContent = finalDraft

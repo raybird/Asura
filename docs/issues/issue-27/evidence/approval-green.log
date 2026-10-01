@@ -1,0 +1,16 @@
+=== RUN   TestWEBGITBoundedApproval
+=== RUN   TestWEBGITBoundedApproval/large
+=== RUN   TestWEBGITBoundedApproval/empty
+=== RUN   TestWEBGITBoundedApproval/oversized-edit
+=== RUN   TestWEBGITBoundedApproval/partial
+=== RUN   TestWEBGITBoundedApproval/discarded
+=== RUN   TestWEBGITBoundedApproval/invalid
+--- PASS: TestWEBGITBoundedApproval (0.01s)
+    --- PASS: TestWEBGITBoundedApproval/large (0.00s)
+    --- PASS: TestWEBGITBoundedApproval/empty (0.00s)
+    --- PASS: TestWEBGITBoundedApproval/oversized-edit (0.00s)
+    --- PASS: TestWEBGITBoundedApproval/partial (0.00s)
+    --- PASS: TestWEBGITBoundedApproval/discarded (0.00s)
+    --- PASS: TestWEBGITBoundedApproval/invalid (0.00s)
+PASS
+ok  	asura/internal/storage	0.012s

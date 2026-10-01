@@ -60,5 +60,13 @@ jobs:
           node docs/issues/issue-21/evidence/ui-probe.cjs taskRace
           node docs/issues/issue-21/evidence/ui-probe.cjs retry503
 
+      - name: Web Git memory browser probe
+        env:
+          NODE_PATH: ${{ runner.temp }}/asura-browser/node_modules
+        run: |
+          npm install --prefix "$RUNNER_TEMP/asura-browser" playwright@1.50.1
+          "$RUNNER_TEMP/asura-browser/node_modules/.bin/playwright" install --with-deps chromium
+          node docs/issues/issue-27/evidence/ui-browser.cjs
+
       - name: Build CLI
         run: go build -v ./cmd/asura

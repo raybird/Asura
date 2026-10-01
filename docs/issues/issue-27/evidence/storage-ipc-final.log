@@ -1,0 +1,53 @@
+=== RUN   TestWEBGITBoundedPageAndDetail
+=== RUN   TestWEBGITBoundedPageAndDetail/draft_content
+=== RUN   TestWEBGITBoundedPageAndDetail/facts_summary
+=== RUN   TestWEBGITBoundedPageAndDetail/repo_id
+=== RUN   TestWEBGITBoundedPageAndDetail/truncated_reason
+--- PASS: TestWEBGITBoundedPageAndDetail (0.07s)
+    --- PASS: TestWEBGITBoundedPageAndDetail/draft_content (0.00s)
+    --- PASS: TestWEBGITBoundedPageAndDetail/facts_summary (0.00s)
+    --- PASS: TestWEBGITBoundedPageAndDetail/repo_id (0.00s)
+    --- PASS: TestWEBGITBoundedPageAndDetail/truncated_reason (0.00s)
+=== RUN   TestWEBGITBoundedApproval
+=== RUN   TestWEBGITBoundedApproval/large
+=== RUN   TestWEBGITBoundedApproval/empty
+=== RUN   TestWEBGITBoundedApproval/oversized-edit
+=== RUN   TestWEBGITBoundedApproval/partial
+=== RUN   TestWEBGITBoundedApproval/discarded
+=== RUN   TestWEBGITBoundedApproval/invalid
+--- PASS: TestWEBGITBoundedApproval (0.02s)
+    --- PASS: TestWEBGITBoundedApproval/large (0.00s)
+    --- PASS: TestWEBGITBoundedApproval/empty (0.00s)
+    --- PASS: TestWEBGITBoundedApproval/oversized-edit (0.00s)
+    --- PASS: TestWEBGITBoundedApproval/partial (0.00s)
+    --- PASS: TestWEBGITBoundedApproval/discarded (0.00s)
+    --- PASS: TestWEBGITBoundedApproval/invalid (0.00s)
+=== RUN   TestWEBGITConcurrentReview
+--- PASS: TestWEBGITConcurrentReview (0.02s)
+=== RUN   TestWEBGITApprovedPartialRejected
+--- PASS: TestWEBGITApprovedPartialRejected (0.01s)
+=== RUN   TestWEBGITLegacyCapacityProbe
+    sqlite_gitmem_probe_test.go:32: 1000 candidates: list limited to 50; legacy detail loads 2 MiB draft + 2 MiB facts, bounded Web projection required
+--- PASS: TestWEBGITLegacyCapacityProbe (0.33s)
+=== RUN   TestApproveCandidateTx_EmptyContentRejected
+--- PASS: TestApproveCandidateTx_EmptyContentRejected (0.01s)
+=== RUN   TestApproveCandidateTx_PartialCandidateRejected
+--- PASS: TestApproveCandidateTx_PartialCandidateRejected (0.03s)
+=== RUN   TestApproveCandidateTx_AtomicStatusCAS_RejectsNonPending
+--- PASS: TestApproveCandidateTx_AtomicStatusCAS_RejectsNonPending (0.01s)
+PASS
+ok  	asura/internal/storage	0.514s
+=== RUN   TestWEBGITBoundedIPC
+--- PASS: TestWEBGITBoundedIPC (1.79s)
+=== RUN   TestWEBGITIPCReauthorization
+--- PASS: TestWEBGITIPCReauthorization (3.17s)
+=== RUN   TestWEBGITIPCDisconnectProbe
+--- PASS: TestWEBGITIPCDisconnectProbe (1.74s)
+PASS
+ok  	asura/internal/daemon	6.705s
+=== RUN   TestWEBGITExpiredSession
+--- PASS: TestWEBGITExpiredSession (0.00s)
+=== RUN   TestWEBGITIPCReaderBound
+--- PASS: TestWEBGITIPCReaderBound (0.02s)
+PASS
+ok  	asura/internal/web	0.036s
