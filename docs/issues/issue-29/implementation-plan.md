@@ -94,10 +94,10 @@
 
 ### Task P5.1 — 固定版本交付與獨立審查
 
-- 狀態：⏳ 進行中
+- 狀態：交付驗證完成；獨立 review 結果以持久化 artifact 判定
 - 產出與最小範圍：常青文件、完整回歸、提交、PR、正式 CI、獨立 review
 - 相依：P4.1
 - 責任驗收：UFL-012
 - 完成判準：固定 BASE/HEAD 證據完整；review PASS 或修正再審
 - 驗證策略：vet/race/build、CI、持久化 review
-- 證據：待執行回填。
+- 證據：2026-10-01 [verification.md](evidence/verification.md)、正式 CI 36807429281、PR #30；獨立 review 的固定範圍與判定保存於同目錄 review artifact。PASS 後本 Task 完成並等待合併，未執行 merge。

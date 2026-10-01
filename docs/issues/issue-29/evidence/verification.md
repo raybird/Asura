@@ -50,7 +50,7 @@ P0 的 Stage 單元測試直接執行 Prepare/Execute 與 optional parser；同�
 - `go test -race ./internal/daemon ./cmd/asura -run 'Utility|StatusRecall' -count=1`：exit 0，[client-cli-race.log](client-cli-race.log)。
 - `go test -race ./internal/daemon -run Utility -count=1`：exit 0，[daemon-race.log](daemon-race.log)，含最後新增 sealed redelivery 整合。
 - 精煉後完整 `go test -count=1 -race ./...`：exit 0，所有 package 全綠，integration 263.278s；[race.log](race.log)。之後只新增 pipeline archived/oversize fixture 與 Daemon sealed redelivery 測試，兩個 package 最終增量 race 亦全綠；此完整 log 綁定 b618f23 的 production code；後續 audit policy 澄清的增量檢查如下，正式 CI 再覆蓋最新全範圍。
-- 正式 CI 與獨立 review：P5 尚待執行，不冒充通過。
+- 正式 CI 結果與版本見下節；獨立 review 的判定以同目錄持久化報告為準。
 
 ## 2026-10-01 稽核 policy 澄清
 
@@ -65,3 +65,11 @@ review 與自我檢查發現 store 的 potential weight 在 observe IPC 中未�
 新增16連線 barrier 測試，在未修復的06b6cfe storage程式跑30次 exit 1（[migration-claims-red.log](migration-claims-red.log)）；最小修復把 marker claim 移到隔離交易的第一個寫入，ON CONFLICT DO NOTHING，僅取得 claim 者隔離，未取得者直接提交。保留已完成 marker fast path，隔離失敗與 marker 一起 rollback，不改 migration 的隔離範圍。這是交付驗證揭露的必要啟動可靠性修復，非新增使用者行為。
 
 修復後新 concurrent/trigger rollback/retry 測試10次 race exit 0（[migration-claims.log](migration-claims.log)）；storage全套race exit 0（[migration-storage.log](migration-storage.log)）；CLI CancelIsolation20次race exit 0（[migration-cli.log](migration-cli.log)）。既有完整migration/新完整candidate/restart案例亦包含於storage全套。code-simplify 檢查為 no-op，claim與更新同一transaction，未加入抽象或修改Git等待時間。正式完整CI需於新HEAD重跑，未把本機增量視為正式CI通過。
+
+2026-10-01 修復提交 `cbbed9250ef809416961480e2321b2a58e99112f` 的完整本機 `go test -race ./... -count=1` exit 0，integration 278.995s（[final-race.log](final-race.log)）；`go vet ./...` 與 `go build -o /tmp/asura-issue-29 ./cmd/asura` exit 0。183檔source manifest全數一致；後續交付文件不改被測source。
+
+## 2026-10-01 正式交付結果
+
+修復提交 `cbbed9250ef809416961480e2321b2a58e99112f` 的 [CI 36807429281](https://github.com/raybird/Asura/actions/runs/36807429281) conclusion=success；vet、完整race、Web memory/Git browser probes、CLI build全部成功。[final-ci.json](final-ci.json) 保存job/step實際狀態。首輪失敗與後續修復證據均保留，沒有豁免或修改原Git WaitDelay。
+
+後續僅交付文件與review報告；source manifest一致時重用上述source驗證，文件以diff/連結/狀態查核驗證。最終獨立review必須覆蓋固定BASE至交付文件HEAD；有效PASS與報告新增提交的對應由PR固定列出。未合併PR，不宣稱issue已結案。

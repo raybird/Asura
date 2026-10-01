@@ -185,21 +185,22 @@ And MEM、CTXMEM、RECALL、WEBMEM、GITMEM、WEBGIT、CTXWIN、TFACE、MBACK、
 
 ## 待確認事項
 
-所有 K-TBD 的核准方案見技術分析；真實 probe 結果仍須取得。
+所有 K-TBD 的核准方案見技術分析；2026-10-01 真實 Critic probe 9/9 一致，限制見驗證證據。
 
 | 編號 | 事項 | 狀態 | 影響 |
 |---|---|---|---|
 | TBD-1 | 核准 UFL-001～012 及 K-TBD-1～10 的具體方案 | 已解決 | 2026-10-01 使用者「核准」，可依相依順序執行 |
-| TBD-2 | 真實 Critic probe 的 backend/model 與可用性 | 已解決 | 2026-10-01 沿用已設定 OpenCode 1.18.31 / openai/gpt-5.6-sol；可信度仍待 probe |
+| TBD-2 | 真實 Critic probe 的 backend/model 與可用性 | 已解決 | 2026-10-01 沿用已設定 OpenCode 1.18.31 / openai/gpt-5.6-sol；固定 fixture probe 9/9 一致，未推論因果效用 |
 
 ## 驗證證據
 
-2026-10-01：P0～P4 完成，紅綠、固定模型 9/9、10k/100k 容量、精煉、vet/race/build 見 [verification.md](evidence/verification.md)。正式 CI 與獨立 review 於 P5 取得後回填。
+2026-10-01：P0～P4 完成，紅綠、固定模型 9/9、10k/100k 容量、精煉、vet/race/build 見 [verification.md](evidence/verification.md)。正式 CI 36807429281 全綠；獨立 review 的完整版本、結果與報告見 PR #30 及同目錄 review artifact。
 
 ## Timeline
 
 | 日期 | 異動 | 負責人 |
 |---|---|---|
+| 2026-10-01 | P0～P4、完整回歸、正式 CI 完成；PR #30 交付，獨立 review 結論以固定版本 artifact 為準 | Codex |
 | 2026-10-01 | 使用者「核准」UFL-001～012 與 K-TBD-1～10；沿用現有模型設定 | 使用者／Codex |
 | 2026-10-01 | 讀取 issue、盤點基準、建立待核准規格與設計方案 | Codex |
 
@@ -207,4 +208,4 @@ And MEM、CTXMEM、RECALL、WEBMEM、GITMEM、WEBGIT、CTXWIN、TFACE、MBACK、
 **建立日期**: 2026-10-01
 **分級**: Large — 跨 storage、Daemon、engine、pipeline、recall 與 CLI
 **風險**: High
-**狀態**: 實作完成，交付驗證與獨立審查中
+**狀態**: 交付驗證完成；獨立 review PASS 後等待合併
