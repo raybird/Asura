@@ -144,6 +144,10 @@ func NewSQLiteStore(dbPath string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("init schema: %w", err)
 	}
 
+	if err := store.initLifecycleSchema(); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("init lifecycle schema: %w", err)
+	}
 	if err := store.initUtilitySchema(); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("init utility schema: %w", err)
@@ -823,7 +827,6 @@ func (s *SQLiteStore) UpdateTaskStatusIfCancelling(ctx context.Context, id strin
 	}
 	return rowsAffected > 0, nil
 }
-
 
 // UpdateTaskResult 僅更新任務的輸出結果，保留既有狀態與錯誤訊息 (修復 R-06)
 func (s *SQLiteStore) UpdateTaskResult(ctx context.Context, id string, result string) error {

@@ -16,6 +16,7 @@ var (
 
 // Memory 定義專案級基礎記憶結構 (MEM-001)
 type Memory struct {
+	LifecycleMetadata
 	ID        string    `json:"id"`
 	Workspace string    `json:"workspace"`
 	Content   string    `json:"content"`
@@ -25,28 +26,8 @@ type Memory struct {
 
 // CreateMemory 寫入專案記憶 (MEM-001)
 func (s *SQLiteStore) CreateMemory(ctx context.Context, memory Memory) error {
-	if memory.ID == "" {
-		return errors.New("memory id cannot be empty")
-	}
-	if memory.Workspace == "" {
-		return errors.New("workspace cannot be empty")
-	}
-	if memory.Source == "" {
-		memory.Source = "manual"
-	}
-	if memory.CreatedAt.IsZero() {
-		memory.CreatedAt = time.Now().UTC()
-	}
-
-	query := `
-	INSERT INTO memories (id, workspace, content, source, created_at)
-	VALUES (?, ?, ?, ?, ?)
-	`
-	_, err := s.db.ExecContext(ctx, query, memory.ID, memory.Workspace, memory.Content, memory.Source, memory.CreatedAt)
-	if err != nil {
-		return fmt.Errorf("create memory: %w", err)
-	}
-	return nil
+	_, err := s.CreateMemoryWithOptions(ctx, memory, CreateMemoryOptions{})
+	return err
 }
 
 // ListMemories 依工作區列出記憶清單，限定單一 workspace，無全域讀取捷徑 (MEM-001, MEM-002)
@@ -74,6 +55,12 @@ func (s *SQLiteStore) ListMemories(ctx context.Context, workspace string) ([]Mem
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("rows error: %w", err)
 	}
+	rows.Close()
+	for i := range memories {
+		if err := s.loadLifecycle(ctx, &memories[i]); err != nil {
+			return nil, err
+		}
+	}
 	return memories, nil
 }
 
@@ -91,6 +78,9 @@ func (s *SQLiteStore) GetMemory(ctx context.Context, workspace, id string) (*Mem
 			return nil, ErrMemoryNotFound
 		}
 		return nil, fmt.Errorf("get memory: %w", err)
+	}
+	if err := s.loadLifecycle(ctx, &m); err != nil {
+		return nil, err
 	}
 	return &m, nil
 }
@@ -148,9 +138,9 @@ func (s *SQLiteStore) ResolveMemoriesForTask(ctx context.Context, canonicalWorks
 func (s *SQLiteStore) RecallCandidates(ctx context.Context, workspace string) ([]Memory, bool, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT
  substr(CAST(id AS BLOB),1,257), substr(CAST(content AS BLOB),1,8193),
- substr(CAST(source AS BLOB),1,129), substr(CAST(created_at AS BLOB),1,65)
+ substr(CAST(source AS BLOB),1,129), substr(CAST(created_at AS BLOB),1,65), lifecycle,is_durable,coalesce(substr(CAST(lifecycle_changed_at AS BLOB),1,65),'')
 	FROM memories
-	WHERE workspace = ?
+	WHERE workspace = ? AND lifecycle = 'active'
 	  AND source NOT IN ('git-approved-legacy-partial', 'git-approved-legacy-unknown')
 	ORDER BY id LIMIT 257`, workspace)
 	if err != nil {
@@ -164,11 +154,12 @@ func (s *SQLiteStore) RecallCandidates(ctx context.Context, workspace string) ([
 			truncated = true
 			break
 		}
-		var id, content, source, created string
-		if err := rows.Scan(&id, &content, &source, &created); err != nil {
+		var id, content, source, created, state, changed string
+		var durable int
+		if err := rows.Scan(&id, &content, &source, &created, &state, &durable, &changed); err != nil {
 			return nil, false, err
 		}
-		m := Memory{ID: id, Workspace: workspace, Content: content, Source: source}
+		m := Memory{ID: id, Workspace: workspace, Content: content, Source: source, LifecycleMetadata: LifecycleMetadata{Lifecycle: state, IsDurable: durable == 1, LifecycleChangedAt: changed}}
 		if len(created) <= 64 {
 			for _, layout := range []string{"2006-01-02 15:04:05.999999999 -0700 MST", "2006-01-02 15:04:05.999999999-07:00", "2006-01-02 15:04:05.999999999", time.RFC3339Nano, "2006-01-02T15:04:05.999999999", "2006-01-02 15:04", "2006-01-02T15:04", "2006-01-02"} {
 				if parsed, err := time.Parse(layout, created); err == nil {

@@ -168,5 +168,9 @@ FROM memories WHERE workspace=? AND id=?`, workspace, id).Scan(&gotID, &content,
 	if createdAt.IsZero() {
 		return nil, ErrMemoryMetadata
 	}
-	return &Memory{ID: gotID, Workspace: workspace, Content: content, Source: source, CreatedAt: createdAt}, nil
+	m := &Memory{ID: gotID, Workspace: workspace, Content: content, Source: source, CreatedAt: createdAt}
+	if err := s.loadLifecycle(ctx, m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }

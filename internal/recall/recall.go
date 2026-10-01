@@ -48,7 +48,14 @@ type Budget struct {
 	FirstStage       contextwin.StageAdmission `json:"first_stage"`
 }
 
+type LifecycleAudit struct {
+	storage.LifecycleMetadata
+	ID     string `json:"id"`
+	Source string `json:"source"`
+}
+
 type Decision struct {
+	LifecycleAudit     []LifecycleAudit  `json:"lifecycle_audit,omitempty"`
 	RecallID           string            `json:"recall_id,omitempty"`
 	UtilityPolicy      string            `json:"utility_policy,omitempty"`
 	UtilityVersion     string            `json:"utility_version,omitempty"`

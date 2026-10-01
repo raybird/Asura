@@ -144,7 +144,7 @@ func (d *Daemon) handleGitMemoryApprove(ctx context.Context, req IPCRequest, enc
 		return
 	}
 
-	memID, err := d.store.ApproveCandidateTx(ctx, canonicalScope, req.CandidateID, storage.ApproveOptions{
+	memID, err := d.store.ApproveCandidateTx(ctx, canonicalScope, req.CandidateID, storage.ApproveOptions{Lifecycle: storage.CreateMemoryOptions{Supersedes: req.Supersedes, Durable: req.IsDurable, Reason: req.Reason},
 		Content: req.Content,
 	})
 	if err != nil {

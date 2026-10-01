@@ -84,6 +84,12 @@ func (d *Daemon) recallMemories(workspace, prompt, mode string, ids []string, ex
 	if err != nil {
 		return recall.Result{}, err
 	}
+	for _, m := range explicit {
+		result.Decision.LifecycleAudit = append(result.Decision.LifecycleAudit, recall.LifecycleAudit{ID: m.ID, Source: "explicit", LifecycleMetadata: m.LifecycleMetadata})
+	}
+	for _, m := range result.Memories {
+		result.Decision.LifecycleAudit = append(result.Decision.LifecycleAudit, recall.LifecycleAudit{ID: m.ID, Source: "auto", LifecycleMetadata: m.LifecycleMetadata})
+	}
 	result.Decision.RecallID = engine.GenerateTaskID()
 	result.Decision.UtilityPolicy = utilityPolicy
 	result.Decision.UtilityVersion = storage.UtilityVersion
@@ -94,7 +100,7 @@ func memoryContext(workspace, prompt string, memories []storage.Memory) *engine.
 	result := &engine.ExecutionContext{Workspace: workspace, OriginalPrompt: prompt}
 	for _, m := range memories {
 		result.ProjectMemories = append(result.ProjectMemories, engine.ProjectMemorySnapshot{
-			ID: m.ID, Workspace: m.Workspace, Content: m.Content, Source: m.Source, CreatedAt: m.CreatedAt,
+			LifecycleMetadata: m.LifecycleMetadata, ID: m.ID, Workspace: m.Workspace, Content: m.Content, Source: m.Source, CreatedAt: m.CreatedAt,
 		})
 	}
 	return result

@@ -1,0 +1,41 @@
+=== RUN   TestLifecycleLargeDataProbe
+=== RUN   TestLifecycleLargeDataProbe/10000
+    sqlite_lifecycle_probe_test.go:107: relations=10000 iteration=0 migration=58.303617ms recall=203.528µs detail=653.986µs plan=SEARCH memories USING COVERING INDEX idx_memory_active (workspace=? AND lifecycle=?)
+    sqlite_lifecycle_probe_test.go:107: relations=10000 iteration=1 migration=58.303617ms recall=75.99µs detail=239.023µs plan=SEARCH memories USING COVERING INDEX idx_memory_active (workspace=? AND lifecycle=?)
+    sqlite_lifecycle_probe_test.go:107: relations=10000 iteration=2 migration=58.303617ms recall=74.244µs detail=229.349µs plan=SEARCH memories USING COVERING INDEX idx_memory_active (workspace=? AND lifecycle=?)
+    sqlite_lifecycle_probe_test.go:107: relations=10000 iteration=3 migration=58.303617ms recall=69.015µs detail=244.5µs plan=SEARCH memories USING COVERING INDEX idx_memory_active (workspace=? AND lifecycle=?)
+    sqlite_lifecycle_probe_test.go:107: relations=10000 iteration=4 migration=58.303617ms recall=65.057µs detail=222.023µs plan=SEARCH memories USING COVERING INDEX idx_memory_active (workspace=? AND lifecycle=?)
+=== RUN   TestLifecycleLargeDataProbe/100000
+    sqlite_lifecycle_probe_test.go:107: relations=100000 iteration=0 migration=647.217749ms recall=141.124µs detail=471.711µs plan=SEARCH memories USING COVERING INDEX idx_memory_active (workspace=? AND lifecycle=?)
+    sqlite_lifecycle_probe_test.go:107: relations=100000 iteration=1 migration=647.217749ms recall=96.017µs detail=370.663µs plan=SEARCH memories USING COVERING INDEX idx_memory_active (workspace=? AND lifecycle=?)
+    sqlite_lifecycle_probe_test.go:107: relations=100000 iteration=2 migration=647.217749ms recall=87.82µs detail=373.361µs plan=SEARCH memories USING COVERING INDEX idx_memory_active (workspace=? AND lifecycle=?)
+    sqlite_lifecycle_probe_test.go:107: relations=100000 iteration=3 migration=647.217749ms recall=88.67µs detail=405.862µs plan=SEARCH memories USING COVERING INDEX idx_memory_active (workspace=? AND lifecycle=?)
+    sqlite_lifecycle_probe_test.go:107: relations=100000 iteration=4 migration=647.217749ms recall=90.227µs detail=363.151µs plan=SEARCH memories USING COVERING INDEX idx_memory_active (workspace=? AND lifecycle=?)
+--- PASS: TestLifecycleLargeDataProbe (2.14s)
+    --- PASS: TestLifecycleLargeDataProbe/10000 (0.18s)
+    --- PASS: TestLifecycleLargeDataProbe/100000 (1.97s)
+PASS
+ok  	asura/internal/storage	2.147s
+	Command being timed: "go test ./internal/storage -run TestLifecycleLargeDataProbe -count=1 -v"
+	User time (seconds): 2.67
+	System time (seconds): 0.43
+	Percent of CPU this job got: 119%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:02.60
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 159616
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 71
+	Minor (reclaiming a frame) page faults: 66104
+	Voluntary context switches: 7520
+	Involuntary context switches: 417
+	Swaps: 0
+	File system inputs: 17006
+	File system outputs: 267568
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

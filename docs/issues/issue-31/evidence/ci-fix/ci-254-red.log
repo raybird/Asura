@@ -1,0 +1,13 @@
+Test & Build	Test with Race Detector	2026-10-01T06:51:04.8690757Z === RUN   TestLifecycleLargeDataProbe
+Test & Build	Test with Race Detector	2026-10-01T06:51:04.8691648Z === RUN   TestLifecycleLargeDataProbe/10000
+Test & Build	Test with Race Detector	2026-10-01T06:51:04.8711709Z === RUN   TestLifecycleLargeDataProbe/100000
+Test & Build	Test with Race Detector	2026-10-01T06:51:04.8712873Z     sqlite_lifecycle_probe_test.go:50: migration=41.896294367s >30s
+Test & Build	Test with Race Detector	2026-10-01T06:51:04.8713942Z --- FAIL: TestLifecycleLargeDataProbe (68.26s)
+Test & Build	Test with Race Detector	2026-10-01T06:51:04.8715015Z     --- PASS: TestLifecycleLargeDataProbe/10000 (10.49s)
+Test & Build	Test with Race Detector	2026-10-01T06:51:04.8716108Z     --- FAIL: TestLifecycleLargeDataProbe/100000 (57.77s)
+Test & Build	Test with Race Detector	2026-10-01T06:57:44.4852209Z === RUN   TestRECALL_QueryDeadline
+Test & Build	Test with Race Detector	2026-10-01T06:57:44.4852810Z --- PASS: TestRECALL_QueryDeadline (377.58s)
+Test & Build	Test with Race Detector	2026-10-01T06:57:44.4883334Z === RUN   TestWEBGITHTTPPaging
+Test & Build	Test with Race Detector	2026-10-01T06:57:44.4883858Z panic: test timed out after 10m0s
+Test & Build	Test with Race Detector	2026-10-01T06:57:44.4884712Z 		TestWEBGITHTTPPaging (2m6s)
+Test & Build	Test with Race Detector	2026-10-01T06:57:44.5107716Z asura/tests/integration.TestWEBGITHTTPPaging(0xc000222248)
