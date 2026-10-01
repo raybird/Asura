@@ -57,3 +57,11 @@ P0 的 Stage 單元測試直接執行 Prepare/Execute 與 optional parser；同�
 review 與自我檢查發現 store 的 potential weight 在 observe IPC 中未區別是否生效。`go test ./internal/daemon -run '^TestUtilityCurrentPolicyAudit$' -count=1` exit 1：observe 預期 observe/1000000，實際空 policy/500000；apply 也缺 policy。
 
 最小修改：UtilityPage 加 policy，Daemon observe 固定回傳有效 weight=1000000、apply 保留 derived weight；不改排序、formula 或 ledger。`go test -race ./internal/daemon ./internal/storage ./cmd/asura -run 'Utility|StatusRecall' -count=1` exit 0（[policy-audit-race.log](policy-audit-race.log)）；`go vet ./...` exit 0（[policy-vet.log](policy-vet.log)）；build exit 0。code-simplify 再檢查這個局部修正為 no-op，直述三個政策分支已是最小必要範圍，沒有新增抽象；沿用有效綠燈。真實 IPC 同一 5-unused aggregate 在 observe/apply 分別為1.0/0.5，與獨立字面期望相符。最新正式 CI／review 待取得後記平台證據。
+
+## 2026-10-01 正式 CI 並行開庫修復
+
+[CI 36806217857](https://github.com/raybird/Asura/actions/runs/36806217857) 在 06b6cfe 失敗；完整錯誤見 [ci-failure.log](ci-failure.log)。原有 Git capture WaitDelay 100ms 測試本機 race 重跑30次 exit 0（[ci-gitmem-repro.log](ci-gitmem-repro.log)），保留既有契約與測試。原有 CLI CancelIsolation race 重跑20次 exit 1，重現 migration marker UNIQUE 衝突（[ci-cli-repro.log](ci-cli-repro.log)）。
+
+新增16連線 barrier 測試，在未修復的06b6cfe storage程式跑30次 exit 1（[migration-claims-red.log](migration-claims-red.log)）；最小修復把 marker claim 移到隔離交易的第一個寫入，ON CONFLICT DO NOTHING，僅取得 claim 者隔離，未取得者直接提交。保留已完成 marker fast path，隔離失敗與 marker 一起 rollback，不改 migration 的隔離範圍。這是交付驗證揭露的必要啟動可靠性修復，非新增使用者行為。
+
+修復後新 concurrent/trigger rollback/retry 測試10次 race exit 0（[migration-claims.log](migration-claims.log)）；storage全套race exit 0（[migration-storage.log](migration-storage.log)）；CLI CancelIsolation20次race exit 0（[migration-cli.log](migration-cli.log)）。既有完整migration/新完整candidate/restart案例亦包含於storage全套。code-simplify 檢查為 no-op，claim與更新同一transaction，未加入抽象或修改Git等待時間。正式完整CI需於新HEAD重跑，未把本機增量視為正式CI通過。

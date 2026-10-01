@@ -1,0 +1,1520 @@
+Test & Build	Test with Race Detector	﻿2026-10-01T02:32:26.6328099Z ##[group]Run go test -count=1 -race -v ./...
+Test & Build	Test with Race Detector	2026-10-01T02:32:26.6328788Z [36;1mgo test -count=1 -race -v ./...[0m
+Test & Build	Test with Race Detector	2026-10-01T02:32:26.6430438Z shell: /usr/bin/bash -e {0}
+Test & Build	Test with Race Detector	2026-10-01T02:32:26.6430980Z ##[endgroup]
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2427551Z === RUN   TestAskAcceptsExpandedBackendIDs
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2429168Z --- PASS: TestAskAcceptsExpandedBackendIDs (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2430927Z === RUN   TestExpandedBackendStatus
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2432244Z === RUN   TestExpandedBackendStatus/omp
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2433527Z === RUN   TestExpandedBackendStatus/antigravity
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2434806Z --- PASS: TestExpandedBackendStatus (0.35s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2436626Z     --- PASS: TestExpandedBackendStatus/omp (0.18s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2438415Z     --- PASS: TestExpandedBackendStatus/antigravity (0.17s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2439807Z === RUN   TestCLI_MemoryCapture
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2440838Z --- PASS: TestCLI_MemoryCapture (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2441782Z === RUN   TestCLI_MemoryCandidates
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2442807Z --- PASS: TestCLI_MemoryCandidates (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2444028Z === RUN   TestCLI_MemoryApprove
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2445200Z --- PASS: TestCLI_MemoryApprove (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2446339Z === RUN   TestCLI_MemoryDiscard
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2447304Z --- PASS: TestCLI_MemoryDiscard (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2448407Z === RUN   TestCLI_MissingFlagsValidation
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2449533Z --- PASS: TestCLI_MissingFlagsValidation (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2450610Z === RUN   TestCLI_MemoryCandidate_Detail
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2451572Z --- PASS: TestCLI_MemoryCandidate_Detail (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2452517Z === RUN   TestCLI_MemoryClearCandidates
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2453472Z --- PASS: TestCLI_MemoryClearCandidates (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2454382Z === RUN   TestMemoryUtilityCLI
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2455254Z --- PASS: TestMemoryUtilityCLI (2.48s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2456438Z === RUN   TestAskRecall
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2457177Z === RUN   TestAskRecall/off
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2457984Z === RUN   TestAskRecall/bounded
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2458794Z --- PASS: TestAskRecall (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2459677Z     --- PASS: TestAskRecall/off (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2460613Z     --- PASS: TestAskRecall/bounded (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2461611Z === RUN   TestStatusRecallAudit
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2462472Z --- PASS: TestStatusRecallAudit (0.17s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2463503Z === RUN   TestRunCLI_UsageAndValidation
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2465615Z === RUN   TestRunCLI_UsageAndValidation/無參數輸出_Usage_並返回非_0_狀態碼
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2467064Z === RUN   TestRunCLI_UsageAndValidation/未知子命令返回非_0_狀態碼
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2468505Z === RUN   TestRunCLI_UsageAndValidation/run_指令缺少_prompt_返回非_0_狀態碼
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2470190Z === RUN   TestRunCLI_UsageAndValidation/status_指令缺少_task_id_返回非_0_狀態碼
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2471777Z === RUN   TestRunCLI_UsageAndValidation/ask_指令缺少_prompt_返回非_0_狀態碼
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2473403Z === RUN   TestRunCLI_UsageAndValidation/ask_指令在_Daemon_不可用時回報錯誤且不自動啟動_(P4-T1)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2475013Z === RUN   TestRunCLI_UsageAndValidation/cancel_指令缺少_task_id_返回非_0_狀態碼
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2476742Z === RUN   TestRunCLI_UsageAndValidation/web_指令缺少_access_key_返回非_0_狀態碼
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2478167Z === RUN   TestRunCLI_UsageAndValidation/web_指令在監聽_0.0.0.0_且未指定_origin_時輸出警告
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2479640Z === RUN   TestRunCLI_UsageAndValidation/ask_指令傳入未知_backend_拒絕_(MBACK-003)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2481050Z === RUN   TestRunCLI_UsageAndValidation/run_指令傳入未知_backend_拒絕_(MBACK-003)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2485047Z --- PASS: TestRunCLI_UsageAndValidation (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2487077Z     --- PASS: TestRunCLI_UsageAndValidation/無參數輸出_Usage_並返回非_0_狀態碼 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2488630Z     --- PASS: TestRunCLI_UsageAndValidation/未知子命令返回非_0_狀態碼 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2490503Z     --- PASS: TestRunCLI_UsageAndValidation/run_指令缺少_prompt_返回非_0_狀態碼 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2492441Z     --- PASS: TestRunCLI_UsageAndValidation/status_指令缺少_task_id_返回非_0_狀態碼 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2494145Z     --- PASS: TestRunCLI_UsageAndValidation/ask_指令缺少_prompt_返回非_0_狀態碼 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2497126Z     --- PASS: TestRunCLI_UsageAndValidation/ask_指令在_Daemon_不可用時回報錯誤且不自動啟動_(P4-T1) (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2499139Z     --- PASS: TestRunCLI_UsageAndValidation/cancel_指令缺少_task_id_返回非_0_狀態碼 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2501444Z     --- PASS: TestRunCLI_UsageAndValidation/web_指令缺少_access_key_返回非_0_狀態碼 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2503460Z     --- PASS: TestRunCLI_UsageAndValidation/web_指令在監聽_0.0.0.0_且未指定_origin_時輸出警告 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2506016Z     --- PASS: TestRunCLI_UsageAndValidation/ask_指令傳入未知_backend_拒絕_(MBACK-003) (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2513676Z     --- PASS: TestRunCLI_UsageAndValidation/run_指令傳入未知_backend_拒絕_(MBACK-003) (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2516287Z === RUN   TestRunCLI_CronValidation
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2518313Z === RUN   TestRunCLI_CronValidation/cron_指令無子操作輸出_Usage_並返回非_0
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2520980Z === RUN   TestRunCLI_CronValidation/cron_add_缺少必要參數返回非_0
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2523553Z === RUN   TestRunCLI_CronValidation/cron_pause_缺少_id_返回非_0
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2525714Z --- PASS: TestRunCLI_CronValidation (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2528433Z     --- PASS: TestRunCLI_CronValidation/cron_指令無子操作輸出_Usage_並返回非_0 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2530885Z     --- PASS: TestRunCLI_CronValidation/cron_add_缺少必要參數返回非_0 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2532885Z     --- PASS: TestRunCLI_CronValidation/cron_pause_缺少_id_返回非_0 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2534932Z === RUN   TestRunCLI_MemoryValidation
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2537124Z === RUN   TestRunCLI_MemoryValidation/memory_指令無子操作輸出_Usage_並返回非_0
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2539124Z === RUN   TestRunCLI_MemoryValidation/memory_add_缺少必要參數返回非_0
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2541580Z === RUN   TestRunCLI_MemoryValidation/memory_list_缺少_workspace_返回非_0
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2544114Z === RUN   TestRunCLI_MemoryValidation/memory_get_缺少參數返回非_0
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2548169Z === RUN   TestRunCLI_MemoryValidation/memory_remove_缺少參數返回非_0
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2550424Z === RUN   TestRunCLI_MemoryValidation/memory_指令在_Daemon_不可用時回報錯誤_(MEM-006)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2552032Z --- PASS: TestRunCLI_MemoryValidation (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2554440Z     --- PASS: TestRunCLI_MemoryValidation/memory_指令無子操作輸出_Usage_並返回非_0 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2556935Z     --- PASS: TestRunCLI_MemoryValidation/memory_add_缺少必要參數返回非_0 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2559180Z     --- PASS: TestRunCLI_MemoryValidation/memory_list_缺少_workspace_返回非_0 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2561676Z     --- PASS: TestRunCLI_MemoryValidation/memory_get_缺少參數返回非_0 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2563946Z     --- PASS: TestRunCLI_MemoryValidation/memory_remove_缺少參數返回非_0 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2565884Z     --- PASS: TestRunCLI_MemoryValidation/memory_指令在_Daemon_不可用時回報錯誤_(MEM-006) (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2567400Z === RUN   TestHandleAsk_MemoryFlags
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2568746Z --- PASS: TestHandleAsk_MemoryFlags (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2570246Z === RUN   TestHandleAsk_ModeFlags
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2571830Z === RUN   TestHandleAsk_ModeFlags/非法_mode_返回非_0_並輸出錯誤
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2573653Z === RUN   TestHandleAsk_ModeFlags/合法_three-face_mode_正確傳遞至_Daemon
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2574765Z --- PASS: TestHandleAsk_ModeFlags (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2576706Z     --- PASS: TestHandleAsk_ModeFlags/非法_mode_返回非_0_並輸出錯誤 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2578150Z     --- PASS: TestHandleAsk_ModeFlags/合法_three-face_mode_正確傳遞至_Daemon (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2579019Z === RUN   TestHandleAsk_BackendFlags
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2579940Z === RUN   TestHandleAsk_BackendFlags/指定_--backend_codex_正確傳遞至_Daemon
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2581078Z === RUN   TestHandleAsk_BackendFlags/未指定_--backend_預設為_opencode_並傳遞至_Daemon
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2582584Z --- PASS: TestHandleAsk_BackendFlags (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2583790Z     --- PASS: TestHandleAsk_BackendFlags/指定_--backend_codex_正確傳遞至_Daemon (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2585179Z     --- PASS: TestHandleAsk_BackendFlags/未指定_--backend_預設為_opencode_並傳遞至_Daemon (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2586377Z === RUN   TestHandleRun_ModeValidation
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2587620Z === RUN   TestHandleRun_ModeValidation/非法_mode_返回非_0_並輸出錯誤
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2588373Z --- PASS: TestHandleRun_ModeValidation (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2589415Z     --- PASS: TestHandleRun_ModeValidation/非法_mode_返回非_0_並輸出錯誤 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2590451Z === RUN   TestHandleStatus_PipelineTrace
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2591141Z --- PASS: TestHandleStatus_PipelineTrace (0.17s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2591831Z === RUN   TestHandleRun_InvalidContextConfig
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2592551Z --- PASS: TestHandleRun_InvalidContextConfig (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2593284Z === RUN   TestHandleDaemon_InvalidContextConfig
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2594046Z --- PASS: TestHandleDaemon_InvalidContextConfig (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2594921Z === RUN   TestHandleRun_ContextLimitReject_PreflightFailClosed
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2597653Z --- PASS: TestHandleRun_ContextLimitReject_PreflightFailClosed (0.18s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2598756Z === RUN   TestHandleRun_ContextLimitReject_NaNReserveRatio_StartupRejection
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2599967Z --- PASS: TestHandleRun_ContextLimitReject_NaNReserveRatio_StartupRejection (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2600791Z PASS
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.2601262Z ok  	asura/cmd/asura	4.402s
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.3364823Z === RUN   TestRecallProbe
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.3366775Z     recall_probe_test.go:72: query="SQLITE workspace 隔離" selected="a,d,b"
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.3368714Z     recall_probe_test.go:72: query="transaction rollback" selected="b"
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.3370572Z     recall_probe_test.go:72: query="部署 Docker" selected="c"
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.3372130Z     recall_probe_test.go:72: query="香蕉果汁" selected=""
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.3373607Z     recall_probe_test.go:72: query="資料庫" selected=""
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.3375051Z     recall_probe_test.go:72: query="隔" selected=""
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.3377409Z     recall_probe_test.go:81: formatted_bytes=76 estimated_delta=33 raw_content_estimate=25
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.3378716Z --- PASS: TestRecallProbe (0.05s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.3379568Z === RUN   TestBoundedSQLProbe
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.3380953Z     recall_probe_test.go:106: SEARCH memories USING INDEX recall_scope_id (workspace=?)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.3383076Z     recall_probe_test.go:119: database_rows=10001 returned=257 returned_bytes=14081 elapsed=18.314584ms
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.3384707Z --- PASS: TestBoundedSQLProbe (3.26s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.3385706Z PASS
+Test & Build	Test with Race Detector	2026-10-01T02:33:34.3386702Z ok  	asura/docs/issues/issue-19/evidence	4.327s
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2596258Z === RUN   TestAuthorizeWorkspace_Denied
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2597624Z === RUN   TestAuthorizeWorkspace_Denied/sensitive_root_directory
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2599116Z === RUN   TestAuthorizeWorkspace_Denied/outside_allowed_roots
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2601064Z === RUN   TestAuthorizeWorkspace_Denied/parent_traversal_attempt
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2602378Z --- PASS: TestAuthorizeWorkspace_Denied (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2603922Z     --- PASS: TestAuthorizeWorkspace_Denied/sensitive_root_directory (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2605763Z     --- PASS: TestAuthorizeWorkspace_Denied/outside_allowed_roots (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2607880Z     --- PASS: TestAuthorizeWorkspace_Denied/parent_traversal_attempt (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2609114Z === RUN   TestAuthorizeWorkspace_Allowed
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2610281Z === RUN   TestAuthorizeWorkspace_Allowed/exact_allowed_root
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2611582Z === RUN   TestAuthorizeWorkspace_Allowed/subproject_directory
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2612947Z --- PASS: TestAuthorizeWorkspace_Allowed (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2614377Z     --- PASS: TestAuthorizeWorkspace_Allowed/exact_allowed_root (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2616162Z     --- PASS: TestAuthorizeWorkspace_Allowed/subproject_directory (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2617439Z === RUN   TestAuthorizeCanonicalWorkspace
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2619009Z === RUN   TestAuthorizeCanonicalWorkspace/正向授權取得_canonical_scope
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2620543Z === RUN   TestAuthorizeCanonicalWorkspace/有效別名解析至同一專案_canonical_scope
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2622156Z === RUN   TestAuthorizeCanonicalWorkspace/子目錄_C_獨立且不等於專案_A_之_canonical_scope
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2623987Z === RUN   TestAuthorizeCanonicalWorkspace/越界符號連結拒絕
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2625235Z === RUN   TestAuthorizeCanonicalWorkspace/未授權外部目錄拒絕
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2626558Z --- PASS: TestAuthorizeCanonicalWorkspace (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2628362Z     --- PASS: TestAuthorizeCanonicalWorkspace/正向授權取得_canonical_scope (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2630258Z     --- PASS: TestAuthorizeCanonicalWorkspace/有效別名解析至同一專案_canonical_scope (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2632295Z     --- PASS: TestAuthorizeCanonicalWorkspace/子目錄_C_獨立且不等於專案_A_之_canonical_scope (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2634338Z     --- PASS: TestAuthorizeCanonicalWorkspace/越界符號連結拒絕 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2636673Z     --- PASS: TestAuthorizeCanonicalWorkspace/未授權外部目錄拒絕 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2638337Z === RUN   TestWEB002Unit
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2639507Z --- PASS: TestWEB002Unit (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2640491Z PASS
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.2641206Z ok  	asura/internal/auth	1.016s
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.3500085Z === RUN   TestExecutionRequest_JSON
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.3501351Z --- PASS: TestExecutionRequest_JSON (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.3502583Z === RUN   TestExecutionResult_JSON
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.3504048Z --- PASS: TestExecutionResult_JSON (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.3505287Z === RUN   TestExecutionError
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.3506427Z --- PASS: TestExecutionError (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.3507578Z === RUN   TestRegistry_RegisterAndGet
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.3508800Z --- PASS: TestRegistry_RegisterAndGet (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.3510029Z === RUN   TestRegistry_Concurrency
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.3511244Z --- PASS: TestRegistry_Concurrency (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.3512421Z === RUN   TestTokenUsage_NullablePresence
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.3513615Z --- PASS: TestTokenUsage_NullablePresence (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.3514729Z === RUN   TestDataProvenance_Constants
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.3516085Z --- PASS: TestDataProvenance_Constants (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.3517102Z PASS
+Test & Build	Test with Race Detector	2026-10-01T02:33:35.3517838Z ok  	asura/internal/backend	1.012s
+Test & Build	Test with Race Detector	2026-10-01T02:33:36.2799462Z === RUN   TestAccessOnlySnapshot
+Test & Build	Test with Race Detector	2026-10-01T02:33:36.2800805Z --- PASS: TestAccessOnlySnapshot (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:36.2802120Z === RUN   TestLiveAdapter
+Test & Build	Test with Race Detector	2026-10-01T02:33:36.2803444Z     live_test.go:15: live OAuth model call opt-in
+Test & Build	Test with Race Detector	2026-10-01T02:33:36.2804689Z --- SKIP: TestLiveAdapter (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:36.2805635Z === RUN   TestNativeFixtures
+Test & Build	Test with Race Detector	2026-10-01T02:33:36.2806836Z === RUN   TestNativeFixtures/access-keyring
+Test & Build	Test with Race Detector	2026-10-01T02:33:36.2808066Z === RUN   TestNativeFixtures/access-expired
+Test & Build	Test with Race Detector	2026-10-01T02:33:36.2809376Z === RUN   TestNativeFixtures/access-partial
+Test & Build	Test with Race Detector	2026-10-01T02:33:36.2810677Z === RUN   TestNativeFixtures/access-failure
+Test & Build	Test with Race Detector	2026-10-01T02:33:36.2811933Z === RUN   TestNativeFixtures/side-effect-timeout
+Test & Build	Test with Race Detector	2026-10-01T02:33:36.2813054Z --- PASS: TestNativeFixtures (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:36.2814239Z     --- PASS: TestNativeFixtures/access-keyring (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:36.2815490Z     --- PASS: TestNativeFixtures/access-expired (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:36.2817621Z     --- PASS: TestNativeFixtures/access-partial (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:36.2818890Z     --- PASS: TestNativeFixtures/access-failure (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:36.2820105Z     --- PASS: TestNativeFixtures/side-effect-timeout (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:36.2821409Z === RUN   TestTerminalErrorOverridesSuccess
+Test & Build	Test with Race Detector	2026-10-01T02:33:36.2822576Z --- PASS: TestTerminalErrorOverridesSuccess (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:36.2823537Z PASS
+Test & Build	Test with Race Detector	2026-10-01T02:33:36.2824221Z ok  	asura/internal/backend/antigravity	1.019s
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9569711Z === RUN   TestReviewProtectedWorkspaceAndStartFailure
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9587449Z --- PASS: TestReviewProtectedWorkspaceAndStartFailure (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9600693Z === RUN   TestDependencySnapshot
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9626274Z --- PASS: TestDependencySnapshot (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9632129Z === RUN   TestUnsupportedRoles
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9652218Z --- PASS: TestUnsupportedRoles (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9664046Z === RUN   TestProcessCancellation
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9666762Z --- PASS: TestProcessCancellation (2.54s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9687472Z === RUN   TestAuthenticationBoundary
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9706387Z --- PASS: TestAuthenticationBoundary (0.03s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9726068Z === RUN   TestRuntimePinnedAcrossSourceUpdate
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9727194Z --- PASS: TestRuntimePinnedAcrossSourceUpdate (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9745711Z PASS
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9766449Z ok  	asura/internal/backend/clisandbox	3.606s
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9776033Z === RUN   TestCodexProbe_BinaryVersion
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9807304Z     adapter_probe_test.go:35: codex binary not found in PATH; skipping live contract probe
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9808720Z --- SKIP: TestCodexProbe_BinaryVersion (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9811535Z === RUN   TestCodexProbe_NonInteractive_JSONL
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9813242Z     adapter_probe_test.go:50: codex binary not found in PATH; skipping live contract probe
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9814528Z --- SKIP: TestCodexProbe_NonInteractive_JSONL (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9815784Z === RUN   TestCodexProbe_ReadOnlySandbox
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9817160Z     adapter_probe_test.go:116: codex binary not found in PATH; skipping live contract probe
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9818374Z --- SKIP: TestCodexProbe_ReadOnlySandbox (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9819352Z === RUN   TestCodexProbe_WorkspaceWriteSandbox
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9820718Z     adapter_probe_test.go:163: codex binary not found in PATH; skipping live contract probe
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9821978Z --- SKIP: TestCodexProbe_WorkspaceWriteSandbox (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9823014Z === RUN   TestCodexProbe_ContextCancellation
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9824597Z     adapter_probe_test.go:201: codex binary not found in PATH; skipping live contract probe
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9826335Z --- SKIP: TestCodexProbe_ContextCancellation (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9827270Z === RUN   TestAdapter_BackendInterface
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9828667Z     adapter_test.go:38: codex version lookup: codex binary not found: codex not found in PATH
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9829907Z --- PASS: TestAdapter_BackendInterface (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9830817Z === RUN   TestNormalizeCodexVersion
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9831658Z --- PASS: TestNormalizeCodexVersion (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9832579Z === RUN   TestAdapter_VersionMismatch_FailClosed
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9833695Z === RUN   TestAdapter_VersionMismatch_FailClosed/exact_valid_full_prefix
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9835001Z === RUN   TestAdapter_VersionMismatch_FailClosed/exact_valid_bare_version
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9836639Z === RUN   TestAdapter_VersionMismatch_FailClosed/older_version
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9837799Z === RUN   TestAdapter_VersionMismatch_FailClosed/substring_trailing_digit
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9838931Z === RUN   TestAdapter_VersionMismatch_FailClosed/substring_beta_suffix
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9840024Z === RUN   TestAdapter_VersionMismatch_FailClosed/substring_custom_suffix
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9841300Z === RUN   TestAdapter_VersionMismatch_FailClosed/substring_prefix_number
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9843208Z --- PASS: TestAdapter_VersionMismatch_FailClosed (0.02s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9844582Z     --- PASS: TestAdapter_VersionMismatch_FailClosed/exact_valid_full_prefix (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9846361Z     --- PASS: TestAdapter_VersionMismatch_FailClosed/exact_valid_bare_version (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9848128Z     --- PASS: TestAdapter_VersionMismatch_FailClosed/older_version (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9849580Z     --- PASS: TestAdapter_VersionMismatch_FailClosed/substring_trailing_digit (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9851130Z     --- PASS: TestAdapter_VersionMismatch_FailClosed/substring_beta_suffix (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9852658Z     --- PASS: TestAdapter_VersionMismatch_FailClosed/substring_custom_suffix (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9854145Z     --- PASS: TestAdapter_VersionMismatch_FailClosed/substring_prefix_number (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9855501Z === RUN   TestAdapter_UnknownRole_FailClosed
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9856504Z --- PASS: TestAdapter_UnknownRole_FailClosed (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9857416Z === RUN   TestAdapter_Run_Cancellation
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9858307Z --- PASS: TestAdapter_Run_Cancellation (0.05s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9859151Z === RUN   TestAdapter_Run_Live
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9860386Z     adapter_test.go:231: codex binary not found in PATH; skipping live contract probe
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9861500Z --- SKIP: TestAdapter_Run_Live (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9862496Z === RUN   TestAdapter_Run_UsagePreservedOnSuccessAndFailure
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9863800Z --- PASS: TestAdapter_Run_UsagePreservedOnSuccessAndFailure (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9865009Z === RUN   TestExtractResultAndEvents_Success
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9866249Z --- PASS: TestExtractResultAndEvents_Success (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9867243Z === RUN   TestExtractResultAndEvents_RateLimit
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9868210Z --- PASS: TestExtractResultAndEvents_RateLimit (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9869178Z === RUN   TestExtractResultAndEvents_AuthFailure
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9870195Z --- PASS: TestExtractResultAndEvents_AuthFailure (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9871229Z === RUN   TestExtractResultAndEvents_EmptyResult
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9872341Z --- PASS: TestExtractResultAndEvents_EmptyResult (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9873457Z === RUN   TestExtractResultAndEvents_FailurePreservesUsage
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9874602Z --- PASS: TestExtractResultAndEvents_FailurePreservesUsage (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9875802Z === RUN   TestCodexProbe_HermeticFixtures
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9876689Z --- PASS: TestCodexProbe_HermeticFixtures (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9877507Z === RUN   TestCodexProbe_Live
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9878665Z     probe_context_test.go:128: codex binary not found; skipping live probe
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9879761Z --- SKIP: TestCodexProbe_Live (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9880439Z PASS
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9881114Z ok  	asura/internal/backend/codex	1.097s
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9881947Z === RUN   TestAccessOnlySnapshot
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9882791Z --- PASS: TestAccessOnlySnapshot (0.04s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9883627Z === RUN   TestLiveAdapter
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9884542Z     live_test.go:14: live OAuth model call opt-in
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9885618Z --- SKIP: TestLiveAdapter (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9886413Z === RUN   TestNativeFixtures
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9887265Z === RUN   TestNativeFixtures/access-empty-refresh
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9888236Z === RUN   TestNativeFixtures/nested-rate-limit
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9889161Z === RUN   TestNativeFixtures/nested-partial
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9890087Z === RUN   TestNativeFixtures/nested-after-tool
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9891082Z --- PASS: TestNativeFixtures (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9892128Z     --- PASS: TestNativeFixtures/access-empty-refresh (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9893325Z     --- PASS: TestNativeFixtures/nested-rate-limit (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9894404Z     --- PASS: TestNativeFixtures/nested-partial (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9895712Z     --- PASS: TestNativeFixtures/nested-after-tool (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9896528Z PASS
+Test & Build	Test with Race Detector	2026-10-01T02:33:38.9897199Z ok  	asura/internal/backend/omp	1.051s
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.5317144Z === RUN   TestAdapter_BackendInterface
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.5353944Z     adapter_backend_test.go:41: opencode adapter version: 1.18.23
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.5392257Z --- PASS: TestAdapter_BackendInterface (2.79s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.5412822Z === RUN   TestINT001Unit
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.5481449Z     adapter_test.go:34: skipping live adapter.Run test: no model credentials configured in this environment
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.5502476Z --- SKIP: TestINT001Unit (0.78s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.5546403Z === RUN   TestINT007Unit
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.5566186Z --- PASS: TestINT007Unit (0.90s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.5594835Z === RUN   TestAdapter_Run_BackendErrorWithExitZero
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.5617854Z --- PASS: TestAdapter_Run_BackendErrorWithExitZero (0.02s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.5654975Z === RUN   TestAdapter_IsolatedReadOnlyConfig
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.5696915Z --- PASS: TestAdapter_IsolatedReadOnlyConfig (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.5699803Z === RUN   TestAdapter_Run_IsolatedCommandAndEnv
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.5764486Z --- PASS: TestAdapter_Run_IsolatedCommandAndEnv (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.5836775Z === RUN   TestAdapter_BuildExecutionEnv_DropsAllHostileOpenCodeEnv
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.5879995Z --- PASS: TestAdapter_BuildExecutionEnv_DropsAllHostileOpenCodeEnv (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.5911254Z === RUN   TestAdapter_Striker_PreservesOpenCodeConfigEnv
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.5936251Z --- PASS: TestAdapter_Striker_PreservesOpenCodeConfigEnv (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.5986411Z === RUN   TestAdapter_SanitizeAuthJSON_DropsWellknown
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6007696Z --- PASS: TestAdapter_SanitizeAuthJSON_DropsWellknown (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6046343Z === RUN   TestAdapter_LoadGlobalOpenCodeConfig_PrecedenceMerge
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6066437Z --- PASS: TestAdapter_LoadGlobalOpenCodeConfig_PrecedenceMerge (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6086013Z === RUN   TestAdapter_StripJSONC
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6096147Z --- PASS: TestAdapter_StripJSONC (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6106259Z === RUN   TestAdapter_SanitizeProviderConfig_DisallowNPM
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6126261Z --- PASS: TestAdapter_SanitizeProviderConfig_DisallowNPM (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6146340Z === RUN   TestAdapter_CreateIsolatedReadOnlyConfigDir_SupportsJSONCAndSanitizesNPM
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6156474Z --- PASS: TestAdapter_CreateIsolatedReadOnlyConfigDir_SupportsJSONCAndSanitizesNPM (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6166459Z === RUN   TestAdapter_LoadGlobalOpenCodeConfig_StrictXDGPrecedence
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6186350Z --- PASS: TestAdapter_LoadGlobalOpenCodeConfig_StrictXDGPrecedence (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6206152Z === RUN   TestAdapter_DisallowUnsafeDynamicRef_ModelAndProvider
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6226209Z --- PASS: TestAdapter_DisallowUnsafeDynamicRef_ModelAndProvider (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6227491Z === RUN   TestAdapter_BuildExecutionEnv_IsolatesAllXDGAndDropsHostileCache
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6246386Z --- PASS: TestAdapter_BuildExecutionEnv_IsolatesAllXDGAndDropsHostileCache (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6266421Z === RUN   TestAdapter_CreateIsolatedReadOnlyConfigDir_SanitizesAndPersistsAuthJSON
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6286419Z --- PASS: TestAdapter_CreateIsolatedReadOnlyConfigDir_SanitizesAndPersistsAuthJSON (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6306005Z === RUN   TestAdapter_Run_UsagePreservedOnSuccessAndFailure
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6307247Z --- PASS: TestAdapter_Run_UsagePreservedOnSuccessAndFailure (0.02s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6325944Z === RUN   TestAdapter_Run_UsageNullablePresenceCases
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6340234Z === RUN   TestAdapter_Run_UsageNullablePresenceCases/Case_1:_原生事件完全沒有_cache_欄位
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6341888Z === RUN   TestAdapter_Run_UsageNullablePresenceCases/Case_2:_原生事件明確回報_input_為_0
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6366399Z === RUN   TestAdapter_Run_UsageNullablePresenceCases/Case_3:_多個_step_只有部分_step_回報_cache_欄位
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6368108Z --- PASS: TestAdapter_Run_UsageNullablePresenceCases (0.02s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6369773Z     --- PASS: TestAdapter_Run_UsageNullablePresenceCases/Case_1:_原生事件完全沒有_cache_欄位 (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6371541Z     --- PASS: TestAdapter_Run_UsageNullablePresenceCases/Case_2:_原生事件明確回報_input_為_0 (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6373947Z     --- PASS: TestAdapter_Run_UsageNullablePresenceCases/Case_3:_多個_step_只有部分_step_回報_cache_欄位 (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6375565Z === RUN   TestAdapter_Run_LargeJSONLEvent_PreservesUsage
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6376982Z --- PASS: TestAdapter_Run_LargeJSONLEvent_PreservesUsage (0.04s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6378119Z === RUN   TestAdapter_Run_OversizedJSONLEvent_ReturnsScannerError
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6379337Z --- PASS: TestAdapter_Run_OversizedJSONLEvent_ReturnsScannerError (0.65s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6380508Z === RUN   TestAdapter_ExtractResultFromEvents_LargeOutput
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6381680Z --- PASS: TestAdapter_ExtractResultFromEvents_LargeOutput (1.21s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6382771Z === RUN   TestOpenCodeProbe_HermeticFixtures
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6383765Z --- PASS: TestOpenCodeProbe_HermeticFixtures (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6384639Z === RUN   TestOpenCodeProbe_Live
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6386251Z     probe_context_test.go:121: installed opencode version: 1.18.23
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6387986Z     probe_context_test.go:134: live opencode run failed (credential/network missing): signal: killed, out: 
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6389229Z --- SKIP: TestOpenCodeProbe_Live (16.54s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6389998Z === RUN   TestProcessCancel
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6390805Z --- PASS: TestProcessCancel (0.21s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6391582Z === RUN   TestProcessGroup
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6392387Z --- PASS: TestProcessGroup (0.05s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6393223Z === RUN   TestIsTaskProcessGroup
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6394064Z --- PASS: TestIsTaskProcessGroup (0.05s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6395777Z === RUN   TestVerifyTaskProcess_StartTime
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6399412Z --- PASS: TestVerifyTaskProcess_StartTime (0.05s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6400452Z === RUN   TestVerifyTaskProcessGroup_OrphanGroup
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6401465Z --- PASS: TestVerifyTaskProcessGroup_OrphanGroup (0.19s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6402454Z === RUN   TestRoleRoutingBackend_RoutesByRole
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6403448Z --- PASS: TestRoleRoutingBackend_RoutesByRole (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6404295Z === RUN   TestParseEventLine_Text
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6405104Z --- PASS: TestParseEventLine_Text (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6406363Z === RUN   TestParseEventLine_ToolUse
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6407254Z --- PASS: TestParseEventLine_ToolUse (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6408117Z === RUN   TestParseEventLine_StepFinish
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6409034Z --- PASS: TestParseEventLine_StepFinish (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6409907Z === RUN   TestParseEventLine_RateLimit429
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6410825Z --- PASS: TestParseEventLine_RateLimit429 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6411689Z === RUN   TestParseEventLine_Invalid
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6412535Z --- PASS: TestParseEventLine_Invalid (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6413452Z === RUN   TestParseEventLine_StepFinishWithCache
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6414420Z --- PASS: TestParseEventLine_StepFinishWithCache (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6415193Z PASS
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6416766Z ok  	asura/internal/backend/opencode	24.614s
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6418516Z === RUN   TestAdmissionEngine_EvaluateStage
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6419754Z === RUN   TestAdmissionEngine_EvaluateStage/catalog_model_within_limit_admitted
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6431279Z === RUN   TestAdmissionEngine_EvaluateStage/catalog_model_exceeds_limit_with_reject_policy
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6437096Z === RUN   TestAdmissionEngine_EvaluateStage/catalog_model_exceeds_limit_with_observe_policy_warning
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6438741Z === RUN   TestAdmissionEngine_EvaluateStage/explicit_config_limit_priority_over_catalog
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6440273Z === RUN   TestAdmissionEngine_EvaluateStage/explicit_config_limit_applies_to_unknown_model
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6441802Z === RUN   TestAdmissionEngine_EvaluateStage/unknown_model_without_explicit_limit_is_bypassed
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6443283Z === RUN   TestAdmissionEngine_EvaluateStage/empty_model_without_explicit_limit_is_bypassed
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6444433Z --- PASS: TestAdmissionEngine_EvaluateStage (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6446530Z     --- PASS: TestAdmissionEngine_EvaluateStage/catalog_model_within_limit_admitted (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6448348Z     --- PASS: TestAdmissionEngine_EvaluateStage/catalog_model_exceeds_limit_with_reject_policy (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6450348Z     --- PASS: TestAdmissionEngine_EvaluateStage/catalog_model_exceeds_limit_with_observe_policy_warning (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6452629Z     --- PASS: TestAdmissionEngine_EvaluateStage/explicit_config_limit_priority_over_catalog (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6454408Z     --- PASS: TestAdmissionEngine_EvaluateStage/explicit_config_limit_applies_to_unknown_model (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6456525Z     --- PASS: TestAdmissionEngine_EvaluateStage/unknown_model_without_explicit_limit_is_bypassed (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6458331Z     --- PASS: TestAdmissionEngine_EvaluateStage/empty_model_without_explicit_limit_is_bypassed (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6459602Z === RUN   TestAdmissionEngine_ExactLimitAdmitted
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6460637Z --- PASS: TestAdmissionEngine_ExactLimitAdmitted (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6461647Z === RUN   TestStaticCatalog_Lookup
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6462455Z --- PASS: TestStaticCatalog_Lookup (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6463362Z === RUN   TestCatalog_ResolveWindow_ExplicitPriority
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6464394Z --- PASS: TestCatalog_ResolveWindow_ExplicitPriority (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6465574Z === RUN   TestLoadConfig_Defaults
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6467505Z --- PASS: TestLoadConfig_Defaults (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6468390Z === RUN   TestLoadConfig_ValidValues
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6469281Z --- PASS: TestLoadConfig_ValidValues (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6470202Z === RUN   TestLoadConfig_InvalidLimit
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6471120Z --- PASS: TestLoadConfig_InvalidLimit (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6472056Z === RUN   TestLoadConfig_InvalidPolicy
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6473005Z --- PASS: TestLoadConfig_InvalidPolicy (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6473981Z === RUN   TestLoadConfig_InvalidReserveRatio
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6475002Z --- PASS: TestLoadConfig_InvalidReserveRatio (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6476289Z === RUN   TestHeuristicEstimator_Estimate
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6477100Z === RUN   TestHeuristicEstimator_Estimate/empty_prompt
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6478232Z === RUN   TestHeuristicEstimator_Estimate/pure_english_ascii
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6479525Z === RUN   TestHeuristicEstimator_Estimate/traditional_chinese_cjk
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6480760Z === RUN   TestHeuristicEstimator_Estimate/mixed_english_and_chinese
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6481861Z --- PASS: TestHeuristicEstimator_Estimate (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6483085Z     --- PASS: TestHeuristicEstimator_Estimate/empty_prompt (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6484471Z     --- PASS: TestHeuristicEstimator_Estimate/pure_english_ascii (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6486263Z     --- PASS: TestHeuristicEstimator_Estimate/traditional_chinese_cjk (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6487834Z     --- PASS: TestHeuristicEstimator_Estimate/mixed_english_and_chinese (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6489142Z === RUN   TestHeuristicEstimator_CustomReserveRatio
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6490292Z --- PASS: TestHeuristicEstimator_CustomReserveRatio (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6491430Z === RUN   TestHeuristicEstimator_NaNAndInfDefense
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6510910Z --- PASS: TestHeuristicEstimator_NaNAndInfDefense (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6512011Z === RUN   TestTypes_JSONSerialization
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6512974Z --- PASS: TestTypes_JSONSerialization (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6513932Z === RUN   TestTypes_BypassedOmitEmpty
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6514902Z --- PASS: TestTypes_BypassedOmitEmpty (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6516004Z PASS
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6516750Z ok  	asura/internal/contextwin	1.026s
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6517660Z === RUN   TestCronParser_ValidExpressions
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6519136Z === RUN   TestCronParser_ValidExpressions/每分鐘表達式_*_*_*_*_*
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6520404Z === RUN   TestCronParser_ValidExpressions/間隔表達式_*/5_*_*_*_*
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6521734Z === RUN   TestCronParser_ValidExpressions/指定時間與平日_0_2_*_*_1-5
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6523386Z === RUN   TestCronParser_ValidExpressions/列表表達式_30_8_1,15_*_*
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6524660Z === RUN   TestCronParser_ValidExpressions/跨年計算_0_0_1_1_*
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6526175Z --- PASS: TestCronParser_ValidExpressions (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6527853Z     --- PASS: TestCronParser_ValidExpressions/每分鐘表達式_*_*_*_*_* (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6529424Z     --- PASS: TestCronParser_ValidExpressions/間隔表達式_*/5_*_*_*_* (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6531558Z     --- PASS: TestCronParser_ValidExpressions/指定時間與平日_0_2_*_*_1-5 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6533181Z     --- PASS: TestCronParser_ValidExpressions/列表表達式_30_8_1,15_*_* (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6534676Z     --- PASS: TestCronParser_ValidExpressions/跨年計算_0_0_1_1_* (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6536034Z === RUN   TestCronParser_InvalidExpressions
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6537158Z === RUN   TestCronParser_InvalidExpressions/4_欄位不足
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6538314Z === RUN   TestCronParser_InvalidExpressions/6_欄位過多
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6539473Z === RUN   TestCronParser_InvalidExpressions/空字串
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6540630Z === RUN   TestCronParser_InvalidExpressions/分鐘超過_59
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6541797Z === RUN   TestCronParser_InvalidExpressions/分鐘小於_0
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6542927Z === RUN   TestCronParser_InvalidExpressions/小時超過_23
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6544121Z === RUN   TestCronParser_InvalidExpressions/日期超過_31
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6545695Z === RUN   TestCronParser_InvalidExpressions/月份超過_12
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6546939Z === RUN   TestCronParser_InvalidExpressions/月份為_0
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6557015Z === RUN   TestCronParser_InvalidExpressions/星期超過_7
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6558262Z === RUN   TestCronParser_InvalidExpressions/非數字無效文字
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6559393Z === RUN   TestCronParser_InvalidExpressions/無效步進語法
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6560611Z === RUN   TestCronParser_InvalidExpressions/反向範圍
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6561708Z --- PASS: TestCronParser_InvalidExpressions (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6565545Z     --- PASS: TestCronParser_InvalidExpressions/4_欄位不足 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6567131Z     --- PASS: TestCronParser_InvalidExpressions/6_欄位過多 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6568540Z     --- PASS: TestCronParser_InvalidExpressions/空字串 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6569924Z     --- PASS: TestCronParser_InvalidExpressions/分鐘超過_59 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6571323Z     --- PASS: TestCronParser_InvalidExpressions/分鐘小於_0 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6572681Z     --- PASS: TestCronParser_InvalidExpressions/小時超過_23 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6574079Z     --- PASS: TestCronParser_InvalidExpressions/日期超過_31 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6575878Z     --- PASS: TestCronParser_InvalidExpressions/月份超過_12 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6577266Z     --- PASS: TestCronParser_InvalidExpressions/月份為_0 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6578617Z     --- PASS: TestCronParser_InvalidExpressions/星期超過_7 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6580005Z     --- PASS: TestCronParser_InvalidExpressions/非數字無效文字 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6581349Z     --- PASS: TestCronParser_InvalidExpressions/無效步進語法 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6582721Z     --- PASS: TestCronParser_InvalidExpressions/反向範圍 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6583763Z === RUN   TestCronParser_UnreachableDate
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6584759Z --- PASS: TestCronParser_UnreachableDate (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6586088Z === RUN   TestCronParser_DaylightSavingTime
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6587504Z === RUN   TestCronParser_DaylightSavingTime/2027-03-14_DST_transition_0_9_*_*_*
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6589154Z === RUN   TestCronParser_DaylightSavingTime/2027-03-14_DST_transition_30_2_*_*_*_(missing_hour)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6592495Z === RUN   TestCronParser_DaylightSavingTime/America/Santiago_DST_transition
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6593749Z --- PASS: TestCronParser_DaylightSavingTime (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6595210Z     --- PASS: TestCronParser_DaylightSavingTime/2027-03-14_DST_transition_0_9_*_*_* (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6597362Z     --- PASS: TestCronParser_DaylightSavingTime/2027-03-14_DST_transition_30_2_*_*_*_(missing_hour) (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6599131Z     --- PASS: TestCronParser_DaylightSavingTime/America/Santiago_DST_transition (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6600833Z === RUN   TestCronParser_LeapYearLongWindow
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6601851Z --- PASS: TestCronParser_LeapYearLongWindow (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6602894Z === RUN   TestScheduler_AlignSchedules_NoCatchup
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6604259Z --- PASS: TestScheduler_AlignSchedules_NoCatchup (0.19s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6605528Z === RUN   TestScheduler_Trigger_OverlapSkip
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6606595Z --- PASS: TestScheduler_Trigger_OverlapSkip (0.19s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6608163Z === RUN   TestScheduler_Trigger_OverlapSkip_Cancelling
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6609338Z --- PASS: TestScheduler_Trigger_OverlapSkip_Cancelling (0.14s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6611248Z === RUN   TestScheduler_Trigger_UnauthorizedAutoPause
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6612513Z --- PASS: TestScheduler_Trigger_UnauthorizedAutoPause (0.13s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6645788Z === RUN   TestScheduler_Trigger_DispatchFailureAdvancesNextRunAt
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6647237Z --- PASS: TestScheduler_Trigger_DispatchFailureAdvancesNextRunAt (0.13s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6648266Z PASS
+Test & Build	Test with Race Detector	2026-10-01T02:34:03.6648989Z ok  	asura/internal/cron	1.828s
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6457356Z === RUN   TestExpandedBackendsRegisteredFailClosed
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6466325Z --- PASS: TestExpandedBackendsRegisteredFailClosed (0.26s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6486401Z === RUN   TestExpandedIdentitySurvivesDaemonRestart
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6496376Z === RUN   TestExpandedIdentitySurvivesDaemonRestart/omp
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6526353Z === RUN   TestExpandedIdentitySurvivesDaemonRestart/antigravity
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6546215Z --- PASS: TestExpandedIdentitySurvivesDaemonRestart (0.45s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6560457Z     --- PASS: TestExpandedIdentitySurvivesDaemonRestart/omp (0.22s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6563953Z     --- PASS: TestExpandedIdentitySurvivesDaemonRestart/antigravity (0.23s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6606029Z === RUN   TestDaemonConcurrency
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6617899Z === RUN   TestDaemonConcurrency/競爭啟動無雙重擁有者
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6626396Z === RUN   TestDaemonConcurrency/不超過全域上限且各執行一次
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6646240Z === RUN   TestDaemonConcurrency/未接受的請求得到明確結果
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6666594Z === RUN   TestDaemonConcurrency/SCN-006:_守護程序重啟保留已完成結果並揭露中斷任務
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6686623Z === RUN   TestDaemonConcurrency/R-08:_執行失敗時_Client.Submit_同時回傳_Task_與_Error
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6702011Z --- PASS: TestDaemonConcurrency (19.49s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6718858Z     --- PASS: TestDaemonConcurrency/競爭啟動無雙重擁有者 (16.56s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6746958Z     --- PASS: TestDaemonConcurrency/不超過全域上限且各執行一次 (0.39s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6766946Z     --- PASS: TestDaemonConcurrency/未接受的請求得到明確結果 (0.05s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6786584Z     --- PASS: TestDaemonConcurrency/SCN-006:_守護程序重啟保留已完成結果並揭露中斷任務 (2.22s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6806744Z     --- PASS: TestDaemonConcurrency/R-08:_執行失敗時_Client.Submit_同時回傳_Task_與_Error (0.12s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6807950Z === RUN   TestReviewOwnershipDuringDrain
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6846007Z --- PASS: TestReviewOwnershipDuringDrain (0.20s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6855942Z === RUN   TestINT002Unit
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6865921Z --- PASS: TestINT002Unit (0.13s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6866489Z === RUN   TestINT003Unit
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6867036Z --- PASS: TestINT003Unit (0.21s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6867537Z === RUN   TestINT004Unit
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6868077Z --- PASS: TestINT004Unit (0.24s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6868650Z === RUN   TestINT004RedeliveryUnit
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6869305Z --- PASS: TestINT004RedeliveryUnit (0.31s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6870045Z === RUN   TestDaemon_ConcurrentRedeliveryDedupAtomic
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6870933Z --- PASS: TestDaemon_ConcurrentRedeliveryDedupAtomic (0.33s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6871749Z === RUN   TestDaemon_INT007_PermissionPolicy
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6872474Z --- PASS: TestDaemon_INT007_PermissionPolicy (2.73s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6873226Z === RUN   TestDaemon_RequestID_FingerprintSafety
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6874010Z --- PASS: TestDaemon_RequestID_FingerprintSafety (0.15s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6874643Z === RUN   TestDaemon_CronIPC
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6891988Z --- PASS: TestDaemon_CronIPC (1.88s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6892641Z === RUN   TestDaemon_WorkspaceMutex_NormalizedPaths
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6893408Z --- PASS: TestDaemon_WorkspaceMutex_NormalizedPaths (0.16s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6894224Z === RUN   TestDaemon_QueuedTaskClassPreservedOnWake
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6895684Z --- PASS: TestDaemon_QueuedTaskClassPreservedOnWake (0.17s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6896524Z === RUN   TestDaemon_WakeQueuedTask_PoolSlotFreed
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6897318Z --- PASS: TestDaemon_WakeQueuedTask_PoolSlotFreed (0.25s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6898140Z === RUN   TestDaemon_WakeQueuedTask_WhenTaskStatusIsPending
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6899048Z --- PASS: TestDaemon_WakeQueuedTask_WhenTaskStatusIsPending (0.14s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6899973Z === RUN   TestDaemon_WakeQueuedTask_BypassesPoolQueueLimit
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6900907Z --- PASS: TestDaemon_WakeQueuedTask_BypassesPoolQueueLimit (0.27s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6902077Z === RUN   TestDaemon_ReleaseWorkspace_SymlinkTargetChanged_DoesNotLeak
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6903220Z --- PASS: TestDaemon_ReleaseWorkspace_SymlinkTargetChanged_DoesNotLeak (0.17s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6904197Z === RUN   TestDaemon_DispatchFailure_HandsOverWorkspaceLock
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6905134Z --- PASS: TestDaemon_DispatchFailure_HandsOverWorkspaceLock (0.17s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6927583Z === RUN   TestDaemon_CancellingTaskKeepsWorkspaceLockedUntilReapConfirmed
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6928862Z --- PASS: TestDaemon_CancellingTaskKeepsWorkspaceLockedUntilReapConfirmed (0.34s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6929812Z === RUN   TestThreeFaceRedelivery
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6930448Z --- PASS: TestThreeFaceRedelivery (0.18s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6931248Z === RUN   TestDaemon_IPC_InvalidExecutionMode_Rejected
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6932115Z --- PASS: TestDaemon_IPC_InvalidExecutionMode_Rejected (0.15s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6933035Z === RUN   TestDaemon_BackendFingerprint_ConflictAndRedelivery
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6934025Z === RUN   TestDaemon_BackendFingerprint_ConflictAndRedelivery/opencode
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6935032Z === RUN   TestDaemon_BackendFingerprint_ConflictAndRedelivery/omp
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6936393Z === RUN   TestDaemon_BackendFingerprint_ConflictAndRedelivery/antigravity
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6937490Z --- PASS: TestDaemon_BackendFingerprint_ConflictAndRedelivery (0.64s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6938746Z     --- PASS: TestDaemon_BackendFingerprint_ConflictAndRedelivery/opencode (0.19s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6939991Z     --- PASS: TestDaemon_BackendFingerprint_ConflictAndRedelivery/omp (0.23s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6941307Z     --- PASS: TestDaemon_BackendFingerprint_ConflictAndRedelivery/antigravity (0.23s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6942280Z === RUN   TestDaemon_ThreeFace_CapabilityIsolation
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6943083Z --- PASS: TestDaemon_ThreeFace_CapabilityIsolation (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6944090Z === RUN   TestDaemon_ThreeFace_HostileWorkspaceConfig_CannotEscapeReadOnly
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6966078Z     daemon_test.go:2347: skipping live hostile opencode test: no model credentials configured in this environment
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6967586Z --- SKIP: TestDaemon_ThreeFace_HostileWorkspaceConfig_CannotEscapeReadOnly (1.32s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6968584Z === RUN   TestDaemon_Start_FailClosedOnInitError
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6969413Z --- PASS: TestDaemon_Start_FailClosedOnInitError (2.54s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6970190Z === RUN   TestDaemon_QueueWake_PreservesBackend
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6970932Z === RUN   TestDaemon_QueueWake_PreservesBackend/codex
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6971667Z === RUN   TestDaemon_QueueWake_PreservesBackend/omp
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6972477Z === RUN   TestDaemon_QueueWake_PreservesBackend/antigravity
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6973309Z --- PASS: TestDaemon_QueueWake_PreservesBackend (0.64s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6974223Z     --- PASS: TestDaemon_QueueWake_PreservesBackend/codex (0.21s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6975156Z     --- PASS: TestDaemon_QueueWake_PreservesBackend/omp (0.22s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6976435Z     --- PASS: TestDaemon_QueueWake_PreservesBackend/antigravity (0.21s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6977842Z === RUN   TestBoundedMemoryQueryCanceledOnIPCDisconnect
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6978749Z === RUN   TestBoundedMemoryQueryCanceledOnIPCDisconnect/memory_page
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6979863Z === RUN   TestBoundedMemoryQueryCanceledOnIPCDisconnect/memory_detail_bounded
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6981163Z --- PASS: TestBoundedMemoryQueryCanceledOnIPCDisconnect (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6982329Z     --- PASS: TestBoundedMemoryQueryCanceledOnIPCDisconnect/memory_page (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6983687Z     --- PASS: TestBoundedMemoryQueryCanceledOnIPCDisconnect/memory_detail_bounded (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.6984708Z === RUN   TestDaemonIPCReplyAfterClientHalfClose
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7006042Z --- PASS: TestDaemonIPCReplyAfterClientHalfClose (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7007046Z === RUN   TestDaemonBoundedMemoryIPCReplyAfterClientHalfClose
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7008130Z === RUN   TestDaemonBoundedMemoryIPCReplyAfterClientHalfClose/memory_page
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7009349Z === RUN   TestDaemonBoundedMemoryIPCReplyAfterClientHalfClose/memory_detail_bounded
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7010688Z --- PASS: TestDaemonBoundedMemoryIPCReplyAfterClientHalfClose (0.27s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7011993Z     --- PASS: TestDaemonBoundedMemoryIPCReplyAfterClientHalfClose/memory_page (0.14s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7013486Z     --- PASS: TestDaemonBoundedMemoryIPCReplyAfterClientHalfClose/memory_detail_bounded (0.13s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7014594Z === RUN   TestDaemonIPCReplyBeforeMalformedPayload
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7015596Z --- PASS: TestDaemonIPCReplyBeforeMalformedPayload (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7016269Z === RUN   TestPipelineMetrics
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7016825Z --- PASS: TestPipelineMetrics (0.26s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7017332Z === RUN   TestWorkerPool
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7018178Z === RUN   TestWorkerPool/並行上限控制與各執行一次
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7018857Z === RUN   TestWorkerPool/超出容量上限返回明確錯誤
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7019577Z === RUN   TestWorkerPool/R-02:_快速交替任務不發生佇列停滯
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7020502Z === RUN   TestWorkerPool/排水關閉_(Drain):_已進入佇列之任務在_Close_時必須完整執行完畢
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7021223Z --- PASS: TestWorkerPool (0.31s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7021978Z     --- PASS: TestWorkerPool/並行上限控制與各執行一次 (0.18s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7022770Z     --- PASS: TestWorkerPool/超出容量上限返回明確錯誤 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7023626Z     --- PASS: TestWorkerPool/R-02:_快速交替任務不發生佇列停滯 (0.06s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7024722Z     --- PASS: TestWorkerPool/排水關閉_(Drain):_已進入佇列之任務在_Close_時必須完整執行完畢 (0.07s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7046123Z === RUN   TestWorkerPool_CapacityClassification
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7046953Z --- PASS: TestWorkerPool_CapacityClassification (0.10s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7047573Z === RUN   TestRecallBudget
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7048087Z --- PASS: TestRecallBudget (0.13s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7048668Z === RUN   TestRecallJSONCompatibility
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7049365Z --- PASS: TestRecallJSONCompatibility (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7050003Z === RUN   TestUtilityRecallIdentity
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7050619Z --- PASS: TestUtilityRecallIdentity (0.12s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7051585Z === RUN   TestUtilityPolicyAndFailure
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7052235Z --- PASS: TestUtilityPolicyAndFailure (0.12s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7052907Z === RUN   TestUtilityClientRejectsOversize
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7053637Z --- PASS: TestUtilityClientRejectsOversize (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7054724Z === RUN   TestWorkspaceQueue_ExclusiveAccess
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7055972Z === RUN   TestWorkspaceQueue_ExclusiveAccess/同專案單一任務直接取得執行權
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7056987Z === RUN   TestWorkspaceQueue_ExclusiveAccess/同專案第二個任務排入佇列並依序喚醒
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7057951Z === RUN   TestWorkspaceQueue_ExclusiveAccess/不同專案各自獨立互不阻塞
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7059037Z === RUN   TestWorkspaceQueue_ExclusiveAccess/並發競爭安全性_(Race_Condition_Check)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7059942Z --- PASS: TestWorkspaceQueue_ExclusiveAccess (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7061003Z     --- PASS: TestWorkspaceQueue_ExclusiveAccess/同專案單一任務直接取得執行權 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7062200Z     --- PASS: TestWorkspaceQueue_ExclusiveAccess/同專案第二個任務排入佇列並依序喚醒 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7063427Z     --- PASS: TestWorkspaceQueue_ExclusiveAccess/不同專案各自獨立互不阻塞 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7064730Z     --- PASS: TestWorkspaceQueue_ExclusiveAccess/並發競爭安全性_(Race_Condition_Check) (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7086039Z === RUN   TestWEBGITBoundedIPC
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7086694Z --- PASS: TestWEBGITBoundedIPC (2.51s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7087386Z === RUN   TestWEBGITIPCReauthorization
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7088096Z --- PASS: TestWEBGITIPCReauthorization (5.03s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7088806Z === RUN   TestWEBGITIPCDisconnectProbe
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7089505Z --- PASS: TestWEBGITIPCDisconnectProbe (2.03s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7090174Z === RUN   TestDaemon_GitMemory_IPC
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7090978Z === RUN   TestDaemon_GitMemory_IPC/授權邊界校驗
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7092277Z === RUN   TestDaemon_GitMemory_IPC/完整_Capture、Candidates、Approve、Discard_工作流
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7093213Z --- PASS: TestDaemon_GitMemory_IPC (2.17s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7094144Z     --- PASS: TestDaemon_GitMemory_IPC/授權邊界校驗 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7095721Z     --- PASS: TestDaemon_GitMemory_IPC/完整_Capture、Candidates、Approve、Discard_工作流 (0.16s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7096849Z === RUN   TestDaemon_GitMemory_BoundedCandidatesListAndDetail
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7097882Z --- PASS: TestDaemon_GitMemory_BoundedCandidatesListAndDetail (2.93s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7098881Z === RUN   TestDaemon_GitMemory_AIDraftFailClosedAndInjection
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7099895Z --- PASS: TestDaemon_GitMemory_AIDraftFailClosedAndInjection (4.77s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7100715Z === RUN   TestDaemonBoundedMemoryIPC
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7101414Z --- PASS: TestDaemonBoundedMemoryIPC (2.93s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7102057Z === RUN   TestDaemon_Memory_IPC
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7102761Z === RUN   TestDaemon_Memory_IPC/漏參數拒絕
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7103557Z === RUN   TestDaemon_Memory_IPC/越界符號連結與外部目錄拒絕
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7104366Z === RUN   TestDaemon_Memory_IPC/正向_CRUD_流程完整驗證
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7105028Z --- PASS: TestDaemon_Memory_IPC (2.37s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7126699Z     --- PASS: TestDaemon_Memory_IPC/漏參數拒絕 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7127766Z     --- PASS: TestDaemon_Memory_IPC/越界符號連結與外部目錄拒絕 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7128769Z     --- PASS: TestDaemon_Memory_IPC/正向_CRUD_流程完整驗證 (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7129531Z === RUN   TestDaemon_SubmitMemoryFingerprint
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7130315Z --- PASS: TestDaemon_SubmitMemoryFingerprint (0.16s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7131031Z === RUN   TestDaemon_MemoryScopeRejection
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7132155Z === RUN   TestDaemon_MemoryScopeRejection/CTXMEM-002:_跨專案記憶於_runner_前拒絕且調用為_0
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7133492Z === RUN   TestDaemon_MemoryScopeRejection/CTXMEM-005:_不存在或已刪除記憶於_runner_前拒絕且調用為_0
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7134741Z === RUN   TestDaemon_MemoryScopeRejection/CTXMEM-003:_未授權_workspace_拒絕且調用為_0
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7136397Z === RUN   TestDaemon_MemoryScopeRejection/CTXMEM-001:_合法同專案記憶解析注入成功且_runner_取得組裝_Prompt
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7137391Z --- PASS: TestDaemon_MemoryScopeRejection (0.15s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7138705Z     --- PASS: TestDaemon_MemoryScopeRejection/CTXMEM-002:_跨專案記憶於_runner_前拒絕且調用為_0 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7140766Z     --- PASS: TestDaemon_MemoryScopeRejection/CTXMEM-005:_不存在或已刪除記憶於_runner_前拒絕且調用為_0 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7142355Z     --- PASS: TestDaemon_MemoryScopeRejection/CTXMEM-003:_未授權_workspace_拒絕且調用為_0 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7144283Z     --- PASS: TestDaemon_MemoryScopeRejection/CTXMEM-001:_合法同專案記憶解析注入成功且_runner_取得組裝_Prompt (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7166082Z === RUN   TestDaemon_TaskContextSealedAndImmutable
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7167042Z --- PASS: TestDaemon_TaskContextSealedAndImmutable (0.16s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7167813Z === RUN   TestUtilityIPCIsolation
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7168468Z --- PASS: TestUtilityIPCIsolation (2.38s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7169116Z === RUN   TestUtilitySealedRedelivery
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7169795Z --- PASS: TestUtilitySealedRedelivery (0.19s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7170477Z === RUN   TestUtilityCurrentPolicyAudit
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7171177Z === RUN   TestUtilityCurrentPolicyAudit/observe
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7171928Z === RUN   TestUtilityCurrentPolicyAudit/apply
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7172667Z --- PASS: TestUtilityCurrentPolicyAudit (4.69s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7173589Z     --- PASS: TestUtilityCurrentPolicyAudit/observe (2.26s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7174487Z     --- PASS: TestUtilityCurrentPolicyAudit/apply (2.26s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7175062Z PASS
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7175752Z ok  	asura/internal/daemon	68.378s
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7176271Z === RUN   TestEngineCancel
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7176807Z --- PASS: TestEngineCancel (0.28s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7177613Z === RUN   TestEngineCancel_SynchronouslyTerminatesProcessGroup
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7178654Z --- PASS: TestEngineCancel_SynchronouslyTerminatesProcessGroup (0.17s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7179704Z === RUN   TestEngineCancel_UnknownIdentityDoesNotMarkCancelled
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7180764Z --- PASS: TestEngineCancel_UnknownIdentityDoesNotMarkCancelled (0.15s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7181965Z === RUN   TestEngineCancel_ActiveRunnerUnknownIdentityDoesNotMarkCancelled
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7183293Z --- PASS: TestEngineCancel_ActiveRunnerUnknownIdentityDoesNotMarkCancelled (0.16s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7184482Z === RUN   TestEngineCancel_DoesNotOverwriteCommittedTerminalState
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7206361Z === RUN   TestEngineCancel_DoesNotOverwriteCommittedTerminalState/completed_status_must_not_be_overwritten
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7208110Z === RUN   TestEngineCancel_DoesNotOverwriteCommittedTerminalState/failed_status_must_not_be_overwritten
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7209530Z --- PASS: TestEngineCancel_DoesNotOverwriteCommittedTerminalState (0.31s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7211275Z     --- PASS: TestEngineCancel_DoesNotOverwriteCommittedTerminalState/completed_status_must_not_be_overwritten (0.15s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7213285Z     --- PASS: TestEngineCancel_DoesNotOverwriteCommittedTerminalState/failed_status_must_not_be_overwritten (0.16s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7214854Z === RUN   TestEngineCancel_StalePendingSnapshotDoesNotOverwriteTerminalState
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7217021Z === RUN   TestEngineCancel_StalePendingSnapshotDoesNotOverwriteTerminalState/stale_pending_snapshot_must_not_overwrite_completed_(no_registration)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7219352Z === RUN   TestEngineCancel_StalePendingSnapshotDoesNotOverwriteTerminalState/stale_pending_snapshot_must_not_overwrite_failed_(no_registration)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7221636Z === RUN   TestEngineCancel_StalePendingSnapshotDoesNotOverwriteTerminalState/stale_pending_snapshot_must_not_overwrite_completed_(with_registration)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7223848Z === RUN   TestEngineCancel_StalePendingSnapshotDoesNotOverwriteTerminalState/stale_pending_snapshot_must_not_overwrite_failed_(with_registration)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7246014Z --- PASS: TestEngineCancel_StalePendingSnapshotDoesNotOverwriteTerminalState (0.64s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7248277Z     --- PASS: TestEngineCancel_StalePendingSnapshotDoesNotOverwriteTerminalState/stale_pending_snapshot_must_not_overwrite_completed_(no_registration) (0.19s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7250879Z     --- PASS: TestEngineCancel_StalePendingSnapshotDoesNotOverwriteTerminalState/stale_pending_snapshot_must_not_overwrite_failed_(no_registration) (0.18s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7253958Z     --- PASS: TestEngineCancel_StalePendingSnapshotDoesNotOverwriteTerminalState/stale_pending_snapshot_must_not_overwrite_completed_(with_registration) (0.12s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7257104Z     --- PASS: TestEngineCancel_StalePendingSnapshotDoesNotOverwriteTerminalState/stale_pending_snapshot_must_not_overwrite_failed_(with_registration) (0.15s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7258702Z === RUN   TestEngineCancel_FinalizeGetTaskErrorFailsClosed
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7259676Z --- PASS: TestEngineCancel_FinalizeGetTaskErrorFailsClosed (0.12s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7260601Z === RUN   TestEngineCancel_ClearPGIDErrorFailsClosed
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7261487Z --- PASS: TestEngineCancel_ClearPGIDErrorFailsClosed (0.17s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7262164Z === RUN   TestEngineExecute
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7263137Z === RUN   TestEngineExecute/SCN-002:_拒絕超出授權範圍的執行
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7264058Z === RUN   TestEngineExecute/SCN-001:_授權使用者取得單次任務結果並可重查
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7264752Z --- PASS: TestEngineExecute (0.10s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7286455Z     --- PASS: TestEngineExecute/SCN-002:_拒絕超出授權範圍的執行 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7287703Z     --- PASS: TestEngineExecute/SCN-001:_授權使用者取得單次任務結果並可重查 (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7288485Z === RUN   TestEngine_FailedExecution
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7289165Z --- PASS: TestEngine_FailedExecution (0.13s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7289852Z === RUN   TestEngine_PartialFailureNoRetry
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7290569Z --- PASS: TestEngine_PartialFailureNoRetry (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7291326Z === RUN   TestEngine_EmptyOutputTreatedAsFailed
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7292137Z --- PASS: TestEngine_EmptyOutputTreatedAsFailed (0.13s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7292992Z === RUN   TestEngine_R05_PersistOnCancelledParentContext
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7293936Z --- PASS: TestEngine_R05_PersistOnCancelledParentContext (0.11s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7294852Z === RUN   TestEngine_R06_PreservePartialOutputOnCancel
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7296004Z --- PASS: TestEngine_R06_PreservePartialOutputOnCancel (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7296825Z === RUN   TestEngine_R09_UnresolvedStructuredError
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7297661Z --- PASS: TestEngine_R09_UnresolvedStructuredError (0.13s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7298554Z === RUN   TestEngine_R10_DoNotOverwriteCancelledStatus
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7299473Z --- PASS: TestEngine_R10_DoNotOverwriteCancelledStatus (0.10s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7300271Z === RUN   TestReviewCancelBeforeRunner
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7300967Z --- PASS: TestReviewCancelBeforeRunner (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7301720Z === RUN   TestReviewCancelInRunningBeforeRunner
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7302573Z --- PASS: TestReviewCancelInRunningBeforeRunner (0.12s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7303305Z === RUN   TestReviewPersistError
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7303937Z --- PASS: TestReviewPersistError (0.14s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7304520Z === RUN   TestReviewToolError
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7305105Z --- PASS: TestReviewToolError (0.14s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7326557Z === RUN   TestLatestReview_G02_PersistOnCancelBeforeRunner
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7327529Z --- PASS: TestLatestReview_G02_PersistOnCancelBeforeRunner (0.15s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7328281Z === RUN   TestComposePrompt
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7329322Z === RUN   TestComposePrompt/CTXMEM-007:_未選取記憶時維持既有任務語意，Prompt_完全原樣
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7330416Z === RUN   TestComposePrompt/CTXMEM-001:_有記憶時以_Markdown_區塊格式組裝
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7331171Z --- PASS: TestComposePrompt (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7332346Z     --- PASS: TestComposePrompt/CTXMEM-007:_未選取記憶時維持既有任務語意，Prompt_完全原樣 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7333682Z     --- PASS: TestComposePrompt/CTXMEM-001:_有記憶時以_Markdown_區塊格式組裝 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7334590Z === RUN   TestEngine_SubmitTaskWithMemoryContext
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7335693Z --- PASS: TestEngine_SubmitTaskWithMemoryContext (0.14s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7336659Z === RUN   TestEngine_SubmitTask_CorruptedSealedContextFailsClosed
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7338312Z === RUN   TestEngine_SubmitTask_CorruptedSealedContextFailsClosed/損毀的_ResolvedContext_JSON_應_fail-closed_拒絕
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7340720Z === RUN   TestEngine_SubmitTask_CorruptedSealedContextFailsClosed/有_MemoryRefs_但_ResolvedContext_遺失時應_fail-closed_拒絕
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7342174Z --- PASS: TestEngine_SubmitTask_CorruptedSealedContextFailsClosed (0.19s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7344427Z     --- PASS: TestEngine_SubmitTask_CorruptedSealedContextFailsClosed/損毀的_ResolvedContext_JSON_應_fail-closed_拒絕 (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7363800Z     --- PASS: TestEngine_SubmitTask_CorruptedSealedContextFailsClosed/有_MemoryRefs_但_ResolvedContext_遺失時應_fail-closed_拒絕 (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7365092Z === RUN   TestEngine_ThreeFacePipeline
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7366068Z --- PASS: TestEngine_ThreeFacePipeline (0.20s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7367066Z === RUN   TestEngine_ThreeFacePipeline_Failure
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7367886Z --- PASS: TestEngine_ThreeFacePipeline_Failure (0.21s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7368577Z === RUN   TestEngine_DirectModeTrace
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7369238Z --- PASS: TestEngine_DirectModeTrace (0.20s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7370019Z === RUN   TestEngine_InvalidExecutionMode_FailClosed
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7370901Z --- PASS: TestEngine_InvalidExecutionMode_FailClosed (0.20s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7371835Z === RUN   TestEngine_PipelineTracePersistenceError_ErrorsJoin
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7372852Z --- PASS: TestEngine_PipelineTracePersistenceError_ErrorsJoin (0.25s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7373832Z === RUN   TestEngine_SubmitTask_BackendDefaultAndOverride
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7374785Z --- PASS: TestEngine_SubmitTask_BackendDefaultAndOverride (0.33s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7375927Z === RUN   TestEngine_SubmitTask_BackendConflictRejected
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7376863Z --- PASS: TestEngine_SubmitTask_BackendConflictRejected (0.27s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7377891Z === RUN   TestEngine_SubmitTask_IdempotentAdmissionAndContextPreserved
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7379104Z --- PASS: TestEngine_SubmitTask_IdempotentAdmissionAndContextPreserved (0.19s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7380024Z === RUN   TestDirectUtilityUnknown
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7380689Z === RUN   TestDirectUtilityUnknown/success
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7381372Z === RUN   TestDirectUtilityUnknown/failed
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7382050Z --- PASS: TestDirectUtilityUnknown (0.29s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7382875Z     --- PASS: TestDirectUtilityUnknown/success (0.14s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7383766Z     --- PASS: TestDirectUtilityUnknown/failed (0.15s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7384528Z === RUN   TestThreeFaceUtilityPersistence
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7425503Z === RUN   TestThreeFaceUtilityPersistence/used
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7426407Z === RUN   TestThreeFaceUtilityPersistence/invalid
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7427164Z === RUN   TestThreeFaceUtilityPersistence/legacy
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7427906Z --- PASS: TestThreeFaceUtilityPersistence (0.45s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7428767Z     --- PASS: TestThreeFaceUtilityPersistence/used (0.15s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7429659Z     --- PASS: TestThreeFaceUtilityPersistence/invalid (0.15s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7430506Z     --- PASS: TestThreeFaceUtilityPersistence/legacy (0.15s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7431068Z PASS
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7431500Z ok  	asura/internal/engine	7.428s
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7432142Z === RUN   TestAIDraft_FormatPrompt_UntrustedBoundary
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7432932Z --- PASS: TestAIDraft_FormatPrompt_UntrustedBoundary (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7433563Z === RUN   TestAIDraft_Success
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7434134Z --- PASS: TestAIDraft_Success (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7434736Z === RUN   TestAIDraft_FallbackOnError
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7435623Z --- PASS: TestAIDraft_FallbackOnError (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7436323Z === RUN   TestCaptureService_WithAIDraft
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7437034Z --- PASS: TestCaptureService_WithAIDraft (0.31s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7437695Z === RUN   TestCapture_Complete
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7438274Z --- PASS: TestCapture_Complete (0.07s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7438883Z === RUN   TestCapture_Partial_FileLimit
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7439560Z --- PASS: TestCapture_Partial_FileLimit (1.52s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7440247Z === RUN   TestCapture_Partial_DiffSizeLimit
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7441372Z --- PASS: TestCapture_Partial_DiffSizeLimit (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7442088Z === RUN   TestCapture_SensitiveFileFiltering
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7442840Z --- PASS: TestCapture_SensitiveFileFiltering (0.07s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7443615Z === RUN   TestCapture_SingleFileOver512KiB_Truncated
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7444724Z --- PASS: TestCapture_SingleFileOver512KiB_Truncated (0.26s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7465898Z === RUN   TestCapture_SubdirectoryScopeIsolation
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7466728Z --- PASS: TestCapture_SubdirectoryScopeIsolation (0.11s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7467642Z === RUN   TestCapture_SubdirectoryWithWildcardName_LiteralIsolation
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7468707Z --- PASS: TestCapture_SubdirectoryWithWildcardName_LiteralIsolation (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7469701Z === RUN   TestCapture_SpecialFilenamesWithNullDelimiter
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7470588Z --- PASS: TestCapture_SpecialFilenamesWithNullDelimiter (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7471641Z === RUN   TestCapture_TotalTimeoutExceeded_TruncatedAndZeroCheckpointAdvance
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7472876Z --- PASS: TestCapture_TotalTimeoutExceeded_TruncatedAndZeroCheckpointAdvance (0.05s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7473886Z === RUN   TestCaptureService_DedupPendingAndApproved
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7474725Z --- PASS: TestCaptureService_DedupPendingAndApproved (0.35s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7475762Z === RUN   TestCaptureService_DiscardedRequiresForce
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7476587Z --- PASS: TestCaptureService_DiscardedRequiresForce (0.34s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7477545Z === RUN   TestCaptureService_CheckpointProgressionAndPartialBlocking
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7478670Z --- PASS: TestCaptureService_CheckpointProgressionAndPartialBlocking (0.39s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7479708Z === RUN   TestCaptureService_ManualRangeDoesNotRewindCheckpoint
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7480714Z --- PASS: TestCaptureService_ManualRangeDoesNotRewindCheckpoint (0.29s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7481723Z === RUN   TestCaptureService_AncestryCheck_RejectsDivergedHistory
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7482707Z --- PASS: TestCaptureService_AncestryCheck_RejectsDivergedHistory (0.25s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7483737Z === RUN   TestCaptureService_ConcurrentCaptureAndDraftImmutability
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7505758Z     dedup_test.go:286: concurrent capture failed: validate repo: failed to resolve repo root: exec: WaitDelay expired before I/O complete
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7507466Z --- FAIL: TestCaptureService_ConcurrentCaptureAndDraftImmutability (0.34s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7508842Z === RUN   TestCaptureService_ConcurrentCheckpointAdvancement_NeverRewindsStaleHead
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7510236Z --- PASS: TestCaptureService_ConcurrentCheckpointAdvancement_NeverRewindsStaleHead (0.27s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7511483Z === RUN   TestCaptureService_CaptureBudgetTimeout_DuringAIGeneration
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7512586Z --- PASS: TestCaptureService_CaptureBudgetTimeout_DuringAIGeneration (0.31s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7513824Z === RUN   TestCaptureService_ReopenDiscardedCandidate_HandlesConcurrentApprovalSafely
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7515599Z --- PASS: TestCaptureService_ReopenDiscardedCandidate_HandlesConcurrentApprovalSafely (0.29s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7516965Z === RUN   TestCaptureService_AIDraft_PreflightFailClosed_EvenIfCandidateExists
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7518211Z --- PASS: TestCaptureService_AIDraft_PreflightFailClosed_EvenIfCandidateExists (0.25s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7519414Z === RUN   TestCaptureService_LongCallerDeadline_EnforcesHardTenSecondLimit
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7520612Z --- PASS: TestCaptureService_LongCallerDeadline_EnforcesHardTenSecondLimit (0.22s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7521892Z === RUN   TestCaptureService_DiscardedCandidate_NeverAdvancesCheckpointOnFailure
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7523223Z --- PASS: TestCaptureService_DiscardedCandidate_NeverAdvancesCheckpointOnFailure (0.39s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7524757Z === RUN   TestCaptureService_PartialCandidate_CompleteRetryUpgradesCandidateAndAdvancesCheckpoint
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7546892Z --- PASS: TestCaptureService_PartialCandidate_CompleteRetryUpgradesCandidateAndAdvancesCheckpoint (0.20s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7548621Z === RUN   TestCaptureService_AIDraft_DisclosesExistingCandidateSkipped
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7549759Z --- PASS: TestCaptureService_AIDraft_DisclosesExistingCandidateSkipped (0.19s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7550982Z === RUN   TestCaptureService_PartialCandidate_CannotBeApprovedUntilCompleteUpgrade
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7552523Z --- PASS: TestCaptureService_PartialCandidate_CannotBeApprovedUntilCompleteUpgrade (0.22s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7553872Z === RUN   TestCaptureService_PartialUpgrade_ConcurrentDraftEdit_PreservesManualContent
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7555418Z --- PASS: TestCaptureService_PartialUpgrade_ConcurrentDraftEdit_PreservesManualContent (0.28s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7556725Z === RUN   TestCaptureService_PartialUpgrade_ConcurrentDiscard_RejectsWithoutForce
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7558000Z --- PASS: TestCaptureService_PartialUpgrade_ConcurrentDiscard_RejectsWithoutForce (0.28s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7559139Z === RUN   TestCaptureService_PartialUpgrade_PreservesUserEditedDraft
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7560201Z --- PASS: TestCaptureService_PartialUpgrade_PreservesUserEditedDraft (0.30s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7561364Z === RUN   TestCaptureService_ConflictRecovery_AdvanceCheckpointErrorPropagated
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7562608Z --- PASS: TestCaptureService_ConflictRecovery_AdvanceCheckpointErrorPropagated (0.29s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7563845Z === RUN   TestCaptureService_ConcurrentCreateDiscard_SaveConflictRequiresForce
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7565074Z --- PASS: TestCaptureService_ConcurrentCreateDiscard_SaveConflictRequiresForce (0.39s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7606560Z === RUN   TestFormatFactsSummary
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7607233Z --- PASS: TestFormatFactsSummary (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7607867Z === RUN   TestGenerateDraftContent
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7608485Z --- PASS: TestGenerateDraftContent (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7609056Z === RUN   TestBuildProvenance
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7609622Z --- PASS: TestBuildProvenance (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7610434Z === RUN   TestGitExecutor_ValidateAndResolveRepo_Success
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7611333Z --- PASS: TestGitExecutor_ValidateAndResolveRepo_Success (0.06s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7612311Z === RUN   TestGitExecutor_ValidateAndResolveRepo_Subdirectory
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7613257Z --- PASS: TestGitExecutor_ValidateAndResolveRepo_Subdirectory (0.06s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7614156Z === RUN   TestGitExecutor_ValidateAndResolveRepo_NotGit
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7615109Z --- PASS: TestGitExecutor_ValidateAndResolveRepo_NotGit (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7616213Z === RUN   TestGitExecutor_ValidateAndResolveRepo_OutsideAllowedRoots
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7617792Z --- PASS: TestGitExecutor_ValidateAndResolveRepo_OutsideAllowedRoots (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7618670Z === RUN   TestGitExecutor_ValidateAndResolveRepo_GitDirEscape
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7619544Z --- PASS: TestGitExecutor_ValidateAndResolveRepo_GitDirEscape (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7620353Z === RUN   TestGitExecutor_Exec_ExternalDiffBlocked
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7621120Z --- PASS: TestGitExecutor_Exec_ExternalDiffBlocked (0.04s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7621953Z === RUN   TestGitExecutor_Exec_TimeoutWithProcessGroup
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7622833Z --- PASS: TestGitExecutor_Exec_TimeoutWithProcessGroup (0.18s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7623758Z === RUN   TestGitExecutor_NoLazyFetchWithPromisorRemote
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7624741Z --- PASS: TestGitExecutor_NoLazyFetchWithPromisorRemote (0.04s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7636329Z === RUN   TestGitExecutor_IsAncestor_DistinguishesNotAncestorFromExecutionErrors
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7637701Z --- PASS: TestGitExecutor_IsAncestor_DistinguishesNotAncestorFromExecutionErrors (0.04s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7638777Z === RUN   TestGitMemory_FullLifecycleAndAntiRevival
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7639627Z --- PASS: TestGitMemory_FullLifecycleAndAntiRevival (0.28s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7640722Z === RUN   TestGitMemory_ReopenDiscardedCandidateAfterClear_ProducesNonEmptyMemory
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7642073Z --- PASS: TestGitMemory_ReopenDiscardedCandidateAfterClear_ProducesNonEmptyMemory (0.40s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7643050Z === RUN   TestResolveRange_ValidRange
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7644236Z --- PASS: TestResolveRange_ValidRange (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7644900Z === RUN   TestResolveRange_SingleCommit
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7656030Z --- PASS: TestResolveRange_SingleCommit (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7656767Z === RUN   TestResolveRange_InvalidRef
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7657802Z --- PASS: TestResolveRange_InvalidRef (0.06s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7658464Z === RUN   TestResolveRange_NotAncestor
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7659109Z --- PASS: TestResolveRange_NotAncestor (0.07s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7659780Z === RUN   TestResolveRange_UnrelatedHistory
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7660496Z --- PASS: TestResolveRange_UnrelatedHistory (0.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7661216Z === RUN   TestResolveRange_EmptyRange
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7661909Z --- PASS: TestResolveRange_EmptyRange (0.06s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7662583Z === RUN   TestResolveRange_TooManyCommits
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7663281Z --- PASS: TestResolveRange_TooManyCommits (2.82s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7663826Z FAIL
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7664292Z FAIL	asura/internal/gitmem	12.885s
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7664952Z === RUN   TestNewBackendsThreeFaceStageZero
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7686049Z === RUN   TestNewBackendsThreeFaceStageZero/omp
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7686906Z === RUN   TestNewBackendsThreeFaceStageZero/antigravity
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7687735Z --- PASS: TestNewBackendsThreeFaceStageZero (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7688650Z     --- PASS: TestNewBackendsThreeFaceStageZero/omp (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7689626Z     --- PASS: TestNewBackendsThreeFaceStageZero/antigravity (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7690580Z === RUN   TestNewBackendContextMemoryAndFailureIsolation
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7691529Z === RUN   TestNewBackendContextMemoryAndFailureIsolation/omp
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7692598Z === RUN   TestNewBackendContextMemoryAndFailureIsolation/antigravity
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7693686Z --- PASS: TestNewBackendContextMemoryAndFailureIsolation (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7694878Z     --- PASS: TestNewBackendContextMemoryAndFailureIsolation/omp (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7696444Z     --- PASS: TestNewBackendContextMemoryAndFailureIsolation/antigravity (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7697445Z === RUN   TestOrchestrator_UnknownBackend_FailClosed
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7698264Z --- PASS: TestOrchestrator_UnknownBackend_FailClosed (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7699224Z === RUN   TestOrchestrator_ThreeFace_CapabilityPreflight_FailClosed
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7700329Z --- PASS: TestOrchestrator_ThreeFace_CapabilityPreflight_FailClosed (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7701370Z === RUN   TestOrchestrator_Trace_RecordsActualBackendAndVersion
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7702415Z --- PASS: TestOrchestrator_Trace_RecordsActualBackendAndVersion (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7703437Z === RUN   TestOrchestrator_NoFailoverAfterPartialExecution
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7704430Z --- PASS: TestOrchestrator_NoFailoverAfterPartialExecution (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7718115Z === RUN   TestOrchestrator_ThreeFace_Success_StrictOrder
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7719098Z --- PASS: TestOrchestrator_ThreeFace_Success_StrictOrder (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7720017Z === RUN   TestOrchestrator_ThreeFace_OracleFailed_FailClosed
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7720957Z --- PASS: TestOrchestrator_ThreeFace_OracleFailed_FailClosed (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7721910Z === RUN   TestOrchestrator_ThreeFace_StrikerFailed_FailClosed
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7722902Z --- PASS: TestOrchestrator_ThreeFace_StrikerFailed_FailClosed (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7723925Z === RUN   TestOrchestrator_ThreeFace_CriticFailed_NotSuccess
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7724882Z --- PASS: TestOrchestrator_ThreeFace_CriticFailed_NotSuccess (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7725965Z === RUN   TestOrchestrator_DirectMode
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7726660Z --- PASS: TestOrchestrator_DirectMode (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7727474Z === RUN   TestOrchestrator_ContextBudget_RejectFailClosed
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7728425Z --- PASS: TestOrchestrator_ContextBudget_RejectFailClosed (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7729436Z === RUN   TestOrchestrator_ThreeFace_StrikerRejectPreservesOracle
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7730507Z --- PASS: TestOrchestrator_ThreeFace_StrikerRejectPreservesOracle (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7731912Z === RUN   TestOrchestrator_ContextBudget_ObserveWarningContinues
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7732944Z --- PASS: TestOrchestrator_ContextBudget_ObserveWarningContinues (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7733869Z === RUN   TestStrikerStage_DirectMode_WithoutPlan
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7734974Z --- PASS: TestStrikerStage_DirectMode_WithoutPlan (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7776309Z === RUN   TestStrikerStage_ThreeFace_WithPlan
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7777146Z --- PASS: TestStrikerStage_ThreeFace_WithPlan (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7777863Z === RUN   TestStrikerStage_RunnerError
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7778552Z --- PASS: TestStrikerStage_RunnerError (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7779216Z === RUN   TestOracleStage_Success
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7779834Z --- PASS: TestOracleStage_Success (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7780473Z === RUN   TestOracleStage_MarkdownJSON
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7781152Z --- PASS: TestOracleStage_MarkdownJSON (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7781807Z === RUN   TestOracleStage_RunnerError
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7782480Z --- PASS: TestOracleStage_RunnerError (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7783119Z === RUN   TestCriticStage_Success
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7783726Z --- PASS: TestCriticStage_Success (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7784347Z === RUN   TestCriticStage_MarkdownJSON
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7785032Z --- PASS: TestCriticStage_MarkdownJSON (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7785910Z === RUN   TestCriticStage_RunnerError
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7786564Z --- PASS: TestCriticStage_RunnerError (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7787263Z === RUN   TestOracleStage_InvalidJSON_FailClosed
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7788006Z --- PASS: TestOracleStage_InvalidJSON_FailClosed (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7788788Z === RUN   TestOracleStage_SemanticValidation_FailClosed
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7789623Z --- PASS: TestOracleStage_SemanticValidation_FailClosed (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7790431Z === RUN   TestCriticStage_InvalidJSON_FailClosed
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7791220Z --- PASS: TestCriticStage_InvalidJSON_FailClosed (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7791991Z === RUN   TestCriticStage_InvalidVerdict_FailClosed
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7792809Z --- PASS: TestCriticStage_InvalidVerdict_FailClosed (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7793604Z === RUN   TestCriticStage_ComposePromptContext
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7794409Z --- PASS: TestCriticStage_ComposePromptContext (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7795075Z === RUN   TestUtilityLiveProbe
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7816485Z     utility_probe_test.go:20: set ASURA_UFL_PROBE_DIR to preserve live probe evidence
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7817413Z --- SKIP: TestUtilityLiveProbe (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7818070Z === RUN   TestUtilityArchivedProbeReplay
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7819093Z === RUN   TestUtilityArchivedProbeReplay/a1
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7819784Z === RUN   TestUtilityArchivedProbeReplay/a2
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7820468Z === RUN   TestUtilityArchivedProbeReplay/a3
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7821124Z === RUN   TestUtilityArchivedProbeReplay/b1
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7821774Z === RUN   TestUtilityArchivedProbeReplay/b2
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7822469Z === RUN   TestUtilityArchivedProbeReplay/b3
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7823125Z === RUN   TestUtilityArchivedProbeReplay/c1
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7823784Z === RUN   TestUtilityArchivedProbeReplay/c2
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7824453Z === RUN   TestUtilityArchivedProbeReplay/c3
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7825409Z --- PASS: TestUtilityArchivedProbeReplay (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7826292Z     --- PASS: TestUtilityArchivedProbeReplay/a1 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7827174Z     --- PASS: TestUtilityArchivedProbeReplay/a2 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7828034Z     --- PASS: TestUtilityArchivedProbeReplay/a3 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7829955Z     --- PASS: TestUtilityArchivedProbeReplay/b1 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7830874Z     --- PASS: TestUtilityArchivedProbeReplay/b2 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7831750Z     --- PASS: TestUtilityArchivedProbeReplay/b3 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7832593Z     --- PASS: TestUtilityArchivedProbeReplay/c1 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7833433Z     --- PASS: TestUtilityArchivedProbeReplay/c2 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7834747Z     --- PASS: TestUtilityArchivedProbeReplay/c3 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7835757Z === RUN   TestCriticUtilityContract
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7836384Z === RUN   TestCriticUtilityContract/valid
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7837041Z === RUN   TestCriticUtilityContract/missing
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7837981Z === RUN   TestCriticUtilityContract/wrong_type
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7838665Z === RUN   TestCriticUtilityContract/oversized
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7839348Z === RUN   TestCriticUtilityContract/over_count
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7840029Z === RUN   TestCriticUtilityContract/fabricated
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7840713Z === RUN   TestCriticUtilityContract/explicit
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7841401Z === RUN   TestCriticUtilityContract/duplicate
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7842105Z === RUN   TestCriticUtilityContract/invalid_state
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7842810Z --- PASS: TestCriticUtilityContract (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7843590Z     --- PASS: TestCriticUtilityContract/valid (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7844427Z     --- PASS: TestCriticUtilityContract/missing (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7845487Z     --- PASS: TestCriticUtilityContract/wrong_type (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7846372Z     --- PASS: TestCriticUtilityContract/oversized (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7847227Z     --- PASS: TestCriticUtilityContract/over_count (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7848086Z     --- PASS: TestCriticUtilityContract/fabricated (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7848933Z     --- PASS: TestCriticUtilityContract/explicit (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7849779Z     --- PASS: TestCriticUtilityContract/duplicate (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7850673Z     --- PASS: TestCriticUtilityContract/invalid_state (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7851389Z === RUN   TestCriticUtilityPrompt
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7852007Z --- PASS: TestCriticUtilityPrompt (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7852894Z === RUN   TestStagePromptCharacterization_ByteForByteEquivalence
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7854064Z --- PASS: TestStagePromptCharacterization_ByteForByteEquivalence (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7875660Z === RUN   TestStage_ExecutionResultPreservedOnBackendAndJSONErrors
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7876947Z --- PASS: TestStage_ExecutionResultPreservedOnBackendAndJSONErrors (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7878061Z === RUN   TestPipelineTrace_SerializationWithAdmissionAndUsage
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7879126Z --- PASS: TestPipelineTrace_SerializationWithAdmissionAndUsage (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7879827Z PASS
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7880287Z ok  	asura/internal/pipeline	1.047s
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7880797Z === RUN   TestSelect
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7894689Z --- PASS: TestSelect (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7915728Z === RUN   TestSelectLimits
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7916378Z === RUN   TestSelectLimits/bytes
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7916972Z === RUN   TestSelectLimits/tokens
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7917552Z === RUN   TestSelectLimits/stage
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7918103Z --- PASS: TestSelectLimits (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7918786Z     --- PASS: TestSelectLimits/bytes (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7919950Z     --- PASS: TestSelectLimits/tokens (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7920713Z     --- PASS: TestSelectLimits/stage (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7921411Z === RUN   TestSelectDeadlineAndQueryRune
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7922128Z --- PASS: TestSelectDeadlineAndQueryRune (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7922790Z === RUN   TestUtilityApplyRanking
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7923432Z --- PASS: TestUtilityApplyRanking (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7924088Z === RUN   TestUtilityObserveAndExplicit
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7924781Z --- PASS: TestUtilityObserveAndExplicit (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7925567Z PASS
+Test & Build	Test with Race Detector	2026-10-01T02:34:54.7926039Z ok  	asura/internal/recall	1.039s
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5762048Z === RUN   TestSQLiteStore_CronSchemaMigration
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5762643Z --- PASS: TestSQLiteStore_CronSchemaMigration (0.16s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5763406Z === RUN   TestSQLiteStore_CronCRUD
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5763887Z --- PASS: TestSQLiteStore_CronCRUD (0.14s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5764277Z === RUN   TestWEBGITBoundedPageAndDetail
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5765013Z === RUN   TestWEBGITBoundedPageAndDetail/draft_content
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5766795Z === RUN   TestWEBGITBoundedPageAndDetail/facts_summary
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5786556Z === RUN   TestWEBGITBoundedPageAndDetail/repo_id
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5787571Z === RUN   TestWEBGITBoundedPageAndDetail/truncated_reason
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5788887Z --- PASS: TestWEBGITBoundedPageAndDetail (0.94s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5789930Z     --- PASS: TestWEBGITBoundedPageAndDetail/draft_content (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5791069Z     --- PASS: TestWEBGITBoundedPageAndDetail/facts_summary (0.03s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5792097Z     --- PASS: TestWEBGITBoundedPageAndDetail/repo_id (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5793212Z     --- PASS: TestWEBGITBoundedPageAndDetail/truncated_reason (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5794080Z === RUN   TestWEBGITBoundedApproval
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5794808Z === RUN   TestWEBGITBoundedApproval/large
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5795760Z === RUN   TestWEBGITBoundedApproval/empty
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5796604Z === RUN   TestWEBGITBoundedApproval/oversized-edit
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5797416Z === RUN   TestWEBGITBoundedApproval/partial
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5798225Z === RUN   TestWEBGITBoundedApproval/discarded
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5798995Z === RUN   TestWEBGITBoundedApproval/invalid
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5799784Z --- PASS: TestWEBGITBoundedApproval (0.22s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5800658Z     --- PASS: TestWEBGITBoundedApproval/large (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5801626Z     --- PASS: TestWEBGITBoundedApproval/empty (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5802609Z     --- PASS: TestWEBGITBoundedApproval/oversized-edit (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5803632Z     --- PASS: TestWEBGITBoundedApproval/partial (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5804566Z     --- PASS: TestWEBGITBoundedApproval/discarded (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5805998Z     --- PASS: TestWEBGITBoundedApproval/invalid (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5806712Z === RUN   TestWEBGITConcurrentReview
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5807502Z --- PASS: TestWEBGITConcurrentReview (0.26s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5808251Z === RUN   TestWEBGITApprovedPartialRejected
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5809134Z --- PASS: TestWEBGITApprovedPartialRejected (0.18s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5809912Z === RUN   TestWEBGITLegacyCapacityProbe
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5811668Z     sqlite_gitmem_probe_test.go:32: 1000 candidates: list limited to 50; legacy detail loads 2 MiB draft + 2 MiB facts, bounded Web projection required
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5813072Z --- PASS: TestWEBGITLegacyCapacityProbe (6.60s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5813887Z === RUN   TestGitMem_SchemaAndIsolation
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5814657Z --- PASS: TestGitMem_SchemaAndIsolation (0.13s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5815932Z === RUN   TestGitMem_CandidateCRUD
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5816666Z --- PASS: TestGitMem_CandidateCRUD (0.15s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5817446Z === RUN   TestGitMem_CheckpointCRUD
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5818181Z --- PASS: TestGitMem_CheckpointCRUD (0.13s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5818983Z === RUN   TestGitMem_ProvenanceCascadeDelete
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5819820Z --- PASS: TestGitMem_ProvenanceCascadeDelete (0.16s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5820716Z === RUN   TestTruncateUTF8Safe_MultiByteCharacters
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5821630Z --- PASS: TestTruncateUTF8Safe_MultiByteCharacters (0.14s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5822646Z === RUN   TestSQLiteStore_PartialCandidateMigrationBackfill
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5823706Z --- PASS: TestSQLiteStore_PartialCandidateMigrationBackfill (0.26s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5825087Z === RUN   TestLegacyMigration_BackfillIsTruncatedFromMemoryProvenanceAfterClearCandidates
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5826963Z --- PASS: TestLegacyMigration_BackfillIsTruncatedFromMemoryProvenanceAfterClearCandidates (0.23s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5828611Z === RUN   TestLegacyMigration_QuarantinesApprovedCandidateWithNoRemainingPartialEvidence
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5830261Z --- PASS: TestLegacyMigration_QuarantinesApprovedCandidateWithNoRemainingPartialEvidence (0.19s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5831788Z === RUN   TestLegacyMigration_PreservesCompleteRecaptureAfterPriorQuarantine
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5833172Z --- PASS: TestLegacyMigration_PreservesCompleteRecaptureAfterPriorQuarantine (0.17s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5835017Z === RUN   TestCurrentSchema_DoesNotQuarantineClearedApprovedCompleteCandidate
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5836719Z --- PASS: TestCurrentSchema_DoesNotQuarantineClearedApprovedCompleteCandidate (0.18s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5838128Z === RUN   TestLegacyMigration_ResumesAfterColumnAddedBeforeMarkerRecorded
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5839699Z --- PASS: TestLegacyMigration_ResumesAfterColumnAddedBeforeMarkerRecorded (0.19s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5840846Z === RUN   TestApproveCandidate_SuccessAndIdempotency
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5841792Z --- PASS: TestApproveCandidate_SuccessAndIdempotency (0.20s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5842773Z === RUN   TestApproveCandidate_WithCustomContent
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5843662Z --- PASS: TestApproveCandidate_WithCustomContent (0.15s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5844525Z === RUN   TestApproveCandidate_AntiRevival
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5845510Z --- PASS: TestApproveCandidate_AntiRevival (0.14s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5846500Z === RUN   TestSaveCandidateAndCheckpointTx_RollbackOnFailure
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5847597Z --- PASS: TestSaveCandidateAndCheckpointTx_RollbackOnFailure (0.14s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5848798Z === RUN   TestSaveCandidateAndCheckpointTx_MonotonicConcurrentAdvance
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5850140Z --- PASS: TestSaveCandidateAndCheckpointTx_MonotonicConcurrentAdvance (0.13s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5851425Z === RUN   TestClearProcessedCandidates_AntiRevivalAndDedupProtected
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5852634Z --- PASS: TestClearProcessedCandidates_AntiRevivalAndDedupProtected (0.14s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5857354Z === RUN   TestSaveCandidateAndCheckpointTx_TargetNotDescendant_NeverRewindsEvenIfExpectedMatches
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5867830Z --- PASS: TestSaveCandidateAndCheckpointTx_TargetNotDescendant_NeverRewindsEvenIfExpectedMatches (0.13s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5869193Z === RUN   TestApproveCandidateTx_EmptyContentRejected
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5870215Z --- PASS: TestApproveCandidateTx_EmptyContentRejected (0.13s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5871188Z === RUN   TestApproveCandidateTx_PartialCandidateRejected
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5872207Z --- PASS: TestApproveCandidateTx_PartialCandidateRejected (0.13s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5873340Z === RUN   TestReopenDiscardedCandidate_ReplacesPayloadAndResetsPending
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5874563Z --- PASS: TestReopenDiscardedCandidate_ReplacesPayloadAndResetsPending (0.16s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5875945Z === RUN   TestAdvanceCheckpointTx_MonotonicAndCAS
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5876869Z --- PASS: TestAdvanceCheckpointTx_MonotonicAndCAS (0.13s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5877731Z === RUN   TestDiscardCandidate_AtomicStatusCAS
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5878584Z --- PASS: TestDiscardCandidate_AtomicStatusCAS (0.16s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5879550Z === RUN   TestReopenDiscardedCandidate_AtomicCAS_RejectsApproved
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5880663Z --- PASS: TestReopenDiscardedCandidate_AtomicCAS_RejectsApproved (0.17s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5881795Z === RUN   TestApproveCandidateTx_AtomicStatusCAS_RejectsNonPending
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5882939Z --- PASS: TestApproveCandidateTx_AtomicStatusCAS_RejectsNonPending (0.15s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5883969Z === RUN   TestUpgradePartialCandidate_AtomicUpgrade
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5884898Z --- PASS: TestUpgradePartialCandidate_AtomicUpgrade (0.13s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5886228Z === RUN   TestSaveCandidateAndCheckpointTx_PartialBlocksCheckpointAdvance
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5887542Z --- PASS: TestSaveCandidateAndCheckpointTx_PartialBlocksCheckpointAdvance (0.13s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5888858Z === RUN   TestUpgradePartialCandidateAndAdvanceCheckpointTx_SuccessAndRollback
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5890230Z --- PASS: TestUpgradePartialCandidateAndAdvanceCheckpointTx_SuccessAndRollback (0.14s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5891446Z === RUN   TestUpgradePartialCandidate_SQLPreservesUserEditedDraft
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5892558Z --- PASS: TestUpgradePartialCandidate_SQLPreservesUserEditedDraft (0.17s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5893979Z === RUN   TestSaveCandidateAndCheckpointTx_DiscardedConflict_RollsBackAndNeverAdvancesCheckpoint
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5895968Z --- PASS: TestSaveCandidateAndCheckpointTx_DiscardedConflict_RollsBackAndNeverAdvancesCheckpoint (0.18s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5897875Z === RUN   TestExistingCandidateDiscardedAfterRead_CannotAdvanceCheckpoint
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5899256Z --- PASS: TestExistingCandidateDiscardedAfterRead_CannotAdvanceCheckpoint (0.16s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5900821Z === RUN   TestReopenDiscardedCandidateAndAdvanceCheckpointTx_RollsBackTogether
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5902250Z --- PASS: TestReopenDiscardedCandidateAndAdvanceCheckpointTx_RollsBackTogether (0.14s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5903653Z === RUN   TestAdvanceCheckpointForCandidateTx_RejectsUnsupportedExpectedStatus
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5905015Z --- PASS: TestAdvanceCheckpointForCandidateTx_RejectsUnsupportedExpectedStatus (0.13s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5906406Z === RUN   TestAdvanceCheckpointTx_PropagatesAncestryErrors
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5907418Z --- PASS: TestAdvanceCheckpointTx_PropagatesAncestryErrors (0.12s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5908298Z === RUN   TestMemoryPageBoundaries
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5909008Z --- PASS: TestMemoryPageBoundaries (0.35s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5909787Z === RUN   TestMemoryPageLargeDatasetAndLegacy
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5910663Z --- PASS: TestMemoryPageLargeDatasetAndLegacy (14.02s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5911490Z === RUN   TestMemoryPageUTF8AndDetailLimit
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5912305Z --- PASS: TestMemoryPageUTF8AndDetailLimit (0.12s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5913057Z === RUN   TestRecallCandidates
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5914071Z     sqlite_recall_test.go:46: 10001 rows: returned=256 elapsed=25.333943ms
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5914988Z --- PASS: TestRecallCandidates (13.07s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5915988Z === RUN   TestRecallMetadataAndLegacyMigration
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5916994Z     sqlite_recall_test.go:110: legacy index migration=28.3296ms
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5917941Z --- PASS: TestRecallMetadataAndLegacyMigration (0.11s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5918704Z === RUN   TestTaskStorage
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5919332Z --- PASS: TestTaskStorage (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5919974Z === RUN   TestSQLiteStore_Unit
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5920660Z --- PASS: TestSQLiteStore_Unit (0.12s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5921438Z === RUN   TestSQLiteStore_RecoverInterruptedTasks
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5922317Z --- PASS: TestSQLiteStore_RecoverInterruptedTasks (0.15s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5923184Z === RUN   TestRecoverInterruptedTasks_Cancelling
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5924060Z --- PASS: TestRecoverInterruptedTasks_Cancelling (0.12s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5924894Z === RUN   TestSQLiteStore_TaskClassPersistence
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5925915Z --- PASS: TestSQLiteStore_TaskClassPersistence (0.12s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5926872Z === RUN   TestSQLiteStore_UpgradeFromOldSchemaWithoutRequestID
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5927989Z --- PASS: TestSQLiteStore_UpgradeFromOldSchemaWithoutRequestID (0.15s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5929033Z === RUN   TestSQLiteStore_DuplicateRequestIDUniqueIndex
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5930011Z --- PASS: TestSQLiteStore_DuplicateRequestIDUniqueIndex (0.11s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5931111Z === RUN   TestSQLiteStore_UpgradeFromSchemaWithDuplicateRequestIDs
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5932321Z --- PASS: TestSQLiteStore_UpgradeFromSchemaWithDuplicateRequestIDs (0.16s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5933408Z === RUN   TestSQLiteStore_MemoryContextColumnsMigration
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5934558Z --- PASS: TestSQLiteStore_MemoryContextColumnsMigration (0.15s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5935842Z === RUN   TestTaskPipelineTraceStorage
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5936665Z --- PASS: TestTaskPipelineTraceStorage (0.12s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5937412Z === RUN   TestTaskBackendStorage
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5938245Z --- PASS: TestTaskBackendStorage (0.16s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5938950Z === RUN   TestUtilityCapacityProbe
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5939882Z     sqlite_utility_probe_test.go:15: opt-in 10k/100k SQLite probe
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5940753Z --- SKIP: TestUtilityCapacityProbe (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5941477Z === RUN   TestUtilityLedgerAdmission
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5942220Z --- PASS: TestUtilityLedgerAdmission (0.15s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5942983Z === RUN   TestUtilityAtomicRetryRebuild
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5943768Z --- PASS: TestUtilityAtomicRetryRebuild (0.23s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5944949Z === RUN   TestUtilityAdmissionRollback
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5945922Z --- PASS: TestUtilityAdmissionRollback (0.07s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5946701Z === RUN   TestUtilityRecoveryAndDeletion
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5947509Z --- PASS: TestUtilityRecoveryAndDeletion (0.16s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5948471Z === RUN   TestUtilityPageBounds
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5949234Z --- PASS: TestUtilityPageBounds (0.10s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5949881Z === RUN   TestUtilityWeight
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5950507Z --- PASS: TestUtilityWeight (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5951197Z === RUN   TestUtilityTerminalOutcomes
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5952089Z === RUN   TestUtilityTerminalOutcomes/cancelled0"completed"}]}
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5953058Z === RUN   TestUtilityTerminalOutcomes/failed1"completed"}]}
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5954003Z === RUN   TestUtilityTerminalOutcomes/failed0s":"failed"}]}
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5954862Z --- PASS: TestUtilityTerminalOutcomes (0.22s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5956117Z     --- PASS: TestUtilityTerminalOutcomes/cancelled0"completed"}]} (0.07s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5957300Z     --- PASS: TestUtilityTerminalOutcomes/failed1"completed"}]} (0.07s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5958453Z     --- PASS: TestUtilityTerminalOutcomes/failed0s":"failed"}]} (0.07s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5959334Z === RUN   TestUtilityFailureStatus
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5960060Z --- PASS: TestUtilityFailureStatus (0.07s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5960928Z === RUN   TestTaskPipelineTrace_ContextWindowCompatibility
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5961975Z --- PASS: TestTaskPipelineTrace_ContextWindowCompatibility (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5962881Z === RUN   TestSQLiteStore_MemoryCRUD
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5963612Z --- PASS: TestSQLiteStore_MemoryCRUD (0.11s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5964395Z === RUN   TestSQLiteStore_MemorySchemaUpgrade
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5965431Z --- PASS: TestSQLiteStore_MemorySchemaUpgrade (0.11s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5966225Z === RUN   TestResolveMemoriesForTask
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5966969Z --- PASS: TestResolveMemoriesForTask (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5967564Z PASS
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5968087Z ok  	asura/internal/storage	45.402s
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5968747Z === RUN   TestWEBGITExpiredSession
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5969462Z --- PASS: TestWEBGITExpiredSession (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5970196Z === RUN   TestWEB010ExpiredSession
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5970907Z --- PASS: TestWEB010ExpiredSession (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5971725Z === RUN   TestSession_EvictOldestWhenCapacityReached
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5972668Z --- PASS: TestSession_EvictOldestWhenCapacityReached (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5973493Z === RUN   TestWEBGITIPCReaderBound
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5974211Z --- PASS: TestWEBGITIPCReaderBound (0.19s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5974867Z === RUN   TestWEB001Unit
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5975640Z --- PASS: TestWEB001Unit (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5976227Z === RUN   TestWEB010Unit
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5976825Z --- PASS: TestWEB010Unit (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5977398Z === RUN   TestWEB003Unit
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5977989Z --- PASS: TestWEB003Unit (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5978576Z === RUN   TestWEB004Unit
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5979169Z --- PASS: TestWEB004Unit (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5979738Z === RUN   TestWEB005Unit
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5980330Z --- PASS: TestWEB005Unit (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5980906Z === RUN   TestWEB008Unit
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5981519Z --- PASS: TestWEB008Unit (0.02s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5982096Z === RUN   TestWEB007Unit
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5982684Z --- PASS: TestWEB007Unit (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5983193Z PASS
+Test & Build	Test with Race Detector	2026-10-01T02:35:20.5983700Z ok  	asura/internal/web	1.245s
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2262095Z === RUN   TestCLI_EndToEnd
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2263975Z === RUN   TestCLI_EndToEnd/SCN-001:_提交任務並重查結果
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2265744Z === RUN   TestCLI_EndToEnd/SCN-002:_拒絕超出授權的工作目錄
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2266819Z --- PASS: TestCLI_EndToEnd (1.72s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2268359Z     --- PASS: TestCLI_EndToEnd/SCN-001:_提交任務並重查結果 (1.44s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2270025Z     --- PASS: TestCLI_EndToEnd/SCN-002:_拒絕超出授權的工作目錄 (0.27s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2271306Z === RUN   TestCLI_CancelIsolation
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2274910Z     cli_test.go:245: task B failed to complete: exit status 1, stderr: error: failed to initialize storage: init schema: record legacy completeness migration: constraint failed: UNIQUE constraint failed: schema_migrations.name (1555)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2278305Z --- FAIL: TestCLI_CancelIsolation (1.62s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2279376Z === RUN   TestCLI_PartialFailureProtection
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2280627Z --- PASS: TestCLI_PartialFailureProtection (1.30s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2281864Z === RUN   TestCLI_RestartRecovery
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2283092Z --- PASS: TestCLI_RestartRecovery (1.30s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2284236Z === RUN   TestCLI_EmptyOutputDefense
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2285277Z --- PASS: TestCLI_EmptyOutputDefense (1.29s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2286473Z === RUN   TestCLI_ReviewFixes_R03_R06_R07
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2287271Z --- PASS: TestCLI_ReviewFixes_R03_R06_R07 (1.31s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2287998Z === RUN   TestCLI_ReviewFixes_R04_ConcurrentOutput
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2288793Z --- PASS: TestCLI_ReviewFixes_R04_ConcurrentOutput (3.21s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2289739Z === RUN   TestCLI_LatestReview_G01_HandshakeCancelBeforeStart
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2290769Z --- PASS: TestCLI_LatestReview_G01_HandshakeCancelBeforeStart (4.06s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2291751Z === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2292745Z --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.90s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2293648Z === RUN   TestCLI_LatestReview_H01_LockFailureAbort
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2294468Z --- PASS: TestCLI_LatestReview_H01_LockFailureAbort (1.15s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2295827Z === RUN   TestCLI_LatestReview_I01_CancelRetryRecoversProcess
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2296811Z --- PASS: TestCLI_LatestReview_I01_CancelRetryRecoversProcess (2.20s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2297764Z === RUN   TestCLI_LatestReview_J01_CancelDoesNotKillReusedPGID
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2298743Z --- PASS: TestCLI_LatestReview_J01_CancelDoesNotKillReusedPGID (2.17s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2299737Z === RUN   TestCLI_LatestReview_K01_CancelRecoversCleanEnvProcess
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2300745Z --- PASS: TestCLI_LatestReview_K01_CancelRecoversCleanEnvProcess (2.17s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2301762Z === RUN   TestCLI_LatestReview_L01_CancelRecoversOrphanProcessGroup
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2302409Z --- PASS: TestCLI_LatestReview_L01_CancelRecoversOrphanProcessGroup (2.31s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2303208Z === RUN   TestCLI_LatestReview_M01_OrphanUnknownIdentityFailsSafely
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2303806Z --- PASS: TestCLI_LatestReview_M01_OrphanUnknownIdentityFailsSafely (1.15s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2304276Z === RUN   TestCLI_DaemonLifecycle
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2304622Z --- PASS: TestCLI_DaemonLifecycle (0.79s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2305031Z === RUN   TestCTXWIN001_BackendContextCapabilityProbe
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2306693Z === RUN   TestCTXWIN001_BackendContextCapabilityProbe/OpenCode_1.18.31_/_1.18.23_探測與離線_fixture_解析
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2307831Z === RUN   TestCTXWIN001_BackendContextCapabilityProbe/Codex_CLI_0.155.1_/_0.155.0_探測與離線_fixture_解析
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2308733Z --- PASS: TestCTXWIN001_BackendContextCapabilityProbe (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2309605Z     --- PASS: TestCTXWIN001_BackendContextCapabilityProbe/OpenCode_1.18.31_/_1.18.23_探測與離線_fixture_解析 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2311526Z     --- PASS: TestCTXWIN001_BackendContextCapabilityProbe/Codex_CLI_0.155.1_/_0.155.0_探測與離線_fixture_解析 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2312558Z === RUN   TestCTXWIN002_ExplicitProvenanceForTokenData
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2313617Z --- PASS: TestCTXWIN002_ExplicitProvenanceForTokenData (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2314577Z === RUN   TestCTXWIN003_DynamicStageAwarePromptEvaluation
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2316285Z --- PASS: TestCTXWIN003_DynamicStageAwarePromptEvaluation (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2317173Z === RUN   TestCTXWIN004_PreflightAdmissionRejection
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2318064Z --- PASS: TestCTXWIN004_PreflightAdmissionRejection (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2318982Z === RUN   TestCTXWIN005_SealedContextImmutability
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2319886Z --- PASS: TestCTXWIN005_SealedContextImmutability (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2320744Z === RUN   TestCTXWIN006_StageLevelTraceAuditAndBackwardCompatibility
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2322134Z --- PASS: TestCTXWIN006_StageLevelTraceAuditAndBackwardCompatibility (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2323422Z === RUN   TestCTXWIN007_RedeliveryPreservesContextAndAdmission
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2324467Z --- PASS: TestCTXWIN007_RedeliveryPreservesContextAndAdmission (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2325687Z === RUN   TestCTXWIN008_BaselineRegressionSafety
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2326714Z --- PASS: TestCTXWIN008_BaselineRegressionSafety (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2327627Z === RUN   TestCRON001_WorkspaceMutexQueue
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2328515Z --- PASS: TestCRON001_WorkspaceMutexQueue (0.15s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2329308Z === RUN   TestCRON002_InteractiveChannelReserved
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2330292Z --- PASS: TestCRON002_InteractiveChannelReserved (0.15s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2331203Z === RUN   TestCRON003_CLICronManagement
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2332086Z --- PASS: TestCRON003_CLICronManagement (0.87s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2332844Z === RUN   TestCRON004_PeriodicTriggerCreatesTask
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2333809Z --- PASS: TestCRON004_PeriodicTriggerCreatesTask (1.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2334689Z === RUN   TestCRON005_OverlapSkip
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2335768Z --- PASS: TestCRON005_OverlapSkip (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2336449Z === RUN   TestCRON006_RestartNoCatchup
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2337122Z --- PASS: TestCRON006_RestartNoCatchup (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2338110Z === RUN   TestCRON007_UnauthorizedWorkspaceAutoPause
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2339303Z --- PASS: TestCRON007_UnauthorizedWorkspaceAutoPause (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2340132Z === RUN   TestCRON008_PersistenceAcrossRestart
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2340893Z --- PASS: TestCRON008_PersistenceAcrossRestart (3.02s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2341771Z === RUN   TestCRON001_CronAndInteractiveWorkspaceMutex
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2342817Z --- PASS: TestCRON001_CronAndInteractiveWorkspaceMutex (0.16s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2343803Z === RUN   TestCRON007_CLICronHistoryQuery
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2344530Z --- PASS: TestCRON007_CLICronHistoryQuery (2.29s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2345645Z === RUN   TestGitMemory_EndToEnd_FullWorkflow
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2346607Z --- PASS: TestGitMemory_EndToEnd_FullWorkflow (0.27s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2347496Z === RUN   TestGitMem_RecallIntegration
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2348190Z --- PASS: TestGitMem_RecallIntegration (0.21s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2348746Z === RUN   TestINT001
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2349756Z     int_test.go:33: skipping contract test: no model credentials configured in this environment
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2350564Z --- SKIP: TestINT001 (0.71s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2351036Z === RUN   TestINT007
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2352419Z     int_test.go:95: skipping contract test: no model credentials configured in this environment
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2353482Z --- SKIP: TestINT007 (0.75s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2353974Z === RUN   TestINT002
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2354429Z --- PASS: TestINT002 (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2355521Z === RUN   TestINT003
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2356229Z --- PASS: TestINT003 (0.16s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2356782Z === RUN   TestINT004
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2357443Z --- PASS: TestINT004 (0.18s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2358065Z === RUN   TestINT004Redelivery
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2359158Z --- PASS: TestINT004Redelivery (0.24s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2359761Z === RUN   TestINT005
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2360402Z --- PASS: TestINT005 (0.17s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2361061Z === RUN   TestINT006
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2361560Z --- PASS: TestINT006 (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2362607Z === RUN   TestCTXMEM001_MemoryInjectedIntoPromptAndOriginalPromptProtected
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2363877Z --- PASS: TestCTXMEM001_MemoryInjectedIntoPromptAndOriginalPromptProtected (0.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2364857Z === RUN   TestCTXMEM002_CrossProjectMemoryRejection
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2365926Z --- PASS: TestCTXMEM002_CrossProjectMemoryRejection (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2366443Z === RUN   TestCTXMEM003_RevokedOrOutsideWorkspaceRejection
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2366996Z --- PASS: TestCTXMEM003_RevokedOrOutsideWorkspaceRejection (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2367520Z === RUN   TestCTXMEM004_SealedContextImmutableOnRedelivery
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2368040Z --- PASS: TestCTXMEM004_SealedContextImmutableOnRedelivery (0.12s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2368571Z === RUN   TestCTXMEM005_NonExistentAndDeletedMemoryRejection
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2369113Z --- PASS: TestCTXMEM005_NonExistentAndDeletedMemoryRejection (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2369632Z === RUN   TestCTXMEM006_TaskQueryExposesMemoryRefsAndScope
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2370150Z --- PASS: TestCTXMEM006_TaskQueryExposesMemoryRefsAndScope (0.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2370635Z === RUN   TestCTXMEM007_NoMemoryMaintainsLegacyPrompt
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2371109Z --- PASS: TestCTXMEM007_NoMemoryMaintainsLegacyPrompt (0.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2371523Z === RUN   TestCTXMEM_CLI_EndToEnd
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2371862Z --- PASS: TestCTXMEM_CLI_EndToEnd (0.41s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2372295Z === RUN   TestCTXMEM_QueuedTaskPreservesSealedContextOnWake
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2372838Z --- PASS: TestCTXMEM_QueuedTaskPreservesSealedContextOnWake (0.10s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2373395Z === RUN   TestCTXMEM_SymlinkRetargetUsesOriginalCanonicalWorkspace
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2373997Z --- PASS: TestCTXMEM_SymlinkRetargetUsesOriginalCanonicalWorkspace (0.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2374514Z === RUN   TestP1T2a_FixtureAndRunnerBaseline
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2374921Z --- PASS: TestP1T2a_FixtureAndRunnerBaseline (0.11s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2376369Z === RUN   TestMEM002
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2376940Z --- PASS: TestMEM002 (0.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2377455Z === RUN   TestMEM003
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2378313Z === RUN   TestMEM003/越界符號連結操作拒絕
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2378950Z === RUN   TestMEM003/未授權外部目錄操作拒絕
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2379599Z --- PASS: TestMEM003 (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2380372Z     --- PASS: TestMEM003/越界符號連結操作拒絕 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2381118Z     --- PASS: TestMEM003/未授權外部目錄操作拒絕 (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2381629Z === RUN   TestMEM004
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2382112Z --- PASS: TestMEM004 (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2382702Z === RUN   TestMEM007
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2383144Z --- PASS: TestMEM007 (2.93s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2383667Z === RUN   TestMEM001
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2384134Z --- PASS: TestMEM001 (4.56s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2384593Z === RUN   TestMEM005
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2385062Z --- PASS: TestMEM005 (4.49s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2385894Z === RUN   TestMEM006
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2386343Z --- PASS: TestMEM006 (2.14s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2386931Z === RUN   TestMBACK_001_DefaultBackendOpenCode
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2387845Z --- PASS: TestMBACK_001_DefaultBackendOpenCode (0.10s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2388526Z === RUN   TestMBACK_002_ExplicitBackendCodex
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2389471Z --- PASS: TestMBACK_002_ExplicitBackendCodex (0.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2390279Z === RUN   TestMBACK_003_UnknownBackendFailClosed
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2391115Z --- PASS: TestMBACK_003_UnknownBackendFailClosed (0.14s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2392026Z === RUN   TestMBACK_004_DifferentBackendConflictRejected
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2393349Z --- PASS: TestMBACK_004_DifferentBackendConflictRejected (0.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2394349Z === RUN   TestMBACK_005_SameBackendRedelivery
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2395126Z --- PASS: TestMBACK_005_SameBackendRedelivery (0.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2396461Z === RUN   TestMBACK_006_FailureClassification
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2397194Z --- PASS: TestMBACK_006_FailureClassification (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2397890Z === RUN   TestMBACK_007_CancellationProcessGroup
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2398662Z --- PASS: TestMBACK_007_CancellationProcessGroup (0.16s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2399411Z === RUN   TestMBACK_008_ThreeFaceCapabilityPreflight
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2400298Z --- PASS: TestMBACK_008_ThreeFaceCapabilityPreflight (0.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2401090Z === RUN   TestMBACK_009_PipelineTraceRecordsBackend
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2402073Z --- PASS: TestMBACK_009_PipelineTraceRecordsBackend (0.12s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2403086Z === RUN   TestMBACK_010_NoFailoverAfterPartialExecution
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2404043Z --- PASS: TestMBACK_010_NoFailoverAfterPartialExecution (0.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2404794Z === RUN   TestMBACK_011_EventNormalization
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2405863Z --- PASS: TestMBACK_011_EventNormalization (0.00s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2406322Z === RUN   TestMBACK_012_QueueWakePreservesBackend
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2406789Z --- PASS: TestMBACK_012_QueueWakePreservesBackend (0.12s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2407428Z === RUN   TestMBACK_OpenCode_RoleRouting_Separation
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2407894Z --- PASS: TestMBACK_OpenCode_RoleRouting_Separation (0.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2408323Z === RUN   TestProbe_GitBoundary_ReadOnlyWorktree
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2408766Z --- PASS: TestProbe_GitBoundary_ReadOnlyWorktree (0.03s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2409196Z === RUN   TestProbe_GitBoundary_ExternalDiffBlocked
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2409874Z     probe_git_boundary_test.go:186: Confirmed: unsafe git diff triggered external diff script!
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2410731Z     probe_git_boundary_test.go:216: PASS: External diff script was completely suppressed by safe flags.
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2411365Z --- PASS: TestProbe_GitBoundary_ExternalDiffBlocked (0.03s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2411800Z === RUN   TestProbe_GitBoundary_BinaryAndStats
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2412472Z     probe_git_boundary_test.go:270: PASS: Git numstat accurately reports binary file with '-' sentinel.
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2413066Z --- PASS: TestProbe_GitBoundary_BinaryAndStats (0.03s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2413487Z === RUN   TestProbe_GitBoundary_ProcessGroupKill
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2414080Z     probe_git_boundary_test.go:305: PASS: Process group killed cleanly in 200.596788ms
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2414629Z --- PASS: TestProbe_GitBoundary_ProcessGroupKill (0.20s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2415051Z === RUN   TestProbe_GitBoundary_LimitReader
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2417054Z     probe_git_boundary_test.go:320: PASS: LimitReader strictly bounds output to 256 KiB.
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2418188Z --- PASS: TestProbe_GitBoundary_LimitReader (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2418957Z === RUN   TestProbe_GitBoundary_GitDirEscape
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2421442Z     probe_git_boundary_test.go:375: PASS: Successfully detected external gitdir escape (/tmp/TestProbe_GitBoundary_GitDirEscape4276002123/001/outside/external.git outside /tmp/TestProbe_GitBoundary_GitDirEscape4276002123/001/allowed)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2426236Z --- PASS: TestProbe_GitBoundary_GitDirEscape (0.01s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2426977Z === RUN   TestProbe_SQLite_GitApprovedMemoryCompat
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2428241Z     probe_sqlite_isolation_test.go:110: PASS: Recall correctly selected git-approved memory with score: 5
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2429366Z --- PASS: TestProbe_SQLite_GitApprovedMemoryCompat (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2430391Z === RUN   TestProbe_SQLite_CandidateIsolationAndProvenanceCascade
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2431779Z     probe_sqlite_isolation_test.go:193: PASS: Candidate storage is 100% isolated from ListMemories.
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2433450Z     probe_sqlite_isolation_test.go:229: PASS: ON DELETE CASCADE cleanly removed provenance row upon memory deletion.
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2435095Z --- PASS: TestProbe_SQLite_CandidateIsolationAndProvenanceCascade (0.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2436332Z === RUN   TestRECALL_Acceptance
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2436931Z --- PASS: TestRECALL_Acceptance (0.14s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2437878Z === RUN   TestRECALL_OffScopeExplicitAndNoRequery
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2438648Z --- PASS: TestRECALL_OffScopeExplicitAndNoRequery (0.20s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2439452Z === RUN   TestRECALL_ConcurrentRequest
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2440169Z --- PASS: TestRECALL_ConcurrentRequest (0.12s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2440860Z === RUN   TestRECALL_BoundedAndExplicit
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2441530Z --- PASS: TestRECALL_BoundedAndExplicit (0.41s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2442235Z === RUN   TestRECALL_BoundedCanonicalExplicitIDs
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2443003Z --- PASS: TestRECALL_BoundedCanonicalExplicitIDs (0.14s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2443701Z === RUN   TestRECALL_StageAdmission
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2444356Z === RUN   TestRECALL_StageAdmission/reject
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2445078Z === RUN   TestRECALL_StageAdmission/observe
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2446055Z --- PASS: TestRECALL_StageAdmission (0.21s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2446894Z     --- PASS: TestRECALL_StageAdmission/reject (0.11s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2447728Z     --- PASS: TestRECALL_StageAdmission/observe (0.11s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2448402Z === RUN   TestRECALL_QueuedRestartSnapshot
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2449173Z --- PASS: TestRECALL_QueuedRestartSnapshot (0.18s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2449939Z === RUN   TestRECALL_ExplicitOverrunAndCriticOverrun
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2450900Z === RUN   TestRECALL_ExplicitOverrunAndCriticOverrun/explicit_observe
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2451957Z === RUN   TestRECALL_ExplicitOverrunAndCriticOverrun/explicit_reject
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2452890Z === RUN   TestRECALL_ExplicitOverrunAndCriticOverrun/critic
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2453738Z --- PASS: TestRECALL_ExplicitOverrunAndCriticOverrun (0.30s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2454810Z     --- PASS: TestRECALL_ExplicitOverrunAndCriticOverrun/explicit_observe (0.10s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2456420Z     --- PASS: TestRECALL_ExplicitOverrunAndCriticOverrun/explicit_reject (0.10s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2457672Z     --- PASS: TestRECALL_ExplicitOverrunAndCriticOverrun/critic (0.11s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2458476Z === RUN   TestRECALL_QueryDeadline
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2459305Z --- PASS: TestRECALL_QueryDeadline (0.39s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2460048Z === RUN   TestGitMem_SealedSnapshotIntegrity
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2460877Z --- PASS: TestGitMem_SealedSnapshotIntegrity (0.21s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2461649Z === RUN   TestTFACE001_FixedOrderExecution
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2462392Z --- PASS: TestTFACE001_FixedOrderExecution (0.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2462919Z === RUN   TestTFACE002_OraclePlanStructuredAndTraceable
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2463813Z --- PASS: TestTFACE002_OraclePlanStructuredAndTraceable (0.11s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2464661Z === RUN   TestTFACE003_SharedSealedExecutionContext
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2466627Z --- PASS: TestTFACE003_SharedSealedExecutionContext (0.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2467428Z === RUN   TestTFACE004_OracleFailureFailClosed
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2468186Z --- PASS: TestTFACE004_OracleFailureFailClosed (0.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2468941Z === RUN   TestTFACE005_StrikerFailureNoCriticNoRetry
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2469749Z --- PASS: TestTFACE005_StrikerFailureNoCriticNoRetry (0.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2470444Z === RUN   TestTFACE006_CriticReviewSuccess
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2471125Z --- PASS: TestTFACE006_CriticReviewSuccess (0.11s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2471888Z === RUN   TestTFACE007_CriticFailureMustNotClaimSuccess
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2473144Z === RUN   TestTFACE007_CriticFailureMustNotClaimSuccess/Critic_執行異常報錯
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2474346Z === RUN   TestTFACE007_CriticFailureMustNotClaimSuccess/Critic_Verdict_判定_Failed
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2475677Z --- PASS: TestTFACE007_CriticFailureMustNotClaimSuccess (0.18s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2476916Z     --- PASS: TestTFACE007_CriticFailureMustNotClaimSuccess/Critic_執行異常報錯 (0.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2478335Z     --- PASS: TestTFACE007_CriticFailureMustNotClaimSuccess/Critic_Verdict_判定_Failed (0.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2479787Z === RUN   TestTFACE008_DirectModeSemanticsPreserved
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2480697Z --- PASS: TestTFACE008_DirectModeSemanticsPreserved (0.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2481588Z === RUN   TestTFACE009_ThreeFaceRedeliveryIdempotency
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2482754Z --- PASS: TestTFACE009_ThreeFaceRedeliveryIdempotency (0.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2483641Z === RUN   TestTFACE010_PipelineMetricsAndCostDistinction
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2484584Z --- PASS: TestTFACE010_PipelineMetricsAndCostDistinction (0.13s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2485828Z === RUN   TestWEBGITHTTPCancellation
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2486635Z === RUN   TestWEBGITHTTPCancellation/disconnect
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2487494Z === RUN   TestWEBGITHTTPCancellation/timeout
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2488233Z --- PASS: TestWEBGITHTTPCancellation (10.16s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2489170Z     --- PASS: TestWEBGITHTTPCancellation/disconnect (0.03s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2490050Z     --- PASS: TestWEBGITHTTPCancellation/timeout (10.02s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2490752Z === RUN   TestWEBGITHTTPWorkflow
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2491420Z --- PASS: TestWEBGITHTTPWorkflow (0.23s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2492067Z === RUN   TestWEBGITHTTPBoundaryAndBounds
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2492749Z --- PASS: TestWEBGITHTTPBoundaryAndBounds (0.12s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2493394Z === RUN   TestWEBGITHTTPPaging
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2494032Z --- PASS: TestWEBGITHTTPPaging (232.80s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2494712Z === RUN   TestWEBGITRecallAndSealedContext
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2495659Z --- PASS: TestWEBGITRecallAndSealedContext (0.16s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2496432Z === RUN   TestWEBGITCaptureModesAndLegacyPayload
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2497315Z --- PASS: TestWEBGITCaptureModesAndLegacyPayload (1.52s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2498242Z === RUN   TestWEBGITHTTPMalformedAndEscapingBounds
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2499191Z --- PASS: TestWEBGITHTTPMalformedAndEscapingBounds (0.59s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2499964Z === RUN   TestWEBGITCrossOriginRead
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2500720Z --- PASS: TestWEBGITCrossOriginRead (0.08s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2501421Z === RUN   TestWEBMEMHTTPBoundary
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2502099Z --- PASS: TestWEBMEMHTTPBoundary (0.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2502759Z === RUN   TestWEBMEMCRUDAndLimits
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2503384Z --- PASS: TestWEBMEMCRUDAndLimits (0.61s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2504039Z === RUN   TestWEBMEMHTTPPageLargeDataset
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2504746Z --- PASS: TestWEBMEMHTTPPageLargeDataset (10.18s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2505774Z === RUN   TestWEBMEMSubmitExplicitAndBounded
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2506559Z --- PASS: TestWEBMEMSubmitExplicitAndBounded (0.14s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2507366Z === RUN   TestWEBMEMBoundedOnly
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2508290Z --- PASS: TestWEBMEMBoundedOnly (0.10s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2509011Z === RUN   TestWEBMEMRedelivery
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2509608Z --- PASS: TestWEBMEMRedelivery (0.10s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2510194Z === RUN   TestWEB002Daemon
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2510727Z --- PASS: TestWEB002Daemon (1.53s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2511248Z === RUN   TestWEB001
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2511673Z --- PASS: TestWEB001 (0.10s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2512117Z === RUN   TestWEB002
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2512539Z --- PASS: TestWEB002 (0.10s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2512971Z === RUN   TestWEB010
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2513350Z --- PASS: TestWEB010 (0.09s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2513784Z === RUN   TestWEB003
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2514182Z --- PASS: TestWEB003 (0.19s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2514611Z === RUN   TestWEB004
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2515001Z --- PASS: TestWEB004 (0.13s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2515595Z === RUN   TestWEB005
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2516006Z --- PASS: TestWEB005 (0.12s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2516407Z === RUN   TestWEB008
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2516785Z --- PASS: TestWEB008 (0.19s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2517293Z === RUN   TestWEB008ProjectsAndPage
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2517915Z --- PASS: TestWEB008ProjectsAndPage (0.10s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2518432Z === RUN   TestWEB006
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2532511Z --- PASS: TestWEB006 (0.12s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2533082Z === RUN   TestWEB007
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2533848Z --- PASS: TestWEB007 (0.15s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2534321Z === RUN   TestWEB009
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2534776Z --- PASS: TestWEB009 (0.13s)
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2535175Z FAIL
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2535921Z FAIL	asura/tests/integration	322.215s
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.2536622Z FAIL
+Test & Build	Test with Race Detector	2026-10-01T02:40:23.3878561Z ##[error]Process completed with exit code 1.

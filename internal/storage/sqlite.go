@@ -428,6 +428,18 @@ func (s *SQLiteStore) initSchema() error {
 			}
 			defer tx.Rollback()
 
+			claim, err := tx.Exec(`INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?) ON CONFLICT(name) DO NOTHING`, legacyCompletenessMigration, time.Now().UTC())
+			if err != nil {
+				return fmt.Errorf("record legacy completeness migration: %w", err)
+			}
+			claimed, err := claim.RowsAffected()
+			if err != nil {
+				return fmt.Errorf("check legacy completeness migration claim: %w", err)
+			}
+			if claimed == 0 {
+				return tx.Commit()
+			}
+
 			quarantineLegacyUnknown := `
 			UPDATE memory_candidates
 			SET policy_version = 'gitmem-v1-legacy-unknown'
@@ -464,9 +476,6 @@ func (s *SQLiteStore) initSchema() error {
 			`
 			if _, err := tx.Exec(quarantineLegacyUnknownMemories); err != nil {
 				return fmt.Errorf("quarantine legacy approved memories with unknown completeness: %w", err)
-			}
-			if _, err := tx.Exec(`INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)`, legacyCompletenessMigration, time.Now().UTC()); err != nil {
-				return fmt.Errorf("record legacy completeness migration: %w", err)
 			}
 			if err := tx.Commit(); err != nil {
 				return fmt.Errorf("commit legacy completeness migration: %w", err)
