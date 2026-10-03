@@ -1,0 +1,2 @@
+2026-10-03; command: go build -o /tmp/asura-issue35 ./cmd/asura; tested source: tested-source.sha256; exit code: 0
+Success (no stdout/stderr).

@@ -379,3 +379,12 @@ PipelineTrace 的 execution_contract 複用接受時值，execution_guard／guar
 本機 run 的 opencode/codex 仍是既有 shell runner，不將它偽稱為實際 runtime 執行；2026-10-03 已核准保留 shell 相容行為，CLI／Web 的 runtime contract 明示 legacy/unavailable，不探測或偽造 runtime snapshot。真正 local runtime pipeline 使用共同 admission。
 
 最後驗證日期：2026-10-03；相關測試與未決範圍見 docs/issues/issue-33。
+
+
+## Phase 4B：Capability-aware Runtime Selection（2026-10-03）
+
+明確 backend=auto 才啟用選擇。Registry.Snapshot 固定註冊集合並按 ID 排序，鎖外捕獲所有 descriptor；共同 matcher 決定 eligibility，純 policy 依有效 priority 選一個 Task-level runtime。預設 OpenCode 優先、其餘 ID 字典序、OMP 最後；ASURA_RUNTIME_PRIORITY 在 daemon/local CLI composition root 解析，policy ID/version 與有效排序均封存。
+
+requested intent 用於 fingerprint/redelivery，Task.Backend/ExecutionContext.Backend 保存 selected ID；worker dispatch 與 queue 喚醒保留 auto intent，由 engine 讀已保存 binding。SelectionDecision 為 capability-v1 ExecutionContract additive 欄位，與 resolved_context 同次 CreateTask INSERT，沒有 SQL migration。查詢只讀快照；執行 guard 比較同一 selected runtime 的能力，不能重選。
+
+候選版本失敗、unknown capability、無 eligible 或 32 candidates／64 KiB 上限超出皆 fail-closed，不降低需求或 fallback。CLI explicit shell 相容，local auto 使用真 adapters 與取消身分登記。Web API additive backend 欄位與既有 audit，未新增 management UI。選擇沒有模型、health/load/cost 輸入；未實作 mixed-stage runtime 或 attempt/retry。

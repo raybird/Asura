@@ -1,6 +1,7 @@
 package main
 
 import (
+	"asura/internal/backend"
 	"flag"
 	"fmt"
 	"io"
@@ -34,6 +35,12 @@ func handleDaemon(args []string, stdout, stderr io.Writer) int {
 	contextCfg, err := contextwin.LoadConfig()
 	if err != nil {
 		fmt.Fprintf(stderr, "error: invalid context configuration: %v\n", err)
+		return 1
+	}
+
+	runtimePriority, err := backend.ParseRuntimePriority(os.Getenv("ASURA_RUNTIME_PRIORITY"))
+	if err != nil {
+		fmt.Fprintf(stderr, "error: runtime priority: %v\n", err)
 		return 1
 	}
 
@@ -77,11 +84,12 @@ func handleDaemon(args []string, stdout, stderr io.Writer) int {
 	defer store.Close()
 
 	cfg := daemon.Config{
-		UtilityPolicy: utilityPolicy,
-		SocketPath:    *sockPath,
-		MaxWorkers:    *workers,
-		MaxQueue:      *queue,
-		ContextConfig: contextCfg,
+		RuntimePriority: runtimePriority,
+		UtilityPolicy:   utilityPolicy,
+		SocketPath:      *sockPath,
+		MaxWorkers:      *workers,
+		MaxQueue:        *queue,
+		ContextConfig:   contextCfg,
 	}
 	if *permission != "" {
 		cfg.OpenCodeConfig.Permission = *permission

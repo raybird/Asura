@@ -6,7 +6,7 @@
 
 本期加入明確 opt-in 的能力感知選擇：共同 matcher 篩選 eligible runtimes，再由 deterministic policy 選出一個 Task-level runtime。explicit backend 維持 authoritative，Three-Face 三個 stage 共用同一 binding。保存接受時決策，歷史查詢與重送不重選。
 
-不含 health/load/cost/intelligence routing、fallback、retry、mixed-stage binding、discovery 或 Runtime Management UI。Issue 原文的驗收為「候選」，RS-TBD 尚待定案；本文件是待核准提案，不是實作授權。
+不含 health/load/cost/intelligence routing、fallback、retry、mixed-stage binding、discovery 或 Runtime Management UI。Issue 原文的驗收為「候選」；2026-10-03 使用者「提案也核准」後，RTSEL-001～015 與 RS-TBD 全部成為實作契約。
 
 ## 文件清單
 
@@ -167,7 +167,7 @@ Feature: deterministic capability-aware runtime selection
 
 ## Gherkin 核准紀錄
 
-- **核准 commit**: 待提交（整份規格核准；排序舊基線 4a1a7af）
+- **核准 commit**: c3381d4（完整規格核准；排序舊基線 4a1a7af）
 - **核准來源**: 2026-10-03 使用者 `/dev-cycle issue:35` 授權盤點與準備提案；GitHub #35 明示候選驗收與待定 RS-TBD。未將 issue ID 視為新增行為核准。2026-10-03 使用者先指定「Omp 預設放最後好了」，再對可調排序提案回覆「好核准」，核准 RTSEL-003、RTSEL-015 與有效排序封存方向；未推定為其餘 Scenario 全部核准。
 
 | Scenario | 核准日期 | 狀態 |
@@ -202,10 +202,10 @@ Feature: deterministic capability-aware runtime selection
 
 | 編號 | 事項 | 狀態 | 影響 |
 |---|---|---|---|
-| TBD-1 | 核准 RTSEL-001～014 與 technical-analysis 的 RS-TBD-1～12 提案 | 已解決 | 全部 Scenario；待核准項未排成可執行 Task |
-| TBD-2 | OMP 預設最後、opencode 優先、其餘 ID 字典序；ASURA_RUNTIME_PRIORITY 可調排序入口 | 已解決 | 2026-10-03 使用者回覆「好核准」；RTSEL-003、015。其餘 admission 行為仍分開待核准 |
-| TBD-3 | local run auto 走真實 AI runtime，explicit shell 保持 | 已解決 | RTSEL-001／011，run prompt 解讀方式 |
-| TBD-4 | 任一候選版本失敗拒絕整次 auto；32 candidates／64 KiB 上限 | 已解決 | RTSEL-013／014；未安裝 OMP/Antigravity 但已註冊時 auto 也會失敗 |
+| TBD-1 | 2026-10-03 使用者核准 RTSEL-001～015 與 RS-TBD-1～12 | 已解決 | 全部 Scenario 已核准，Task 依 implementation-plan 執行 |
+| TBD-2 | OMP 預設最後、opencode 優先、其餘 ID 字典序；ASURA_RUNTIME_PRIORITY 可調排序入口 | 已解決 | 2026-10-03 使用者回覆「好核准」；RTSEL-003、015。2026-10-03 其餘 admission 行為亦已核准 |
+| TBD-3 | local run auto 走真實 AI runtime，explicit shell 保持 | 已解決 | 2026-10-03 完整提案核准；RTSEL-001／011 |
+| TBD-4 | 任一候選版本失敗拒絕整次 auto；32 candidates／64 KiB 上限 | 已解決 | 2026-10-03 完整提案核准；RTSEL-013／014；未安裝 OMP/Antigravity 但已註冊時 auto 也會失敗 |
 
 ## Timeline
 

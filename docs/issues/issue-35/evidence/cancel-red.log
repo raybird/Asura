@@ -1,0 +1,6 @@
+2026-10-03; command: go test -count=1 ./cmd/asura -run TestRuntimeSelectionLocalCancel; exit code: 1
+--- FAIL: TestRuntimeSelectionLocalCancel (5.02s)
+    runtime_selection_test.go:96: auto runtime survived cancel
+FAIL
+FAIL	asura/cmd/asura	5.023s
+FAIL

@@ -74,6 +74,9 @@ func (e *Engine) Preflight(ctx context.Context, mode, requested string) (*backen
 	}); ok {
 		return admission.Preflight(ctx, mode, requested)
 	}
+	if requested == "auto" {
+		return nil, fmt.Errorf("%w: auto requires runtime registry", backend.ErrInvalidContract)
+	}
 	return nil, nil
 }
 
@@ -312,7 +315,15 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 	if req.ID != "" {
 		existing, err := e.store.GetTask(ctx, req.ID)
 		if err == nil {
-			if existing.Backend != "" && backendID != "" && existing.Backend != backendID {
+			existingIntent := existing.Backend
+			var storedContext ExecutionContext
+			if existing.ResolvedContext != "" && json.Unmarshal([]byte(existing.ResolvedContext), &storedContext) == nil && storedContext.ExecutionContract != nil {
+				existingIntent = storedContext.ExecutionContract.RequestedBackend
+				if existingIntent == "" {
+					existingIntent = "opencode"
+				}
+			}
+			if existingIntent != "" && existingIntent != backendID {
 				return nil, fmt.Errorf("request ID %q reused with different backend (existing: %q, requested: %q)", req.ID, existing.Backend, backendID)
 			}
 			if existing.Status == storage.StatusCancelled {
@@ -321,6 +332,7 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 			if existing.Status != storage.StatusPending && existing.Status != storage.StatusQueued {
 				return existing, nil
 			}
+			backendID = existing.Backend
 			task = existing
 			alreadyCreated = true
 		}
@@ -332,10 +344,13 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 			return nil, fmt.Errorf("capability admission: %w", err)
 		}
 		if contract != nil {
+			backendID = contract.Runtime.ID
+			task.Backend = backendID
 			sealed := &ExecutionContext{OriginalPrompt: req.Prompt, Workspace: req.Workspace, Backend: backendID, CreatedAt: now}
 			if req.ResolvedContext != nil {
 				*sealed = *req.ResolvedContext
 			}
+			sealed.Backend = backendID
 			sealed.ExecutionContract = contract
 			raw, err := json.Marshal(sealed)
 			if err != nil {

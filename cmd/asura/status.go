@@ -87,6 +87,14 @@ func handleStatus(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stdout, "Runtime snapshot: %s %s (%s)\n", contract.Runtime.ID, contract.Runtime.Version, contract.Runtime.CapturedAt.Format("2006-01-02T15:04:05Z07:00"))
 			fmt.Fprintf(stdout, "Requirements: %v\n", contract.Match.Required)
 			fmt.Fprintf(stdout, "Capabilities: %v\n", contract.Match.Available)
+			if d := contract.SelectionDecision; d != nil {
+				fmt.Fprintf(stdout, "Requested selection: %s\nSelected runtime: %s %s\nSelection policy: %s %s\nRuntime priority: %v\nEligible runtimes: %v\nRejected runtimes: %v\n", d.Request.Mode, d.Selected.ID, d.Selected.Version, d.PolicyID, d.PolicyVersion, d.Priority, d.Eligible, d.Rejected)
+				for _, candidate := range d.Candidates {
+					fmt.Fprintf(stdout, "Candidate: %s %s required=%v available=%v missing=%v\n", candidate.Runtime.ID, candidate.Runtime.Version, candidate.Match.Required, candidate.Match.Available, candidate.Match.Missing)
+				}
+			} else {
+				fmt.Fprintln(stdout, "Runtime selection: legacy/unavailable")
+			}
 			fmt.Fprintln(stdout, "Capability match: compatible")
 		}
 	} else {

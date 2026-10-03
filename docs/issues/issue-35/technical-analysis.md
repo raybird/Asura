@@ -1,6 +1,6 @@
 # Issue 35 — 技術提案
 
-2026-10-03 提案，排序及設定入口已分批核准，其餘待核准。以 [現況盤點](requirement-analysis.md) 與 [驗收規格](README.md) 為依據。
+2026-10-03 提案，使用者「提案也核准」後，全份提案已核准。以 [現況盤點](requirement-analysis.md) 與 [驗收規格](README.md) 為依據。
 
 ## 選型與取捨
 
@@ -36,7 +36,7 @@
 | RS-TBD-5 | 純 selection 函式，無獨立 SelectionPolicy interface；不把 policy 放 Registry 或 adapter |
 | RS-TBD-6 | 預設 opencode 優先、其餘 ID 字典序、omp 最後；可選使用者 priority 列表，未列者依預設規則補齊；registry audit ID 序與 policy priority 分開 |
 | RS-TBD-7 | 封存 policy_id=`deterministic-priority`、policy_version=`v1` 與有效 priority 列表（含補齊項）；capability-v1 policy/version 仍保留，兩種政策分開解讀 |
-| RS-TBD-8 | additive SelectionDecision 保存 intent、所有候選、eligible/rejected、selected、policy；requirements 引用同一 ExecutionContract。最多 32 candidates，decision JSON 最多 64 KiB，超限拒絕而不截斷；上限待核准，不冒稱既有契約 |
+| RS-TBD-8 | additive SelectionDecision 保存 intent、所有候選、eligible/rejected、selected、policy；requirements 引用同一 ExecutionContract。最多 32 candidates，decision JSON 最多 64 KiB，超限拒絕而不截斷；2026-10-03 核准的新上限，不冒稱既有契約 |
 | RS-TBD-9 | fingerprint 以 intent 建立：沿用原 explicit hash，auto 的 backend 字串為 auto，絕不納入 registry/selected/version；engine 比 persisted intent，派送使用 selected ID；正常重送先 lookup，並行首次 admission 容許多次 capture 但唯一 Task／execution |
 | RS-TBD-10 | IPC 既有 backend 欄位可傳 auto，Web API additive backend；舊 client 缺欄位不變。CLI/status/trace/Web audit 從 sealed contract 顯示 requested/selected/policy/candidates；不加入 Web management UI |
 | RS-TBD-11 | admission 前建立 Three-Face 完整 requirements union，一次 matcher/policy，三 stage 使用同一 selected ID；執行期 guard 不重選 |
@@ -54,7 +54,7 @@ explicit 不需要枚舉其他候選，維持 Phase 4A 的能力拒絕與版本�
 
 控制平面仍只做 requirements/matcher/selection，adapter 不變成 router。local auto 必須接真實 registry/adapters，沿用 process lock、cancel、context budget 與 role sandbox。常青架構及 CLI 文件在實作交付時更新，不先描述尚未存在的功能。
 
-README TBD-1～4 是核准阻塞；其中版本失敗提案限制可用性最明顯。若要改成「版本不明仍按 capability 選，僅 selected 版本失敗拒絕」，需同步修訂 candidate version provenance 與 RTSEL-013，不視為等價技術選擇。
+2026-10-03 README TBD-1～4 已全部核准；其中版本失敗提案限制可用性最明顯。若要改成「版本不明仍按 capability 選，僅 selected 版本失敗拒絕」，需同步修訂 candidate version provenance 與 RTSEL-013，不視為等價技術選擇。
 
 ## 使用者可調排序入口提案（2026-10-03）
 
@@ -69,6 +69,8 @@ ASURA_RUNTIME_PRIORITY=codex,opencode,antigravity,omp asura run --backend auto '
 
 列表是偏好而不是候選白名單：未列者按預設規則補齊；偏好中的 runtime 未註冊時不新增候選。空項、重複 ID 與不支援的設定 ID 拒絕，不默默吞錯。設定 ID 第一版限既有四個 backend；其他已註冊 runtime 仍依預設字典序參與選擇。排序僅套用 eligible 集合，不改 explicit backend，不增加 fallback。
 
-保存有效 priority 後，歷史 decision 可由 requirements、candidate snapshot、priority 與 policy version 重建；修改環境不改歷史或重送結果。補驗收需涵蓋自訂順序、未列候選、未註冊偏好、錯誤設定及設定變更後重送。2026-10-03 使用者回覆「好核准」，核准排序、環境變數入口及有效 priority 封存方向。其餘 admission 行為仍需確認；不視為整份規格核准。
+保存有效 priority 後，歷史 decision 可由 requirements、candidate snapshot、priority 與 policy version 重建；修改環境不改歷史或重送結果。補驗收需涵蓋自訂順序、未列候選、未註冊偏好、錯誤設定及設定變更後重送。2026-10-03 使用者回覆「好核准」，核准排序、環境變數入口及有效 priority 封存方向。2026-10-03 隨後使用者「提案也核准」確認整份規格。
 
 Web 可在既有 audit 顯示有效排序。本期建議先提供上述設定入口；可編輯的 Web 排序頁需要持久化設定與變更 API，仍超出原 issue 的 audit-only Web 邊界，若使用者指定本期要做再修訂範圍。
+
+2026-10-03 實作註記：local auto composition root 註冊 OpenCode，Codex/OMP/Antigravity 在找到各自 binary 時註冊；daemon registry 沿原樣，OMP/Antigravity 無條件註冊。這是各入口建立 registry 的差異；selection 對所有已註冊候選完整捕獲版本，不在枚舉時做 availability routing。

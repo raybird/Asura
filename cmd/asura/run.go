@@ -20,9 +20,11 @@ import (
 	"asura/internal/auth"
 	"asura/internal/backend"
 	"asura/internal/backend/antigravity"
+	"asura/internal/backend/codex"
 	"asura/internal/backend/omp"
 	"asura/internal/backend/opencode"
 	"asura/internal/contextwin"
+	"asura/internal/daemon"
 	"asura/internal/engine"
 	"asura/internal/pipeline"
 	"asura/internal/storage"
@@ -118,7 +120,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 	workspace := fs.String("workspace", "", "target workspace directory")
 	allowedRoots := fs.String("allowed-roots", "", "comma-separated list of allowed root directories")
 	mode := fs.String("mode", string(pipeline.ModeDirect), "execution mode (direct or three-face)")
-	backendFlag := fs.String("backend", "opencode", "execution backend (opencode, codex, omp, antigravity)")
+	backendFlag := fs.String("backend", "opencode", "execution backend (opencode, codex, omp, antigravity, auto)")
 
 	if err := fs.Parse(args); err != nil {
 		return 1
@@ -139,11 +141,19 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 	if bID == "" {
 		bID = "opencode"
 	}
-	if bID != "opencode" && bID != "codex" && bID != "omp" && bID != "antigravity" {
-		fmt.Fprintf(stderr, "error: unknown backend %q (supported: opencode, codex, omp, antigravity)\n", bID)
+	if bID != "opencode" && bID != "codex" && bID != "omp" && bID != "antigravity" && bID != "auto" {
+		fmt.Fprintf(stderr, "error: unknown backend %q (supported: opencode, codex, omp, antigravity, auto)\n", bID)
 		return 1
 	}
 
+	var runtimePriority []string
+	if bID == "auto" {
+		runtimePriority, err = backend.ParseRuntimePriority(os.Getenv("ASURA_RUNTIME_PRIORITY"))
+		if err != nil {
+			fmt.Fprintf(stderr, "error: runtime priority: %v\n", err)
+			return 1
+		}
+	}
 	remaining := fs.Args()
 	if len(remaining) == 0 {
 		fmt.Fprintln(stderr, "error: prompt is required")
@@ -322,7 +332,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 	criticStage := pipeline.NewCriticStage(runner)
 	orc := pipeline.NewOrchestrator(oracleStage, strikerStage, criticStage).WithContextBudget(contextCfg)
 	// 2026-09-30：新增 CLI adapter 在本地 composition root 接線；保留既有 shell runner。
-	if bID == "omp" || bID == "antigravity" {
+	if bID == "omp" || bID == "antigravity" || bID == "auto" {
 		beforeStart := func(c context.Context) (func(), error) {
 			lf, e := os.OpenFile(taskLockPath(*dbPath, currentTaskID), os.O_CREATE|os.O_RDWR, 0600)
 			if e != nil {
@@ -351,20 +361,80 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 			}
 			return release, nil
 		}
-		onStarted := func(c context.Context, pgid int) { _ = store.UpdateTaskPGID(context.Background(), currentTaskID, pgid) }
-		onExited := func(c context.Context, pgid int) { _ = store.UpdateTaskPGID(context.Background(), currentTaskID, 0) }
+		onStarted := func(c context.Context, pgid int) {
+			if bID != "auto" {
+				_ = store.UpdateTaskPGID(context.Background(), currentTaskID, pgid)
+				return
+			}
+			lf, e := os.OpenFile(taskLockPath(*dbPath, currentTaskID), os.O_CREATE|os.O_RDWR, 0600)
+			if e != nil {
+				_ = opencode.KillProcessGroup(pgid)
+				return
+			}
+			defer lf.Close()
+			if e = syscall.Flock(int(lf.Fd()), syscall.LOCK_EX); e != nil {
+				_ = opencode.KillProcessGroup(pgid)
+				return
+			}
+			defer syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
+			st, e := opencode.GetProcessStartTime(pgid)
+			runnerST, runnerErr := opencode.GetProcessStartTime(os.Getpid())
+			if e != nil || runnerErr != nil {
+				_ = opencode.KillProcessGroup(pgid)
+				return
+			}
+			_ = lf.Truncate(0)
+			_, e = fmt.Fprintf(lf, "%d:%s:%d:%s", pgid, st, os.Getpid(), runnerST)
+			if e != nil {
+				_ = opencode.KillProcessGroup(pgid)
+				return
+			}
+			_ = store.UpdateTaskPGID(context.Background(), currentTaskID, pgid)
+			task, _ := store.GetTask(context.Background(), currentTaskID)
+			_, intentErr := os.Stat(taskCancelIntentPath(*dbPath, currentTaskID))
+			if c.Err() != nil || intentErr == nil || task != nil && (task.Status == storage.StatusCancelled || task.Status == storage.StatusCancelling) {
+				_ = opencode.KillProcessGroup(pgid)
+			}
+		}
+		onExited := func(c context.Context, pgid int) {
+			if bID != "auto" || !opencode.IsProcessGroupAlive(pgid) {
+				_ = store.UpdateTaskPGID(context.Background(), currentTaskID, 0)
+			}
+		}
 		var selected backend.Backend
 		if bID == "omp" {
 			selected = omp.NewAdapter(omp.AdapterConfig{OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart})
-		} else {
+		} else if bID == "antigravity" {
 			selected = antigravity.NewAdapter(antigravity.AdapterConfig{OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart})
 		}
 		reg := backend.NewRegistry()
-		_ = reg.Register(selected)
+		if bID == "auto" {
+			configDir, cleanup, e := opencode.CreateIsolatedReadOnlyConfigDir()
+			if e != nil {
+				fmt.Fprintf(stderr, "error: read-only runtime config: %v\n", e)
+				return 1
+			}
+			defer cleanup()
+			readOnly := opencode.NewAdapter(opencode.AdapterConfig{ConfigDir: configDir, Permission: daemon.DefaultReadOnlyPermissionPolicy, DisableAuto: true, Role: opencode.RoleOracle, Agent: opencode.AsuraReadOnlyAgentName, Pure: true, DisableProjectConfig: true, Isolated: true, OnProcessStarted: onStarted, OnProcessExited: onExited})
+			writer := opencode.NewAdapter(opencode.AdapterConfig{Permission: daemon.DefaultApprovedPermissionPolicy, Role: opencode.RoleStriker, OnProcessStarted: onStarted, OnProcessExited: onExited})
+			selected = opencode.NewRoleRoutingBackend(readOnly, writer)
+			reg.Register(selected)
+			if path, e := exec.LookPath("codex"); e == nil {
+				reg.Register(codex.NewAdapter(codex.AdapterConfig{BinaryPath: path, OnProcessStarted: onStarted, OnProcessExited: onExited}))
+			}
+			if _, e := exec.LookPath("omp"); e == nil {
+				reg.Register(omp.NewAdapter(omp.AdapterConfig{OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart}))
+			}
+			if _, e := exec.LookPath("agy"); e == nil {
+				reg.Register(antigravity.NewAdapter(antigravity.AdapterConfig{OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart}))
+			}
+		} else {
+			reg.Register(selected)
+		}
 		oracleStage = pipeline.NewOracleStageWithBackend(selected)
 		strikerStage = pipeline.NewStrikerStageWithBackend(selected)
 		criticStage = pipeline.NewCriticStageWithBackend(selected)
-		orc = pipeline.NewOrchestrator(oracleStage, strikerStage, criticStage).WithRegistry(reg).WithContextBudget(contextCfg)
+		orc = pipeline.NewOrchestrator(oracleStage, strikerStage, criticStage).WithRegistry(reg).WithContextBudget(contextCfg).WithRuntimePriority(runtimePriority)
 	}
 
 	eng := engine.NewEngine(store, policy,

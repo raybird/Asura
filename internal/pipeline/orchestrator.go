@@ -35,6 +35,7 @@ type CriticStage interface {
 
 // PipelineOrchestrator 負責任務管線的 Stage 調度、順序控制與 Fail-Closed 防禦
 type PipelineOrchestrator struct {
+	runtimePriority []string
 	registry        backend.Registry
 	oracle          OracleStage
 	striker         StrikerStage
@@ -93,9 +94,12 @@ func (o *PipelineOrchestrator) evaluateAdmission(stage, prompt, model string) co
 // 2026-10-03：所有 runtime 接受入口共用同一純 policy 與 matcher。
 func (o *PipelineOrchestrator) Preflight(ctx context.Context, mode, requested string) (*backend.ExecutionContract, error) {
 	if o.registry == nil {
+		if requested == "auto" {
+			return nil, fmt.Errorf("%w: auto requires runtime registry", backend.ErrInvalidContract)
+		}
 		return nil, nil
 	}
-	return backend.AdmitRuntime(ctx, o.registry, mode, requested)
+	return backend.AdmitRuntime(ctx, o.registry, mode, requested, o.runtimePriority)
 }
 
 // Execute 依指定模式執行管線
@@ -454,4 +458,10 @@ func (o *PipelineOrchestrator) ExecutePipeline(ctx context.Context, mode string,
 		traceJSON = string(b)
 	}
 	return out, traceJSON, err
+}
+
+// 2026-10-03：只保存政策資料，不由 registry 決定排序。
+func (o *PipelineOrchestrator) WithRuntimePriority(priority []string) *PipelineOrchestrator {
+	o.runtimePriority = append([]string(nil), priority...)
+	return o
 }

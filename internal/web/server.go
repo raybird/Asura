@@ -125,10 +125,17 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			ID           string   `json:"id"`
 			Workspace    string   `json:"workspace"`
 			Prompt       string   `json:"prompt"`
+			Backend      string   `json:"backend,omitempty"`
 			MemoryIDs    []string `json:"memory_ids,omitempty"`
 			MemoryRecall string   `json:"memory_recall,omitempty"`
 		}
 		if !decode(w, r, &input) {
+			return
+		}
+		switch input.Backend {
+		case "", "opencode", "codex", "omp", "antigravity", "auto":
+		default:
+			http.Error(w, "invalid backend", http.StatusBadRequest)
 			return
 		}
 		if input.ID == "" || strings.TrimSpace(input.Prompt) == "" || input.Workspace == "" {
@@ -148,7 +155,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if input.MemoryRecall == "off" {
 			input.MemoryRecall = ""
 		}
-		req = daemon.IPCRequest{Action: "submit", RequestID: input.ID, Workspace: input.Workspace, Prompt: input.Prompt, MemoryIDs: input.MemoryIDs, MemoryRecall: input.MemoryRecall}
+		req = daemon.IPCRequest{Action: "submit", Backend: input.Backend, RequestID: input.ID, Workspace: input.Workspace, Prompt: input.Prompt, MemoryIDs: input.MemoryIDs, MemoryRecall: input.MemoryRecall}
 		status = http.StatusAccepted
 	case strings.HasPrefix(r.URL.Path, "/api/tasks/"):
 		id := strings.TrimPrefix(r.URL.Path, "/api/tasks/")

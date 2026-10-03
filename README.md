@@ -105,6 +105,15 @@ go build -o bin/asura ./cmd/asura
 
 2026-10-03：本機 `run --backend opencode/codex` 保留既有 shell 命令執行，不呼叫 runtime 或封存其能力；CLI status 與 Web 稽核明示 `legacy/unavailable`。真正 runtime 的 engine、Daemon／IPC／Web／Cron 入口才封存 runtime 契約。
 
+2026-10-03：`ask --backend auto` 與 `run --backend auto` 明確啟用能力感知 runtime 選擇；`run auto` 的參數是 AI prompt，其他既有 shell run 行為保持。先以共同 matcher 篩選，再依 `opencode` 優先、其他 ID 字典序、`omp` 最後的 deterministic policy 選擇一個 runtime；Three-Face 三 stage 共用完整 union 所選的 runtime。explicit 不相容不 fallback。
+
+2026-10-03：可用 `ASURA_RUNTIME_PRIORITY=codex,opencode,antigravity,omp asura daemon` 或同環境變數啟動 `asura run --backend auto 'prompt'` 調整偏好。未列的候選按預設規則補齊，未註冊的偏好不新增候選；空項、重複或非四種已知 ID 拒絕。`ask` 使用 daemon 啟動設定，變更需重啟 daemon；不以 client 環境覆蓋。排序只能作用於 eligible set。
+
+2026-10-03：Daemon 沿用原 registry，OMP/Antigravity 可能已註冊但未安裝；local auto composition root 註冊 OpenCode，並於找到 binary 時註冊 Codex/OMP/Antigravity。auto 會捕獲所有已註冊候選的版本；任一版本錯誤／逾時即拒絕整次 admission，不排除該候選後改選。最多 32 candidates、decision JSON 最多 64 KiB，超限拒絕。Web task API 支援 additive `backend:"auto"`，頁面沿既有稽核區顯示決策，沒有新增設定編輯頁。
+
+2026-10-03：`status`、pipeline trace 與 Web audit 顯示封存的 intent、candidate/match、eligible/rejected、selected runtime、policy ID/version 及有效排序；registry、設定或版本變更不改歷史，重送回原 Task。舊 Task 缺 selection decision 顯示 legacy/unavailable，不補寫歷史。
+
+
 #### 安全取消任務 (cancel)
 ```bash
 # 從共同入口發送取消請求，終止任務進程組並確保進程樹安全回收
