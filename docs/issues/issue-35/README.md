@@ -223,4 +223,4 @@ Feature: deterministic capability-aware runtime selection
 **建立日期**: 2026-10-03
 **分級**: Large — 跨 runtime registry、admission、execution 與 audit contract
 **風險**: High
-**狀態**: 實作與驗證完成，交付審查中
+**狀態**: [PR #36](https://github.com/raybird/Asura/pull/36) 已交付；審查判定見本目錄 review artifact，尚未合併

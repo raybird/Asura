@@ -14,7 +14,7 @@
 | 2.1 | backend contract/snapshot/priority/resolver | 1.1 紅燈 | 002、003、004、008、013、014、015 | matcher 重用、固定預期的排序/版本/上限單元紅綠；設定整合由4.1支援 | ✅ 已完成 |
 | 3.1 | daemon/engine/pipeline 單 binding 封存及持久化 | 2.1 | 007、009 | 1.1綠燈；三 stage共用、registry drift/重啟/並行重送不改decision | ✅ 已完成 |
 | 4.1 | CLI auto與Web submission/audit及文件 | 3.1 | 001、011 | 真CLI/IPC/Web 紅綠；explicit shell相容、priority設定/封存與舊資料讀取 | ✅ 已完成 |
-| 5.1 | 完整回歸與交付 | 4.1 | 012 | vet/race/build、固定BASE/HEAD、PR及獨立review artifact | ⏳ 等待 PR／獨立審查 |
+| 5.1 | 完整回歸與交付 | 4.1 | 012 | vet/race/build、固定BASE/HEAD、PR及獨立review artifact | ✅ 實作／驗證／PR 已交付；獨立審查結果見 review artifact |
 
 同層純函式驗收合併內外紅燈；跨IPC/engine/CLI/持久化保留各自整合保障。證據於各Task完成後在本檔回填。
 
@@ -47,8 +47,8 @@ matcher/policy 是純函式，其同層驗收可合併內外紅燈；daemon/engi
 - [x] 15 個 Scenario 與核准表一致；RS-TBD-1～12 全部有具體提案。
 - [x] 最大風險先由負向 admission／redelivery 測試驗證；任務來源唯一。
 - [x] 核准 TBD-1～4，規格基線 c3381d4，已在本檔 decompose。
-- [x] Task 1.1～4.1 回填測試證據；5.1 的 PR／獨立 review 待交付。
-- [ ] 固定 BASE/HEAD、PR Proof of Test 與獨立 review artifact。
+- [x] Task 1.1～4.1 回填測試證據；5.1 的完整回歸與 PR 已交付，獨立 review 結果由固定 HEAD artifact 記錄。
+- [x] 固定 BASE/HEAD 與 PR Proof of Test 已建立；獨立 review gate 以後續 review artifact 的實際判定為準。
 
 ## 核准前相容性基線（2026-10-03）
 
@@ -76,3 +76,5 @@ matcher/policy 是純函式，其同層驗收可合併內外紅燈；daemon/engi
 2026-10-04 獨立 review 修復：local auto OMP/Antigravity 已持有 BeforeStart flock，OnProcessStarted 再取同鎖造成死鎖；以 [start-lock-red.log](evidence/start-lock-red.log) 真子進程＋持鎖測試重現，登記callback改用既有handle。另以 [cancel-probe-red.log](evidence/cancel-probe-red.log) 重現取消發生在Version探測時，已成功取消仍啟動prompt造成side effect；OpenCode/Codex additive BeforeStart在cmd.Start前握手，所有local auto adapters共用同一啟動鎖。這是同一local auto取消契約必要修復，沒有新增routing/capability政策。
 
 2026-10-04 順序限制補充：priority／bounds／封存欄位的新斷言在共同auto admission目標紅燈後加入，未逐分支保留事前獨立紅燈；不宣稱每項assertion都經獨立事前TDD。初次admission外迴圈保障resolver核心，純函式同層測試補必要失敗面；Web forwarding事後baseline重現另如實記錄。
+
+2026-10-04 交付：[PR #36](https://github.com/raybird/Asura/pull/36)。程式碼及驗證完成，獨立審查結果保存於本目錄 review-{HEAD7}.md；只有 artifact 判定 PASS 且符合 report-only successor 檢查時，才視為等待合併。
