@@ -34,6 +34,7 @@ Phase 4A 建立 Agent Runtime Control Plane 的執行需求、共同 capability 
 - `cmd/asura/run.go`、`internal/daemon/daemon.go`：共用 admission wiring。
 - `internal/web/page.go` 與對應測試：沿用 Task 稽核區顯示契約，不建 runtime 管理頁。
 - 根目錄 `README.md`、`docs/superpowers/specs/2026-09-11-asura-architecture-design.md`：功能與架構常青文件。
+- `internal/backend/opencode/adapter.go`、`capability_version_test.go`：版本解析傳遞 admission deadline，維持能力與既有公開 helper 語意。
 - 本 issue 文件與 evidence。
 
 四個 adapter、Registry lookup 及既有隔離邊界保持現有能力語意；只補共同契約相容測試。Phase 4A 不包含 auto routing、fallback、mixed runtime、健康／認證輪詢、skills／MCP discovery、ACP／A2A、retry 或語意記憶。
@@ -225,4 +226,4 @@ Feature: 可稽核且 fail-closed 的 explicit runtime 執行契約
 **建立日期**: 2026-10-03  
 **分級**: Large — backend／pipeline／engine／daemon／CLI／Web 跨模組契約  
 **風險**: High  
-**狀態**: runtime 契約已實作且全回歸通過，獨立審查中；RTCAP-016 shell 相容性待決
+**狀態**: runtime 契約已實作且最終全回歸通過；待 RC-TBD-11 定案及完整交付審查

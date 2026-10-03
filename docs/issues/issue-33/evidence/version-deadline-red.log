@@ -1,0 +1,5 @@
+--- FAIL: TestCapabilityVersionProbeDeadline (2.00s)
+    capability_version_test.go:21: version probe ignored deadline: 2.00130274s
+FAIL
+FAIL	asura/internal/backend/opencode	2.003s
+FAIL

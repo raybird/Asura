@@ -23,3 +23,11 @@
 - `go vet ./...`：exit 0，`full-vet.log` 無診斷。
 - `go build -o /tmp/asura-issue33 ./cmd/asura`：exit 0，`full-build.log` 無診斷；與未指定輸出檔名的 build 等價，避免新增 repo 二進位產物。
 - `go test -count=1 -race ./...`：exit 0，19 個 package 通過；`full-race.log`。
+
+## 獨立審查前修復版本期限（2026-10-03）
+
+- 原工作區在 a9ba9b9 增加 opencode/capability_version_test.go，命令 `go test -count=1 ./internal/backend/opencode -run '^TestCapabilityVersionProbeDeadline'` exit 1；caller 50ms deadline 仍等待 2.00s，真實紅燈見 version-deadline-red.log。
+- 原因：OpenCode Version 內先走不帶 context 的 Resolve/Validate helper；外部 CaptureRuntime timeout 無法中斷它。只新增私有 context-aware helpers，原公開 helper 簽章與既有行為保留，Version 傳遞 caller context。未變更 adapter 能力宣告與隔離規則。
+- `go test -count=1 -race ./internal/backend/opencode -run 'TestCapabilityVersionProbeDeadline|Test.*Version|Test.*Resolve'` exit 0，version-deadline-green.log。沒有獨立 IPC 層失敗面，真版本 subprocess 可直接驗版本期限；同層合併紅燈。
+- code-simplify：只增加必要 context 傳遞，保留既有公開 helper；沒有額外可證明安全的精煉，no-op。後續完整檢查即重構後全綠證據。
+- 最終 `go vet ./...` exit 0，final-vet.log；`go build -o /tmp/asura-issue33 ./cmd/asura` exit 0，final-build.log；`go test -count=1 -race ./...` exit 0，19 package 通過，final-race.log（integration 262.324s）。版本對應 final-tested-source.sha256，未冒用 a9ba9b9 作為修復後被測版本。

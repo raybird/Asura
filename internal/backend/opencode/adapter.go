@@ -188,7 +188,12 @@ type Adapter struct {
 
 // ValidateOpenCodeVersion 檢查二進位檔版本是否符合預期
 func ValidateOpenCodeVersion(binPath string, expectedVersion string) error {
-	out, err := exec.Command(binPath, "--version").Output()
+	return validateOpenCodeVersion(context.Background(), binPath, expectedVersion)
+}
+
+// 2026-10-03：接受前版本預檢沿用 caller deadline，保留既有公開 helper 契約。
+func validateOpenCodeVersion(ctx context.Context, binPath string, expectedVersion string) error {
+	out, err := exec.CommandContext(ctx, binPath, "--version").Output()
 	if err != nil {
 		return fmt.Errorf("execute opencode --version: %w", err)
 	}
@@ -221,8 +226,12 @@ func HasLiveCredentials() bool {
 
 // ResolveOpenCodeBinary 解析並驗證 OpenCode 二進位檔路徑與版本
 func ResolveOpenCodeBinary(preferredPath string, expectedVersion string) (string, error) {
+	return resolveOpenCodeBinary(context.Background(), preferredPath, expectedVersion)
+}
+
+func resolveOpenCodeBinary(ctx context.Context, preferredPath string, expectedVersion string) (string, error) {
 	if preferredPath != "" {
-		if err := ValidateOpenCodeVersion(preferredPath, expectedVersion); err != nil {
+		if err := validateOpenCodeVersion(ctx, preferredPath, expectedVersion); err != nil {
 			return "", err
 		}
 		return preferredPath, nil
@@ -233,7 +242,7 @@ func ResolveOpenCodeBinary(preferredPath string, expectedVersion string) (string
 	if err == nil {
 		isolatedBin := filepath.Join(home, ".cache/asura-probe-issue-2/install/node_modules/.bin/opencode")
 		if _, err := os.Stat(isolatedBin); err == nil {
-			if vErr := ValidateOpenCodeVersion(isolatedBin, expectedVersion); vErr == nil {
+			if vErr := validateOpenCodeVersion(ctx, isolatedBin, expectedVersion); vErr == nil {
 				return isolatedBin, nil
 			}
 		}
@@ -242,7 +251,7 @@ func ResolveOpenCodeBinary(preferredPath string, expectedVersion string) (string
 	// 2. 檢查 PATH
 	pathBin, err := exec.LookPath("opencode")
 	if err == nil {
-		vErr := ValidateOpenCodeVersion(pathBin, expectedVersion)
+		vErr := validateOpenCodeVersion(ctx, pathBin, expectedVersion)
 		if vErr == nil {
 			return pathBin, nil
 		}
@@ -341,7 +350,7 @@ func (a *Adapter) Version(ctx context.Context) (string, error) {
 	if expectedVer == "" {
 		expectedVer = "1.18"
 	}
-	binPath, err := ResolveOpenCodeBinary(a.cfg.BinaryPath, expectedVer)
+	binPath, err := resolveOpenCodeBinary(ctx, a.cfg.BinaryPath, expectedVer)
 	if err != nil {
 		return "", err
 	}
