@@ -2,7 +2,7 @@
 
 ## 概述
 
-來源：[GitHub #39](https://github.com/raybird/Asura/issues/39)。2026-10-04 依使用者 `/dev-cycle issue:39` 盤點與準備提案；尚未取得新增技術政策的核准。以已合併 Phase 4C 的 main `625e62d` 為基準，建立 registered 與 admission-time availability 的獨立契約。
+來源：[GitHub #39](https://github.com/raybird/Asura/issues/39)。2026-10-04 依使用者 `/dev-cycle issue:39` 盤點與準備提案；2026-10-04 使用者回覆「核准」，授權全部技術提案、驗收與 TBD-1～5。以已合併 Phase 4C 的 main `625e62d` 為基準，建立 registered 與 admission-time availability 的獨立契約。
 
 新 admission：Registry snapshot → Inventory probe/descriptor capture → available descriptors → capability filter → deterministic priority → StageBindingPlan。sealed execution 仍只用封存 runtime ID；不得重新選擇、fallback 或 retry。
 
@@ -153,26 +153,26 @@ Feature: 有界且可稽核的 runtime admission inventory
 
 ## Gherkin 核准紀錄
 
-- **核准 commit**: 待提交（規格尚待核准，非已核准基線）
-- **核准來源**: 2026-10-04 使用者 `/dev-cycle issue:39` 授權盤點與提案。GitHub #39 明列「候選驗收劇本」與「待 technical analysis 固定 RI-TBD 與驗收規格後進入 implementation」；未將 issue ID 視為新增政策核准。
+- **核准 commit**: a88fe79（承載核准規格；2026-10-04 使用者「核准」）
+- **核准來源**: 2026-10-04 使用者 `/dev-cycle issue:39` 授權盤點與提案。GitHub #39 明列「候選驗收劇本」與「待 technical analysis 固定 RI-TBD 與驗收規格後進入 implementation」；2026-10-04 使用者另回覆「核准」，核准 RI-TBD-1～15、RTINV-001～015 與 TBD-1～5。
 
 | Scenario | 核准日期 | 狀態 |
 |---|---|---|
-| RTINV-001 | - | 待核准 |
-| RTINV-002 | - | 待核准 |
-| RTINV-003 | - | 待核准 |
-| RTINV-004 | - | 待核准 |
-| RTINV-005 | - | 待核准 |
-| RTINV-006 | - | 待核准 |
-| RTINV-007 | - | 待核准 |
-| RTINV-008 | - | 待核准 |
-| RTINV-009 | - | 待核准 |
-| RTINV-010 | - | 待核准 |
-| RTINV-011 | - | 待核准 |
-| RTINV-012 | - | 待核准 |
-| RTINV-013 | - | 待核准 |
-| RTINV-014 | - | 待核准 |
-| RTINV-015 | - | 待核准 |
+| RTINV-001 | 2026-10-04 | 已核准 |
+| RTINV-002 | 2026-10-04 | 已核准 |
+| RTINV-003 | 2026-10-04 | 已核准 |
+| RTINV-004 | 2026-10-04 | 已核准 |
+| RTINV-005 | 2026-10-04 | 已核准 |
+| RTINV-006 | 2026-10-04 | 已核准 |
+| RTINV-007 | 2026-10-04 | 已核准 |
+| RTINV-008 | 2026-10-04 | 已核准 |
+| RTINV-009 | 2026-10-04 | 已核准 |
+| RTINV-010 | 2026-10-04 | 已核准 |
+| RTINV-011 | 2026-10-04 | 已核准 |
+| RTINV-012 | 2026-10-04 | 已核准 |
+| RTINV-013 | 2026-10-04 | 已核准 |
+| RTINV-014 | 2026-10-04 | 已核准 |
+| RTINV-015 | 2026-10-04 | 已核准 |
 
 ## 風險與首要驗證
 
@@ -186,20 +186,21 @@ Feature: 有界且可稽核的 runtime admission inventory
 
 | 編號 | 事項 | 狀態 | 影響 |
 |---|---|---|---|
-| TBD-1 | 核准 technical-analysis 的 RI-TBD-1～15 與全部 RTINV-001～015 | 待確認 | 全部驗收；核准前不建立可實作 Task |
-| TBD-2 | available 限於本機 admission evidence，不保證遠端登入／配額；probe 不讀取或驗證 token | 待確認 | RTINV-001/002/010，需接受成功不代表 Run 必定成功 |
-| TBD-3 | 採 3 秒／runtime、5 秒／inventory、至多 32 個並行 probe；只有 available 可 admission | 待確認 | RTINV-003/008/013，逾時固定 unknown |
-| TBD-4 | 新 runtime-inventory-v1 封存一次 inventory，允許沿用有界 stage candidate 重複資料；64 KiB inventory／256 KiB contract | 待確認 | RTINV-007/012/015，legacy 不回填 |
-| TBD-5 | 新增 asura runtime inventory、daemon inventory IPC、Web 唯讀 inventory 與 task audit；四內建 adapter 明確註冊缺 binary 也保留 entry | 待確認 | RTINV-002/014，local/daemon 登錄集合一致 |
+| TBD-1 | 核准 technical-analysis 的 RI-TBD-1～15 與全部 RTINV-001～015 | 已解決 | 2026-10-04 使用者「核准」，全部驗收可依計畫實作 |
+| TBD-2 | available 限於本機 admission evidence，不保證遠端登入／配額；probe 不讀取或驗證 token | 已解決 | 2026-10-04 使用者「核准」；RTINV-001/002/010，需接受成功不代表 Run 必定成功 |
+| TBD-3 | 採 3 秒／runtime、5 秒／inventory、至多 32 個並行 probe；只有 available 可 admission | 已解決 | 2026-10-04 使用者「核准」；RTINV-003/008/013，逾時固定 unknown |
+| TBD-4 | 新 runtime-inventory-v1 封存一次 inventory，允許沿用有界 stage candidate 重複資料；64 KiB inventory／256 KiB contract | 已解決 | 2026-10-04 使用者「核准」；RTINV-007/012/015，legacy 不回填 |
+| TBD-5 | 新增 asura runtime inventory、daemon inventory IPC、Web 唯讀 inventory 與 task audit；四內建 adapter 明確註冊缺 binary 也保留 entry | 已解決 | 2026-10-04 使用者「核准」；RTINV-002/014，local/daemon 登錄集合一致 |
 
 ## 實作入口
 
-[implementation-plan.md](./implementation-plan.md) 是唯一任務來源。目前只有待核准的初始 Phase；取得核准後由 decompose 在同檔細化 Task，不新增第二份清單。
+[implementation-plan.md](./implementation-plan.md) 是唯一任務來源。2026-10-04 已核准並由 decompose 在同檔細化 Task，不新增第二份清單。
 
 ## Timeline
 
 | 日期 | 異動 | 負責人 |
 |---|---|---|
+| 2026-10-04 | 使用者「核准」RI-TBD-1～15、全部驗收與 TBD-1～5 | 使用者 |
 | 2026-10-04 | 讀取 #39 與已合併 Phase 4C，建立現況分析、RI-TBD 提案與待核准驗收；未修改 production code | Codex |
 
 ---
@@ -207,4 +208,4 @@ Feature: 有界且可稽核的 runtime admission inventory
 **建立日期**: 2026-10-04
 **分級**: Large — 跨 runtime adapter、admission、execution guard、persistence 與 audit
 **風險**: High
-**狀態**: 待核准技術提案與驗收規格
+**狀態**: 實作中

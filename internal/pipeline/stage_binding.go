@@ -33,7 +33,26 @@ func (o *PipelineOrchestrator) guardStage(ctx context.Context, ec *engine.Execut
 	}
 	ver := ""
 	if version {
-		ver, _ = b.Version(ctx)
+		if ec.ExecutionContract.ContractVersion == backend.InventoryContractVersion {
+			snapshot, e := backend.CaptureInventory(ctx, []backend.RegisteredRuntime{{ID: id, Backend: b}})
+			if e != nil {
+				return nil, &m, "", e
+			}
+			if snapshot.Entries[0].AvailabilityState != backend.Available {
+				return nil, &m, "", &backend.InventoryAdmissionError{Snapshot: snapshot, Cause: backend.ErrBackendUnavailable}
+			}
+			descriptor := snapshot.Entries[0].Descriptor
+			m, e = backend.MatchCapabilities([]backend.ExecutionRequirements{binding.Requirements}, *descriptor)
+			if e != nil {
+				return nil, &m, "", e
+			}
+			if !m.Compatible {
+				return nil, &m, "", &backend.CapabilityAdmissionError{RequestedBackend: id, Match: m}
+			}
+			ver = descriptor.Version
+		} else {
+			ver, _ = b.Version(ctx)
+		}
 	}
 	m.BackendVersion = ver
 	copy := *ec

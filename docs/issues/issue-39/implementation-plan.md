@@ -1,6 +1,6 @@
 # Issue 39 — 初始實作計畫
 
-2026-10-04 建立。唯一任務來源；本計畫的 Phase 全部待核准，尚無可實作 Task。核准後依 decompose 細化原檔並標註驗收／責任映射。
+2026-10-04 建立。唯一任務來源；2026-10-04 使用者核准後，依 decompose 細化以下責任 Task。
 
 ## 設計方案
 
@@ -8,15 +8,52 @@
 
 模型與限制以 technical-analysis RI-TBD-1～15 為提案來源；風險與首要驗證只引用 [README](./README.md#風險與首要驗證)。
 
-## 初始 Phase（待核准，非可實作 Task）
+## Phase 與責任 Task
 
-| Phase | 對應驗收 | 產出 | 相依 | 完成判準 |
-|---|---|---|---|---|
-| P1：首要風險驗證 | 003/004/007/008/010/013 | daemon admission／pipeline 負向測試與同層 inventory 單元紅燈 | 規格核准與 Task 拆解 | 真實 failure isolation、timeout、cancel、sealed disappearance 紅燈；Task/dispatch/Run 計數與 workspace sentinel |
-| P2：inventory 與四 adapter probe | 001/002/003/008/009/012/013 | typed states/reasons、Registry identity snapshot、bounded context-aware probe/output | P1 | enum、sorting、identity、panic、deadline、huge output、secret sentinel、版本/依賴與 read-only config 單元及 adapter 測試全綠 |
-| P3：admission、封存、execution | 004/005/006/007/010/011/012 | auto/explicit integration、runtime-inventory-v1 validate、sealed guard、trace | P2 | auto 繼續可用候選；explicit 無 fallback；每個 admission runtime probe 一次；Run 前拒絕不可用 sealed runtime；全契約一致性與上限通過 |
-| P4：composition、persistence、audit | 002/007/011/012/014/015 | local/daemon 固定登錄、inventory CLI/IPC/Web、task audit、legacy/queue/restart tests、常青文件 | P3 | local/daemon semantics 一致；status 不 probe；legacy 不回填；queue/redelivery 不重新 admission；restart 維持既有政策 |
-| P5：交付與審查 | 015 及全部驗收 | 全套回歸證據、code-simplify、commit/PR、獨立 review artifact | P4 | vet/race/build 全綠、全部驗收證據、固定 BASE/HEAD、獨立 review PASS 或完成修正 |
+### Task 1 — 首要風險紅燈（Phase 1）
+- 產出與最小範圍：daemon admission／pipeline failure isolation、timeout/cancel、sealed disappearance 整合測試；不改 production。
+- 相依：無；核准基線 a88fe79。
+- 驗收：支援 RTINV-003/004/007/008/010/013；最終責任分別在 Task 2／3。
+- 完成判準：取得目標行為的失敗，記錄 Task/Run 零副作用斷言與失敗原因。
+- 驗證：daemon 外迴圈及 pipeline 執行邊界；後續 inventory 單元紅燈保留另一失敗面。
+- 狀態：✅ 已完成
+- 證據：[驗證紀錄](./verification-evidence.md#紅燈與修復)；daemon error/timeout 阻擋 Codex、pipeline 版本錯誤仍 Run 的真實紅燈。
+
+### Task 2 — Inventory 與 adapter probe（Phase 2）
+- 產出與最小範圍：backend inventory、authoritative snapshot、四 adapter context-aware bounded probe。
+- 相依：Task 1 紅燈。
+- 責任驗收：RTINV-001/002/003/008/009/012/013。
+- 完成判準：state/reason/identity、timeout/panic/cancel、deterministic serialization、secret/output/size bounds 與 adapter fixture 全綠。
+- 驗證：inventory 單元與 adapter 真實 subprocess/file fixture；同層 API 行為可合併迴圈，跨 subprocess 資源回收另驗。
+- 狀態：✅ 已完成
+- 證據：[驗證紀錄](./verification-evidence.md) 對應驗收與定向 race 全綠；code-simplify 已檢查本次 API/序列化契約，保留必要 probe 邊界。
+
+### Task 3 — Admission、sealed execution（Phase 3）
+- 產出與最小範圍：auto/explicit integration、新 contract validator、engine/pipeline 辨識、guard 與 trace。
+- 相依：Task 2。
+- 責任驗收：RTINV-004/005/006/007/010/011。
+- 完成判準：single failure 不污染 auto；explicit 不 fallback；Three-Face 共用 snapshot；sealed disappearance 與 recovery 不改綁。
+- 驗證：daemon/local Task/dispatch/Run 與 workspace sentinel 整合、planner/validator 單元。
+- 狀態：✅ 已完成
+- 證據：[驗證紀錄](./verification-evidence.md) 對應驗收與定向 race 全綠；code-simplify 已檢查本次 API/序列化契約，保留必要 probe 邊界。
+
+### Task 4 — Audit 與 persistence（Phase 4）
+- 產出與最小範圍：local/daemon composition、inventory CLI/IPC/Web、sealed task status、legacy/queue/restart fixtures、README/架構文件。
+- 相依：Task 3。
+- 責任驗收：RTINV-014；支援 RTINV-002/007/011/012/015。
+- 完成判準：四個固定 registered ID；CLI/Web state/reason 可讀；status 不 reprobe；legacy 不回填；queue/redelivery/restart 保留封存契約。
+- 驗證：CLI/HTTP/IPC 外迴圈、SQLite reopen/queue fixtures，常青文件靜態檢查。
+- 狀態：✅ 已完成
+- 證據：[驗證紀錄](./verification-evidence.md) 對應驗收與定向 race 全綠；code-simplify 已檢查本次 API/序列化契約，保留必要 probe 邊界。
+
+### Task 5 — 回歸交付（Phase 5）
+- 產出與最小範圍：完整測試、code-simplify、交付 commit/PR、獨立 review artifact。
+- 相依：Task 4。
+- 責任驗收：RTINV-015。
+- 完成判準：vet/race/build 全綠；全部驗收證據；固定 BASE/HEAD；獨立審查 PASS 或修正後再審。
+- 驗證：全 repo 回歸與範圍一致性；審查遵循 review-evidence。
+- 狀態：⏳ 進行中
+- 證據：[驗證紀錄](./verification-evidence.md)；等待全套整合測試收尾、PR 與獨立 review。
 
 ## 使用方式對照
 

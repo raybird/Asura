@@ -60,6 +60,8 @@ func RunCLI(args []string, stdout, stderr io.Writer) int {
 		return handleRun(subargs, stdout, stderr)
 	case "ask":
 		return handleAsk(subargs, stdout, stderr)
+	case "runtime":
+		return handleRuntime(subargs, stdout, stderr)
 	case "status":
 		return handleStatus(subargs, stdout, stderr)
 	case "cancel":
@@ -89,6 +91,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  web     Start the local web remote entry console")
 	fmt.Fprintln(w, "  cron    Manage periodic scheduled tasks")
 	fmt.Fprintln(w, "  memory  Manage project-level long-term memories")
+	fmt.Fprintln(w, "  runtime Query runtime inventory and admission availability")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Run 'asura <command> -h' for details on each command.")
 }
@@ -393,15 +396,9 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 			writer := opencode.NewAdapter(opencode.AdapterConfig{Permission: daemon.DefaultApprovedPermissionPolicy, Role: opencode.RoleStriker, OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart})
 			selected = opencode.NewRoleRoutingBackend(readOnly, writer)
 			reg.Register(selected)
-			if path, e := exec.LookPath("codex"); e == nil {
-				reg.Register(codex.NewAdapter(codex.AdapterConfig{BinaryPath: path, OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart}))
-			}
-			if _, e := exec.LookPath("omp"); e == nil {
-				reg.Register(omp.NewAdapter(omp.AdapterConfig{OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart}))
-			}
-			if _, e := exec.LookPath("agy"); e == nil {
-				reg.Register(antigravity.NewAdapter(antigravity.AdapterConfig{OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart}))
-			}
+			reg.Register(codex.NewAdapter(codex.AdapterConfig{OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart}))
+			reg.Register(omp.NewAdapter(omp.AdapterConfig{OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart}))
+			reg.Register(antigravity.NewAdapter(antigravity.AdapterConfig{OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart}))
 		} else {
 			reg.Register(selected)
 		}

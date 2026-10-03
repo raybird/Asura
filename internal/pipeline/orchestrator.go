@@ -119,7 +119,7 @@ func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, 
 	}
 	var backendVer string
 	var guard *backend.CapabilityMatch
-	stagePlan := contract != nil && (contract.ContractVersion == backend.StageBindingContractVersion || contract.StageBindingPlan != nil)
+	stagePlan := contract != nil && (contract.ContractVersion == backend.StageBindingContractVersion || contract.ContractVersion == backend.InventoryContractVersion || contract.StageBindingPlan != nil)
 	guards := map[backend.Role]*backend.CapabilityMatch{}
 	originalCtx := execCtx
 	failStage := func(role backend.Role, err error) *PipelineTrace {
@@ -532,4 +532,12 @@ func (o *PipelineOrchestrator) ExecutePipeline(ctx context.Context, mode string,
 func (o *PipelineOrchestrator) WithRuntimePriority(priority []string) *PipelineOrchestrator {
 	o.runtimePriority = append([]string(nil), priority...)
 	return o
+}
+
+// 2026-10-04：查詢只捕獲 inventory，不進入 Run。
+func (o *PipelineOrchestrator) Inventory(ctx context.Context) (*backend.InventorySnapshot, error) {
+	if o.registry == nil {
+		return nil, fmt.Errorf("runtime inventory unavailable")
+	}
+	return backend.CaptureInventory(ctx, o.registry.RegisteredSnapshot())
 }

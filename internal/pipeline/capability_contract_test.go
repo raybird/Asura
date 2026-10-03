@@ -94,6 +94,7 @@ func TestCapabilityThreeFaceBoundRuntime(t *testing.T) {
 	}
 	// 2026-10-04：此測試刻畫舊 capability-v1 的單一 runtime handle；新版本另測逐 stage guard。
 	contract.StageBindingPlan = nil
+	contract.InventorySnapshot = nil
 	contract.ContractVersion = backend.CapabilityContractVersion
 	contract.Match, _ = backend.MatchCapabilities(contract.Requirements, contract.Runtime)
 	contract.SelectionDecision = nil

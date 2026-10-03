@@ -160,25 +160,18 @@ func admitAutoRuntime(ctx context.Context, reg Registry, mode string, priority [
 	if mode == "" {
 		mode = "direct"
 	}
-	runtimes := reg.Snapshot()
-	if len(runtimes) > MaxRuntimeCandidates {
-		return nil, fmt.Errorf("%w: candidate limit exceeded", ErrInvalidContract)
+	snapshot, err := CaptureInventory(ctx, reg.RegisteredSnapshot())
+	if err != nil {
+		return nil, err
 	}
-	descriptors := make([]RuntimeDescriptor, 0, len(runtimes))
-	for _, b := range runtimes {
-		r, err := CaptureRuntime(ctx, b)
-		if err != nil {
-			return nil, fmt.Errorf("auto candidate %q: %w", b.ID(), err)
-		}
-		descriptors = append(descriptors, r)
-	}
+	descriptors := snapshot.AvailableDescriptors()
 	var preferred []string
 	if len(priority) > 0 {
 		preferred = priority[0]
 	}
 	plan, err := planStageBindings(mode, RuntimeSelectionRequest{Mode: "auto"}, descriptors, preferred)
 	if err != nil {
-		return nil, err
+		return nil, &InventoryAdmissionError{Snapshot: snapshot, Cause: err}
 	}
-	return contractFromPlan(plan, "auto")
+	return sealInventory(plan, "auto", snapshot)
 }

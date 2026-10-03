@@ -1,6 +1,6 @@
 # Issue 39 — RI-TBD 技術提案
 
-2026-10-04 提案；以下均待 README 的核准紀錄生效。
+2026-10-04 提案；2026-10-04 使用者「核准」，依 README 核准紀錄生效。
 
 ## 技術可行性與方案取捨
 
@@ -55,4 +55,4 @@ admission error 的 snapshot 隨錯誤返回，CLI/IPC/Web 可立即稽核；拒
 
 ## 待釐清
 
-README TBD-1～5 是核准入口，包含 auth 邊界、budget、size／normalization 與 audit surface。以上政策全部屬提案，2026-10-04 尚未寫入 production code。
+README TBD-1～5 是核准入口，包含 auth 邊界、budget、size／normalization 與 audit surface。2026-10-04 使用者已核准以上政策；實作證據依 implementation-plan 保存。

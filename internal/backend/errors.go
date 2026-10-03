@@ -6,6 +6,7 @@ import (
 )
 
 var (
+	ErrBackendUnavailable = errors.New("backend unavailable")
 	// ErrBackendNotFound 代表請求之 Backend 未註冊
 	ErrBackendNotFound = errors.New("backend not found")
 	// ErrUnsupportedCapability 代表 Backend 缺少執行該任務或角色所需之必要能力
