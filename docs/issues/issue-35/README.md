@@ -167,7 +167,7 @@ Feature: deterministic capability-aware runtime selection
 
 ## Gherkin 核准紀錄
 
-- **核准 commit**: 待提交（RTSEL-003、RTSEL-015 分批核准）
+- **核准 commit**: 4a1a7af（RTSEL-003、RTSEL-015 分批核准）
 - **核准來源**: 2026-10-03 使用者 `/dev-cycle issue:35` 授權盤點與準備提案；GitHub #35 明示候選驗收與待定 RS-TBD。未將 issue ID 視為新增行為核准。2026-10-03 使用者先指定「Omp 預設放最後好了」，再對可調排序提案回覆「好核准」，核准 RTSEL-003、RTSEL-015 與有效排序封存方向；未推定為其餘 Scenario 全部核准。
 
 | Scenario | 核准日期 | 狀態 |
