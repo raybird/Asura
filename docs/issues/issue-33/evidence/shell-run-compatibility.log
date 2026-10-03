@@ -1,0 +1,12 @@
+日期：2026-10-03
+被測程式：/tmp/asura-issue33，含版本期限修復的工作區 build，建置 exit 0。
+命令：/tmp/asura-issue33 run --db /tmp/asura-issue33-shell-probe/asura.db --workspace /tmp/asura-issue33-shell-probe --id shell-compatibility-probe --backend codex 'printf shell-proof'
+exit code: 0
+結果：shell-proof；Status: completed。
+命令：/tmp/asura-issue33 status --db /tmp/asura-issue33-shell-probe/asura.db shell-compatibility-probe
+exit code: 0
+Backend: codex
+Capability contract: legacy/unavailable
+Pipeline: striker (completed, 0ms)
+Result: shell-proof
+用途：證明 RC-TBD-11 的既有 shell 入口差異，不把此無快照結果算成 RTCAP-016 通過。

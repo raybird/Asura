@@ -63,7 +63,9 @@ func (s *DefaultOracleStage) ExecutePrepared(ctx context.Context, execCtx *engin
 	}
 
 	var activeBackend = s.backend
-	if s.registry != nil && execCtx != nil && execCtx.Backend != "" {
+	if execCtx != nil && execCtx.BoundBackend != nil {
+		activeBackend = execCtx.BoundBackend
+	} else if s.registry != nil && execCtx != nil && execCtx.Backend != "" {
 		if b, err := s.registry.Get(execCtx.Backend); err == nil && b != nil {
 			activeBackend = b
 		}

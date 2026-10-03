@@ -1,0 +1,6 @@
+2026-10-03
+Command: go test -count=1 -race ./cmd/asura -run '^TestCapability'
+Source: af0f9a8 + TestCapabilityShellRunCompatibility (uncommitted characterization only)
+Exit: 0
+ok  	asura/cmd/asura	1.631s
+RTCAP-016: actual handleRun/SQLite/status for opencode and codex, shell output preserved, zero runtime CLI calls, no execution_contract, unavailable audit, unchanged stored JSON.

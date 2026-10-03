@@ -1,0 +1,17 @@
+日期：2026-10-03
+被測版本：41b5220b2100ad85fdb4913c7c8e73ea57657464
+工作區：production code 未修改；新增 issue 33 規劃文件。
+用途：既有行為刻畫；不是新 RTCAP 驗收通過證據。
+
+首次沙箱執行 exit code 1，沒有診斷輸出；不視為行為紅燈。
+以下為重新執行（沙箱外）的實際輸出，exit code 0：
+
+go test -count=1 ./internal/backend ./internal/pipeline ./internal/engine ./internal/storage -run 'Test(Orchestrator_.*|NewBackendsThreeFaceStageZero|Engine_SubmitTask_IdempotentAdmissionAndContextPreserved|TaskPipelineTrace_ContextWindowCompatibility|LifecycleLegacySealedSnapshot)$'
+
+ok  asura/internal/backend  0.001s [no tests to run]
+ok  asura/internal/pipeline  0.350s
+ok  asura/internal/engine  0.016s
+ok  asura/internal/storage  0.013s
+
+backend package 的篩選結果沒有測試；不宣稱該 package 新契約已驗證。
+篩選包含既有 Orchestrator 測試、OMP/Antigravity Stage 0、engine idempotent context、storage trace compatibility 與 legacy sealed snapshot。

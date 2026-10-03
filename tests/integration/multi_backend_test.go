@@ -26,13 +26,13 @@ import (
 
 // mockTrackableBackend 用於追蹤調用次數、角色與模式的通用測試後端
 type mockTrackableBackend struct {
-	id         string
-	version    string
-	caps       []backend.Capability
-	calls      int32
-	callRoles  []backend.Role
-	mu         sync.Mutex
-	customRun  func(ctx context.Context, req *backend.ExecutionRequest) (*backend.ExecutionResult, error)
+	id        string
+	version   string
+	caps      []backend.Capability
+	calls     int32
+	callRoles []backend.Role
+	mu        sync.Mutex
+	customRun func(ctx context.Context, req *backend.ExecutionRequest) (*backend.ExecutionResult, error)
 }
 
 func (m *mockTrackableBackend) ID() string { return m.id }
@@ -555,22 +555,15 @@ func TestMBACK_008_ThreeFaceCapabilityPreflight(t *testing.T) {
 		_ = f.reg.Register(weakBackend)
 	})
 
-	task, err := fix.client.Submit(context.Background(), engine.SubmitRequest{
+	_, err := fix.client.Submit(context.Background(), engine.SubmitRequest{
 		Workspace: fix.rootDir,
 		Prompt:    "three-face on weak backend",
 		Backend:   "weak-backend",
 		Mode:      "three-face",
 	})
-	if err != nil {
-		t.Fatalf("Submit failed: %v", err)
-	}
-
-	res := waitForTaskTerminalState(t, fix.client, task.ID, 3*time.Second)
-	if res.Status != storage.StatusFailed {
-		t.Errorf("expected task to fail due to missing capability, got %s", res.Status)
-	}
-	if !strings.Contains(res.ErrorMessage, "does not support read-only sandbox") {
-		t.Errorf("expected error message to mention read-only sandbox requirement, got: %s", res.ErrorMessage)
+	// 2026-10-03：RTCAP-003／004 接受前拒絕取代建立 failed Task，安全強度保持。
+	if err == nil || !strings.Contains(err.Error(), "missing=[read_only_sandbox]") {
+		t.Fatalf("expected synchronous read-only capability rejection: %v", err)
 	}
 
 	// 斷言：全後端 0 模型調用
@@ -901,4 +894,3 @@ func TestMBACK_OpenCode_RoleRouting_Separation(t *testing.T) {
 	}
 	strikerMock.mu.Unlock()
 }
-

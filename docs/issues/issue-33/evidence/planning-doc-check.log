@@ -1,0 +1,12 @@
+日期：2026-10-03
+範圍：issue 33 規劃文件，production code 未修改。
+命令：python3 docs/issues/issue-33/evidence/check_planning.py
+首次檢查：exit code 1，缺少本檔；補齊 evidence 檔案後重新檢查。
+
+重跑 exit code 0，實際輸出：
+PASS: 四份文件存在；相對連結有效；無範本註解。
+PASS: RTCAP-001～016 與核准表一對一，全部保持待核准。
+PASS: RC-TBD-1～10 齊備，Large／High metadata 與日期明確。
+限制：靜態結構檢查不代表設計已核准或 production 行為已驗證。
+
+人工查核：2026-10-03 對照 issue R1～R8、候選 RTCAP-001～012 與 RC-TBD-1～10；補充 013～016 保持待核准，未排成可執行 Task。常青文件與四個 adapter 的既有能力邊界已列入範圍，只有規劃文件及 evidence 被新增。

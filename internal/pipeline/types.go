@@ -74,12 +74,15 @@ type StageTrace struct {
 
 // PipelineTrace 代表完整任務執行管線的審計歷程
 type PipelineTrace struct {
-	Mode         ExecutionMode `json:"mode"`
-	BackendID    string        `json:"backend_id,omitempty"`
-	OraclePlan   *OraclePlan   `json:"oracle_plan,omitempty"`
-	CriticReview *CriticReview `json:"critic_review,omitempty"`
-	Stages       []StageTrace  `json:"stages"`
-	ModelCalls   int           `json:"model_calls"`
-	DurationMs   int64         `json:"duration_ms"`
-	FinalResult  string        `json:"final_result,omitempty"`
+	ExecutionContract *backend.ExecutionContract `json:"execution_contract,omitempty"`
+	ExecutionGuard    *backend.CapabilityMatch   `json:"execution_guard,omitempty"`
+	GuardError        string                     `json:"guard_error,omitempty"`
+	Mode              ExecutionMode              `json:"mode"`
+	BackendID         string                     `json:"backend_id,omitempty"`
+	OraclePlan        *OraclePlan                `json:"oracle_plan,omitempty"`
+	CriticReview      *CriticReview              `json:"critic_review,omitempty"`
+	Stages            []StageTrace               `json:"stages"`
+	ModelCalls        int                        `json:"model_calls"`
+	DurationMs        int64                      `json:"duration_ms"`
+	FinalResult       string                     `json:"final_result,omitempty"`
 }

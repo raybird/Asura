@@ -307,6 +307,21 @@ func (d *Daemon) Scheduler() *cron.Scheduler {
 
 // dispatchCronTask 由 Cron Scheduler 觸發時調用，整合專案互斥鎖與保留通道調度 (CRON-001, CRON-002)
 func (d *Daemon) dispatchCronTask(ctx context.Context, cronID, workspace, prompt string) (string, error) {
+	canonical, authErr := d.policy.AuthorizeCanonicalWorkspace(workspace)
+	if authErr != nil {
+		return "", authErr
+	}
+	workspace = canonical
+	contract, err := d.engine.Preflight(ctx, "direct", "")
+	if err != nil {
+		return "", fmt.Errorf("capability admission: %w", err)
+	}
+	sealed := &engine.ExecutionContext{OriginalPrompt: prompt, Workspace: workspace, Backend: "opencode", ExecutionContract: contract, CreatedAt: time.Now().UTC()}
+	rawCtx, err := json.Marshal(sealed)
+	if err != nil {
+		return "", err
+	}
+
 	if !d.tryAcquireCapacity() {
 		return "", ErrCapacityExceeded
 	}
@@ -316,16 +331,17 @@ func (d *Daemon) dispatchCronTask(ctx context.Context, cronID, workspace, prompt
 	fp := fmt.Sprintf("%x", sha256.Sum256([]byte(workspace+":"+prompt)))
 
 	initialTask := &storage.Task{
-		ID:            taskID,
-		Fingerprint:   fp,
-		Prompt:        prompt,
-		Workspace:     workspace,
-		Backend:       "opencode",
-		ExecutionMode: "direct",
-		Status:        storage.StatusPending,
-		Class:         string(TaskClassCron),
-		CreatedAt:     now,
-		UpdatedAt:     now,
+		ResolvedContext: string(rawCtx),
+		ID:              taskID,
+		Fingerprint:     fp,
+		Prompt:          prompt,
+		Workspace:       workspace,
+		Backend:         "opencode",
+		ExecutionMode:   "direct",
+		Status:          storage.StatusPending,
+		Class:           string(TaskClassCron),
+		CreatedAt:       now,
+		UpdatedAt:       now,
 	}
 
 	if err := d.store.CreateTask(ctx, initialTask); err != nil {
@@ -343,7 +359,7 @@ func (d *Daemon) dispatchCronTask(ctx context.Context, cronID, workspace, prompt
 	}
 
 	// 遵循 CRON-002：以 TaskClassCron 類別派工，受 MaxCronWorkers 限制並保留互動通道
-	err := d.dispatchTask(taskID, workspace, prompt, TaskClassCron)
+	err = d.dispatchTask(taskID, workspace, prompt, TaskClassCron)
 	if err != nil {
 		d.releaseCapacity()
 		d.releaseWorkspaceAndWakeNext(wsKey, taskID)
@@ -781,6 +797,13 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				}
 			}
 
+			// 2026-10-03：去重後、接受與派送前取得 immutable runtime contract。
+			contract, admissionErr := d.engine.Preflight(connCtx, reqMode, req.Backend)
+			if admissionErr != nil {
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("capability admission: %v", admissionErr)})
+				continue
+			}
+
 			// 遵循 CTXMEM-002, CTXMEM-005：在容量取得與任務持久化前，解析選取之記憶並嚴格隔離跨專案/不存在記憶
 			var resolvedMemories []storage.Memory
 			if len(req.MemoryIDs) > 0 {
@@ -820,7 +843,6 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			}
 
 			var execCtx *engine.ExecutionContext
-			var resolvedCtxJSON string
 			if len(resolvedMemories) > 0 || recallDecision != nil {
 				snapshots := make([]engine.ProjectMemorySnapshot, 0, len(resolvedMemories))
 				for _, m := range resolvedMemories {
@@ -842,13 +864,6 @@ func (d *Daemon) handleConn(conn net.Conn) {
 					MemoryRefs:      memoryRefs,
 					CreatedAt:       now,
 				}
-				raw, err := json.Marshal(execCtx)
-				if err != nil {
-					d.releaseCapacity()
-					_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("seal execution context: %v", err)})
-					continue
-				}
-				resolvedCtxJSON = string(raw)
 			} else {
 				execCtx = &engine.ExecutionContext{
 					OriginalPrompt: req.Prompt,
@@ -857,6 +872,15 @@ func (d *Daemon) handleConn(conn net.Conn) {
 					CreatedAt:      now,
 				}
 			}
+
+			execCtx.ExecutionContract = contract
+			rawCtx, sealErr := json.Marshal(execCtx)
+			if sealErr != nil {
+				d.releaseCapacity()
+				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("seal execution contract: %v", sealErr)})
+				continue
+			}
+			resolvedCtxJSON := string(rawCtx)
 
 			initialTask := &storage.Task{
 				ID:              taskID,

@@ -116,6 +116,8 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
     <div style="margin-top:0.5rem; font-weight:600; font-size:0.9rem;">任務輸出：</div>
     <pre id="task-result">(尚未查詢任務)</pre>
     <div style="margin-top:0.5rem; font-weight:600; font-size:0.9rem;">記憶與召回稽核：</div>
+    <h4>Runtime 執行契約</h4>
+    <pre id="capability-audit">(尚未查詢任務)</pre>
     <pre id="memory-audit">(尚未查詢任務)</pre>
   </div>
 </div>
@@ -143,6 +145,7 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
 
   const taskStatus = document.getElementById('task-status');
   const taskResult = document.getElementById('task-result');
+  const capabilityAudit = document.getElementById('capability-audit');
   const memoryAudit = document.getElementById('memory-audit');
 
   const memoryList = document.getElementById('memory-list');
@@ -167,6 +170,7 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
     taskStatus.textContent = '-';
     taskResult.textContent = '(尚未查詢任務)';
     memoryAudit.textContent = '(尚未查詢任務)';
+    capabilityAudit.textContent = '(尚未查詢任務)';
     taskIdInput.value = '';
     requestIDDisplay.textContent = '(尚未提交)';
     memoryCursor = '';
@@ -642,6 +646,7 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
     taskStatus.textContent = '-';
     taskResult.textContent = '(等待提交回應...)';
     memoryAudit.textContent = '(尚未查詢任務)';
+    capabilityAudit.textContent = '(尚未查詢任務)';
     sendTask(payload, taskToken);
   });
 
@@ -649,7 +654,36 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
     if (pendingRequest) sendTask(pendingRequest, taskGeneration);
   });
 
+  function renderCapabilityAudit(task) {
+    if (!task.resolved_context) { capabilityAudit.textContent = 'Runtime 契約：legacy/unavailable'; return; }
+    let context;
+    try { context = JSON.parse(task.resolved_context); }
+    catch (err) { capabilityAudit.textContent = 'Runtime 契約：unsupported/unavailable'; return; }
+    const contract = context && context.execution_contract;
+    if (!contract) { capabilityAudit.textContent = 'Runtime 契約：legacy/unavailable'; return; }
+    if (contract.contract_version !== 'capability-v1' || contract.policy_version !== 'capability-v1' || !contract.runtime || !contract.match) {
+      capabilityAudit.textContent = 'Runtime 契約：unsupported/unavailable'; return;
+    }
+    const runtime = contract.runtime;
+    const match = contract.match;
+    const lines = [
+      'Runtime 契約：' + contract.contract_version + '；policy ' + contract.policy_version,
+      'Requested backend：' + JSON.stringify(contract.requested_backend),
+      '接受時 runtime：' + runtime.id + ' ' + runtime.version,
+      'Snapshot：' + runtime.captured_at,
+      'Requirements：' + JSON.stringify(match.required),
+      'Capabilities：' + JSON.stringify(match.available),
+      'Capability match：' + (match.compatible ? 'compatible' : 'incompatible'),
+      'Missing：' + JSON.stringify(match.missing)
+    ];
+    let trace;
+    try { trace = task.pipeline_trace ? JSON.parse(task.pipeline_trace) : null; } catch (err) { trace = null; }
+    if (trace && trace.guard_error) lines.push('Execution guard：rejected（' + trace.guard_error + '）');
+    capabilityAudit.textContent = lines.join('\n');
+  }
+
   function renderMemoryAudit(task) {
+    renderCapabilityAudit(task);
     if (!task.resolved_context) {
       memoryAudit.textContent = '舊任務：未提供記憶與召回資料';
       return;
@@ -739,6 +773,7 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
     taskStatus.textContent = '-';
     taskResult.textContent = '(查詢中...)';
     memoryAudit.textContent = '(查詢中...)';
+    capabilityAudit.textContent = '(查詢中...)';
     const generation = memoryGeneration;
     try {
       const res = await fetch('/api/tasks/' + encodeURIComponent(tid));
@@ -782,6 +817,7 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
     taskStatus.textContent = '-';
     taskResult.textContent = '(查詢中...)';
     memoryAudit.textContent = '(查詢中...)';
+    capabilityAudit.textContent = '(查詢中...)';
     const generation = memoryGeneration;
     try {
       const res = await fetch('/api/tasks/' + encodeURIComponent(tid));

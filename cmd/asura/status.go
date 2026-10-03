@@ -74,6 +74,24 @@ func handleStatus(args []string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintf(stdout, "Workspace: %s\n", task.Workspace)
 	fmt.Fprintf(stdout, "Prompt:    %s\n", task.Prompt)
+	// 2026-10-03：只讀取接受時封存值，查詢不探測目前 runtime。
+	var capabilityContext engine.ExecutionContext
+	if task.ResolvedContext != "" && json.Unmarshal([]byte(task.ResolvedContext), &capabilityContext) != nil {
+		fmt.Fprintln(stdout, "Capability contract: unsupported/unavailable")
+	} else if contract := capabilityContext.ExecutionContract; contract != nil {
+		if contract.Validate(task.ExecutionMode, backendID) != nil {
+			fmt.Fprintln(stdout, "Capability contract: unsupported/unavailable")
+		} else {
+			fmt.Fprintf(stdout, "Capability contract: %s (policy %s)\n", contract.ContractVersion, contract.PolicyVersion)
+			fmt.Fprintf(stdout, "Requested backend: %q\n", contract.RequestedBackend)
+			fmt.Fprintf(stdout, "Runtime snapshot: %s %s (%s)\n", contract.Runtime.ID, contract.Runtime.Version, contract.Runtime.CapturedAt.Format("2006-01-02T15:04:05Z07:00"))
+			fmt.Fprintf(stdout, "Requirements: %v\n", contract.Match.Required)
+			fmt.Fprintf(stdout, "Capabilities: %v\n", contract.Match.Available)
+			fmt.Fprintln(stdout, "Capability match: compatible")
+		}
+	} else {
+		fmt.Fprintln(stdout, "Capability contract: legacy/unavailable")
+	}
 	if task.ResolvedContext != "" {
 		var sealed engine.ExecutionContext
 		if err := json.Unmarshal([]byte(task.ResolvedContext), &sealed); err == nil && sealed.Recall != nil {
@@ -88,6 +106,9 @@ func handleStatus(args []string, stdout, stderr io.Writer) int {
 	}
 	if task.PipelineTrace != "" {
 		var trace pipeline.PipelineTrace
+		if json.Unmarshal([]byte(task.PipelineTrace), &trace) == nil && trace.GuardError != "" {
+			fmt.Fprintf(stdout, "Execution guard: rejected (%s)\n", trace.GuardError)
+		}
 		if err := json.Unmarshal([]byte(task.PipelineTrace), &trace); err == nil && len(trace.Stages) > 0 {
 			var stageParts []string
 			for _, s := range trace.Stages {

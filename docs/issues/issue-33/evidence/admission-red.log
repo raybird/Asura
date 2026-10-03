@@ -1,0 +1,8 @@
+日期：2026-10-03
+被測基準：665e409，production 尚未修改，新增 daemon/capability_contract_test.go。
+命令：go test -count=1 ./internal/daemon -run '^TestCapabilityContract'
+exit code: 1
+TestCapabilityContractAdmissionRejects/unsafe：missing/unknown capability accepted before persistence
+TestCapabilityContractAdmissionRejects/unknown：missing/unknown capability accepted before persistence
+TestCapabilityContractSealedRedelivery：accepted task not sealed: unexpected end of JSON input
+這是接受前拒絕與無記憶封存的目標行為紅燈；非環境／編譯失敗。

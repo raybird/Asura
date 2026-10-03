@@ -90,6 +90,14 @@ func (o *PipelineOrchestrator) evaluateAdmission(stage, prompt, model string) co
 	return engine.EvaluateStage(stage, prompt, model, o.contextCfg)
 }
 
+// 2026-10-03：所有 runtime 接受入口共用同一純 policy 與 matcher。
+func (o *PipelineOrchestrator) Preflight(ctx context.Context, mode, requested string) (*backend.ExecutionContract, error) {
+	if o.registry == nil {
+		return nil, nil
+	}
+	return backend.AdmitRuntime(ctx, o.registry, mode, requested)
+}
+
 // Execute 依指定模式執行管線
 func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, execCtx *engine.ExecutionContext) (string, *PipelineTrace, error) {
 	if mode == "" {
@@ -107,22 +115,49 @@ func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, 
 		b, err := o.registry.Get(backendID)
 		if err != nil {
 			// 未知後端在任何模型呼叫前 fail-closed 拒絕 (MBACK-003)
+			if execCtx != nil && execCtx.ExecutionContract != nil {
+				return "", &PipelineTrace{Mode: mode, BackendID: backendID, ExecutionContract: execCtx.ExecutionContract, GuardError: err.Error()}, fmt.Errorf("backend preflight failed: %w", err)
+			}
 			return "", nil, fmt.Errorf("backend preflight failed: %w", err)
 		}
 		activeBackend = b
 		backendVer, _ = b.Version(ctx)
 	}
 
-	// 能力預檢 (Capability Preflight, MBACK-008)
+	// 2026-10-03：封存契約的需求保持不變，執行前只查核目前安全能力。
+	var contract *backend.ExecutionContract
+	var guard *backend.CapabilityMatch
+	if execCtx != nil {
+		contract = execCtx.ExecutionContract
+	}
+	requirements, reqErr := backend.RequirementsForMode(string(mode))
+	if contract != nil {
+		if err := contract.Validate(string(mode), backendID); err != nil {
+			return "", &PipelineTrace{Mode: mode, BackendID: backendID, ExecutionContract: contract, GuardError: err.Error()}, err
+		}
+		requirements = contract.Requirements
+	}
+	if reqErr != nil {
+		return "", nil, reqErr
+	}
 	if activeBackend != nil {
-		// 任何執行模式皆需要工作區寫入能力以供 Striker 執行
-		if !activeBackend.HasCapability(backend.CapWorkspaceWrite) {
-			return "", nil, fmt.Errorf("%w: backend %q does not support workspace write required for execution", backend.ErrUnsupportedCapability, activeBackend.ID())
+		m, err := backend.MatchCapabilities(requirements, backend.RuntimeDescriptor{ID: activeBackend.ID(), Version: backendVer, Capabilities: activeBackend.Capabilities()})
+		guard = &m
+		if err == nil && !m.Compatible {
+			err = &backend.CapabilityAdmissionError{RequestedBackend: backendID, Match: m}
 		}
-		// Three-Face 模式額外要求 Oracle 與 Critic 之唯讀沙箱安全能力
-		if mode == ModeThreeFace && !activeBackend.HasCapability(backend.CapReadOnlySandbox) {
-			return "", nil, fmt.Errorf("%w: backend %q does not support read-only sandbox required for Three-Face", backend.ErrUnsupportedCapability, activeBackend.ID())
+		if err != nil {
+			if contract != nil {
+				return "", &PipelineTrace{Mode: mode, BackendID: backendID, ExecutionContract: contract, ExecutionGuard: guard, GuardError: err.Error()}, err
+			}
+			return "", nil, err
 		}
+	} else if contract != nil {
+		err := fmt.Errorf("%w: sealed runtime unavailable", backend.ErrBackendNotFound)
+		return "", &PipelineTrace{Mode: mode, BackendID: backendID, ExecutionContract: contract, GuardError: err.Error()}, err
+	}
+	if execCtx != nil {
+		execCtx.BoundBackend = activeBackend
 	}
 
 	if mode == ModeDirect {
@@ -138,8 +173,10 @@ func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, 
 		if adm.Verdict == contextwin.VerdictRejected {
 			duration := time.Since(start).Milliseconds()
 			trace := &PipelineTrace{
-				Mode:      ModeDirect,
-				BackendID: backendID,
+				ExecutionContract: contract,
+				ExecutionGuard:    guard,
+				Mode:              ModeDirect,
+				BackendID:         backendID,
 				Stages: []StageTrace{
 					{
 						Name:           "striker",
@@ -176,8 +213,10 @@ func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, 
 		}
 
 		trace := &PipelineTrace{
-			Mode:      ModeDirect,
-			BackendID: backendID,
+			ExecutionContract: contract,
+			ExecutionGuard:    guard,
+			Mode:              ModeDirect,
+			BackendID:         backendID,
 			Stages: []StageTrace{
 				{
 					Name:           "striker",
@@ -202,9 +241,11 @@ func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, 
 	// ModeThreeFace 固定依序執行：Oracle → Striker → Critic
 	pipelineStart := time.Now()
 	trace := &PipelineTrace{
-		Mode:      ModeThreeFace,
-		BackendID: backendID,
-		Stages:    make([]StageTrace, 0, 3),
+		ExecutionContract: contract,
+		ExecutionGuard:    guard,
+		Mode:              ModeThreeFace,
+		BackendID:         backendID,
+		Stages:            make([]StageTrace, 0, 3),
 	}
 
 	// 1. Oracle Stage

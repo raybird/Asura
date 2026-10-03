@@ -99,6 +99,12 @@ go build -o bin/asura ./cmd/asura
 ./bin/asura status <task-id>
 ```
 
+2026-10-03：真正使用 backend runtime 的 Daemon／IPC／Web／Cron 與本機 runtime pipeline，在接受新任務前以共同 deterministic requirements／capability matcher 預檢。Direct 要求 Striker 的 workspace_write；Three-Face 另要求 Oracle／Critic 的 read_only_sandbox。缺少能力、未知 runtime／capability 或版本取得失敗時接受前拒絕，沒有模型呼叫或自動 fallback。
+
+接受時的 capability-v1 契約保存於 Task resolved_context，包含 stage requirements、requested／resolved runtime、版本、能力集合、UTC snapshot 與 match。無記憶任務也封存；重送先查原 Task，不重新探測。status 與 Web 稽核顯示保存值；舊 Task 未提供快照時明示 legacy/unavailable，不回填。執行前能力退化的拒絕分開記錄在 execution guard，不改寫接受時快照。
+
+2026-10-03：本機 `run --backend opencode/codex` 保留既有 shell 命令執行，不呼叫 runtime 或封存其能力；CLI status 與 Web 稽核明示 `legacy/unavailable`。真正 runtime 的 engine、Daemon／IPC／Web／Cron 入口才封存 runtime 契約。
+
 #### 安全取消任務 (cancel)
 ```bash
 # 從共同入口發送取消請求，終止任務進程組並確保進程樹安全回收
