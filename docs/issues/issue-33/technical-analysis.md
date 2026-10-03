@@ -105,4 +105,4 @@ IPC 跟 Web 共用 daemon 接受點；Cron、local run／engine 新 Task 也使�
 
 進一步閱讀 cmd/asura/run.go 證實 opencode/codex flags 都仍使用 sh -c shell runner；只有 omp/antigravity 使用 Backend.Run。原規劃誤將所有本機 run 視為 runtime 呼叫。要求它保存 OpenCode/Codex descriptor 會造成錯誤稽核，直接改成 runtime 則改變既有命令執行契約。
 
-具體提案：保留 shell run 行為，runtime capability contract 明示 unavailable；真正 runtime 的 local engine、Daemon/IPC/Web/Cron 路徑完整封存。另一方案為切換成實際 runtime Run，會改變命令輸出、認證與模型調用。此必要決策已透過本對話詢問；沒有把等待時間當成核准。尚未實作相依的 shell 標記，RTCAP-016 局部待重新核准。
+具體提案：保留 shell run 行為，runtime capability contract 明示 unavailable；真正 runtime 的 local engine、Daemon/IPC/Web/Cron 路徑完整封存。另一方案為切換成實際 runtime Run，會改變命令輸出、認證與模型調用。2026-10-03 使用者回覆「保留」，核准相容方案及 RTCAP-016 修訂。既有 status／Web 缺快照分支已明示 legacy/unavailable，無須新增 shell 標記或更動 production；新增真 CLI／SQLite characterization 驗證輸出、零 runtime 探測與零歷史回填。

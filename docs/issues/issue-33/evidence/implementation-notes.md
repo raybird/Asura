@@ -31,3 +31,7 @@
 - `go test -count=1 -race ./internal/backend/opencode -run 'TestCapabilityVersionProbeDeadline|Test.*Version|Test.*Resolve'` exit 0，version-deadline-green.log。沒有獨立 IPC 層失敗面，真版本 subprocess 可直接驗版本期限；同層合併紅燈。
 - code-simplify：只增加必要 context 傳遞，保留既有公開 helper；沒有額外可證明安全的精煉，no-op。後續完整檢查即重構後全綠證據。
 - 最終 `go vet ./...` exit 0，final-vet.log；`go build -o /tmp/asura-issue33 ./cmd/asura` exit 0，final-build.log；`go test -count=1 -race ./...` exit 0，19 package 通過，final-race.log（integration 262.324s）。版本對應 final-tested-source.sha256，未冒用 a9ba9b9 作為修復後被測版本。
+
+## RC-TBD-11 定案（2026-10-03）
+
+使用者回覆「保留」，核准 shell 相容方案與 RTCAP-016 修訂。沒有 production 變更；原 status／Web 缺契約分支已提供 legacy/unavailable。新增 TestCapabilityShellRunCompatibility 真 shell／SQLite／status 刻畫測試，opencode/codex fake binary sentinel 證明零 runtime 呼叫。外內迴圈為同一相容路徑，紅燈不適用（維持既有行為）；綠燈見 shell-compatibility-green.log。code-simplify 已查核，no-op：短小 table case 沿用現有測試風格，無需抽象或更動 production。最終全回歸的 production source 完全未變，既有 final race／vet／build 證據仍有效；新增測試另以 race 驗證。

@@ -376,6 +376,6 @@ Direct 為 Striker workspace-write；Three-Face 的 Oracle/Critic 為 read-only�
 
 PipelineTrace 的 execution_contract 複用接受時值，execution_guard／guard_error 則記錄執行前目前能力的安全查核；stage backend version 為執行資訊。能力退化／runtime 移除拒絕而不覆寫接受時判定。缺舊 snapshot 查詢 legacy/unavailable，零 runtime 探測與零歷史回填。這個契約不代表 runtime 認證、health 或實際二進位檔不可變。
 
-本機 run 的 opencode/codex 仍是既有 shell runner，不將它偽稱為實際 runtime 執行；其 runtime snapshot 相容性揭露由 issue 33 的 RC-TBD-11 定案。真正 local runtime pipeline 使用共同 admission。
+本機 run 的 opencode/codex 仍是既有 shell runner，不將它偽稱為實際 runtime 執行；2026-10-03 已核准保留 shell 相容行為，CLI／Web 的 runtime contract 明示 legacy/unavailable，不探測或偽造 runtime snapshot。真正 local runtime pipeline 使用共同 admission。
 
 最後驗證日期：2026-10-03；相關測試與未決範圍見 docs/issues/issue-33。

@@ -18,7 +18,7 @@ for path in files:
     assert "2026-10-03" in text, path.name
 readme = files[0].read_text()
 scenarios = re.findall(r"@RTCAP-(\d{3})", readme)
-approvals = re.findall(r"\| RTCAP-(\d{3}) \| 2026-10-03 \| (?:已核准|待重新核准) \|", readme)
+approvals = re.findall(r"\| RTCAP-(\d{3}) \| 2026-10-03 \| 已核准 \|", readme)
 expected = [f"{n:03d}" for n in range(1, 17)]
 assert scenarios == expected, scenarios
 assert approvals == expected, approvals
@@ -27,6 +27,6 @@ for n in range(1, 11):
 assert "**分級**: Large" in readme
 assert "**風險**: High" in readme
 print("PASS: 四份文件存在；相對連結有效；無範本註解。")
-print("PASS: RTCAP-001～016 與核准表一對一，RTCAP-016 的局部待重新核准有明確原因。")
+print("PASS: RTCAP-001～016 與核准表一對一，所有條件已核准，RTCAP-016 的 shell 相容方案已定案。")
 print("PASS: RC-TBD-1～10 齊備，Large／High metadata 與日期明確。")
 print("限制：靜態結構檢查不代表設計已核准或 production 行為已驗證。")

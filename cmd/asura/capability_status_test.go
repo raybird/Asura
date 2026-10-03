@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -13,6 +14,52 @@ import (
 	"asura/internal/engine"
 	"asura/internal/storage"
 )
+
+// 2026-10-03：RTCAP-016，保留 shell run，禁止偽造 runtime 快照或探測 CLI。
+func TestCapabilityShellRunCompatibility(t *testing.T) {
+	t.Setenv("ASURA_SOCKET", "")
+	for _, id := range []string{"opencode", "codex"} {
+		t.Run(id, func(t *testing.T) {
+			dir := t.TempDir()
+			marker := filepath.Join(dir, "runtime-called")
+			if err := os.WriteFile(filepath.Join(dir, id), []byte("#!/bin/sh\ntouch '"+marker+"'\nexit 99\n"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			db := filepath.Join(dir, "tasks.db")
+			var out, stderr bytes.Buffer
+			if code := handleRun([]string{"--db", db, "--workspace", dir, "--id", "shell", "--backend", id, "printf shell-proof"}, &out, &stderr); code != 0 {
+				t.Fatalf("run exit %d: %s", code, stderr.String())
+			}
+			s, err := storage.NewSQLiteStore(db)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer s.Close()
+			task, err := s.GetTask(context.Background(), "shell")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if task.Status != storage.StatusCompleted || task.Result != "shell-proof" || task.Backend != id {
+				t.Fatalf("shell behavior changed: %+v", task)
+			}
+			if strings.Contains(task.ResolvedContext+task.PipelineTrace, "execution_contract") {
+				t.Fatal("shell run fabricated runtime contract")
+			}
+			out.Reset()
+			if code := handleStatus([]string{"--db", db, "shell"}, &out, &stderr); code != 0 || !strings.Contains(out.String(), "Capability contract: legacy/unavailable") {
+				t.Fatalf("missing unavailable audit: %s / %s", out.String(), stderr.String())
+			}
+			stored, err := s.GetTask(context.Background(), "shell")
+			if err != nil || stored.ResolvedContext != task.ResolvedContext || stored.PipelineTrace != task.PipelineTrace {
+				t.Fatal("audit rewrote shell history")
+			}
+			if _, err := os.Stat(marker); !os.IsNotExist(err) {
+				t.Fatalf("shell path called runtime: %v", err)
+			}
+		})
+	}
+}
 
 // 2026-10-03：RTCAP-007／011／016，status 使用保存值，不讀本機 runtime。
 func TestCapabilityStatusPersistedAndLegacy(t *testing.T) {

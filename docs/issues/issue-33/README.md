@@ -156,17 +156,19 @@ Feature: 可稽核且 fail-closed 的 explicit runtime 執行契約
 
   @RTCAP-016
   Scenario: 所有入口封存與稽核
-    Given 本機 run IPC ask Web 或 Cron 提交且沒有選取記憶
+    Given 真正 runtime 的本機 engine IPC ask Web 或 Cron 提交且沒有選取記憶
     When 新任務被接受並排隊或執行
     Then 接受時已保存 mode requirements requested/resolved backend version capability snapshot match 與 policy/contract version
     And CLI status IPC Task 與 Web Task 稽核可讀出同一接受時契約
     And 不增加使用者必填參數或 runtime 管理 UI
+    And opencode/codex 本機 run 保留既有 shell 行為且不探測 runtime 或偽造快照
+    And shell run 的 CLI status 與 Web 稽核明示 legacy/unavailable
 ```
 
 ## Gherkin 核准紀錄
 
-- **核准 commit**: 665e409。
-- **核准來源**: 2026-10-03 使用者於本對話回覆「核准」，核准本次完整方案及 RTCAP-001～016。
+- **核准 commit**: 665e409（RTCAP-001～015）；RTCAP-016 修訂待提交。
+- **核准來源**: 2026-10-03 使用者於本對話回覆「核准」，核准本次完整方案及 RTCAP-001～016；同日對 RC-TBD-11 回覆「保留」，核准保留 shell 行為與 unavailable 稽核的 RTCAP-016 修訂。
 
 | Scenario | 核准日期 | 狀態 |
 |---|---|---|
@@ -185,7 +187,7 @@ Feature: 可稽核且 fail-closed 的 explicit runtime 執行契約
 | RTCAP-013 | 2026-10-03 | 已核准 |
 | RTCAP-014 | 2026-10-03 | 已核准 |
 | RTCAP-015 | 2026-10-03 | 已核准 |
-| RTCAP-016 | 2026-10-03 | 待重新核准 |
+| RTCAP-016 | 2026-10-03 | 已核准 |
 
 ## 風險與首要驗證
 
@@ -209,9 +211,9 @@ Feature: 可稽核且 fail-closed 的 explicit runtime 執行契約
 | RC-TBD-8 | 保存 raw requested 與 resolved；空值固定 opencode | 已解決 | RTCAP-006／008 |
 | RC-TBD-9 | redelivery 之後、新任務接受前 union 預檢 | 已解決 | RTCAP-003／004／008／016 |
 | RC-TBD-10 | capability-v1 與未知版本 fail-closed | 已解決 | RTCAP-013 |
-| RC-TBD-11 | 本機 run opencode/codex 為 shell runner；提案保留其行為並明示 runtime contract unavailable，真正 runtime 路徑完整封存 | 待確認 | RTCAP-016；已透過本對話提出必要決策 |
+| RC-TBD-11 | 本機 run opencode/codex 為 shell runner；保留其行為並明示 runtime contract unavailable，真正 runtime 路徑完整封存 | 已解決 | RTCAP-016；2026-10-03 使用者回覆「保留」，採相容方案 |
 
-2026-10-03：RC-TBD-1～10 依 technical-analysis 提案定案；RTCAP-001～015 核准有效。RTCAP-016 的 shell run 相容性差異需 RC-TBD-11 定案，其他已核准工作繼續。
+2026-10-03：RC-TBD-1～10 依 technical-analysis 提案定案；RTCAP-001～015 核准有效。RC-TBD-11 已依使用者「保留」定案，RTCAP-016 修訂已核准；shell 稽核沿用 legacy/unavailable，不聲稱 shell 使用 runtime。
 
 ## Timeline
 
@@ -221,9 +223,11 @@ Feature: 可稽核且 fail-closed 的 explicit runtime 執行契約
 | 2026-10-03 | 使用者回覆「核准」，全部方案與驗收定案 | 使用者 |
 | 2026-10-03 | 進一步發現 run opencode/codex 使用 shell；提出 RC-TBD-11，只暫停 RTCAP-016 的該入口決策 | Codex |
 
+| 2026-10-03 | 使用者回覆「保留」，核准 RC-TBD-11 相容方案與 RTCAP-016 修訂 | 使用者 |
+
 ---
 
 **建立日期**: 2026-10-03  
 **分級**: Large — backend／pipeline／engine／daemon／CLI／Web 跨模組契約  
 **風險**: High  
-**狀態**: runtime 契約已實作且最終全回歸通過；待 RC-TBD-11 定案及完整交付審查
+**狀態**: runtime 契約已實作且最終全回歸通過；全部方案已定案；待完整交付審查與 PR
