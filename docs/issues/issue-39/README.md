@@ -10,7 +10,8 @@
 
 - [需求與現況分析](./requirement-analysis.md)
 - [RI-TBD 技術提案](./technical-analysis.md)
-- [初始實作計畫](./implementation-plan.md)
+- [實作計畫與任務](./implementation-plan.md)
+- [驗證紀錄與原始日誌](./verification-evidence.md)
 
 ## 涉及檔案
 
@@ -208,4 +209,4 @@ Feature: 有界且可稽核的 runtime admission inventory
 **建立日期**: 2026-10-04
 **分級**: Large — 跨 runtime adapter、admission、execution guard、persistence 與 audit
 **風險**: High
-**狀態**: 實作中
+**狀態**: 實作與驗證完成，等待獨立審查及合併；最終審查判定以 `review-{HEAD7}.md` 為準

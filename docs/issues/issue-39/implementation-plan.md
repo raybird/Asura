@@ -53,7 +53,7 @@
 - 完成判準：vet/race/build 全綠；全部驗收證據；固定 BASE/HEAD；獨立審查 PASS 或修正後再審。
 - 驗證：全 repo 回歸與範圍一致性；審查遵循 review-evidence。
 - 狀態：⏳ 進行中
-- 證據：[驗證紀錄](./verification-evidence.md)；等待全套整合測試收尾、PR 與獨立 review。
+- 證據：[驗證紀錄](./verification-evidence.md)；2026-10-04 vet／全套 race／build 全綠。最後的獨立審查以同次 `review-{HEAD7}.md` 的固定版本與 PASS 判定結案 Task 5；不自行 merge。
 
 ## 使用方式對照
 
@@ -83,12 +83,12 @@
 
 ## 交付檢查清單
 
-- [ ] RI-TBD／Scenario 核准與可追溯基線齊備
-- [ ] decompose 在本檔完成 Phase/Task 映射
-- [ ] 全部 Scenario 紅綠重構或適用等價證據保存
-- [ ] 常青文件功能／架構與驗證日期更新
-- [ ] go vet ./...
-- [ ] go test -count=1 -race ./...
-- [ ] go build ./cmd/asura（產物置於工作區外或清除本次產物）
+- [x] RI-TBD／Scenario 核准與可追溯基線齊備
+- [x] decompose 在本檔完成 Phase/Task 映射
+- [x] 全部 Scenario 紅綠重構或適用等價證據保存
+- [x] 常青文件功能／架構與驗證日期更新
+- [x] go vet ./...
+- [x] go test -count=1 -race ./...
+- [x] go build ./cmd/asura（產物置於工作區外或清除本次產物）
 - [ ] 固定交付 BASE/HEAD 與 PR 範圍一致
 - [ ] 獨立 review 保存有效報告；不自行 merge

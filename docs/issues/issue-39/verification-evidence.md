@@ -37,13 +37,15 @@ Inventory state/ordering API 的單元與外部行為為同一可觀察層級，
 | RTINV-012 | TestInventoryOpenCodeVersionSecret／BoundsAndTampering／ContractSnapshot／VersionProcessBounds、RuntimeSelectionPriorityAndBounds：ID/version/count/JSON/diagnostic 範圍、secret sentinel、tamper 拒絕 | 定向 race PASS |
 | RTINV-013 | TestInventoryCancellationAndWholeBudget／VersionProcessCancellation／IPCRejectionAndCancellation：合作 probe 結束、leader 回收、無 Task/Run | 定向 race PASS |
 | RTINV-014 | TestInventoryCLI／HTTPBoundary／WebRender、IPC Inventory、既有 status/stage audit：registration/state/reason、legacy／unknown policy、task status 不 probe | 定向 race PASS |
-| RTINV-015 | TestInventoryLegacyContracts、既有 StageBindingRestartRecovery／QueueRedelivery；全部 Memory/Recall/Lifecycle/Git/Web/Cron/CLI 回歸 | 完整回歸進行中 |
+| RTINV-015 | TestInventoryLegacyContracts、既有 StageBindingRestartRecovery／QueueRedelivery；全部 Memory/Recall/Lifecycle/Git/Web/Cron/CLI 回歸 | 完整 race PASS |
 
 ## 全套驗證
 
 2026-10-04：`go vet ./...` exit 0；`go build -o /tmp/asura-issue39 ./cmd/asura` exit 0，等價於指定 build 但產物不進 repo。首次 `go test -count=1 -race ./...` exit 1，僅 daemon 舊錯誤字串預期失敗，其餘套件含 tests/integration（254.069 秒）PASS；已依核准政策調整原斷言。
 
-2026-10-04：最終 `go test -count=1 -race ./...` 正在收尾，完整結果將在本檔回填。/tmp/issue39-final-race.log 是執行中的原始日誌，尚未當作完成證據。
+2026-10-04：安全修復後原始碼 commit `6681b0c0db89f3769cf945069b5884cead12c0a3` 的 `go test -count=1 -race ./...` exit 0，所有套件 PASS，tests/integration 251.356 秒。原始成功輸出：[race-final.log](./evidence/race-final.log)；被測原始碼：[source-sha256.txt](./evidence/source-sha256.txt)；環境：[environment.txt](./evidence/environment.txt)。交付前可用 `sha256sum -c docs/issues/issue-39/evidence/source-sha256.txt` 核對；後續僅 issue 文件／日誌改動，不改被測程式。
+
+2026-10-04：修復後曾有一輪全套與前一輪重疊，exit 1，只有 TestRuntimeSelectionLocalCancel 在 PGID 存在後取消回報 Task 已 failed；未證實失敗原因，不能將重疊視為確定原因。該測試 `go test -count=20 -race ./cmd/asura -run '^TestRuntimeSelectionLocalCancel$'` exit 0（4.779 秒）；沒有弱化斷言或修改取消程式。之後無重疊完整回歸得到上述 exit 0。保留 [失敗日誌](./evidence/race-overlap-failed.log) 與 [修復前 ce45cc9 全綠日誌](./evidence/race-ce45cc9.log)，後者不取代最終修復驗收。
 
 ## 限制
 
