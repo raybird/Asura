@@ -117,16 +117,22 @@ func validRuntimeID(id string) bool {
 	return true
 }
 func validVersion(version string) bool {
-	if strings.TrimSpace(version) == "" || len(version) > MaxRuntimeVersionBytes || !utf8.ValidString(version) {
+	if version == "" || len(version) > MaxRuntimeVersionBytes {
 		return false
 	}
-	for _, c := range version {
-		if unicode.IsControl(c) {
+	// 2026-10-04：只允許版本 token；Codex CLI 的固定前綴可保留。
+	token := strings.TrimPrefix(version, "codex-cli ")
+	if token == "" {
+		return false
+	}
+	for _, c := range token {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || strings.ContainsRune("._+-/", c)) {
 			return false
 		}
 	}
 	return true
 }
+
 func probeRuntime(ctx context.Context, r RegisteredRuntime, observed time.Time) (entry RuntimeInventoryEntry) {
 	entry = RuntimeInventoryEntry{RuntimeID: r.ID, RegistrationState: Registered, AvailabilityState: Unknown, ObservedAt: observed, ProbeKind: DescriptorProbe, ReasonCode: ProbeNotStarted}
 	defer func() {

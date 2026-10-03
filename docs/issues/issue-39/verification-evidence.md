@@ -9,7 +9,9 @@
 3. 2026-10-04，Codex 專用 probe 未實作前執行 `go test -count=1 ./internal/backend/codex -run '^TestInventoryCodexVersionPolicy$'`，exit 1。ExpectedVersion 0.155.0，但 --version fixture 回報 0.155.1，原 admission 為 available。修復後為 unavailable/version_failed。
 4. 2026-10-04，audit 入口未改前執行 `go test -count=1 ./cmd/asura ./internal/web -run '^TestInventory(CLI|HTTPBoundary)$'`，exit 1。CLI unknown command runtime；Web 已認證查詢為 404。修復後有 fixed registered inventory 與受認證的唯讀路徑。
 5. 2026-10-04，最小修復後 `go test -count=1 ./internal/backend ./internal/daemon ./internal/pipeline -run '^TestInventory'` exit 0，原首要風險測試均綠；daemon 用 3.044 秒完成含 timeout 的測試集合。
-6. 2026-10-04，範圍內精煉後 `go test -count=1 -race ./internal/backend/... ./internal/daemon ./internal/pipeline ./internal/engine ./internal/web ./cmd/asura -run 'Test(Inventory|StageBinding|Capability|RuntimeSelection|ExpandedBackendsRegistered)'` exit 0，10 個套件全綠。移除 daemon 多餘 block、explicit 重複 requirements 解析及本次造成的 unused import；保留 Backend/Probe 與 JSON 契約；無其他重構。
+6. 2026-10-04，範圍內精煉後 `go test -count=1 -race ./internal/backend/... ./internal/daemon ./internal/pipeline ./internal/engine ./internal/web ./cmd/asura -run 'Test(Inventory|StageBinding|Capability|RuntimeSelection|ExpandedBackendsRegistered)'` exit 0，11 個套件全綠。移除 daemon 多餘 block、explicit 重複 requirements 解析及本次造成的 unused import；保留 Backend/Probe 與 JSON 契約；無其他重構。
+
+7. 2026-10-04，獨立 review 發現成功 stdout `1.18.31 token=secret-sentinel` 被保存於 available descriptor；永久 `go test -count=1 ./internal/backend ./internal/backend/opencode -run 'TestInventory(Validation|OpenCodeVersionSecret)'` exit 1（backend 無符合測試，OpenCode 真正紅燈）。修復共用版本 token 驗證後，重新執行第 6 項定向 race 命令 exit 0，11 套件 PASS；generic descriptor bounds 另加入單行 secret negative。修復只收緊 probe/capture/validator 的版本資料界線，精煉為 no-op，沒有額外重構。
 
 Inventory state/ordering API 的單元與外部行為為同一可觀察層級，採單迴圈；subprocess cancellation／daemon IPC／sealed pipeline／HTTP/CLI 各保留獨立整合保障。fixture 只取代外部 runtime，不取代 inventory、selection、validator 或 Task persistence。後補的 bounds/ordering/cancel/legacy tests 沒有聲稱先取得紅燈；它們是同一修復的額外回歸保障。
 
@@ -32,7 +34,7 @@ Inventory state/ordering API 的單元與外部行為為同一可觀察層級，
 | RTINV-009 | TestInventoryDeterministicCompletion／PolicyStatesAndOrdering：固定 clock、插入及完成順序不同而 JSON 相同 | 定向 race PASS |
 | RTINV-010 | TestInventorySealedRuntimeDisappears、StageBindingGuardBetweenStages／MixedExecution：0 Run/model、trace guard、constructor 不補位 | 定向 race PASS |
 | RTINV-011 | TestInventoryExplicitRecoveryAndCoherence、StageBindingQueueRedelivery：fresh recovery 僅改新 admission，舊 snapshot/plan byte equality | 定向 race PASS |
-| RTINV-012 | TestInventoryBoundsAndTampering／ContractSnapshot／VersionProcessBounds、RuntimeSelectionPriorityAndBounds：ID/version/count/JSON/diagnostic 範圍、secret sentinel、tamper 拒絕 | 定向 race PASS |
+| RTINV-012 | TestInventoryOpenCodeVersionSecret／BoundsAndTampering／ContractSnapshot／VersionProcessBounds、RuntimeSelectionPriorityAndBounds：ID/version/count/JSON/diagnostic 範圍、secret sentinel、tamper 拒絕 | 定向 race PASS |
 | RTINV-013 | TestInventoryCancellationAndWholeBudget／VersionProcessCancellation／IPCRejectionAndCancellation：合作 probe 結束、leader 回收、無 Task/Run | 定向 race PASS |
 | RTINV-014 | TestInventoryCLI／HTTPBoundary／WebRender、IPC Inventory、既有 status/stage audit：registration/state/reason、legacy／unknown policy、task status 不 probe | 定向 race PASS |
 | RTINV-015 | TestInventoryLegacyContracts、既有 StageBindingRestartRecovery／QueueRedelivery；全部 Memory/Recall/Lifecycle/Git/Web/Cron/CLI 回歸 | 完整回歸進行中 |

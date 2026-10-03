@@ -147,7 +147,7 @@ func TestInventoryBoundsAndTampering(t *testing.T) {
 	if reflect.DeepEqual(ds[0].Capabilities, c.InventorySnapshot.Entries[0].Descriptor.Capabilities) {
 		t.Fatal("descriptor alias")
 	}
-	for _, version := range []string{"", strings.Repeat("v", 257), "v1\nsecret-sentinel"} {
+	for _, version := range []string{"", strings.Repeat("v", 257), "v1\nsecret-sentinel", "v1 token=secret-sentinel"} {
 		s, err := CaptureInventory(context.Background(), []RegisteredRuntime{{ID: "a", Backend: fixture("a", func(context.Context) (string, error) { return version, nil })}})
 		if err != nil || s.Entries[0].ReasonCode != DescriptorInvalid {
 			t.Fatalf("invalid version=%+v %v", s, err)

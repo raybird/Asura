@@ -34,3 +34,14 @@ func TestInventoryOpenCodeProbe(t *testing.T) {
 		t.Fatal("missing readonly adapter admitted")
 	}
 }
+
+// 2026-10-04：RTINV-012，成功 stdout 夾帶敏感資料時不得建立 descriptor。
+func TestInventoryOpenCodeVersionSecret(t *testing.T) {
+	binary := filepath.Join(t.TempDir(), "opencode")
+	os.WriteFile(binary, []byte("#!/bin/sh\necho '1.18.31 token=secret-sentinel'\n"), 0700)
+	adapter := NewAdapter(AdapterConfig{BinaryPath: binary})
+	snapshot, err := backend.CaptureInventory(context.Background(), []backend.RegisteredRuntime{{ID: "opencode", Backend: adapter}})
+	if err != nil || snapshot.Entries[0].AvailabilityState == backend.Available || snapshot.Entries[0].Descriptor != nil {
+		t.Fatalf("unsafe stdout admitted: %+v %v", snapshot, err)
+	}
+}
