@@ -35,3 +35,5 @@
 ## RC-TBD-11 定案（2026-10-03）
 
 使用者回覆「保留」，核准 shell 相容方案與 RTCAP-016 修訂。沒有 production 變更；原 status／Web 缺契約分支已提供 legacy/unavailable。新增 TestCapabilityShellRunCompatibility 真 shell／SQLite／status 刻畫測試，opencode/codex fake binary sentinel 證明零 runtime 呼叫。外內迴圈為同一相容路徑，紅燈不適用（維持既有行為）；綠燈見 shell-compatibility-green.log。code-simplify 已查核，no-op：短小 table case 沿用現有測試風格，無需抽象或更動 production。最終全回歸的 production source 完全未變，既有 final race／vet／build 證據仍有效；新增測試另以 race 驗證。
+
+2026-10-03：新增測試後完整 CLI package 回歸 `go test -count=1 -race ./cmd/asura` exit 0，原始輸出見 shell-cli-race.log；被測來源為 fcb58947607759801f38d999504cfaf2e1289565。全部 production 與既有測試相對 final 全回歸不變，只有 capability_status_test.go 新增 shell characterization，依分層證據重用規則沿用其餘 18 packages 的 final race 與 vet/build。

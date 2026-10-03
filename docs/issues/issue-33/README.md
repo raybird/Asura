@@ -167,7 +167,7 @@ Feature: 可稽核且 fail-closed 的 explicit runtime 執行契約
 
 ## Gherkin 核准紀錄
 
-- **核准 commit**: 665e409（RTCAP-001～015）；RTCAP-016 修訂待提交。
+- **核准 commit**: 665e409（RTCAP-001～015）；fcb58947607759801f38d999504cfaf2e1289565（RTCAP-016 修訂）。
 - **核准來源**: 2026-10-03 使用者於本對話回覆「核准」，核准本次完整方案及 RTCAP-001～016；同日對 RC-TBD-11 回覆「保留」，核准保留 shell 行為與 unavailable 稽核的 RTCAP-016 修訂。
 
 | Scenario | 核准日期 | 狀態 |
