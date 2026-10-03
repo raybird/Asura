@@ -1,0 +1,8 @@
+日期：2026-10-03
+工作區：新契約型別與尚未實作的函式入口；matcher 測試先定義核准政策字面值。
+命令：go test -count=1 ./internal/backend -run '^TestCapability'
+exit code: 1
+TestCapabilityRequirementsPolicy：requirements=[] err=invalid execution contract
+TestCapabilityMatcherSets：match Compatible:false Required:[] Available:[]，err=invalid execution contract
+TestCapabilityDescriptorVersion：成功版本 descriptor 為零值，err=invalid execution contract
+此層同時承擔 RTCAP-002／010／013／014 的內外迴圈，沒有 IPC／storage 整合責任。

@@ -57,16 +57,16 @@ func TestExpandedBackendsRegisteredFailClosed(t *testing.T) {
 	}
 	defer c.Close()
 	for _, id := range []string{"omp", "antigravity", "unknown-issue25"} {
-		task, e := c.Submit(context.Background(), engine.SubmitRequest{Workspace: root, Prompt: "probe", Backend: id})
-		if e != nil {
-			t.Fatal(e)
+		// 2026-10-03：RTCAP-009／014 已核准接受前拒絕，保留全 backend 零呼叫判準。
+		_, e := c.Submit(context.Background(), engine.SubmitRequest{Workspace: root, Prompt: "probe", Backend: id})
+		if e == nil || !strings.Contains(e.Error(), id) {
+			t.Fatalf("runtime accepted or identity absent: %v", e)
 		}
-		task = waitExpandedTask(t, c, task.ID)
-		if task.Status != storage.StatusFailed || task.Backend != id {
-			t.Fatalf("task %+v", task)
+		if id != "unknown-issue25" && (!strings.Contains(e.Error(), "version unavailable") || strings.Contains(e.Error(), "backend not found")) {
+			t.Fatalf("not registered/fail-closed: %v", e)
 		}
-		if id != "unknown-issue25" && (!strings.Contains(task.ErrorMessage, "backend_unavailable") || strings.Contains(task.ErrorMessage, "backend not found")) {
-			t.Fatalf("not registered/fail-closed: %s", task.ErrorMessage)
+		if id == "unknown-issue25" && !strings.Contains(e.Error(), "backend not found") {
+			t.Fatalf("unknown runtime did not fail closed: %v", e)
 		}
 	}
 	if _, e = os.Stat(marker); !os.IsNotExist(e) {

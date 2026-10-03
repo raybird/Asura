@@ -1,0 +1,19 @@
+日期：2026-10-03
+RTCAP-007／013／015 外／內同層 guard 紅燈；獨立固定 JSON，無另一持久化責任。
+基準：665e409 的 pipeline/engine；新增 backend 型別不影響此 fixture 測試。
+命令：go test -count=1 ./internal/pipeline -run ^TestCapabilitySealedGuard
+exit code: 1
+--- FAIL: TestCapabilitySealedGuard (0.00s)
+    --- FAIL: TestCapabilitySealedGuard/capability-removed (0.00s)
+        capability_contract_test.go:35: guard failure not auditable
+    --- FAIL: TestCapabilitySealedGuard/runtime-removed (0.00s)
+        capability_contract_test.go:35: guard failure not auditable
+    --- FAIL: TestCapabilitySealedGuard/unknown-version (0.00s)
+        capability_contract_test.go:34: unsafe execution accepted: <nil> calls 1
+    --- FAIL: TestCapabilitySealedGuard/unknown-policy (0.00s)
+        capability_contract_test.go:34: unsafe execution accepted: <nil> calls 1
+    --- FAIL: TestCapabilitySealedGuard/invalid-match (0.00s)
+        capability_contract_test.go:34: unsafe execution accepted: <nil> calls 1
+FAIL
+FAIL	asura/internal/pipeline	0.002s
+FAIL

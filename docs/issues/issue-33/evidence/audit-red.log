@@ -1,0 +1,8 @@
+日期：2026-10-03
+命令：go test -count=1 ./cmd/asura -run '^TestCapabilityStatus'
+exit code: 1
+sealed/legacy/future fixture 均缺少 Capability contract 輸出；舊 status 不提供契約稽核。
+命令：go test -count=1 ./internal/web -run '^TestCapabilityAuditRender'
+exit code: 1
+TestCapabilityAuditRender：capability audit renderer missing。
+不同 UI 入口各自先取得缺少呈現的真實紅燈；backend matcher 使用前述單元紅燈，沒有把 status renderer 當成 matcher 單元測試。

@@ -365,3 +365,17 @@ memory_relations 對 scoped predecessor 與 successor 各有唯一鍵；只允�
 Recall SQL 使用 (workspace,lifecycle,id) 索引，在 bounded LIMIT 前排除 superseded；explicit recall 仍可使用未刪舊版本。新 sealed snapshot／recall audit 保存 lifecycle metadata；legacy JSON 在讀取時解讀為 active/non-durable，不改 persisted Task。UFL 以新 memory ID 隔離，durable 不加分。硬刪保留不含內容的 relation/operation identity；deleted chain 節點可由同 scope bounded detail 逐節稽核。
 
 CLI/IPC 提供 add options、durable、detail；detail 不遞迴展開全鏈、不展開 provenance facts_summary。content 64 KiB、總 JSON 128 KiB、deadline 2 秒；超限拒絕。Web 不新增 lifecycle UI，Git service options 可安全指定 supersedes，Partial 仍拒絕。ledger 無自動 GC，資料總量持續增長；10k/100k 本地 probe 與驗收證據見 [Issue 31](../../issues/issue-31/README.md)。
+
+## Runtime capability admission（2026-10-03）
+
+Asura 作為 Agent Runtime Control Plane，只管理 runtime 執行契約；skills、MCP 與 workflow 由 runtime 內部處理。internal/backend 的 capability-v1 型別與 matcher 純函式分離需求與供給；pipeline 組合既有 registry lookup 及有期限的 version descriptor 探測。engine、daemon submit 與 Cron 共用接受前 preflight。
+
+Direct 為 Striker workspace-write；Three-Face 的 Oracle/Critic 為 read-only，同一 explicit backend 必須滿足全部 stage union。Unknown mode／role／workspace access／capability／contract-policy version fail-closed；不新增 routing、fallback 或 mixed runtime。執行開始時綁定同一 Backend instance，stage 間 registry 改變不切換 runtime。
+
+接受時 ExecutionContext.execution_contract 原子寫入既有 Task.resolved_context JSON，無記憶與 Cron 也保存，不需 schema migration。request fingerprint 保持原 normalized backend identity，不包含版本或能力。redelivery 先回傳已存在且授權有效的 Task；並行首次請求由 SQLite 唯一 request ID 決定勝者快照。worker 優先使用 persisted context，不能以呼叫端 context 覆寫。
+
+PipelineTrace 的 execution_contract 複用接受時值，execution_guard／guard_error 則記錄執行前目前能力的安全查核；stage backend version 為執行資訊。能力退化／runtime 移除拒絕而不覆寫接受時判定。缺舊 snapshot 查詢 legacy/unavailable，零 runtime 探測與零歷史回填。這個契約不代表 runtime 認證、health 或實際二進位檔不可變。
+
+本機 run 的 opencode/codex 仍是既有 shell runner，不將它偽稱為實際 runtime 執行；其 runtime snapshot 相容性揭露由 issue 33 的 RC-TBD-11 定案。真正 local runtime pipeline 使用共同 admission。
+
+最後驗證日期：2026-10-03；相關測試與未決範圍見 docs/issues/issue-33。

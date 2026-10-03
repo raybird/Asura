@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"asura/internal/auth"
+	"asura/internal/backend"
 	"asura/internal/recall"
 	"asura/internal/storage"
 )
@@ -50,18 +51,30 @@ func (m *ProjectMemorySnapshot) UnmarshalJSON(data []byte) error {
 
 // ExecutionContext 代表任務執行時之完整密封上下文
 type ExecutionContext struct {
-	Recall          *recall.Decision        `json:"recall,omitempty"`
-	OriginalPrompt  string                  `json:"original_prompt"`
-	Workspace       string                  `json:"workspace"`
-	Backend         string                  `json:"backend,omitempty"`
-	ProjectMemories []ProjectMemorySnapshot `json:"project_memories"`
-	MemoryRefs      []string                `json:"memory_refs"`
-	CreatedAt       time.Time               `json:"created_at"`
+	BoundBackend      backend.Backend            `json:"-"`
+	ExecutionContract *backend.ExecutionContract `json:"execution_contract,omitempty"`
+	Recall            *recall.Decision           `json:"recall,omitempty"`
+	OriginalPrompt    string                     `json:"original_prompt"`
+	Workspace         string                     `json:"workspace"`
+	Backend           string                     `json:"backend,omitempty"`
+	ProjectMemories   []ProjectMemorySnapshot    `json:"project_memories"`
+	MemoryRefs        []string                   `json:"memory_refs"`
+	CreatedAt         time.Time                  `json:"created_at"`
 }
 
 // PipelineRunner 定義任務執行管線的抽象介面，避免 engine 與 pipeline package 產生循環依賴
 type PipelineRunner interface {
 	ExecutePipeline(ctx context.Context, mode string, execCtx *ExecutionContext) (output string, traceJSON string, err error)
+}
+
+// 2026-10-03：正式 runtime pipeline 提供接受前契約；runner-only seam 沿用既有行為。
+func (e *Engine) Preflight(ctx context.Context, mode, requested string) (*backend.ExecutionContract, error) {
+	if admission, ok := e.pipelineRunner.(interface {
+		Preflight(context.Context, string, string) (*backend.ExecutionContract, error)
+	}); ok {
+		return admission.Preflight(ctx, mode, requested)
+	}
+	return nil, nil
 }
 
 // SubmitRequest 代表提交任務的請求參數
@@ -314,6 +327,22 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 	}
 
 	if !alreadyCreated {
+		contract, err := e.Preflight(ctx, mode, req.Backend)
+		if err != nil {
+			return nil, fmt.Errorf("capability admission: %w", err)
+		}
+		if contract != nil {
+			sealed := &ExecutionContext{OriginalPrompt: req.Prompt, Workspace: req.Workspace, Backend: backendID, CreatedAt: now}
+			if req.ResolvedContext != nil {
+				*sealed = *req.ResolvedContext
+			}
+			sealed.ExecutionContract = contract
+			raw, err := json.Marshal(sealed)
+			if err != nil {
+				return nil, fmt.Errorf("seal execution contract: %w", err)
+			}
+			task.ResolvedContext = string(raw)
+		}
 		if err := e.store.CreateTask(ctx, task); err != nil {
 			if errors.Is(ctx.Err(), context.Canceled) {
 				task.Status = storage.StatusCancelled
@@ -394,10 +423,7 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 	// 5. 調用後端或管線執行
 	runnerPrompt := req.Prompt
 	var execCtx *ExecutionContext
-	if req.ResolvedContext != nil {
-		execCtx = req.ResolvedContext
-		runnerPrompt = ComposePrompt(req.Prompt, req.ResolvedContext)
-	} else if task.ResolvedContext != "" {
+	if task.ResolvedContext != "" {
 		var decoded ExecutionContext
 		if err := json.Unmarshal([]byte(task.ResolvedContext), &decoded); err != nil {
 			persistCtx, persistCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -409,7 +435,10 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 			return task, fmt.Errorf("decode sealed context: %w", err)
 		}
 		execCtx = &decoded
-		runnerPrompt = ComposePrompt(req.Prompt, execCtx)
+		runnerPrompt = ComposePrompt(task.Prompt, execCtx)
+	} else if req.ResolvedContext != nil && !alreadyCreated {
+		execCtx = req.ResolvedContext
+		runnerPrompt = ComposePrompt(req.Prompt, req.ResolvedContext)
 	} else if len(task.MemoryRefs) > 0 {
 		persistCtx, persistCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer persistCancel()

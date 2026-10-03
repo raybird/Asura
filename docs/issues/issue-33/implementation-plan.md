@@ -8,9 +8,9 @@
 |---|---|---|---|---|---|
 | P0 現況與定案 | ✅ | RTCAP-001～016 | 四份規劃文件、既有測試基線、RC-TBD 定案 | issue 33 | 文件靜態查核完成且必要方案／驗收核准有來源 |
 | P1 最高風險契約保護 | 📝 待實作 | 003／007／008／009／015／016 | 接受前拒絕、封存、重送與 restart 的行為測試 | P0 核准 | 先保存因缺少新行為失敗的外迴圈紅燈；獨立字面值與 persisted JSON 比對，不 mock matcher |
-| P2 純契約與 policy | 📝 待實作 | 002／004／010／013／014 | requirement builder、descriptor、共同 matcher、錯誤鏈 | P1 風險刻畫 | deterministic 與 unknown 負向測試先紅後綠；slice 無 alias、順序固定，無模型呼叫 |
+| P2 純契約與 policy | ✅ | 002／004／010／013／014 | requirement builder、descriptor、共同 matcher、錯誤鏈 | P1 風險刻畫 | deterministic 與 unknown 負向測試先紅後綠；slice 無 alias、順序固定，無模型呼叫 |
 | P3 Admission 與封存 | 📝 待實作 | 001／003～009／014～016 | engine/local、IPC/Web、Cron、queue admission 與原子 context 寫入 | P2 | 所有新任務接受前 match；無記憶保存；重送不探測；並行最多一次執行；拒絕無 workspace 副作用 |
-| P4 Pipeline 與 execution guard | 📝 待實作 | 001／004／005／007／013／015 | 移除零散 hard-code、同 backend stages、安全退化 trace | P3 | same backend、stage policy 正確、退化時 Prepare/Run=0，接受時快照不變 |
+| P4 Pipeline 與 execution guard | ✅ | 001／004／005／007／013／015 | 移除零散 hard-code、同 backend stages、安全退化 trace | P3 | same backend、stage policy 正確、退化時 Prepare/Run=0，接受時快照不變 |
 | P5 Audit 與 legacy | 📝 待實作 | 007／011／016 | status、IPC Task、Web 稽核、兩份常青文件 | P4 | 三個 surface 讀同一保存值；legacy 查詢零 runtime 呼叫與零 DB 回填；保留舊欄位 |
 | P6 交付驗證 | 📝 待實作 | 012 與全體 | 全回歸、範圍精煉、commit／PR、持久化獨立 review | P5 | 必要證據齊備、所有條件核准，固定 BASE/HEAD review PASS 後等待合併 |
 
@@ -45,11 +45,11 @@
 
 - 產出與最小範圍：daemon IPC 真 SQLite 整合測試，涵蓋無記憶、拒絕與 redelivery；production 不改。
 - 相依：P0。
-- 驗收責任：RTCAP-003、007、008、009、015、016。
-- 完成判準：拒絕計數 0 與封存 fixture、mutation／restart 後 byte equality。
+- 驗收支援（風險紅燈責任）：RTCAP-003、007、008、009、015、016。
+- 完成判準：先證明舊實作缺少接受前拒絕與無記憶封存；mutation／restart 後 byte equality 為後續實作任務的完成判準。
 - 驗證：外迴圈先紅，內層契約另由 P2-T1 取得紅燈。
-- 狀態：📝 待實作。
-- 證據：執行時回填。
+- 狀態：✅ 已完成。
+- 證據：[admission-red.log](./evidence/admission-red.log)、[implementation-notes.md](./evidence/implementation-notes.md)。
 
 ## Task P2-T1 — 需求與 matcher
 
@@ -58,18 +58,18 @@
 - 驗收責任：RTCAP-002、010、013、014。
 - 完成判準：未知輸入拒絕、集合順序獨立、版本失敗拒絕。
 - 驗證：同一純函式層合併外內紅燈，沒有 IPC/persistence 責任。
-- 狀態：📝 待實作。
-- 證據：執行時回填。
+- 狀態：✅ 已完成。
+- 證據：[implementation-notes.md](./evidence/implementation-notes.md)。
 
 ## Task P3-T1 — 所有入口 admission 與封存
 
 - 產出與最小範圍：engine preflight seam、daemon submit/Cron、CLI wiring、真 storage。
 - 相依：P2-T1。
-- 驗收責任：RTCAP-006、016（支援 003、007、008、009、014）。
+- 驗收責任：RTCAP-003、006、009、016（支援 007、008、014）。
 - 完成判準：接受前共同預檢、duplicate winner、persisted context 權威、無記憶與 Cron 保存。
 - 驗證：IPC/engine/Cron 整合與單元錯誤路徑。
-- 狀態：📝 待實作。
-- 證據：執行時回填。
+- 狀態：⏳ 已有實作與測試；完整交付／RC-TBD-11 定案後回填最終證據。
+- 證據：[implementation-notes.md](./evidence/implementation-notes.md)。
 
 ## Task P4-T1 — Pipeline 與安全 guard
 
@@ -78,8 +78,8 @@
 - 驗收責任：RTCAP-001、004、005、015（支援 007、013）。
 - 完成判準：能力退化拒絕且不改原 contract，stage 同 backend。
 - 驗證：既有 stage characterization 加新 guard 紅綠測試。
-- 狀態：📝 待實作。
-- 證據：執行時回填。
+- 狀態：✅ 已完成。
+- 證據：[implementation-notes.md](./evidence/implementation-notes.md)。
 
 ## Task P5-T1 — 歷史與稽核 surface
 
@@ -88,8 +88,8 @@
 - 驗收責任：RTCAP-007、008、011（支援 016）。
 - 完成判準：三 surface 同值、不回填、重送不呼叫 backend。
 - 驗證：CLI/Web/真 SQLite integration 與 legacy byte equality。
-- 狀態：📝 待實作。
-- 證據：執行時回填。
+- 狀態：⏳ 已有實作與測試；完整交付／RC-TBD-11 定案後回填最終證據。
+- 證據：[implementation-notes.md](./evidence/implementation-notes.md)。
 
 ## Task P6-T1 — 全回歸與交付
 
@@ -98,5 +98,5 @@
 - 驗收責任：RTCAP-012。
 - 完成判準：vet/race/build 通過且 review PASS。
 - 驗證：全 suite 與固定 BASE/HEAD independent review。
-- 狀態：📝 待實作。
-- 證據：執行時回填。
+- 狀態：⏳ 已有實作與測試；完整交付／RC-TBD-11 定案後回填最終證據。
+- 證據：[implementation-notes.md](./evidence/implementation-notes.md)。

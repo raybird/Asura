@@ -10,7 +10,7 @@ Phase 4A 建立 Agent Runtime Control Plane 的執行需求、共同 capability 
 
 - [需求與現況分析](./requirement-analysis.md)
 - [RC-TBD 方案與取捨](./technical-analysis.md)
-- [實作計畫](./implementation-plan.md)：唯一任務來源；核准後依 decompose 細化 Phase／Task。
+- [實作計畫](./implementation-plan.md)：唯一任務來源；已依 decompose 細化 Phase／Task。
 
 ## 關鍵差異
 
@@ -164,7 +164,7 @@ Feature: 可稽核且 fail-closed 的 explicit runtime 執行契約
 
 ## Gherkin 核准紀錄
 
-- **核准 commit**: 待提交（首次規格提交後回填）。
+- **核准 commit**: 665e409。
 - **核准來源**: 2026-10-03 使用者於本對話回覆「核准」，核准本次完整方案及 RTCAP-001～016。
 
 | Scenario | 核准日期 | 狀態 |
@@ -184,7 +184,7 @@ Feature: 可稽核且 fail-closed 的 explicit runtime 執行契約
 | RTCAP-013 | 2026-10-03 | 已核准 |
 | RTCAP-014 | 2026-10-03 | 已核准 |
 | RTCAP-015 | 2026-10-03 | 已核准 |
-| RTCAP-016 | 2026-10-03 | 已核准 |
+| RTCAP-016 | 2026-10-03 | 待重新核准 |
 
 ## 風險與首要驗證
 
@@ -208,8 +208,9 @@ Feature: 可稽核且 fail-closed 的 explicit runtime 執行契約
 | RC-TBD-8 | 保存 raw requested 與 resolved；空值固定 opencode | 已解決 | RTCAP-006／008 |
 | RC-TBD-9 | redelivery 之後、新任務接受前 union 預檢 | 已解決 | RTCAP-003／004／008／016 |
 | RC-TBD-10 | capability-v1 與未知版本 fail-closed | 已解決 | RTCAP-013 |
+| RC-TBD-11 | 本機 run opencode/codex 為 shell runner；提案保留其行為並明示 runtime contract unavailable，真正 runtime 路徑完整封存 | 待確認 | RTCAP-016；已透過本對話提出必要決策 |
 
-2026-10-03：所有 RC-TBD 依 technical-analysis 提案定案；全部驗收已核准，實作責任見 implementation-plan。
+2026-10-03：RC-TBD-1～10 依 technical-analysis 提案定案；RTCAP-001～015 核准有效。RTCAP-016 的 shell run 相容性差異需 RC-TBD-11 定案，其他已核准工作繼續。
 
 ## Timeline
 
@@ -217,10 +218,11 @@ Feature: 可稽核且 fail-closed 的 explicit runtime 執行契約
 |---|---|---|
 | 2026-10-03 | 讀取 issue 33 與 main 基準，建立現況、設計提案與待核准驗收 | Codex |
 | 2026-10-03 | 使用者回覆「核准」，全部方案與驗收定案 | 使用者 |
+| 2026-10-03 | 進一步發現 run opencode/codex 使用 shell；提出 RC-TBD-11，只暫停 RTCAP-016 的該入口決策 | Codex |
 
 ---
 
 **建立日期**: 2026-10-03  
 **分級**: Large — backend／pipeline／engine／daemon／CLI／Web 跨模組契約  
 **風險**: High  
-**狀態**: 已核准，實作中
+**狀態**: runtime 契約已實作且全回歸通過，獨立審查中；RTCAP-016 shell 相容性待決

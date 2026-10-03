@@ -100,3 +100,9 @@ IPC 跟 Web 共用 daemon 接受點；Cron、local run／engine 新 Task 也使�
 ## 架構影響與待定事項
 
 改動限於既有 admission、context、pipeline 與 audit surface，使用一個共同 matcher。read-only boundary、OpenCode role routing、No Automatic Failover、Memory／Recall／UFL／Lifecycle 都保持。2026-10-03 核准的 RC-TBD-1～10 與 RTCAP-001～016 為 production 實作契約。
+
+## RC-TBD-11 — 本機 shell run 相容性差異（2026-10-03）
+
+進一步閱讀 cmd/asura/run.go 證實 opencode/codex flags 都仍使用 sh -c shell runner；只有 omp/antigravity 使用 Backend.Run。原規劃誤將所有本機 run 視為 runtime 呼叫。要求它保存 OpenCode/Codex descriptor 會造成錯誤稽核，直接改成 runtime 則改變既有命令執行契約。
+
+具體提案：保留 shell run 行為，runtime capability contract 明示 unavailable；真正 runtime 的 local engine、Daemon/IPC/Web/Cron 路徑完整封存。另一方案為切換成實際 runtime Run，會改變命令輸出、認證與模型調用。此必要決策已透過本對話詢問；沒有把等待時間當成核准。尚未實作相依的 shell 標記，RTCAP-016 局部待重新核准。
