@@ -11,6 +11,8 @@ Phase 4A 建立 Agent Runtime Control Plane 的執行需求、共同 capability 
 - [需求與現況分析](./requirement-analysis.md)
 - [RC-TBD 方案與取捨](./technical-analysis.md)
 - [實作計畫](./implementation-plan.md)：唯一任務來源；已依 decompose 細化 Phase／Task。
+- [完整獨立審查](./review-c550048.md)：16 項驗收 PASS，固定被審查版本見報告。
+- [PR #34](https://github.com/raybird/Asura/pull/34)：等待合併。
 
 ## 關鍵差異
 
@@ -225,9 +227,11 @@ Feature: 可稽核且 fail-closed 的 explicit runtime 執行契約
 
 | 2026-10-03 | 使用者回覆「保留」，核准 RC-TBD-11 相容方案與 RTCAP-016 修訂 | 使用者 |
 
+| 2026-10-03 | 16 項驗收完成，PR #34 建立，完整獨立審查 PASS；未合併 | Codex |
+
 ---
 
 **建立日期**: 2026-10-03  
 **分級**: Large — backend／pipeline／engine／daemon／CLI／Web 跨模組契約  
 **風險**: High  
-**狀態**: runtime 契約已實作且最終全回歸通過；全部方案已定案；待完整交付審查與 PR
+**狀態**: runtime 契約已實作且最終全回歸通過；等待合併 — PR #34 已建立，完整獨立審查 PASS；CI 執行中（結果以 PR checks 為準）

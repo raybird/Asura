@@ -12,7 +12,7 @@
 | P3 Admission 與封存 | ✅ | 001／003～009／014～016 | engine/local、IPC/Web、Cron、queue admission 與原子 context 寫入 | P2 | 所有新任務接受前 match；無記憶保存；重送不探測；並行最多一次執行；拒絕無 workspace 副作用 |
 | P4 Pipeline 與 execution guard | ✅ | 001／004／005／007／013／015 | 移除零散 hard-code、同 backend stages、安全退化 trace | P3 | same backend、stage policy 正確、退化時 Prepare/Run=0，接受時快照不變 |
 | P5 Audit 與 legacy | ✅ | 007／011／016 | status、IPC Task、Web 稽核、兩份常青文件 | P4 | 三個 surface 讀同一保存值；legacy 查詢零 runtime 呼叫與零 DB 回填；保留舊欄位 |
-| P6 交付驗證 | ⏳ | 012 與全體 | 全回歸、範圍精煉、commit／PR、持久化獨立 review | P5 | 必要證據齊備、所有條件核准，固定 BASE/HEAD review PASS 後等待合併 |
+| P6 交付驗證 | ✅ | 012 與全體 | 全回歸、範圍精煉、commit／PR、持久化獨立 review | P5 | 必要證據齊備、所有條件核准，固定 BASE/HEAD review PASS 後等待合併 |
 
 ## 測試層級與策略
 
@@ -97,8 +97,9 @@
 - 相依：P5-T1。
 - 驗收責任：RTCAP-012。
 - 完成判準：vet/race/build 通過且 review PASS。
+- 交付證據：[review-c550048.md](./review-c550048.md)、[PR #34](https://github.com/raybird/Asura/pull/34)。
 - 驗證：全 suite 與固定 BASE/HEAD independent review。
-- 狀態：⏳ 全回歸已通過；等待完整交付審查與 PR。
+- 狀態：✅ 已完成。2026-10-03 全回歸／CLI race 通過、PR #34 已建立、完整獨立 review PASS；等待合併。
 - 證據：[implementation-notes.md](./evidence/implementation-notes.md)。
 
 2026-10-03：RTCAP-016 的 shell 子範圍已核准保留；P3／P5 沿用既有 shell 與 unavailable 稽核。相容性驗證見 [shell-compatibility-green.log](./evidence/shell-compatibility-green.log)，沒有 production 行為修改，紅燈不適用。
