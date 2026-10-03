@@ -167,26 +167,28 @@ Feature: deterministic capability-aware runtime selection
 
 ## Gherkin 核准紀錄
 
-- **核准 commit**: 4a1a7af（RTSEL-003、RTSEL-015 分批核准）
+- **核准 commit**: 待提交（整份規格核准；排序舊基線 4a1a7af）
 - **核准來源**: 2026-10-03 使用者 `/dev-cycle issue:35` 授權盤點與準備提案；GitHub #35 明示候選驗收與待定 RS-TBD。未將 issue ID 視為新增行為核准。2026-10-03 使用者先指定「Omp 預設放最後好了」，再對可調排序提案回覆「好核准」，核准 RTSEL-003、RTSEL-015 與有效排序封存方向；未推定為其餘 Scenario 全部核准。
 
 | Scenario | 核准日期 | 狀態 |
 |---|---|---|
-| RTSEL-001 | - | 待核准 |
-| RTSEL-002 | - | 待核准 |
+| RTSEL-001 | 2026-10-03 | 已核准 |
+| RTSEL-002 | 2026-10-03 | 已核准 |
 | RTSEL-003 | 2026-10-03 | 已核准 |
-| RTSEL-004 | - | 待核准 |
-| RTSEL-005 | - | 待核准 |
-| RTSEL-006 | - | 待核准 |
-| RTSEL-007 | - | 待核准 |
-| RTSEL-008 | - | 待核准 |
-| RTSEL-009 | - | 待核准 |
-| RTSEL-010 | - | 待核准 |
-| RTSEL-011 | - | 待核准 |
-| RTSEL-012 | - | 待核准 |
-| RTSEL-013 | - | 待核准 |
-| RTSEL-014 | - | 待核准 |
+| RTSEL-004 | 2026-10-03 | 已核准 |
+| RTSEL-005 | 2026-10-03 | 已核准 |
+| RTSEL-006 | 2026-10-03 | 已核准 |
+| RTSEL-007 | 2026-10-03 | 已核准 |
+| RTSEL-008 | 2026-10-03 | 已核准 |
+| RTSEL-009 | 2026-10-03 | 已核准 |
+| RTSEL-010 | 2026-10-03 | 已核准 |
+| RTSEL-011 | 2026-10-03 | 已核准 |
+| RTSEL-012 | 2026-10-03 | 已核准 |
+| RTSEL-013 | 2026-10-03 | 已核准 |
+| RTSEL-014 | 2026-10-03 | 已核准 |
 | RTSEL-015 | 2026-10-03 | 已核准 |
+
+2026-10-03 使用者回覆「提案也核准」，核准本文件 RTSEL-001～015 及 technical-analysis 全部提案，包括版本失敗整次拒絕、local auto 真實 runtime 與快照上限。
 
 ## 風險與首要驗證
 
@@ -200,10 +202,10 @@ Feature: deterministic capability-aware runtime selection
 
 | 編號 | 事項 | 狀態 | 影響 |
 |---|---|---|---|
-| TBD-1 | 核准 RTSEL-001～014 與 technical-analysis 的 RS-TBD-1～12 提案 | 待確認 | 全部 Scenario；待核准項未排成可執行 Task |
+| TBD-1 | 核准 RTSEL-001～014 與 technical-analysis 的 RS-TBD-1～12 提案 | 已解決 | 全部 Scenario；待核准項未排成可執行 Task |
 | TBD-2 | OMP 預設最後、opencode 優先、其餘 ID 字典序；ASURA_RUNTIME_PRIORITY 可調排序入口 | 已解決 | 2026-10-03 使用者回覆「好核准」；RTSEL-003、015。其餘 admission 行為仍分開待核准 |
-| TBD-3 | local run auto 走真實 AI runtime，explicit shell 保持 | 待確認 | RTSEL-001／011，run prompt 解讀方式 |
-| TBD-4 | 任一候選版本失敗拒絕整次 auto；32 candidates／64 KiB 上限 | 待確認 | RTSEL-013／014；未安裝 OMP/Antigravity 但已註冊時 auto 也會失敗 |
+| TBD-3 | local run auto 走真實 AI runtime，explicit shell 保持 | 已解決 | RTSEL-001／011，run prompt 解讀方式 |
+| TBD-4 | 任一候選版本失敗拒絕整次 auto；32 candidates／64 KiB 上限 | 已解決 | RTSEL-013／014；未安裝 OMP/Antigravity 但已註冊時 auto 也會失敗 |
 
 ## Timeline
 
@@ -213,9 +215,11 @@ Feature: deterministic capability-aware runtime selection
 | 2026-10-03 | 使用者指定 OMP 預設最後；補充可調 priority 的設定入口提案，未將詢問可行性視為核准新增設定功能 | Codex |
 | 2026-10-03 | 使用者回覆「好核准」，分批核准排序及設定入口；其餘行為另行確認 | 使用者 |
 
+| 2026-10-03 | 使用者「提案也核准」，核准完整驗收與技術方案 | 使用者 |
+
 ---
 
 **建立日期**: 2026-10-03
 **分級**: Large — 跨 runtime registry、admission、execution 與 audit contract
 **風險**: High
-**狀態**: 待方案與驗收核准
+**狀態**: 實作中

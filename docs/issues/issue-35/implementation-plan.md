@@ -2,21 +2,21 @@
 
 2026-10-03 建立。設計見 [技術提案](technical-analysis.md)，風險與首要驗證只維護在 [README](README.md#風險與首要驗證)。本檔是唯一任務來源。
 
-## 核准前狀態
+## 核准與任務來源
 
-2026-10-03 分批核准 RTSEL-003、015（排序及設定入口）；其餘 Scenario 待確認。核心 admission 主要成功／失敗路徑尚未完整核准，依 acceptance.md 分批門檻先保存基線，不啟動 production 實作。核准後依 decompose 在本檔細化穩定 Task ID、scenario mapping、相依與證據欄位，不建立第二份任務清單。
+2026-10-03 使用者「提案也核准」，完整核准 RTSEL-001～015。
 
-## 已核准部分的責任 Task
+## Phase / Task
 
-### Task 2.1 — 可調 deterministic priority
+| Task | 目標與最小範圍 | 相依 | 責任驗收 | 完成判準與驗證 | 狀態 |
+|---|---|---|---|---|---|
+| 1.1 | daemon/engine auto admission 與重送負向測試 | 無 | 005、006、010 | 真 IPC/DB 紅燈及 Task/Run/side-effect 斷言；先於主要實作 | ⏳ 進行中 |
+| 2.1 | backend contract/snapshot/priority/resolver | 1.1 紅燈 | 002、003、004、008、013、014、015 | matcher 重用、固定預期的排序/版本/上限單元紅綠；設定整合由4.1支援 | 📝 待實作 |
+| 3.1 | daemon/engine/pipeline 單 binding 封存及持久化 | 2.1 | 007、009 | 1.1綠燈；三 stage共用、registry drift/重啟/並行重送不改decision | 📝 待實作 |
+| 4.1 | CLI auto與Web submission/audit及文件 | 3.1 | 001、011 | 真CLI/IPC/Web 紅綠；explicit shell相容、priority設定/封存與舊資料讀取 | 📝 待實作 |
+| 5.1 | 完整回歸與交付 | 4.1 | 012 | vet/race/build、固定BASE/HEAD、PR及獨立review artifact | 📝 待實作 |
 
-- 產出與範圍：共同 priority 解析及排序純函式；預設 opencode 優先、其他 ID 字典序、OMP 最後；ASURA_RUNTIME_PRIORITY 同一解析入口、非法設定拒絕。不新增 Web 編輯 API。
-- 相依：核心 admission 主要成功與重要失敗路徑核准；P1 首要風險驗證完成。設定入口整合另依賴 P3/P4 的 auto 接線。
-- 驗收編號：RTSEL-003、RTSEL-015；有效 priority 封存為 RTSEL-009 的支援工作，009 仍待核准。
-- 完成判準：已知候選下預設／自訂順序符合字面值預期；空項、重複、未知設定 ID 拒絕；未列者補齊；只選 eligible；daemon client 不覆蓋設定；歷史排序不被修改。
-- 驗證：priority 純函式單層紅綠；環境入口、能力限制與封存另保留整合外迴圈。
-- 狀態：📝 待實作（核准相依尚未滿足）。
-- 證據：2026-10-03 設定功能尚未實作；下方基線不是本 Task 綠燈。
+同層純函式驗收合併內外紅燈；跨IPC/engine/CLI/持久化保留各自整合保障。證據於各Task完成後在本檔回填。
 
 ## 候選 Phase 與完成判準
 
