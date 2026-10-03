@@ -26,11 +26,12 @@
 
 ```text
 internal/backend/registry.go、requirements.go、selection.go（新增）及對應測試
+internal/backend/codex/adapter.go、opencode/adapter.go（local auto 啟動取消 handshake）
 internal/engine/engine.go、internal/daemon/daemon.go 及契約／重送測試
 internal/pipeline/orchestrator.go、types.go 及 Three-Face 契約測試
 internal/storage/ 既有 SQLite 持久化相容性測試（不新增 schema）
 internal/web/server.go、page.go 及 submission/audit 測試
-cmd/asura/ask.go、run.go、status.go 及 CLI 測試
+cmd/asura/ask.go、run.go、runtime_process.go（新增）、status.go 及 CLI 測試
 README.md、docs/superpowers/specs/2026-09-11-asura-architecture-design.md
 docs/issues/issue-35/ 規劃、驗證及審查證據
 ```
@@ -222,4 +223,4 @@ Feature: deterministic capability-aware runtime selection
 **建立日期**: 2026-10-03
 **分級**: Large — 跨 runtime registry、admission、execution 與 audit contract
 **風險**: High
-**狀態**: 實作中
+**狀態**: 實作與驗證完成，交付審查中

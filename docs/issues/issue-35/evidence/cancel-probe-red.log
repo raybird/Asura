@@ -1,0 +1,6 @@
+2026-10-04; command: go test -count=1 ./cmd/asura -run TestRuntimeSelectionCancelDuringVersionProbe; exit code: 1
+--- FAIL: TestRuntimeSelectionCancelDuringVersionProbe (0.13s)
+    runtime_selection_test.go:159: runtime executed prompt after successful cancellation
+FAIL
+FAIL	asura/cmd/asura	0.129s
+FAIL

@@ -333,12 +333,13 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 	orc := pipeline.NewOrchestrator(oracleStage, strikerStage, criticStage).WithContextBudget(contextCfg)
 	// 2026-09-30：新增 CLI adapter 在本地 composition root 接線；保留既有 shell runner。
 	if bID == "omp" || bID == "antigravity" || bID == "auto" {
+		var startLock *os.File
 		beforeStart := func(c context.Context) (func(), error) {
 			lf, e := os.OpenFile(taskLockPath(*dbPath, currentTaskID), os.O_CREATE|os.O_RDWR, 0600)
 			if e != nil {
 				return nil, e
 			}
-			release := func() { _ = syscall.Flock(int(lf.Fd()), syscall.LOCK_UN); _ = lf.Close() }
+			release := func() { startLock = nil; _ = syscall.Flock(int(lf.Fd()), syscall.LOCK_UN); _ = lf.Close() }
 			if e = syscall.Flock(int(lf.Fd()), syscall.LOCK_EX); e != nil {
 				release()
 				return nil, e
@@ -359,6 +360,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 				release()
 				return nil, context.Canceled
 			}
+			startLock = lf
 			return release, nil
 		}
 		onStarted := func(c context.Context, pgid int) {
@@ -366,35 +368,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 				_ = store.UpdateTaskPGID(context.Background(), currentTaskID, pgid)
 				return
 			}
-			lf, e := os.OpenFile(taskLockPath(*dbPath, currentTaskID), os.O_CREATE|os.O_RDWR, 0600)
-			if e != nil {
-				_ = opencode.KillProcessGroup(pgid)
-				return
-			}
-			defer lf.Close()
-			if e = syscall.Flock(int(lf.Fd()), syscall.LOCK_EX); e != nil {
-				_ = opencode.KillProcessGroup(pgid)
-				return
-			}
-			defer syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
-			st, e := opencode.GetProcessStartTime(pgid)
-			runnerST, runnerErr := opencode.GetProcessStartTime(os.Getpid())
-			if e != nil || runnerErr != nil {
-				_ = opencode.KillProcessGroup(pgid)
-				return
-			}
-			_ = lf.Truncate(0)
-			_, e = fmt.Fprintf(lf, "%d:%s:%d:%s", pgid, st, os.Getpid(), runnerST)
-			if e != nil {
-				_ = opencode.KillProcessGroup(pgid)
-				return
-			}
-			_ = store.UpdateTaskPGID(context.Background(), currentTaskID, pgid)
-			task, _ := store.GetTask(context.Background(), currentTaskID)
-			_, intentErr := os.Stat(taskCancelIntentPath(*dbPath, currentTaskID))
-			if c.Err() != nil || intentErr == nil || task != nil && (task.Status == storage.StatusCancelled || task.Status == storage.StatusCancelling) {
-				_ = opencode.KillProcessGroup(pgid)
-			}
+			recordRuntimeProcessStart(c, store, *dbPath, currentTaskID, pgid, startLock)
 		}
 		onExited := func(c context.Context, pgid int) {
 			if bID != "auto" || !opencode.IsProcessGroupAlive(pgid) {
@@ -415,12 +389,12 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 				return 1
 			}
 			defer cleanup()
-			readOnly := opencode.NewAdapter(opencode.AdapterConfig{ConfigDir: configDir, Permission: daemon.DefaultReadOnlyPermissionPolicy, DisableAuto: true, Role: opencode.RoleOracle, Agent: opencode.AsuraReadOnlyAgentName, Pure: true, DisableProjectConfig: true, Isolated: true, OnProcessStarted: onStarted, OnProcessExited: onExited})
-			writer := opencode.NewAdapter(opencode.AdapterConfig{Permission: daemon.DefaultApprovedPermissionPolicy, Role: opencode.RoleStriker, OnProcessStarted: onStarted, OnProcessExited: onExited})
+			readOnly := opencode.NewAdapter(opencode.AdapterConfig{ConfigDir: configDir, Permission: daemon.DefaultReadOnlyPermissionPolicy, DisableAuto: true, Role: opencode.RoleOracle, Agent: opencode.AsuraReadOnlyAgentName, Pure: true, DisableProjectConfig: true, Isolated: true, OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart})
+			writer := opencode.NewAdapter(opencode.AdapterConfig{Permission: daemon.DefaultApprovedPermissionPolicy, Role: opencode.RoleStriker, OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart})
 			selected = opencode.NewRoleRoutingBackend(readOnly, writer)
 			reg.Register(selected)
 			if path, e := exec.LookPath("codex"); e == nil {
-				reg.Register(codex.NewAdapter(codex.AdapterConfig{BinaryPath: path, OnProcessStarted: onStarted, OnProcessExited: onExited}))
+				reg.Register(codex.NewAdapter(codex.AdapterConfig{BinaryPath: path, OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart}))
 			}
 			if _, e := exec.LookPath("omp"); e == nil {
 				reg.Register(omp.NewAdapter(omp.AdapterConfig{OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart}))

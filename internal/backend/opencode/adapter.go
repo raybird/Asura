@@ -63,6 +63,7 @@ const AsuraReadOnlyConfigJSON = `{
 //   - <dir>/opencode/opencode.json (只定義 asura-readonly primary agent，並安全繼承全域 provider 與 model)
 //   - <dir>/home (乾淨空目錄，用於隔離 HOME/.opencode)
 //   - <dir>/data/opencode/auth.json (消毒後之憑證複本，保留合法 API/OAuth 金鑰，徹底排除可能注入遠端配置之 wellknown 型別)
+//
 // 回傳目錄路徑與清理函式，供 Oracle 與 Critic 唯讀階段使用，免受外部、全域或專案設定污染
 func CreateIsolatedReadOnlyConfigDir() (string, func(), error) {
 	dir, err := os.MkdirTemp("", "asura-opencode-readonly-*")
@@ -167,6 +168,7 @@ func CreateIsolatedReadOnlyConfigDir() (string, func(), error) {
 
 // AdapterConfig 定義 OpenCode Adapter 的執行設定
 type AdapterConfig struct {
+	BeforeStart          func(context.Context) (func(), error)
 	BinaryPath           string
 	ExpectedVersion      string
 	ConfigDir            string
@@ -446,6 +448,22 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 	cmd.Stdout = &stdoutBuf
 	cmd.Stderr = &stderrBuf
 
+	// 2026-10-04：完成版本/準備後，在真正啟動前握手取消與進程身分鎖。
+	var releaseStart func()
+	if cfg.BeforeStart != nil {
+		var startErr error
+		releaseStart, startErr = cfg.BeforeStart(ctx)
+		if startErr != nil {
+			return nil, startErr
+		}
+	}
+	release := func() {
+		if releaseStart != nil {
+			releaseStart()
+			releaseStart = nil
+		}
+	}
+	defer release()
 	if err := cmd.Start(); err != nil {
 		return &backend.ExecutionResult{
 			BackendID:    "opencode",
@@ -463,6 +481,7 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 	if cfg.OnProcessStarted != nil {
 		cfg.OnProcessStarted(ctx, pgid)
 	}
+	release()
 
 	doneChan := make(chan struct{})
 	var closeOnce sync.Once
@@ -1134,4 +1153,3 @@ func sanitizeProviderConfig(rawProvider any, selectedModel string) (map[string]a
 
 	return cleanProviders, nil
 }
-

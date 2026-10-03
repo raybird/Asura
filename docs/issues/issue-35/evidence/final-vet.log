@@ -1,0 +1,5 @@
+2026-10-04 修復獨立 review findings 後的完整驗證
+被測來源：tested-source.sha256（全部 Go source、go.mod、go.sum）；文件及證據提交不改被測內容。
+命令：go vet ./...
+exit code: 0
+輸出：成功，無輸出。

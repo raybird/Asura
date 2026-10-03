@@ -60,15 +60,19 @@ matcher/policy 是純函式，其同層驗收可合併內外紅燈；daemon/engi
 
 | Task／驗收 | 真實證據與結果 |
 |---|---|
-| 1.1；005、006、010 | [admission-red.log](evidence/admission-red.log) 記錄真 IPC/DB 與 backend 純 admission 的目標紅燈；auto 被錯認成 backend ID。005 由既有 explicit 保障及新增零 fallback 斷言驗證；最小實作後全綠見 full-race.log |
+| 1.1；005、006、010 | [admission-red.log](evidence/admission-red.log) 記錄真 IPC/DB 與 backend 純 admission 的目標紅燈；auto 被錯認成 backend ID。005 由既有 explicit 保障及新增零 fallback 斷言驗證；最小實作後全綠見 final-race.log |
 | 2.1；002、003、004、008、013、014、015 | backend selection_test.go 與 requirements 測試：固定排序字面值、自訂排序、未註冊偏好、超限、unknown、Version failure、未知policy封存驗證；純函式 matcher/policy 是同層，合併單迴圈。共同 auto 入口的紅燈見 admission-red.log |
 | 3.1；007、009、010 | daemon runtime_selection_test.go：真三 stage、queue drift安全拒絕、restart、concurrent winner、正常重送零version/Run調用；queue測試曾因dispatch丟失auto intent逾時，修復後全綠。Task5.1 full-race保障全套 |
 | 4.1；001、011、015 | [cli-red.log](evidence/cli-red.log)：CLI不接受auto；[cancel-red.log](evidence/cancel-red.log)：cancel成功後runtime存活，新增metadata handshake修復。CLI/SQLite/真adapter fixture、Web API forwarding與Node audit render最終全綠；explicit shell沿既有characterization |
 | 4.1；011 Web boundary | [web-baseline-red.log](evidence/web-baseline-red.log) 為實作後以核准基線server.go重現，原API拒絕backend欄位。此子項沒有實作前獨立Web紅燈；如實揭露順序限制，不將事後重現描述成事前TDD。Web core resolver由1.1真daemon紅綠保障 |
-| 5.1；012 | [full-vet.log](evidence/full-vet.log)、[full-race-first.log](evidence/full-race-first.log)、[full-build.log](evidence/full-build.log) 初次 race 因舊 Web 欄位拒絕測試失敗，已按 RTSEL-011 更新契約並重跑；最終結果待保存。[tested-source.sha256](evidence/tested-source.sha256) 固定全部Go/config內容，build輸出/tmp避免污染repo |
+| 5.1；012 | [final-vet.log](evidence/final-vet.log)、[final-race.log](evidence/final-race.log)、[final-build.log](evidence/final-build.log) 為 2026-10-04 審查修復後最終驗證，全部 exit 0。初次 race 失敗見 [full-race-first.log](evidence/full-race-first.log)，不沿用為最終綠燈。[tested-source.sha256](evidence/tested-source.sha256) 固定全部Go/config內容，build輸出/tmp避免污染repo |
 
 2026-10-03 code-simplify 已檢查本次修改：保持既有public/callback契約；registry只列舉，selection只依能力及priority；未引入interface層或抽象factory。精煉移除auto分支先建立但隨即覆寫的adapter。後續核對為no-op，沿同一份最終race綠燈，不重跑相同測試。
 
 2026-10-03 驗證限制：adapter 使用確定性假binary／版本fixture與已存在的單元測試，未呼叫真模型；Web forwarding測試只mock IPC遠端，不mock正在驗收的HTTP boundary，核心selection另由真daemon/matcher/seal覆蓋。既有選用live tests按原環境gate執行，完整go test通過不表示新增實地模型驗收。
 
-2026-10-04：完整 race 初次 exit 1，唯一失敗為既有 TestWEBMEMSubmitExplicitAndBounded 把新核准 backend 欄位視為注入。更新為已知 backend 接受且未知 backend 拒絕；resolved_context/mode 拒絕保障保留。Web baseline 紅燈是事後重現，未冒稱實作前 TDD。最終 race/vet/build 重新執行中。
+2026-10-04：完整 race 初次 exit 1，唯一失敗為既有 TestWEBMEMSubmitExplicitAndBounded 把新核准 backend 欄位視為注入。更新為已知 backend 接受且未知 backend 拒絕；resolved_context/mode 拒絕保障保留。Web baseline 紅燈是事後重現，未冒稱實作前 TDD。修復後最終 race/vet/build 全部 exit 0，完整輸出見 final-*.log。
+
+2026-10-04 獨立 review 修復：local auto OMP/Antigravity 已持有 BeforeStart flock，OnProcessStarted 再取同鎖造成死鎖；以 [start-lock-red.log](evidence/start-lock-red.log) 真子進程＋持鎖測試重現，登記callback改用既有handle。另以 [cancel-probe-red.log](evidence/cancel-probe-red.log) 重現取消發生在Version探測時，已成功取消仍啟動prompt造成side effect；OpenCode/Codex additive BeforeStart在cmd.Start前握手，所有local auto adapters共用同一啟動鎖。這是同一local auto取消契約必要修復，沒有新增routing/capability政策。
+
+2026-10-04 順序限制補充：priority／bounds／封存欄位的新斷言在共同auto admission目標紅燈後加入，未逐分支保留事前獨立紅燈；不宣稱每項assertion都經獨立事前TDD。初次admission外迴圈保障resolver核心，純函式同層測試補必要失敗面；Web forwarding事後baseline重現另如實記錄。
