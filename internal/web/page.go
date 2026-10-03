@@ -676,6 +676,23 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
       'Capability match：' + (match.compatible ? 'compatible' : 'incompatible'),
       'Missing：' + JSON.stringify(match.missing)
     ];
+    const decision = contract.selection_decision;
+    if (decision) {
+      if (decision.policy_version !== 'v1' || !['explicit','deterministic-priority'].includes(decision.policy_id) ||
+          !decision.request || !['auto','explicit'].includes(decision.request.mode) || !decision.selected ||
+          decision.selected.id !== runtime.id || decision.selected.version !== runtime.version ||
+          !Array.isArray(decision.priority) || !Array.isArray(decision.candidates) || decision.candidates.length > 32 ||
+          !Array.isArray(decision.eligible) || !Array.isArray(decision.rejected)) {
+        capabilityAudit.textContent = 'Runtime selection：unsupported/unavailable'; return;
+      }
+      lines.push('Requested selection：' + decision.request.mode,
+        'Selected runtime：' + decision.selected.id + ' ' + decision.selected.version,
+        'Selection policy：' + decision.policy_id + ' ' + decision.policy_version,
+        'Runtime priority：' + JSON.stringify(decision.priority),
+        'Eligible runtimes：' + JSON.stringify(decision.eligible),
+        'Rejected runtimes：' + JSON.stringify(decision.rejected),
+        'Candidates：' + JSON.stringify(decision.candidates));
+    } else { lines.push('Runtime selection：legacy/unavailable'); }
     let trace;
     try { trace = task.pipeline_trace ? JSON.parse(task.pipeline_trace) : null; } catch (err) { trace = null; }
     if (trace && trace.guard_error) lines.push('Execution guard：rejected（' + trace.guard_error + '）');

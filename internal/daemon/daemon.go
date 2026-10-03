@@ -60,13 +60,14 @@ type OpenCodeRuntimeConfig struct {
 
 // Config 定義 Daemon 運行參數
 type Config struct {
-	UtilityPolicy  string
-	SocketPath     string
-	MaxWorkers     int
-	MaxCronWorkers int
-	MaxQueue       int
-	OpenCodeConfig OpenCodeRuntimeConfig
-	ContextConfig  contextwin.Config
+	UtilityPolicy   string
+	SocketPath      string
+	MaxWorkers      int
+	MaxCronWorkers  int
+	MaxQueue        int
+	OpenCodeConfig  OpenCodeRuntimeConfig
+	ContextConfig   contextwin.Config
+	RuntimePriority []string
 }
 
 // Daemon 實作單一守護進程中樞
@@ -262,7 +263,7 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 		criticStage := pipeline.NewCriticStageWithBackend(readOnlyAdapter)
 		orc := pipeline.NewOrchestrator(oracleStage, strikerStage, criticStage).
 			WithRegistry(reg).
-			WithContextBudget(d.cfg.ContextConfig)
+			WithContextBudget(d.cfg.ContextConfig).WithRuntimePriority(d.cfg.RuntimePriority)
 
 		strikerRunner := func(ctx context.Context, ws, prompt string) (string, error) {
 			backendID := "opencode"
@@ -804,6 +805,10 @@ func (d *Daemon) handleConn(conn net.Conn) {
 				continue
 			}
 
+			if contract != nil {
+				backendID = contract.Runtime.ID
+			}
+
 			// 遵循 CTXMEM-002, CTXMEM-005：在容量取得與任務持久化前，解析選取之記憶並嚴格隔離跨專案/不存在記憶
 			var resolvedMemories []storage.Memory
 			if len(req.MemoryIDs) > 0 {
@@ -1301,6 +1306,9 @@ func (d *Daemon) dispatchTaskWithMode(taskID, workspace, prompt string, class Ta
 		if execCtx.Backend != "" {
 			backendID = execCtx.Backend
 		}
+		if execCtx.ExecutionContract != nil && execCtx.ExecutionContract.RequestedBackend == "auto" {
+			backendID = "auto"
+		}
 	}
 	wsKey := d.canonicalWorkspace(workspace)
 	_, err := d.pool.SubmitAsyncClassifiedWithDone(context.Background(), class, func() error {
@@ -1375,6 +1383,11 @@ func (d *Daemon) wakeQueuedTask(taskID, wsKey string) {
 	taskBackend := task.Backend
 	if taskBackend == "" {
 		taskBackend = "opencode"
+	}
+
+	var queuedContext engine.ExecutionContext
+	if json.Unmarshal([]byte(task.ResolvedContext), &queuedContext) == nil && queuedContext.ExecutionContract != nil && queuedContext.ExecutionContract.RequestedBackend == "auto" {
+		taskBackend = "auto"
 	}
 
 	// 遵循 MUST FIX 2：被喚醒任務使用 dispatchQueuedTask，不受 pool.maxQueue 二次拋棄

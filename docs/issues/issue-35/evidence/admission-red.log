@@ -1,0 +1,16 @@
+2026-10-03; command: go test -count=1 ./internal/backend ./internal/daemon -run TestRuntimeSelection; exit code: 1
+--- FAIL: TestRuntimeSelectionDefaultAndOrder (0.00s)
+    selection_test.go:16: backend not found: "auto"
+--- FAIL: TestRuntimeSelectionThreeFaceEligibility (0.00s)
+    selection_test.go:30: backend not found: "auto"
+--- FAIL: TestRuntimeSelectionVersionFailureClosed (0.00s)
+    selection_test.go:39: not a snapshot rejection: backend not found: "auto"
+FAIL
+FAIL	asura/internal/backend	0.001s
+--- FAIL: TestRuntimeSelectionAdmissionAndRedelivery (0.01s)
+    runtime_selection_test.go:26: capability admission: backend not found: "auto"
+--- FAIL: TestRuntimeSelectionNoEligible (0.01s)
+    runtime_selection_test.go:46: missing eligibility audit: capability admission: backend not found: "auto"
+FAIL
+FAIL	asura/internal/daemon	0.020s
+FAIL

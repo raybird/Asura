@@ -1,0 +1,2 @@
+2026-10-03; command: go vet ./...; tested source: tested-source.sha256; exit code: 0
+Success (no stdout/stderr).

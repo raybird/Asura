@@ -25,6 +25,7 @@ var (
 
 // AdapterConfig 代表 Codex 適配器配置
 type AdapterConfig struct {
+	BeforeStart      func(context.Context) (func(), error)
 	BinaryPath       string
 	ExpectedVersion  string
 	OnProcessStarted func(ctx context.Context, pgid int)
@@ -180,6 +181,22 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 	cmd.Stdout = &stdoutBuf
 	cmd.Stderr = &stderrBuf
 
+	// 2026-10-04：完成版本/準備後，在真正啟動前握手取消與進程身分鎖。
+	var releaseStart func()
+	if a.cfg.BeforeStart != nil {
+		var startErr error
+		releaseStart, startErr = a.cfg.BeforeStart(ctx)
+		if startErr != nil {
+			return nil, startErr
+		}
+	}
+	release := func() {
+		if releaseStart != nil {
+			releaseStart()
+			releaseStart = nil
+		}
+	}
+	defer release()
 	if err := cmd.Start(); err != nil {
 		return &backend.ExecutionResult{
 			BackendID:    "codex",
@@ -197,6 +214,7 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 	if a.cfg.OnProcessStarted != nil {
 		a.cfg.OnProcessStarted(ctx, pgid)
 	}
+	release()
 
 	// 進程回收監控：Context 取消時發送 SIGKILL 至整組進程組 (MBACK-007)
 	doneChan := make(chan struct{})

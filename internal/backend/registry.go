@@ -14,6 +14,7 @@ type Registry interface {
 	Get(id string) (Backend, error)
 	// List 列出所有已註冊之後端 ID (排序)
 	List() []string
+	Snapshot() []Backend
 	// Default 取得預設後端
 	Default() Backend
 	// SetDefault 設定預設後端 ID
@@ -116,4 +117,20 @@ func (r *InMemoryRegistry) SetDefault(id string) error {
 	}
 	r.defaultName = id
 	return nil
+}
+
+// 2026-10-03：固定註冊集合；描述與版本捕獲在 registry 鎖外完成。
+func (r *InMemoryRegistry) Snapshot() []Backend {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	ids := make([]string, 0, len(r.backends))
+	for id := range r.backends {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	result := make([]Backend, 0, len(ids))
+	for _, id := range ids {
+		result = append(result, r.backends[id])
+	}
+	return result
 }

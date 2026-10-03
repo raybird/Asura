@@ -247,7 +247,17 @@ func TestWEBMEMSubmitExplicitAndBounded(t *testing.T) {
 	if err := json.Unmarshal([]byte(response), &task); err != nil || !strings.Contains(task.ResolvedContext, "bounded") {
 		t.Fatalf("bounded context=%+v err=%v", task, err)
 	}
-	for _, extra := range []string{`"resolved_context":{}`, `"backend":"codex"`, `"mode":"three-face"`} {
+	// 2026-10-04：RTSEL-011 核准 Web additive backend；已知 ID 不再屬注入欄位。
+	body = `{"id":"webmem-explicit-backend","workspace":"` + f.root + `","prompt":"p","backend":"codex"}`
+	code, response, _ = f.call(t, "POST", "/api/tasks", body, f.server.URL, cookie)
+	if code != http.StatusAccepted {
+		t.Fatalf("explicit backend=%d %s", code, response)
+	}
+	task = storage.Task{}
+	if err := json.Unmarshal([]byte(response), &task); err != nil || task.Backend != "codex" {
+		t.Fatalf("explicit binding=%+v %v", task, err)
+	}
+	for _, extra := range []string{`"resolved_context":{}`, `"backend":"unknown"`, `"mode":"three-face"`} {
 		body = `{"id":"injected","workspace":"` + f.root + `","prompt":"p",` + extra + `}`
 		code, _, _ = f.call(t, "POST", "/api/tasks", body, f.server.URL, cookie)
 		if code != http.StatusBadRequest {

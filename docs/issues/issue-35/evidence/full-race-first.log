@@ -1,0 +1,24 @@
+2026-10-03 start; 2026-10-04 completion; command: go test -count=1 -race ./...; initial pre-Web-contract-update workspace (diagnostic only; final tested-source.sha256 differs); exit code: 1
+ok  	asura/cmd/asura	7.996s
+ok  	asura/docs/issues/issue-19/evidence	3.034s
+ok  	asura/internal/auth	1.014s
+ok  	asura/internal/backend	1.030s
+ok  	asura/internal/backend/antigravity	1.021s
+ok  	asura/internal/backend/clisandbox	3.714s
+ok  	asura/internal/backend/codex	1.410s
+ok  	asura/internal/backend/omp	1.068s
+ok  	asura/internal/backend/opencode	27.965s
+ok  	asura/internal/contextwin	1.023s
+ok  	asura/internal/cron	1.597s
+ok  	asura/internal/daemon	32.972s
+ok  	asura/internal/engine	8.909s
+ok  	asura/internal/gitmem	10.902s
+ok  	asura/internal/pipeline	1.615s
+ok  	asura/internal/recall	1.017s
+ok  	asura/internal/storage	80.913s
+ok  	asura/internal/web	1.179s
+--- FAIL: TestWEBMEMSubmitExplicitAndBounded (0.17s)
+    web_memory_test.go:254: injected "backend":"codex"=202
+FAIL
+FAIL	asura/tests/integration	261.713s
+FAIL

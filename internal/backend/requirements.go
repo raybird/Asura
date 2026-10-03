@@ -37,13 +37,14 @@ type CapabilityMatch struct {
 }
 
 type ExecutionContract struct {
-	ContractVersion  string                  `json:"contract_version"`
-	PolicyVersion    string                  `json:"policy_version"`
-	Mode             string                  `json:"mode"`
-	Requirements     []ExecutionRequirements `json:"requirements"`
-	RequestedBackend string                  `json:"requested_backend"`
-	Runtime          RuntimeDescriptor       `json:"runtime"`
-	Match            CapabilityMatch         `json:"match"`
+	SelectionDecision *RuntimeSelectionDecision `json:"selection_decision,omitempty"`
+	ContractVersion   string                    `json:"contract_version"`
+	PolicyVersion     string                    `json:"policy_version"`
+	Mode              string                    `json:"mode"`
+	Requirements      []ExecutionRequirements   `json:"requirements"`
+	RequestedBackend  string                    `json:"requested_backend"`
+	Runtime           RuntimeDescriptor         `json:"runtime"`
+	Match             CapabilityMatch           `json:"match"`
 }
 
 // 2026-10-03：需求由控制平面政策建立，adapter 只提供能力。
@@ -170,10 +171,13 @@ func (e *CapabilityAdmissionError) Error() string {
 }
 func (e *CapabilityAdmissionError) Unwrap() error { return ErrUnsupportedCapability }
 
-func AdmitRuntime(ctx context.Context, reg Registry, mode, requested string) (*ExecutionContract, error) {
+func AdmitRuntime(ctx context.Context, reg Registry, mode, requested string, priority ...[]string) (*ExecutionContract, error) {
 	req, err := RequirementsForMode(mode)
 	if err != nil {
 		return nil, err
+	}
+	if requested == "auto" {
+		return admitAutoRuntime(ctx, reg, mode, req, priority)
 	}
 	id := requested
 	if id == "" {
@@ -205,7 +209,13 @@ func AdmitRuntime(ctx context.Context, reg Registry, mode, requested string) (*E
 	if !match.Compatible {
 		return nil, &CapabilityAdmissionError{RequestedBackend: requested, Match: match}
 	}
-	return &ExecutionContract{ContractVersion: CapabilityContractVersion, PolicyVersion: CapabilityContractVersion, Mode: mode, Requirements: req, RequestedBackend: requested, Runtime: runtime, Match: match}, nil
+	contract := &ExecutionContract{ContractVersion: CapabilityContractVersion, PolicyVersion: CapabilityContractVersion, Mode: mode, Requirements: req, RequestedBackend: requested, Runtime: runtime, Match: match}
+	decision, err := resolveSelection(RuntimeSelectionRequest{Mode: "explicit", RuntimeID: id}, req, []RuntimeDescriptor{runtime}, nil)
+	if err != nil {
+		return nil, err
+	}
+	contract.SelectionDecision = decision
+	return contract, nil
 }
 
 // 2026-10-03：執行時核對封存結構，不以目前 registry 重算接受時判定。
@@ -227,7 +237,20 @@ func (c *ExecutionContract) Validate(mode, id string) error {
 	if requested == "" {
 		requested = "opencode"
 	}
-	if requested != id {
+	if c.SelectionDecision != nil {
+		request := RuntimeSelectionRequest{Mode: "explicit", RuntimeID: requested}
+		if requested == "auto" {
+			request = RuntimeSelectionRequest{Mode: "auto"}
+		}
+		descriptors := make([]RuntimeDescriptor, 0, len(c.SelectionDecision.Candidates))
+		for _, candidate := range c.SelectionDecision.Candidates {
+			descriptors = append(descriptors, candidate.Runtime)
+		}
+		expected, err := resolveSelection(request, c.Requirements, descriptors, c.SelectionDecision.Priority)
+		if err != nil || !reflect.DeepEqual(expected, c.SelectionDecision) || !reflect.DeepEqual(c.Runtime, c.SelectionDecision.Selected) {
+			return fmt.Errorf("%w: sealed selection mismatch", ErrInvalidContract)
+		}
+	} else if requested != id {
 		return fmt.Errorf("%w: requested runtime mismatch", ErrInvalidContract)
 	}
 	m, err := MatchCapabilities(c.Requirements, c.Runtime)

@@ -1,0 +1,6 @@
+2026-10-04; command: go test -count=1 ./cmd/asura -run TestRuntimeSelectionHeldStartLock; exit code: 1
+--- FAIL: TestRuntimeSelectionHeldStartLock (0.21s)
+    runtime_selection_test.go:177: startup callback reacquired held flock and deadlocked
+FAIL
+FAIL	asura/cmd/asura	0.213s
+FAIL

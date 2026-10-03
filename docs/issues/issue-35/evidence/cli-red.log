@@ -1,0 +1,9 @@
+2026-10-03; command: go test -count=1 ./cmd/asura -run TestRuntimeSelection; exit code: 1
+--- FAIL: TestRuntimeSelectionLocalAuto (0.00s)
+    runtime_selection_test.go:27: code=1: error: unknown backend "auto" (supported: opencode, codex, omp, antigravity)
+--- FAIL: TestRuntimeSelectionCLIBoundaries (0.00s)
+    runtime_selection_test.go:39: error: unknown backend "auto" (supported: opencode, codex, omp, antigravity)
+
+FAIL
+FAIL	asura/cmd/asura	0.003s
+FAIL

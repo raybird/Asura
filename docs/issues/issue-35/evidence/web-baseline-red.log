@@ -1,0 +1,6 @@
+2026-10-03; baseline reproduction (after implementation): server.go from c3381d4, other working sources current; command: go test -count=1 ./internal/web -run TestRuntimeSelectionWebIntent; exit code: 1
+--- FAIL: TestRuntimeSelectionWebIntent (0.00s)
+    runtime_selection_test.go:17: response=400 invalid request
+FAIL
+FAIL	asura/internal/web	0.002s
+FAIL

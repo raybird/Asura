@@ -1,0 +1,23 @@
+2026-10-04 修復獨立 review findings 後的完整驗證
+被測來源：tested-source.sha256（全部 Go source、go.mod、go.sum）；文件及證據提交不改被測內容。
+命令：go test -count=1 -race ./...
+exit code: 0
+ok  	asura/cmd/asura	7.424s
+ok  	asura/docs/issues/issue-19/evidence	2.647s
+ok  	asura/internal/auth	1.011s
+ok  	asura/internal/backend	1.023s
+ok  	asura/internal/backend/antigravity	1.017s
+ok  	asura/internal/backend/clisandbox	3.747s
+ok  	asura/internal/backend/codex	1.376s
+ok  	asura/internal/backend/omp	1.071s
+ok  	asura/internal/backend/opencode	26.000s
+ok  	asura/internal/contextwin	1.016s
+ok  	asura/internal/cron	1.557s
+ok  	asura/internal/daemon	31.713s
+ok  	asura/internal/engine	8.085s
+ok  	asura/internal/gitmem	9.772s
+ok  	asura/internal/pipeline	1.572s
+ok  	asura/internal/recall	1.021s
+ok  	asura/internal/storage	79.992s
+ok  	asura/internal/web	1.171s
+ok  	asura/tests/integration	260.340s
