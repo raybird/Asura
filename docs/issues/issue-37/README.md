@@ -175,11 +175,16 @@ Feature: admission 封存 stage runtime 並依原 plan 執行
 | TBD-3 | 保留 restart 標 failed；完整性檢查不承諾偵測一致的全契約重寫 | 已解決 | STGBIND-013/015；不新增自動復跑或密碼學簽章 |
 | TBD-4 | plan 上限 3 bindings、32 candidates/decision、64 KiB/decision、192 KiB/plan | 已解決 | STGBIND-015；新 plan 的合計上限須核准 |
 
+## 交付與審查入口
+
+2026-10-04 程式、驗收與完整測試已交付 [PR #38](https://github.com/raybird/Asura/pull/38)。獨立審查報告按 `review-{被審查 HEAD 前七碼}.md` 保存在本目錄；有效性依 docs/agents/review-evidence.md 判定。尚無有效報告時等待審查；PASS 後等待使用者合併，RETURN TO execute-task 則修正並重新驗證／審查，不自行合併。
+
 ## Timeline
 
 | 日期 | 異動 | 負責人 |
 |---|---|---|
 | 2026-10-04 | 使用者「核准」完整提案與驗收 | 使用者 |
+| 2026-10-04 | 建立 PR #38，固定交付規格、source manifest 與完整測試證據；獨立 review 判定由被審查 HEAD 對應報告保存 | Codex |
 | 2026-10-04 | 完成 stage contract、pipeline guards、queue/restart/audit 驗收，最終 race/vet/build 全綠 | Codex |
 | 2026-10-04 | 盤點 Phase 4B，建立待核准規格與 SB-TBD 提案；未修改 production code | Codex |
 
@@ -188,4 +193,4 @@ Feature: admission 封存 stage runtime 並依原 plan 執行
 **建立日期**: 2026-10-04
 **分級**: Large — 跨 admission、pipeline、persistence 與 audit 邊界
 **風險**: High
-**狀態**: 實作與完整驗證完成，待 PR 獨立審查
+**狀態**: [PR #38](https://github.com/raybird/Asura/pull/38) 已交付；審查判定依本目錄有效 review artifact，尚未合併

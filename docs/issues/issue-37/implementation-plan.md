@@ -41,7 +41,8 @@
 - [x] 2026-10-04 完整核准，基線 d27ace3。
 - [x] 2026-10-04 decompose 在本檔建立可執行 Tasks。
 - [x] 2026-10-04 紅綠證據、精煉、常青文件與完整 race/vet/build 回歸。
-- [ ] 提交、PR、獨立 review artifact；PASS 後等待合併。
+- [x] 2026-10-04 交付已提交並建立 [PR #38](https://github.com/raybird/Asura/pull/38)。
+- 獨立 review gate：由本目錄 `review-{被審查 HEAD 前七碼}.md` 記錄實際判定；無有效 PASS 不視為審查完成，PASS 後等待合併。
 
 ## 本次文件檢查證據
 
@@ -101,7 +102,7 @@
 - 完成判準：查詢不探測；vet/race/build 通過；交付範圍 PR 與獨立 review 於下方交付檢查清單收尾
 - 驗證：依上方測試層級，真實紅綠或文件等價證據；證據列出命令、exit code 與被測內容。
 - 狀態：✅ 實作與驗證已完成；交付審查由固定 HEAD 的 PR 與獨立 report 追蹤
-- 證據：2026-10-04 [驗證記錄](evidence/README.md)，final-vet.log、final-race.log、final-build.log 全數 exit code 0；PR／review 尚待本次交付收尾。
+- 證據：2026-10-04 [驗證記錄](evidence/README.md)，final-vet.log、final-race.log、final-build.log 全數 exit code 0；[PR #38](https://github.com/raybird/Asura/pull/38) 已建立；獨立審查判定由被審查 HEAD 對應 artifact 保存，不預填 PASS。
 
 
 ## 精煉紀錄
