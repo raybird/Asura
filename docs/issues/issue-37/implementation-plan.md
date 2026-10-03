@@ -8,13 +8,13 @@
 
 ## 實作階段
 
-| Phase | 狀態 | 產出與順序 | 相依 | 驗收 | 完成判準 |
-|---|---|---|---|---|---|
-| P1 安全邊界基線 | 📝 待實作 | daemon/pipeline 外迴圈負向測試；existing contract 刻畫 | 完整規格核准 | 001/004/006/010/015 | 取得直接關聯缺少 stage 行為的紅燈，且 existing 行為刻畫為綠；不接受 compile error 作紅燈 |
-| P2 Contract 與純 planner | 📝 待實作 | bounded plan、一次 snapshot、stage selector、version 分流及完整 validation | P1 | 001/002/003/005/006/007/008/015 | 單元紅燈後全綠；固定 OMP/Codex fixture、序列化 round trip、上限/未知 stage/版本與 mutation 覆蓋 |
-| P3 Admission 與持久化 | 📝 待實作 | engine/daemon/local 的 atomic plan 封存、Striker 投影、intent identity | P2 | 001/004/005/006/009/012/013 | 實際 SQLite/IPC 驗證 admission 拒絕零 Task/dispatch/Run/sentinel，重送 plan 不變且無額外 Version capture，重啟保留 plan 並 failed |
-| P4 Pipeline execution | 📝 待實作 | 全 plan 初始 guard、逐 stage guard、stage 局部 context、legacy branch、trace | P3 | 001/002/009/010/011/014/015 | 實際 Run recording 依 codex/omp/codex；constructor 衝突、runtime 缺失/退化不 fallback；先前 stage 間變動在後續 Run 前拒絕；context/cancel 回歸 |
-| P5 Audit 與交付 | 📝 待實作 | CLI/Web stage audit、使用者文件、架構文件、有效測試證據、PR/獨立 review | P4 | 014/016 | status/Web 不探測 runtime；vet/race/build 成功，每個 Scenario 有版本一致證據，獨立 review 保存；不自動 merge |
+| Phase | 產出與順序 | 相依 | 驗收 | 完成判準 |
+|---|---|---|---|---|
+| P1 安全邊界基線 | daemon/pipeline 外迴圈負向測試；existing contract 刻畫 | 完整規格核准 | 001/004/006/010/015 | 取得直接關聯缺少 stage 行為的紅燈，且 existing 行為刻畫為綠；不接受 compile error 作紅燈 |
+| P2 Contract 與純 planner | bounded plan、一次 snapshot、stage selector、version 分流及完整 validation | P1 | 001/002/003/005/006/007/008/015 | 單元紅燈後全綠；固定 OMP/Codex fixture、序列化 round trip、上限/未知 stage/版本與 mutation 覆蓋 |
+| P3 Admission 與持久化 | engine/daemon/local 的 atomic plan 封存、Striker 投影、intent identity | P2 | 001/004/005/006/009/012/013 | 實際 SQLite/IPC 驗證 admission 拒絕零 Task/dispatch/Run/sentinel，重送 plan 不變且無額外 Version capture，重啟保留 plan 並 failed |
+| P4 Pipeline execution | 全 plan 初始 guard、逐 stage guard、stage 局部 context、legacy branch、trace | P3 | 001/002/009/010/011/014/015 | 實際 Run recording 依 codex/omp/codex；constructor 衝突、runtime 缺失/退化不 fallback；先前 stage 間變動在後續 Run 前拒絕；context/cancel 回歸 |
+| P5 Audit 與交付 | CLI/Web stage audit、使用者文件、架構文件、有效測試證據、PR/獨立 review | P4 | 014/016 | status/Web 不探測 runtime；vet/race/build 成功，每個 Scenario 有版本一致證據，獨立 review 保存；不自動 merge |
 
 ## 使用方式對照
 
@@ -38,9 +38,9 @@
 
 - [x] 2026-10-04 完成現況盤點、最小邊界與首要驗證設計。
 - [x] 2026-10-04 16 個驗收 ID 與 SB-TBD-1～15 均有提案。
-- [ ] 完整核准與規格提交基線。
-- [ ] decompose 在本檔建立可執行 Tasks。
-- [ ] 紅綠證據、精煉、常青文件與完整回歸。
+- [x] 2026-10-04 完整核准，基線 d27ace3。
+- [x] 2026-10-04 decompose 在本檔建立可執行 Tasks。
+- [x] 2026-10-04 紅綠證據、精煉、常青文件與完整 race/vet/build 回歸。
 - [ ] 提交、PR、獨立 review artifact；PASS 後等待合併。
 
 ## 本次文件檢查證據
@@ -57,11 +57,11 @@
 
 - 產出與最小範圍：daemon/pipeline/backend 測試與紅燈記錄
 - 相依：無
-- 驗收編號：STGBIND-支援 001～015
+- 驗收編號：支援 STGBIND-001～015；各 Scenario 的責任 Task 見下列項目
 - 完成判準：同一既有入口可重現未封存 stage plan/mixed 不可 admission；舊契約刻畫保持綠
 - 驗證：依上方測試層級，真實紅綠或文件等價證據；證據列出命令、exit code 與被測內容。
-- 狀態：📝 待實作
-- 證據：執行時填入。
+- 狀態：✅ 已完成
+- 證據：2026-10-04 [驗證記錄](evidence/README.md)，紅燈及 focused-green.log；詳見對應驗收列。
 
 ### Task 2.1 — Stage contract 與純 planner
 
@@ -70,8 +70,8 @@
 - 驗收編號：STGBIND-003/005/006/007/008/015
 - 完成判準：已知字面 fixture、mutation/limit/version round trip 均通過
 - 驗證：依上方測試層級，真實紅綠或文件等價證據；證據列出命令、exit code 與被測內容。
-- 狀態：📝 待實作
-- 證據：執行時填入。
+- 狀態：✅ 已完成
+- 證據：2026-10-04 [驗證記錄](evidence/README.md)，紅燈及 focused-green.log；詳見對應驗收列。
 
 ### Task 3.1 — 原子封存與重送／重啟
 
@@ -80,8 +80,8 @@
 - 驗收編號：STGBIND-004/012/013
 - 完成判準：拒絕無 Task/Run 副作用；原 plan 重送不探測，SQLite reopen/recovery 保留快照
 - 驗證：依上方測試層級，真實紅綠或文件等價證據；證據列出命令、exit code 與被測內容。
-- 狀態：📝 待實作
-- 證據：執行時填入。
+- 狀態：✅ 已完成
+- 證據：2026-10-04 [驗證記錄](evidence/README.md)，紅燈及 focused-green.log；詳見對應驗收列。
 
 ### Task 4.1 — 唯一 stage 執行與 guards
 
@@ -90,15 +90,22 @@
 - 驗收編號：STGBIND-001/002/009/010/011
 - 完成判準：codex/omp/codex 實際 Run；缺失/退化/constructor 衝突不 fallback，版本升級保持相容
 - 驗證：依上方測試層級，真實紅綠或文件等價證據；證據列出命令、exit code 與被測內容。
-- 狀態：📝 待實作
-- 證據：執行時填入。
+- 狀態：✅ 已完成
+- 證據：2026-10-04 [驗證記錄](evidence/README.md)，紅燈及 focused-green.log；詳見對應驗收列。
 
 ### Task 5.1 — Audit 與交付
 
 - 產出與最小範圍：CLI/Web audit、常青文件、完整驗證、PR/獨立報告
 - 相依：4.1
 - 驗收編號：STGBIND-014/016
-- 完成判準：查詢不探測；vet/race/build 通過，固定範圍 PR 與獨立 review 保存
+- 完成判準：查詢不探測；vet/race/build 通過；交付範圍 PR 與獨立 review 於下方交付檢查清單收尾
 - 驗證：依上方測試層級，真實紅綠或文件等價證據；證據列出命令、exit code 與被測內容。
-- 狀態：📝 待實作
-- 證據：執行時填入。
+- 狀態：✅ 實作與驗證已完成；交付審查由固定 HEAD 的 PR 與獨立 report 追蹤
+- 證據：2026-10-04 [驗證記錄](evidence/README.md)，final-vet.log、final-race.log、final-build.log 全數 exit code 0；PR／review 尚待本次交付收尾。
+
+
+## 精煉紀錄
+
+2026-10-04 使用 code-simplify 檢查本次模型與 pipeline 修改：保留 JSON 契約、舊版本分流與既有 stage interfaces；簡化 CLI guard 顯示的布林 map，沒有新增可設定政策或 router 抽象。其餘保持現有 stage Prepare/ExecutePrepared 與結果解析流程。精煉後 focused-green.log 為 race 全綠，source manifest 識別最終程式內容。Task 3.1 沿既有 context atomic persistence／queue／redelivery 路徑接新 plan，不需修改 daemon 或 SQLite schema；真 IPC／SQLite 驗收已證明整合。
+
+2026-10-04 既有 TestRuntimeSelectionThreeFaceEligibility 的 Match union 斷言改為已核准 Striker 投影；TestCapabilityThreeFaceBoundRuntime 明確構造 legacy capability-v1，保留舊 handle freezing 行為刻畫。新契約的逐 stage guard 與 mixed Run 另由 TestStageBinding* 驗證，未刪除任何既有失敗面。

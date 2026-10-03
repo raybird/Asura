@@ -1,0 +1,4 @@
+2026-10-04 stage contract 實作後、Task 投影檢查前。
+Command: go test ./internal/engine -run TestStageBindingTaskProjection -count=1
+Exit code: 1
+FAIL: persisted Task.Backend=codex、context/plan=opencode 仍 completed、calls=1；預期 failed、calls=0。

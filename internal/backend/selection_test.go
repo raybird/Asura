@@ -50,8 +50,8 @@ func TestRuntimeSelectionThreeFaceEligibility(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Runtime.ID != "codex" || !reflect.DeepEqual(c.Match.Required, []Capability{CapReadOnlySandbox, CapWorkspaceWrite}) {
-		t.Fatalf("union=%+v", c)
+	if c.Runtime.ID != "codex" || !reflect.DeepEqual(c.Match.Required, []Capability{CapWorkspaceWrite}) {
+		t.Fatalf("Striker projection=%+v", c)
 	}
 }
 

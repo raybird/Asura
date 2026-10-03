@@ -60,6 +60,8 @@ const (
 
 // StageTrace 代表單一 Stage 的執行歷程與耗時
 type StageTrace struct {
+	ExecutionGuard *backend.CapabilityMatch   `json:"execution_guard,omitempty"`
+	GuardError     string                     `json:"guard_error,omitempty"`
 	Name           string                     `json:"name"`
 	Status         StageStatus                `json:"status"`
 	DurationMs     int64                      `json:"duration_ms"`

@@ -1,0 +1,22 @@
+2026-10-04；被測內容見 tested-source.sha256。
+Command: go test -count=1 -race ./...
+Exit code: 0
+ok  	asura/cmd/asura	8.044s
+ok  	asura/docs/issues/issue-19/evidence	2.795s
+ok  	asura/internal/auth	1.015s
+ok  	asura/internal/backend	1.069s
+ok  	asura/internal/backend/antigravity	1.020s
+ok  	asura/internal/backend/clisandbox	3.633s
+ok  	asura/internal/backend/codex	1.353s
+ok  	asura/internal/backend/omp	1.053s
+ok  	asura/internal/backend/opencode	24.655s
+ok  	asura/internal/contextwin	1.015s
+ok  	asura/internal/cron	1.505s
+ok  	asura/internal/daemon	32.672s
+ok  	asura/internal/engine	8.247s
+ok  	asura/internal/gitmem	9.804s
+ok  	asura/internal/pipeline	1.545s
+ok  	asura/internal/recall	1.016s
+ok  	asura/internal/storage	79.992s
+ok  	asura/internal/web	1.158s
+ok  	asura/tests/integration	268.688s

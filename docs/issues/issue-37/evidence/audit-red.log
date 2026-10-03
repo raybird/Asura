@@ -1,0 +1,5 @@
+2026-10-04 工作區：stage planner/pipeline 已實作，audit 尚未修改。
+Command: go test ./cmd/asura ./internal/web -run TestStageBinding -count=1
+Exit code: 1
+FAIL TestStageBindingStatus: missing Stage oracle: codex v1; status 只印 Striker 相容投影。
+FAIL TestStageBindingAudit: JavaScript assertion 看到 Runtime 契約：unsupported/unavailable。

@@ -136,7 +136,7 @@ Feature: admission 封存 stage runtime 並依原 plan 執行
 
 ## Gherkin 核准紀錄
 
-- **核准 commit**: 待提交
+- **核准 commit**: d27ace3
 - **核准來源**: 2026-10-04 使用者 `/dev-cycle issue:37` 授權盤點及準備提案。GitHub #37 的驗收為「候選驗收劇本」，明列先固定 technical analysis；未將 issue ID 視為整份新提案核准。2026-10-04 使用者回覆「核准」，核准技術提案 SB-TBD-1～15、完整 STGBIND-001～016、README TBD-1～4。
 
 | Scenario | 核准日期 | 狀態 |
@@ -180,6 +180,7 @@ Feature: admission 封存 stage runtime 並依原 plan 執行
 | 日期 | 異動 | 負責人 |
 |---|---|---|
 | 2026-10-04 | 使用者「核准」完整提案與驗收 | 使用者 |
+| 2026-10-04 | 完成 stage contract、pipeline guards、queue/restart/audit 驗收，最終 race/vet/build 全綠 | Codex |
 | 2026-10-04 | 盤點 Phase 4B，建立待核准規格與 SB-TBD 提案；未修改 production code | Codex |
 
 ---
@@ -187,4 +188,4 @@ Feature: admission 封存 stage runtime 並依原 plan 執行
 **建立日期**: 2026-10-04
 **分級**: Large — 跨 admission、pipeline、persistence 與 audit 邊界
 **風險**: High
-**狀態**: 實作中
+**狀態**: 實作與完整驗證完成，待 PR 獨立審查

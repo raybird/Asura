@@ -1,0 +1,4 @@
+2026-10-04；被測內容見 tested-source.sha256。
+Command: go build -o /tmp/asura-issue37 ./cmd/asura
+Exit code: 0
+成功，無錯誤輸出。

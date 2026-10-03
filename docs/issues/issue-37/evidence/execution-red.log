@@ -1,0 +1,17 @@
+2026-10-04 BASE=d27ace3 + new pipeline stage_binding_test.go
+Command: go test ./internal/pipeline -run TestStageBinding -count=1
+Exit code: 1
+--- FAIL: TestStageBindingGuardBetweenStages (0.00s)
+    stage_binding_test.go:29: stage capability regression escaped guard: err=<nil> calls=3 trace=&{ExecutionContract:0x3360a8664480 ExecutionGuard:0x3360a86509a0 GuardError: Mode:three-face BackendID:opencode OraclePlan:0x3360a8630180 CriticReview:0x3360a86301e0 Stages:[{Name:oracle Status:completed DurationMs:0 BackendID:opencode BackendVersion:v1 Admission:0x3360a862a420 Usage:<nil> UsageSource:unknown Error: Output:plan generated} {Name:striker Status:completed DurationMs:0 BackendID:opencode BackendVersion:v1 Admission:0x3360a862a580 Usage:<nil> UsageSource:unknown Error: Output:done} {Name:critic Status:completed DurationMs:0 BackendID:opencode BackendVersion:v1 Admission:0x3360a862a6e0 Usage:<nil> UsageSource:unknown Error: Output:pass}] ModelCalls:3 DurationMs:0 FinalResult:done}
+--- FAIL: TestStageBindingMixedExecution (0.00s)
+    --- FAIL: TestStageBindingMixedExecution/priority (0.00s)
+        stage_binding_test.go:48: wrong stage runtimes: [codex:oracle codex:striker codex:critic] err=<nil>
+    --- FAIL: TestStageBindingMixedExecution/missing (0.00s)
+        stage_binding_test.go:47: unsafe execution [codex:oracle codex:striker codex:critic] <nil>
+    --- FAIL: TestStageBindingMixedExecution/regression (0.00s)
+        stage_binding_test.go:47: unsafe execution [codex:oracle codex:striker codex:critic] <nil>
+    --- FAIL: TestStageBindingMixedExecution/upgrade (0.00s)
+        stage_binding_test.go:48: wrong stage runtimes: [codex:oracle codex:striker codex:critic] err=<nil>
+FAIL
+FAIL	asura/internal/pipeline	0.003s
+FAIL
