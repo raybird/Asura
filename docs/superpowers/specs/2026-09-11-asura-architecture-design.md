@@ -251,7 +251,7 @@ Asura/
 - **Codex Adapter**：封裝 Codex CLI 之 stdin/stdout 通訊。
 - **Agy Adapter**：原生適配本地 Antigravity CLI (`agy`)，提供無人值守指令封裝。
 
-2026-09-30：目前 Registry 提供 opencode（預設）、codex、omp、antigravity；新 adapter 邏輯限於 backend 套件及 CLI／Daemon composition。OMP 固定 18.4.4／Bun 1.4.2，Antigravity 固定 1.2.13，hash 驗證後複製 runtime 並唯讀掛載，避免來源更新競態。bwrap PID／IPC namespace、私人 HOME／tmp／dev 與 memfd access-only 登入隔離為必要前提；無支援或登入過期即拒絕。新 adapter 不宣告 read_only_sandbox，Three-Face 在 Stage 0 拒絕。provider transport retry 不視為 Asura 新 attempt；不增加 failover、resume 或自動更新登入。最後驗證日期：2026-09-30，證據見 [issue 25](../../issues/issue-25/evidence/README.md)。
+2026-09-30：目前 Registry 提供 opencode（預設）、codex、omp、antigravity；新 adapter 邏輯限於 backend 套件及 CLI／Daemon composition。OMP 固定 18.4.4／Bun 1.4.2，Antigravity 固定 1.2.13，hash 驗證後複製 runtime 並唯讀掛載，避免來源更新競態。bwrap PID／IPC namespace、私人 HOME／tmp／dev 與 memfd access-only 登入隔離為必要前提；無支援或登入過期即拒絕。2026-10-04：新 adapter 不宣告 read_only_sandbox，Three-Face explicit 在接受前拒絕；auto 可只將其綁定 Striker。provider transport retry 不視為 Asura 新 attempt；不增加 failover、resume 或自動更新登入。最後驗證日期：2026-09-30，證據見 [issue 25](../../issues/issue-25/evidence/README.md)。
 
 ### 7.2 異常防禦與故障轉移
 
@@ -370,7 +370,7 @@ CLI/IPC 提供 add options、durable、detail；detail 不遞迴展開全鏈、�
 
 Asura 作為 Agent Runtime Control Plane，只管理 runtime 執行契約；skills、MCP 與 workflow 由 runtime 內部處理。internal/backend 的 capability-v1 型別與 matcher 純函式分離需求與供給；pipeline 組合既有 registry lookup 及有期限的 version descriptor 探測。engine、daemon submit 與 Cron 共用接受前 preflight。
 
-Direct 為 Striker workspace-write；Three-Face 的 Oracle/Critic 為 read-only，同一 explicit backend 必須滿足全部 stage union。Unknown mode／role／workspace access／capability／contract-policy version fail-closed；不新增 routing、fallback 或 mixed runtime。執行開始時綁定同一 Backend instance，stage 間 registry 改變不切換 runtime。
+Direct 為 Striker workspace-write；Three-Face 的 Oracle/Critic 為 read-only，同一 explicit backend 必須滿足全部 stage union。Unknown mode／role／workspace access／capability／contract-policy version fail-closed。2026-10-04：舊 capability-v1 仍綁定同一 Backend instance；新 stage-binding-v1 的 Three-Face auto 採逐 stage 封存 ID，執行期只 guard，不 select 或 fallback。
 
 接受時 ExecutionContext.execution_contract 原子寫入既有 Task.resolved_context JSON，無記憶與 Cron 也保存，不需 schema migration。request fingerprint 保持原 normalized backend identity，不包含版本或能力。redelivery 先回傳已存在且授權有效的 Task；並行首次請求由 SQLite 唯一 request ID 決定勝者快照。worker 優先使用 persisted context，不能以呼叫端 context 覆寫。
 
@@ -383,8 +383,21 @@ PipelineTrace 的 execution_contract 複用接受時值，execution_guard／guar
 
 ## Phase 4B：Capability-aware Runtime Selection（2026-10-03）
 
-明確 backend=auto 才啟用選擇。Registry.Snapshot 固定註冊集合並按 ID 排序，鎖外捕獲所有 descriptor；共同 matcher 決定 eligibility，純 policy 依有效 priority 選一個 Task-level runtime。預設 OpenCode 優先、其餘 ID 字典序、OMP 最後；ASURA_RUNTIME_PRIORITY 在 daemon/local CLI composition root 解析，policy ID/version 與有效排序均封存。
+明確 backend=auto 才啟用選擇。Registry.Snapshot 固定註冊集合並按 ID 排序，鎖外捕獲所有 descriptor；共同 matcher 決定 eligibility，純 policy 依有效 priority 選 eligible runtime；2026-10-04 改以 stage requirements 各自選擇，共用同一值快照。預設 OpenCode 優先、其餘 ID 字典序、OMP 最後；ASURA_RUNTIME_PRIORITY 在 daemon/local CLI composition root 解析，policy ID/version 與有效排序均封存。
 
 requested intent 用於 fingerprint/redelivery，Task.Backend/ExecutionContext.Backend 保存 selected ID；worker dispatch 與 queue 喚醒保留 auto intent，由 engine 讀已保存 binding。SelectionDecision 為 capability-v1 ExecutionContract additive 欄位，與 resolved_context 同次 CreateTask INSERT，沒有 SQL migration。查詢只讀快照；執行 guard 比較同一 selected runtime 的能力，不能重選。
 
-候選版本失敗、unknown capability、無 eligible 或 32 candidates／64 KiB 上限超出皆 fail-closed，不降低需求或 fallback。CLI explicit shell 相容，local auto 使用真 adapters 與取消身分登記。Web API additive backend 欄位與既有 audit，未新增 management UI。選擇沒有模型、health/load/cost 輸入；未實作 mixed-stage runtime 或 attempt/retry。
+候選版本失敗、unknown capability、無 eligible 或 32 candidates／64 KiB 上限超出皆 fail-closed，不降低需求或 fallback。CLI explicit shell 相容，local auto 使用真 adapters 與取消身分登記。Web API additive backend 欄位與既有 audit，未新增 management UI。選擇沒有模型、health/load/cost 輸入；2026-10-04 新契約支援 mixed-stage runtime；attempt/retry 仍不包含。
+
+
+## Phase 4C：Stage-specific Runtime Binding（2026-10-04）
+
+新 admission 產生 stage-binding-v1 ExecutionContract，StageBindingPlan 為唯一階段執行來源。Direct 固定 Striker；Three-Face 固定 Oracle/Striker/Critic，bounded backend.Role 禁止任意 stage。auto 一次 Registry.Snapshot/capture，重用 Phase 4B resolveSelection/matcher/priority 對各 authoritative requirement 選擇；explicit 只捕獲指定 runtime，全 stage 必須相容。所有 bindings 成功才寫 Task，無部分 admission。
+
+每 binding 保存 requirements 與完整 selection decision（含 selected descriptor/match/policy）。Task.Backend、context.Backend、contract.Runtime/Match/SelectionDecision 為 Striker 相容投影，validation 核對與 plan 一致。每 decision 保留 32 candidates/64 KiB，plan 192 KiB；完整 context 另含相容投影及 memory，不能把 plan 上限當 context 上限。不新增 SQL schema。
+
+Pipeline 先 guard 全部必要 sealed IDs，再於各 stage 取得目前 handle/check capability；局部 context copy 傳 BoundBackend，stage 契約拒絕缺失/不符 handle，不回 constructor/runner。StageTrace 保存當次 actual ID/version 與 capability guard；trace 及 CLI/Web 保留歷史 admission 決策。版本更新不因與封存值不同而拒絕。未知或缺失 plan/version fail-closed，不能降級 legacy；舊 capability-v1 沿單一 runtime guard 路徑。
+
+Queue/redelivery 不 admission，intent fingerprint 不含 selected ID、候選或版本。restart recovery 沿既有標 failed，保留原 plan，不 resume。能力退化或 runtime 消失不 fallback；兩個 Run 之間檢查只能阻止後續副作用，不回滾先前完成工作。契約完整性為結構一致性，不提供針對一致全量重寫的 cryptographic tamper evidence。
+
+最後驗證日期：2026-10-04；驗收與證據見 [Issue 37](../../issues/issue-37/implementation-plan.md)。

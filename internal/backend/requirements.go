@@ -37,6 +37,7 @@ type CapabilityMatch struct {
 }
 
 type ExecutionContract struct {
+	StageBindingPlan  *StageBindingPlan         `json:"stage_binding_plan,omitempty"`
 	SelectionDecision *RuntimeSelectionDecision `json:"selection_decision,omitempty"`
 	ContractVersion   string                    `json:"contract_version"`
 	PolicyVersion     string                    `json:"policy_version"`
@@ -177,7 +178,7 @@ func AdmitRuntime(ctx context.Context, reg Registry, mode, requested string, pri
 		return nil, err
 	}
 	if requested == "auto" {
-		return admitAutoRuntime(ctx, reg, mode, req, priority)
+		return admitAutoRuntime(ctx, reg, mode, priority)
 	}
 	id := requested
 	if id == "" {
@@ -209,18 +210,19 @@ func AdmitRuntime(ctx context.Context, reg Registry, mode, requested string, pri
 	if !match.Compatible {
 		return nil, &CapabilityAdmissionError{RequestedBackend: requested, Match: match}
 	}
-	contract := &ExecutionContract{ContractVersion: CapabilityContractVersion, PolicyVersion: CapabilityContractVersion, Mode: mode, Requirements: req, RequestedBackend: requested, Runtime: runtime, Match: match}
-	decision, err := resolveSelection(RuntimeSelectionRequest{Mode: "explicit", RuntimeID: id}, req, []RuntimeDescriptor{runtime}, nil)
+	plan, err := planStageBindings(mode, RuntimeSelectionRequest{Mode: "explicit", RuntimeID: id}, []RuntimeDescriptor{runtime}, nil)
 	if err != nil {
 		return nil, err
 	}
-	contract.SelectionDecision = decision
-	return contract, nil
+	return contractFromPlan(plan, requested)
 }
 
 // 2026-10-03：執行時核對封存結構，不以目前 registry 重算接受時判定。
 func (c *ExecutionContract) Validate(mode, id string) error {
-	if c == nil || c.ContractVersion != CapabilityContractVersion || c.PolicyVersion != CapabilityContractVersion {
+	if c != nil && c.ContractVersion == StageBindingContractVersion {
+		return c.validateStagePlan(mode, id)
+	}
+	if c == nil || c.StageBindingPlan != nil || c.ContractVersion != CapabilityContractVersion || c.PolicyVersion != CapabilityContractVersion {
 		return fmt.Errorf("%w: unsupported contract/policy version", ErrInvalidContract)
 	}
 	if c.Mode != mode || c.Runtime.ID != id || c.Runtime.Version == "" || c.Runtime.CapturedAt.IsZero() {

@@ -101,17 +101,21 @@ go build -o bin/asura ./cmd/asura
 
 2026-10-03：真正使用 backend runtime 的 Daemon／IPC／Web／Cron 與本機 runtime pipeline，在接受新任務前以共同 deterministic requirements／capability matcher 預檢。Direct 要求 Striker 的 workspace_write；Three-Face 另要求 Oracle／Critic 的 read_only_sandbox。缺少能力、未知 runtime／capability 或版本取得失敗時接受前拒絕，沒有模型呼叫或自動 fallback。
 
-接受時的 capability-v1 契約保存於 Task resolved_context，包含 stage requirements、requested／resolved runtime、版本、能力集合、UTC snapshot 與 match。無記憶任務也封存；重送先查原 Task，不重新探測。status 與 Web 稽核顯示保存值；舊 Task 未提供快照時明示 legacy/unavailable，不回填。執行前能力退化的拒絕分開記錄在 execution guard，不改寫接受時快照。
+2026-10-04：新任務以 stage-binding-v1 契約保存於 Task resolved_context，包含各 stage requirements、requested／resolved runtime、版本、能力集合、UTC snapshot 與 match；舊 capability-v1 Task 沿原單一 runtime 路徑執行。無記憶任務也封存；重送先查原 Task，不重新探測。status 與 Web 稽核顯示保存值；舊 Task 未提供快照時明示 legacy/unavailable，不回填。執行前能力退化的拒絕分開記錄在 execution guard，不改寫接受時快照。
 
 2026-10-03：本機 `run --backend opencode/codex` 保留既有 shell 命令執行，不呼叫 runtime 或封存其能力；CLI status 與 Web 稽核明示 `legacy/unavailable`。真正 runtime 的 engine、Daemon／IPC／Web／Cron 入口才封存 runtime 契約。
 
-2026-10-03：`ask --backend auto` 與 `run --backend auto` 明確啟用能力感知 runtime 選擇；`run auto` 的參數是 AI prompt，其他既有 shell run 行為保持。先以共同 matcher 篩選，再依 `opencode` 優先、其他 ID 字典序、`omp` 最後的 deterministic policy 選擇一個 runtime；Three-Face 三 stage 共用完整 union 所選的 runtime。explicit 不相容不 fallback。
+2026-10-03：`ask --backend auto` 與 `run --backend auto` 明確啟用能力感知 runtime 選擇；`run auto` 的參數是 AI prompt，其他既有 shell run 行為保持。先以共同 matcher 篩選，再依 `opencode` 優先、其他 ID 字典序、`omp` 最後的 deterministic policy 選擇一個 runtime；2026-10-04：Three-Face auto 改為同一份候選快照、共同排序按 stage requirements 各自選擇；explicit 仍讓全部 stage 使用指定 runtime，不相容不 fallback。
 
 2026-10-03：可用 `ASURA_RUNTIME_PRIORITY=codex,opencode,antigravity,omp asura daemon` 或同環境變數啟動 `asura run --backend auto 'prompt'` 調整偏好。未列的候選按預設規則補齊，未註冊的偏好不新增候選；空項、重複或非四種已知 ID 拒絕。`ask` 使用 daemon 啟動設定，變更需重啟 daemon；不以 client 環境覆蓋。排序只能作用於 eligible set。
 
 2026-10-03：Daemon 沿用原 registry，OMP/Antigravity 可能已註冊但未安裝；local auto composition root 註冊 OpenCode，並於找到 binary 時註冊 Codex/OMP/Antigravity。auto 會捕獲所有已註冊候選的版本；任一版本錯誤／逾時即拒絕整次 admission，不排除該候選後改選。最多 32 candidates、decision JSON 最多 64 KiB，超限拒絕。Web task API 支援 additive `backend:"auto"`，頁面沿既有稽核區顯示決策，沒有新增設定編輯頁。
 
-2026-10-03：`status`、pipeline trace 與 Web audit 顯示封存的 intent、candidate/match、eligible/rejected、selected runtime、policy ID/version 及有效排序；registry、設定或版本變更不改歷史，重送回原 Task。舊 Task 缺 selection decision 顯示 legacy/unavailable，不補寫歷史。
+2026-10-04：`status`、pipeline trace 與 Web audit 按 stage 顯示封存 intent、candidate/match、eligible/rejected、selected runtime、policy/version、有效排序及 actual runtime／guard 結果。Task.Backend 代表 Striker 相容投影，execution 以完整 StageBindingPlan 為準。Direct 僅一個 Striker binding；Three-Face 順序固定 Oracle/Striker/Critic。plan 最多三個 binding、每 decision 32 candidates／64 KiB、整份 plan 192 KiB，超限拒絕不截斷。
+
+2026-10-04：例如 daemon 以 `ASURA_RUNTIME_PRIORITY=omp,codex` 啟動，已註冊 OMP 僅支援寫入、Codex 支援唯讀與寫入時，auto Three-Face 可綁定 Codex → OMP → Codex（所有 registered candidates 仍須版本捕獲成功）。全部階段在接受時一次封存，任何必要 stage 無候選整次拒絕；執行前檢查所有 bindings，逐 stage Run 前再檢查安全能力，缺失或退化不重選、不 fallback。版本更新不要求與歷史 snapshot 完全相等。registry／priority 變更不改已接受 Task，queue／redelivery 使用原 plan；daemon 重啟沿既有規則將殘留未完成 Task 標 failed，保留 plan 而不自動續跑。契約一致性檢查不等同防止完整資料庫內容被一致重寫的密碼學驗證。
+
+Runtime binding 最後驗證日期：2026-10-04；證據見 [Issue 37](docs/issues/issue-37/implementation-plan.md)。
 
 
 #### 安全取消任務 (cancel)

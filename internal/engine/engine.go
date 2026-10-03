@@ -62,6 +62,28 @@ type ExecutionContext struct {
 	CreatedAt         time.Time                  `json:"created_at"`
 }
 
+// 2026-10-04：stage 契約禁止缺少綁定 handle 時回到其他 runtime。
+func (c *ExecutionContext) ValidateStageBackend(role backend.Role) error {
+	if err := c.ExecutionContract.Validate(c.ExecutionContract.Mode, c.Backend); err != nil {
+		return err
+	}
+	binding, err := c.ExecutionContract.StageBindingPlan.Binding(role)
+	if err != nil {
+		return err
+	}
+	if c.BoundBackend == nil || c.BoundBackend.ID() != binding.SelectionDecision.Selected.ID {
+		return fmt.Errorf("%w: stage bound runtime mismatch", backend.ErrInvalidContract)
+	}
+	match, err := backend.MatchCapabilities([]backend.ExecutionRequirements{binding.Requirements}, backend.RuntimeDescriptor{ID: c.BoundBackend.ID(), Capabilities: c.BoundBackend.Capabilities()})
+	if err != nil {
+		return err
+	}
+	if !match.Compatible {
+		return &backend.CapabilityAdmissionError{RequestedBackend: c.BoundBackend.ID(), Match: match}
+	}
+	return nil
+}
+
 // PipelineRunner 定義任務執行管線的抽象介面，避免 engine 與 pipeline package 產生循環依賴
 type PipelineRunner interface {
 	ExecutePipeline(ctx context.Context, mode string, execCtx *ExecutionContext) (output string, traceJSON string, err error)
@@ -448,6 +470,17 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 			task.Status = storage.StatusFailed
 			task.ErrorMessage = errMsg
 			return task, fmt.Errorf("decode sealed context: %w", err)
+		}
+		// 2026-10-04：持久化 Task 的相容投影也必須與 plan 一致。
+		if contract := decoded.ExecutionContract; contract != nil && (contract.ContractVersion == backend.StageBindingContractVersion || contract.StageBindingPlan != nil) {
+			if err := contract.Validate(task.ExecutionMode, task.Backend); err != nil {
+				persistCtx, persistCancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer persistCancel()
+				_ = e.store.UpdateTaskStatus(persistCtx, task.ID, storage.StatusFailed, "", err.Error())
+				task.Status = storage.StatusFailed
+				task.ErrorMessage = err.Error()
+				return task, err
+			}
 		}
 		execCtx = &decoded
 		runnerPrompt = ComposePrompt(task.Prompt, execCtx)

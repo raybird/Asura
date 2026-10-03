@@ -67,6 +67,14 @@ func (s *DefaultCriticStage) ExecutePrepared(ctx context.Context, execCtx *engin
 		return nil, nil, errors.New("execution request is nil")
 	}
 
+	if execCtx != nil && execCtx.ExecutionContract != nil && (execCtx.ExecutionContract.ContractVersion == backend.StageBindingContractVersion || execCtx.ExecutionContract.StageBindingPlan != nil) {
+		if err := execCtx.ValidateStageBackend(req.Role); err != nil {
+			return nil, nil, err
+		}
+		if req.Role != backend.RoleCritic {
+			return nil, nil, fmt.Errorf("%w: stage request role mismatch", backend.ErrInvalidContract)
+		}
+	}
 	var activeBackend = s.backend
 	if execCtx != nil && execCtx.BoundBackend != nil {
 		activeBackend = execCtx.BoundBackend

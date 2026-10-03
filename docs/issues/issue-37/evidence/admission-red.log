@@ -1,0 +1,12 @@
+2026-10-04 BASE=d27ace3 + new backend/daemon stage_binding_test.go
+Command: go test ./internal/backend ./internal/daemon -run TestStageBinding -count=1
+Exit code: 1
+--- FAIL: TestStageBindingAdmission (0.00s)
+    stage_binding_test.go:19: missing atomic stage plan: {"selection_decision":{"request":{"mode":"auto"},"candidates":[{"runtime":{"id":"codex","version":"1.0.0","capabilities":["read_only_sandbox","workspace_write"],"captured_at":"2026-10-03T17:06:43.452545736Z"},"match":{"compatible":true,"required":["read_only_sandbox","workspace_write"],"available":["read_only_sandbox","workspace_write"],"missing":[],"backend_id":"codex","backend_version":"1.0.0"}},{"runtime":{"id":"omp","version":"1.0.0","capabilities":["workspace_write"],"captured_at":"2026-10-03T17:06:43.452547558Z"},"match":{"compatible":false,"required":["read_only_sandbox","workspace_write"],"available":["workspace_write"],"missing":["read_only_sandbox"],"backend_id":"omp","backend_version":"1.0.0"}}],"eligible":["codex"],"rejected":[{"runtime_id":"omp","reason":"missing capabilities: [read_only_sandbox]"}],"selected":{"id":"codex","version":"1.0.0","capabilities":["read_only_sandbox","workspace_write"],"captured_at":"2026-10-03T17:06:43.452545736Z"},"policy_id":"deterministic-priority","policy_version":"v1","priority":["omp","codex"]},"contract_version":"capability-v1","policy_version":"capability-v1","mode":"three-face","requirements":[{"role":"oracle","workspace_access":"read-only","required_capabilities":["read_only_sandbox"]},{"role":"striker","workspace_access":"workspace-write","required_capabilities":["workspace_write"]},{"role":"critic","workspace_access":"read-only","required_capabilities":["read_only_sandbox"]}],"requested_backend":"auto","runtime":{"id":"codex","version":"1.0.0","capabilities":["read_only_sandbox","workspace_write"],"captured_at":"2026-10-03T17:06:43.452545736Z"},"match":{"compatible":true,"required":["read_only_sandbox","workspace_write"],"available":["read_only_sandbox","workspace_write"],"missing":[],"backend_id":"codex","backend_version":"1.0.0"}}
+FAIL
+FAIL	asura/internal/backend	0.001s
+--- FAIL: TestStageBindingDaemonMixed (0.01s)
+    stage_binding_test.go:41: missing sealed stage plan
+FAIL
+FAIL	asura/internal/daemon	0.021s
+FAIL

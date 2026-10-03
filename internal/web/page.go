@@ -661,6 +661,42 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
     catch (err) { capabilityAudit.textContent = 'Runtime 契約：unsupported/unavailable'; return; }
     const contract = context && context.execution_contract;
     if (!contract) { capabilityAudit.textContent = 'Runtime 契約：legacy/unavailable'; return; }
+    if (contract.contract_version === 'stage-binding-v1') {
+      const plan = contract.stage_binding_plan;
+      const expected = contract.mode === 'direct' ? ['striker'] : contract.mode === 'three-face' ? ['oracle','striker','critic'] : [];
+      if (contract.policy_version !== 'capability-v1' || !plan || plan.mode !== contract.mode || !Array.isArray(plan.bindings) || plan.bindings.length !== expected.length || !expected.length) {
+        capabilityAudit.textContent = 'Stage binding：unsupported/unavailable'; return;
+      }
+      let trace;
+      try { trace = task.pipeline_trace ? JSON.parse(task.pipeline_trace) : null; } catch (err) { trace = null; }
+      const lines = ['Runtime 契約：stage-binding-v1', 'Requested backend：' + JSON.stringify(contract.requested_backend)];
+      for (let i = 0; i < expected.length; i++) {
+        const binding = plan.bindings[i];
+        const d = binding && binding.selection_decision;
+        if (!binding || binding.stage !== expected[i] || !binding.requirements || binding.requirements.role !== binding.stage ||
+            !d || d.policy_version !== 'v1' || !['explicit','deterministic-priority'].includes(d.policy_id) ||
+            !d.request || !['auto','explicit'].includes(d.request.mode) || !d.selected || !d.selected.id || !d.selected.version ||
+            !Array.isArray(d.candidates) || d.candidates.length > 32 || !Array.isArray(d.priority) || !Array.isArray(d.eligible) || !Array.isArray(d.rejected)) {
+          capabilityAudit.textContent = 'Stage binding：unsupported/unavailable'; return;
+        }
+        lines.push('Stage ' + binding.stage + '：' + d.selected.id + ' ' + d.selected.version,
+          'Snapshot：' + d.selected.captured_at,
+          'Requirements：' + JSON.stringify(binding.requirements),
+          'Requested selection：' + d.request.mode,
+          'Selection policy：' + d.policy_id + ' ' + d.policy_version,
+          'Runtime priority：' + JSON.stringify(d.priority),
+          'Eligible runtimes：' + JSON.stringify(d.eligible),
+          'Rejected runtimes：' + JSON.stringify(d.rejected),
+          'Candidates：' + JSON.stringify(d.candidates));
+        const actual = trace && Array.isArray(trace.stages) && trace.stages.find(s => s.name === binding.stage);
+        if (actual) {
+          lines.push('Actual runtime：' + (actual.backend_id || 'unavailable') + ' ' + (actual.backend_version || 'unavailable'));
+          lines.push('Execution guard：' + (actual.guard_error ? 'rejected (' + actual.guard_error + ')' : actual.execution_guard ? (actual.execution_guard.compatible ? 'compatible' : 'incompatible') : 'unavailable'));
+        }
+      }
+      if (trace && trace.guard_error) lines.push('Execution guard：rejected（' + trace.guard_error + '）');
+      capabilityAudit.textContent = lines.join('\n'); return;
+    }
     if (contract.contract_version !== 'capability-v1' || contract.policy_version !== 'capability-v1' || !contract.runtime || !contract.match) {
       capabilityAudit.textContent = 'Runtime 契約：unsupported/unavailable'; return;
     }

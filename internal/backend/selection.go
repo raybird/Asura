@@ -156,7 +156,7 @@ func resolveSelection(request RuntimeSelectionRequest, requirements []ExecutionR
 	return d, nil
 }
 
-func admitAutoRuntime(ctx context.Context, reg Registry, mode string, requirements []ExecutionRequirements, priority [][]string) (*ExecutionContract, error) {
+func admitAutoRuntime(ctx context.Context, reg Registry, mode string, priority [][]string) (*ExecutionContract, error) {
 	if mode == "" {
 		mode = "direct"
 	}
@@ -176,13 +176,9 @@ func admitAutoRuntime(ctx context.Context, reg Registry, mode string, requiremen
 	if len(priority) > 0 {
 		preferred = priority[0]
 	}
-	d, err := resolveSelection(RuntimeSelectionRequest{Mode: "auto"}, requirements, descriptors, preferred)
+	plan, err := planStageBindings(mode, RuntimeSelectionRequest{Mode: "auto"}, descriptors, preferred)
 	if err != nil {
 		return nil, err
 	}
-	match, err := MatchCapabilities(requirements, d.Selected)
-	if err != nil {
-		return nil, err
-	}
-	return &ExecutionContract{ContractVersion: CapabilityContractVersion, PolicyVersion: CapabilityContractVersion, Mode: mode, Requirements: requirements, RequestedBackend: "auto", Runtime: d.Selected, Match: match, SelectionDecision: d}, nil
+	return contractFromPlan(plan, "auto")
 }

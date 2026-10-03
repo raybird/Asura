@@ -95,6 +95,33 @@ func handleStatus(args []string, stdout, stderr io.Writer) int {
 			} else {
 				fmt.Fprintln(stdout, "Runtime selection: legacy/unavailable")
 			}
+			if plan := contract.StageBindingPlan; plan != nil {
+				var trace pipeline.PipelineTrace
+				_ = json.Unmarshal([]byte(task.PipelineTrace), &trace)
+				for _, binding := range plan.Bindings {
+					d := binding.SelectionDecision
+					fmt.Fprintf(stdout, "Stage %s: %s %s\nStage requirements: %v\nStage selection: %s\nStage policy: %s %s\nStage priority: %v\nStage eligible: %v\nStage rejected: %v\n", binding.Stage, d.Selected.ID, d.Selected.Version, binding.Requirements.RequiredCapabilities, d.Request.Mode, d.PolicyID, d.PolicyVersion, d.Priority, d.Eligible, d.Rejected)
+					for _, candidate := range d.Candidates {
+						fmt.Fprintf(stdout, "Stage candidate: %s %s required=%v available=%v missing=%v\n", candidate.Runtime.ID, candidate.Runtime.Version, candidate.Match.Required, candidate.Match.Available, candidate.Match.Missing)
+					}
+					for _, stage := range trace.Stages {
+						if stage.Name == string(binding.Stage) {
+							fmt.Fprintf(stdout, "Actual runtime: %s %s\n", stage.BackendID, stage.BackendVersion)
+							if stage.GuardError != "" {
+								fmt.Fprintf(stdout, "Execution guard: rejected (%s)\n", stage.GuardError)
+							} else if stage.ExecutionGuard != nil {
+								result := "incompatible"
+								if stage.ExecutionGuard.Compatible {
+									result = "compatible"
+								}
+								fmt.Fprintf(stdout, "Execution guard: %s\n", result)
+							} else {
+								fmt.Fprintln(stdout, "Execution guard: unavailable")
+							}
+						}
+					}
+				}
+			}
 			fmt.Fprintln(stdout, "Capability match: compatible")
 		}
 	} else {

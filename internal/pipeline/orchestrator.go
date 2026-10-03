@@ -103,7 +103,7 @@ func (o *PipelineOrchestrator) Preflight(ctx context.Context, mode, requested st
 }
 
 // Execute 依指定模式執行管線
-func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, execCtx *engine.ExecutionContext) (string, *PipelineTrace, error) {
+func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, execCtx *engine.ExecutionContext) (output string, resultTrace *PipelineTrace, resultErr error) {
 	if mode == "" {
 		mode = ModeDirect
 	}
@@ -113,58 +113,108 @@ func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, 
 		backendID = execCtx.Backend
 	}
 
-	var activeBackend backend.Backend
-	var backendVer string
-	if o.registry != nil {
-		b, err := o.registry.Get(backendID)
-		if err != nil {
-			// 未知後端在任何模型呼叫前 fail-closed 拒絕 (MBACK-003)
-			if execCtx != nil && execCtx.ExecutionContract != nil {
-				return "", &PipelineTrace{Mode: mode, BackendID: backendID, ExecutionContract: execCtx.ExecutionContract, GuardError: err.Error()}, fmt.Errorf("backend preflight failed: %w", err)
-			}
-			return "", nil, fmt.Errorf("backend preflight failed: %w", err)
-		}
-		activeBackend = b
-		backendVer, _ = b.Version(ctx)
-	}
-
-	// 2026-10-03：封存契約的需求保持不變，執行前只查核目前安全能力。
 	var contract *backend.ExecutionContract
-	var guard *backend.CapabilityMatch
 	if execCtx != nil {
 		contract = execCtx.ExecutionContract
 	}
-	requirements, reqErr := backend.RequirementsForMode(string(mode))
-	if contract != nil {
+	var backendVer string
+	var guard *backend.CapabilityMatch
+	stagePlan := contract != nil && (contract.ContractVersion == backend.StageBindingContractVersion || contract.StageBindingPlan != nil)
+	guards := map[backend.Role]*backend.CapabilityMatch{}
+	originalCtx := execCtx
+	failStage := func(role backend.Role, err error) *PipelineTrace {
+		binding, _ := contract.StageBindingPlan.Binding(role)
+		id := ""
+		if binding != nil {
+			id = binding.SelectionDecision.Selected.ID
+		}
+		return &PipelineTrace{Mode: mode, BackendID: backendID, ExecutionContract: contract, GuardError: err.Error(), Stages: []StageTrace{{Name: string(role), Status: StageFailed, BackendID: id, ExecutionGuard: guards[role], GuardError: err.Error(), Error: err.Error()}}}
+	}
+	if stagePlan {
 		if err := contract.Validate(string(mode), backendID); err != nil {
 			return "", &PipelineTrace{Mode: mode, BackendID: backendID, ExecutionContract: contract, GuardError: err.Error()}, err
 		}
-		requirements = contract.Requirements
-	}
-	if reqErr != nil {
-		return "", nil, reqErr
-	}
-	if activeBackend != nil {
-		m, err := backend.MatchCapabilities(requirements, backend.RuntimeDescriptor{ID: activeBackend.ID(), Version: backendVer, Capabilities: activeBackend.Capabilities()})
-		guard = &m
-		if err == nil && !m.Compatible {
-			err = &backend.CapabilityAdmissionError{RequestedBackend: backendID, Match: m}
-		}
-		if err != nil {
-			if contract != nil {
-				return "", &PipelineTrace{Mode: mode, BackendID: backendID, ExecutionContract: contract, ExecutionGuard: guard, GuardError: err.Error()}, err
+		for _, binding := range contract.StageBindingPlan.Bindings {
+			_, m, _, err := o.guardStage(ctx, originalCtx, binding.Stage, false)
+			guards[binding.Stage] = m
+			if err != nil {
+				return "", failStage(binding.Stage, err), err
 			}
-			return "", nil, err
 		}
-	} else if contract != nil {
-		err := fmt.Errorf("%w: sealed runtime unavailable", backend.ErrBackendNotFound)
-		return "", &PipelineTrace{Mode: mode, BackendID: backendID, ExecutionContract: contract, GuardError: err.Error()}, err
+		defer func() {
+			if resultTrace != nil {
+				for i := range resultTrace.Stages {
+					role := backend.Role(resultTrace.Stages[i].Name)
+					resultTrace.Stages[i].ExecutionGuard = guards[role]
+				}
+			}
+		}()
+	} else {
+		var activeBackend backend.Backend
+		if o.registry != nil {
+			b, err := o.registry.Get(backendID)
+			if err != nil {
+				// 未知後端在任何模型呼叫前 fail-closed 拒絕 (MBACK-003)
+				if execCtx != nil && execCtx.ExecutionContract != nil {
+					return "", &PipelineTrace{Mode: mode, BackendID: backendID, ExecutionContract: execCtx.ExecutionContract, GuardError: err.Error()}, fmt.Errorf("backend preflight failed: %w", err)
+				}
+				return "", nil, fmt.Errorf("backend preflight failed: %w", err)
+			}
+			activeBackend = b
+			backendVer, _ = b.Version(ctx)
+		}
+
+		// 2026-10-03：封存契約的需求保持不變，執行前只查核目前安全能力。
+		requirements, reqErr := backend.RequirementsForMode(string(mode))
+		if contract != nil {
+			if err := contract.Validate(string(mode), backendID); err != nil {
+				return "", &PipelineTrace{Mode: mode, BackendID: backendID, ExecutionContract: contract, GuardError: err.Error()}, err
+			}
+			requirements = contract.Requirements
+		}
+		if reqErr != nil {
+			return "", nil, reqErr
+		}
+		if activeBackend != nil {
+			m, err := backend.MatchCapabilities(requirements, backend.RuntimeDescriptor{ID: activeBackend.ID(), Version: backendVer, Capabilities: activeBackend.Capabilities()})
+			guard = &m
+			if err == nil && !m.Compatible {
+				err = &backend.CapabilityAdmissionError{RequestedBackend: backendID, Match: m}
+			}
+			if err != nil {
+				if contract != nil {
+					return "", &PipelineTrace{Mode: mode, BackendID: backendID, ExecutionContract: contract, ExecutionGuard: guard, GuardError: err.Error()}, err
+				}
+				return "", nil, err
+			}
+		} else if contract != nil {
+			err := fmt.Errorf("%w: sealed runtime unavailable", backend.ErrBackendNotFound)
+			return "", &PipelineTrace{Mode: mode, BackendID: backendID, ExecutionContract: contract, GuardError: err.Error()}, err
+		}
+		if execCtx != nil {
+			execCtx.BoundBackend = activeBackend
+		}
 	}
-	if execCtx != nil {
-		execCtx.BoundBackend = activeBackend
+	bindStage := func(role backend.Role) error {
+		if !stagePlan {
+			return nil
+		}
+		bound, m, ver, err := o.guardStage(ctx, originalCtx, role, true)
+		guards[role] = m
+		if err != nil {
+			return err
+		}
+		execCtx = bound
+		backendID = bound.BoundBackend.ID()
+		backendVer = ver
+		guard = m
+		return nil
 	}
 
 	if mode == ModeDirect {
+		if err := bindStage(backend.RoleStriker); err != nil {
+			return "", failStage(backend.RoleStriker, err), err
+		}
 		start := time.Now()
 		req, pErr := o.striker.Prepare(execCtx, nil)
 		if pErr != nil {
@@ -253,6 +303,12 @@ func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, 
 	}
 
 	// 1. Oracle Stage
+	if err := bindStage(backend.RoleOracle); err != nil {
+		failed := failStage(backend.RoleOracle, err)
+		trace.Stages = append(trace.Stages, failed.Stages...)
+		trace.GuardError = err.Error()
+		return "", trace, err
+	}
 	req1, pErr := o.oracle.Prepare(execCtx)
 	if pErr != nil {
 		return "", trace, fmt.Errorf("oracle prepare error: %w", pErr)
@@ -314,6 +370,12 @@ func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, 
 	})
 
 	// 2. Striker Stage (MBACK-010: 部分執行失敗保存 partial output，絕無第二次容錯嘗試)
+	if err := bindStage(backend.RoleStriker); err != nil {
+		failed := failStage(backend.RoleStriker, err)
+		trace.Stages = append(trace.Stages, failed.Stages...)
+		trace.GuardError = err.Error()
+		return trace.FinalResult, trace, err
+	}
 	req2, pErr := o.striker.Prepare(execCtx, plan)
 	if pErr != nil {
 		return "", trace, fmt.Errorf("striker prepare error: %w", pErr)
@@ -377,6 +439,12 @@ func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, 
 	})
 
 	// 3. Critic Stage
+	if err := bindStage(backend.RoleCritic); err != nil {
+		failed := failStage(backend.RoleCritic, err)
+		trace.Stages = append(trace.Stages, failed.Stages...)
+		trace.GuardError = err.Error()
+		return trace.FinalResult, trace, err
+	}
 	req3, pErr := o.critic.Prepare(execCtx, plan, strikerOut)
 	if pErr != nil {
 		return strikerOut, trace, fmt.Errorf("critic prepare error: %w", pErr)
