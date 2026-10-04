@@ -1,6 +1,6 @@
 # Issue 41 — EA-TBD 技術提案
 
-2026-10-04 提案；全部內容待使用者核准，入口為 README。
+2026-10-04 提案；2026-10-04 使用者「核准」，依 README 核准紀錄生效。
 
 ## 方案選型
 
@@ -22,7 +22,7 @@
 + same transaction: Task terminal CAS + unique terminal audit event
 ```
 
-Audit 是觀測紀錄，不能提供 backend 綁定、替代 contract validator 或重新 selection。建議要求觀測寫入成功才開始下一個副作用；這是記錄可靠性的失敗政策，沒有賦予 audit 選擇 runtime 的權力，仍須核准。
+Audit 是觀測紀錄，不能提供 backend 綁定、替代 contract validator 或重新 selection。建議要求觀測寫入成功才開始下一個副作用；這是記錄可靠性的失敗政策，沒有賦予 audit 選擇 runtime 的權力，已於 2026-10-04 核准。
 
 ## EA-TBD-1～16 提案
 
@@ -86,4 +86,4 @@ EXAUD-016 覆蓋所有實作的既有功能回歸。
 
 ## 待決與限制
 
-2026-10-04 尚待核准上述保存與失敗政策，以及 README 的 EXAUD-001～019。特別是 rejection 僅即時回應、fail-closed 寫入和 crash 計數 unknown 均是可觀察行為選擇，不以 `/dev-cycle issue:41` 自動視為同意。raw PipelineTrace 與 Task.Result 既有保存不在本期擴大清理，安全保證對本期新增 audit persistence／query／projection 適用。
+2026-10-04 使用者已核准上述保存與失敗政策，以及 README 的 EXAUD-001～019。特別是 rejection 僅即時回應、fail-closed 寫入和 crash 計數 unknown 均是可觀察行為選擇，不以 `/dev-cycle issue:41` 自動視為同意。raw PipelineTrace 與 Task.Result 既有保存不在本期擴大清理，安全保證對本期新增 audit persistence／query／projection 適用。

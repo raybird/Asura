@@ -25,6 +25,7 @@ assert set(re.findall(r"^\| R(\d+) ", technical, re.M)) == {
 }
 assert "**分級**: Large" in readme and "**風險**: High" in readme
 plan = (root / "implementation-plan.md").read_text()
-for phase in range(6):
-    assert f"| P{phase} | 待核准，不可實作 |" in plan
-print("PASS: files, links, 19 scenarios/approval rows, EA-TBD 1-16, R1-18, gated phases")
+for task in ("P0.1", "P1.1", "P2.1", "P3.1", "P4.1", "P5.1", "P5.2"):
+    assert f"### Task {task}" in plan
+assert len(re.findall(r"\| EXAUD-\d{3} \| 2026-10-04 \| 已核准 \|", readme)) == 19
+print("PASS: files, links, 19 approved scenarios, EA-TBD 1-16, R1-18, seven tasks")

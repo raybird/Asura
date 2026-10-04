@@ -1,6 +1,6 @@
 # Issue 41 — 實作計畫
 
-2026-10-04 草案；所有階段待 README 的驗收與 EA-TBD 提案核准。以下為不可執行的規劃概要；核准後由 decompose 在本檔細化 Phase / Task，不建立第二份清單。
+2026-10-04 使用者「核准」；本檔為唯一任務來源。首要驗證先於依賴它的產品實作，狀態與證據在下列 Task 維護。
 
 ## 設計與使用方式
 
@@ -14,18 +14,63 @@
 | Web task detail 的 trace 摘要 | 增加固定 decision chain、sealed/observed/actual、guard、terminal、completeness |
 | admission error 附 inventory | 附安全 normalized rejection 摘要，不新增失敗 Task |
 
-## 階段概要與相依
+## Phase / Task 與相依
 
-| Phase | 狀態 | 產出與相依 | 驗收 | 完成判準 |
-|---|---|---|---|---|
-| P0 | 待核准，不可實作 | 原子性／故障／recovery characterization 與最小持久化實驗；依提案核准 | 009～011、015、017 | 故障注入證明 Task/header/event/recall 同交易 rollback；CAS 取消競態不雙終態；crash prefix 可辨完整度；確認各 boundary 可持久化而不改 selection |
-| P1 | 待核准，不可實作 | audit-v1 value model、canonical digest、normalized admission、SQLite header/events 與 migration；依 P0 | 001～005、014、015、017、019 | 新舊 DB 均可讀；固定 goldens；32 candidates 及 size 邊界；typed validation 拒絕錯序／錯 digest |
-| P2 | 待核准，不可實作 | local/daemon/cron admission 與 typed pipeline/backend Run observation；依 P1 | 001～008、018 | Direct/mixed goldens；guard Run=0；runtime failure、postprocessing failure 分層；persisted Oracle completion 不依 terminal trace |
-| P3 | 待核准，不可實作 | engine CAS/CancelTask/recovery/redelivery；依 P2 | 009～011、013、017 | reopen DB crash fixture；no phantom execution；同 request/header/event 唯一；完整故障矩陣與回歸 |
-| P4 | 待核准，不可實作 | GetTaskAudit、IPC、CLI、Web 與常青文件；依 P3 | 012～015、019 | 所有讀取 probe/selection/Run=0；authorization 負向；各 surface secret/bounds assertion；Web 實際 renderer 驗證 |
-| P5 | 待核准，不可實作 | 最終回歸、code-simplify、commit、PR、獨立審查；依 P4 | 016 與全部 | go vet ./...、go test -count=1 -race ./...、go build ./cmd/asura；固定交付 BASE/HEAD，持久化 review artifact |
+### Task P0.1 — 原子性與 lifecycle 故障實驗
+- 產出與範圍：真 SQLite Task/recall rollback、CAS 取消競態與 crash boundary 基線；不改產品行為。
+- 相依：無。
+- 責任驗收：EXAUD-017（產品證據由 P1.1/P3.1 支援）。
+- 完成判準：先確認既有交易與取消單一終態，再以觸發器注入確認 audit 缺失的真實紅燈。
+- 驗證：既有 storage/engine cancellation characterization；故障注入對照組，記錄命令/exit code。
+- 狀態：⏳ 進行中。
 
-編號欄的短號皆指 EXAUD- 前綴；完整 Scenario 集合只有 README 維護。
+### Task P1.1 — Audit 模型、admission 正規化與 SQLite persistence
+- 產出與範圍：internal/audit、storage header/events/migration、Task+recall+audit 同交易、readonly fold/validation。
+- 相依：P0.1。
+- 責任驗收：EXAUD-003、004、014、015。
+- 完成判準：有界 allowlist、immutable/idempotent events、offline provenance、tamper 拒絕；故障全部 rollback。
+- 驗證：單元紅綠驗 canonical/transition/security；SQLite 整合紅綠驗交易與 query 不變動。
+- 狀態：📝 待實作。
+
+### Task P2.1 — Admission 與實際執行 observations
+- 產出與範圍：pipeline guard/stage/Run、engine context recorder、local/daemon/cron admission、rejection projection。
+- 相依：P1.1。
+- 責任驗收：EXAUD-001、002、005、006、007、008、018、019。
+- 完成判準：Direct/mixed fixtures；guard failure Run=0；runtime/processing/terminal 分層；intent 與 confirmed return 不混淆。
+- 驗證：計數 backend + 真 SQLite 外層；guard 和 stage 內層紅綠；不 mock recorder。
+- 狀態：📝 待實作。
+
+### Task P3.1 — Cancellation、restart、redelivery 與 terminal 原子性
+- 產出與範圍：storage CAS/terminal/recovery、engine cancel、daemon startup/redelivery。
+- 相依：P2.1。
+- 責任驗收：EXAUD-009、010、011、013。
+- 完成判準：取消協調器宣告終態、completed stage 不改寫；reopen/crash 保留 prefix；events/header 不重複；legacy 不造歷史。
+- 驗證：同步 barrier 競態、SQLite reopen 與 fault injection；回歸真 process-group cancellation。
+- 狀態：📝 待實作。
+
+### Task P4.1 — Read-only IPC、CLI、Web audit
+- 產出與範圍：GetTaskAudit、task_audit IPC、asura audit、GET task audit 及固定 Web projection。
+- 相依：P3.1。
+- 責任驗收：EXAUD-012。
+- 完成判準：每個 query probe/selection/Run=0、授權不可旁路、response bounded、sentinel 不出現在任何新 surface。
+- 驗證：真 IPC/HTTP 與 CLI 紅綠；實際 renderer 檢查；支援 EXAUD-001/002/014/019。
+- 狀態：📝 待實作。
+
+### Task P5.1 — 常青文件、精煉與完整回歸
+- 產出與範圍：README/架構文件、範圍內 code-simplify、測試與證據映射。
+- 相依：P4.1。
+- 責任驗收：EXAUD-016。
+- 完成判準：go vet ./...、go test -count=1 -race ./...、go build ./cmd/asura 全通過；全部 Scenario 的實際證據集合相等。
+- 驗證：四 runtime hermetic 回歸；靜態文件檢查；無真模型呼叫。
+- 狀態：📝 待實作。
+
+### Task P5.2 — PR 與獨立審查交付
+- 產出與範圍：create-commit、create-pr、固定 BASE/HEAD 的獨立 reviewer 與持久化報告。
+- 相依：P5.1。
+- 責任：全部驗收的交付證據，不新增驗收編號。
+- 完成判準：PR Proof of Test 完整，獨立 review PASS 且 artifact 已保存；等待使用者合併。
+- 驗證：review-evidence.md；有 MUST FIX 則修正並重審。
+- 狀態：📝 待實作。
 
 ## 測試策略
 
@@ -42,5 +87,5 @@
 
 - [x] 2026-10-04 現況、最小邊界、兩份分析的觸發理由與 EA-TBD 覆蓋已記錄。
 - [x] 2026-10-04 所有 Scenario 映射至單一計畫概要，待核准項未列為可執行 Task。
-- [ ] 保存使用者核准與規格 baseline commit，decompose 細化任務。
+- [x] 2026-10-04 保存使用者核准與規格 baseline commit 6adb11c，decompose 細化七項任務。
 - [ ] 依核准提案完成實作、紅綠重構與獨立 review。

@@ -2,7 +2,7 @@
 
 ## 概述
 
-來源：[GitHub #41](https://github.com/raybird/Asura/issues/41)，Phase 4E Execution Provenance & Decision Chain。2026-10-04 依使用者 `/dev-cycle issue:41` 建立技術提案；基準 main `2f583c7f257fa9fd3b974ff94f5bbd82c787e4b5`，PR #40 已於 2026-10-04 合併。
+來源：[GitHub #41](https://github.com/raybird/Asura/issues/41)，Phase 4E Execution Provenance & Decision Chain。2026-10-04 依使用者 `/dev-cycle issue:41` 建立技術提案；2026-10-04 使用者回覆「核准」，授權 EA-TBD-1～16、EXAUD-001～019 及 TBD-1～4；基準 main `2f583c7f257fa9fd3b974ff94f5bbd82c787e4b5`，PR #40 已於 2026-10-04 合併。
 
 建立 bounded、machine-readable、persisted audit，說明 intent → admission → sealed binding → guard → observed execution → terminal。ExecutionContract / StageBindingPlan 仍是 execution truth，Task lifecycle 仍有終態宣告權。提案採 immutable admission header + append-only events + read-only fold，不引入 routing、retry、failover、federation、memory 新功能或 metrics 平台。
 
@@ -35,7 +35,7 @@ storage/sqlite_utility.go 的變更僅為 Task + recall + audit 同交易，不�
 
 ## Gherkin 驗收劇本
 
-以下保留來源 EXAUD-001～016，補上提案必要的故障與分層驗收 EXAUD-017～019；全部待核准。
+以下保留來源 EXAUD-001～016，補上提案必要的故障與分層驗收 EXAUD-017～019；全部於 2026-10-04 核准。
 
 ```gherkin
 Feature: 有界且可信的 Control Plane execution provenance
@@ -180,31 +180,31 @@ Feature: 有界且可信的 Control Plane execution provenance
 
 ## Gherkin 核准紀錄
 
-- **核准 commit**: 尚未核准；本次規劃提交是提案基線，不是核准 SHA。
+- **核准 commit**: 6adb11c — 使用者核准的提案規格基線；核准紀錄由本次提交保存。
 - **需求來源**: GitHub #41（2026-10-04 建立）R1～R18 與 EXAUD-001～016；本次使用者 `/dev-cycle issue:41` 授權調查與準備規格，沒有定案 EA-TBD 的原話。
-- **核准來源**: 待使用者核准本提案；新增 EXAUD-017～019 與選定政策亦待核准。
+- **核准來源**: 2026-10-04 使用者回覆「核准」，承接前一回合完整提案及驗收規格的核准問題。
 
 | Scenario | 核准日期 | 狀態 |
 |---|---|---|
-| EXAUD-001 | - | 待核准 |
-| EXAUD-002 | - | 待核准 |
-| EXAUD-003 | - | 待核准 |
-| EXAUD-004 | - | 待核准 |
-| EXAUD-005 | - | 待核准 |
-| EXAUD-006 | - | 待核准 |
-| EXAUD-007 | - | 待核准 |
-| EXAUD-008 | - | 待核准 |
-| EXAUD-009 | - | 待核准 |
-| EXAUD-010 | - | 待核准 |
-| EXAUD-011 | - | 待核准 |
-| EXAUD-012 | - | 待核准 |
-| EXAUD-013 | - | 待核准 |
-| EXAUD-014 | - | 待核准 |
-| EXAUD-015 | - | 待核准 |
-| EXAUD-016 | - | 待核准 |
-| EXAUD-017 | - | 待核准 |
-| EXAUD-018 | - | 待核准 |
-| EXAUD-019 | - | 待核准 |
+| EXAUD-001 | 2026-10-04 | 已核准 |
+| EXAUD-002 | 2026-10-04 | 已核准 |
+| EXAUD-003 | 2026-10-04 | 已核准 |
+| EXAUD-004 | 2026-10-04 | 已核准 |
+| EXAUD-005 | 2026-10-04 | 已核准 |
+| EXAUD-006 | 2026-10-04 | 已核准 |
+| EXAUD-007 | 2026-10-04 | 已核准 |
+| EXAUD-008 | 2026-10-04 | 已核准 |
+| EXAUD-009 | 2026-10-04 | 已核准 |
+| EXAUD-010 | 2026-10-04 | 已核准 |
+| EXAUD-011 | 2026-10-04 | 已核准 |
+| EXAUD-012 | 2026-10-04 | 已核准 |
+| EXAUD-013 | 2026-10-04 | 已核准 |
+| EXAUD-014 | 2026-10-04 | 已核准 |
+| EXAUD-015 | 2026-10-04 | 已核准 |
+| EXAUD-016 | 2026-10-04 | 已核准 |
+| EXAUD-017 | 2026-10-04 | 已核准 |
+| EXAUD-018 | 2026-10-04 | 已核准 |
+| EXAUD-019 | 2026-10-04 | 已核准 |
 
 ## 風險與首要驗證
 
@@ -218,10 +218,10 @@ Feature: 有界且可信的 Control Plane execution provenance
 
 | 編號 | 事項 | 狀態 | 影響 |
 |---|---|---|---|
-| TBD-1 | 核准 EA-TBD-1～16 的完整模型、bounded normalization、schema/bounds/integrity 與 API 提案 | 待確認 | EXAUD-001～019，全部實作相依 |
-| TBD-2 | rejection 僅即時返回，不新增 persisted AdmissionAudit 或 rejected Task | 待確認 | EXAUD-005、011；保存範圍與拒絕重送語意 |
-| TBD-3 | audit 寫入採 fail-closed：未能保存觀測不啟動後續副作用；Task terminal 與 event 同交易，recovery 失敗停止 startup | 待確認 | EXAUD-006～011、017；成功／失敗行為 |
-| TBD-4 | crash/legacy 用 partial/legacy；run intent 不等於精確呼叫，provider model calls 可 unknown；保留既有 trace 診斷 | 待確認 | EXAUD-010、013、018、019；完整度與使用者呈現 |
+| TBD-1 | 核准 EA-TBD-1～16 的完整模型、bounded normalization、schema/bounds/integrity 與 API 提案 | 已解決：2026-10-04 使用者核准 | EXAUD-001～019，全部實作相依 |
+| TBD-2 | rejection 僅即時返回，不新增 persisted AdmissionAudit 或 rejected Task | 已解決：2026-10-04 使用者核准 | EXAUD-005、011；保存範圍與拒絕重送語意 |
+| TBD-3 | audit 寫入採 fail-closed：未能保存觀測不啟動後續副作用；Task terminal 與 event 同交易，recovery 失敗停止 startup | 已解決：2026-10-04 使用者核准 | EXAUD-006～011、017；成功／失敗行為 |
+| TBD-4 | crash/legacy 用 partial/legacy；run intent 不等於精確呼叫，provider model calls 可 unknown；保留既有 trace 診斷 | 已解決：2026-10-04 使用者核准 | EXAUD-010、013、018、019；完整度與使用者呈現 |
 
 ## 本次規劃驗證
 
@@ -231,6 +231,7 @@ Feature: 有界且可信的 Control Plane execution provenance
 
 | 日期 | 異動 | 負責人 |
 |---|---|---|
+| 2026-10-04 | 使用者「核准」完整提案、驗收與四項政策，開始實作 | 使用者 |
 | 2026-10-04 | 依 GitHub #41 盤點已合併 Phase 4D，建立四份規劃文件與 EA-TBD 提案，等待安全／失敗政策及驗收核准 | Codex |
 
 ---
@@ -240,4 +241,4 @@ Feature: 有界且可信的 Control Plane execution provenance
 
 **風險**: High — provenance 原子性、crash/cancel 一致性與秘密保存邊界
 
-**狀態**: 技術提案已建立，待核准；未進入實作
+**狀態**: 已核准，實作中
