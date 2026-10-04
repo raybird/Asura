@@ -149,6 +149,9 @@ func (s *SQLiteStore) getTaskAuditTx(ctx context.Context, tx *sql.Tx, id string,
 		if len(raw) > audit.MaxRecordBytes {
 			return nil, audit.ErrInvalid
 		}
+		if r.Validate() != nil {
+			return nil, audit.ErrInvalid
+		}
 		return r, nil
 	}
 	if err != nil {
@@ -201,7 +204,7 @@ func (s *SQLiteStore) AppendTaskAudit(ctx context.Context, id string, event audi
 	if event.Kind == "terminal" || event.Kind == "recovery" || event.Kind == "task_started" || event.Kind == "cancel_requested" {
 		return audit.ErrInvalid
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginAuditWrite(ctx)
 	if err != nil {
 		return audit.ErrPersistence
 	}
@@ -333,7 +336,7 @@ func (s *SQLiteStore) updateTaskStateAudit(ctx context.Context, id string, statu
 }
 
 func (s *SQLiteStore) recoverInterruptedTasksAudit(ctx context.Context) (int64, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginAuditWrite(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -380,4 +383,18 @@ func (s *SQLiteStore) TaskAuditWorkspace(ctx context.Context, id string) (string
 		return "", ErrTaskNotFound
 	}
 	return workspace, err
+}
+
+// 2026-10-04：先取得 WAL writer lock，避免 deferred read snapshot 升級時 SQLITE_BUSY。
+// WHERE 0 不改任何 header bytes；CAS/CreateTask 已先寫入，不需此步驟。
+func (s *SQLiteStore) beginAuditWrite(ctx context.Context) (*sql.Tx, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE task_execution_audits SET digest=digest WHERE 0`); err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+	return tx, nil
 }

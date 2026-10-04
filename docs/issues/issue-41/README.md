@@ -241,6 +241,6 @@ Feature: 有界且可信的 Control Plane execution provenance
 
 **風險**: High — provenance 原子性、crash/cancel 一致性與秘密保存邊界
 
-**狀態**: 實作與驗證完成，PR／獨立審查中
+**狀態**: 修正與完整驗證完成，等待新固定 HEAD 的獨立重審判定；PASS 後等待合併
 
 2026-10-04：實作證據與逐項 EXAUD 映射見 [verification.md](./evidence/verification.md)；核准 Gherkin 保持不變。

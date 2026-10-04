@@ -102,7 +102,7 @@ go build -o bin/asura ./cmd/asura
 
 2026-10-04：`audit` 讀取 `execution-audit-v1` 持久化資料，顯示 intent、接受時 availability／能力篩選／priority／policy、各 stage 的 sealed／guard observed／confirmed actual runtime，以及獨立的 stage outcome 與 Task terminal。Web 任務頁提供相同摘要，HTTP 入口為已登入的 `GET /api/tasks/{id}/audit`。查詢不重新 probe、選擇或執行 runtime；daemon 路徑沿用 workspace 授權，授權失敗不改走本機 DB。
 
-2026-10-04：run intent 只代表執行意圖；confirmed return 才代表已確認的 runtime 返回，未返回顯示 unknown。模型內部呼叫數固定標示 unknown。crash recovery 保留已完成 stage 與未完成 prefix，呈現 partial；升級前 Task 無 audit header 時呈現 legacy，不從 trace 補造歷史。稽核只保存有界 enum、descriptor、digest 與 lifecycle，不保存 prompt、memory、output 或任意 error。結構與 hash chain 偵測不一致，不提供不可否認性；CLI 本機 DB 的存取權由作業系統控制。
+2026-10-04：run intent 只代表執行意圖；confirmed return 才代表已確認的 runtime 返回，未返回顯示 unknown。模型內部呼叫數固定標示 unknown。crash recovery 保留已完成 stage 與未完成 prefix，呈現 partial；升級前 Task 無 audit header 時呈現 legacy，不從 trace 補造歷史；capability-v1 的候選 match 是原本全 Task 的一次決策，不能解讀為新的 per-stage 選擇。稽核只保存有界 enum、descriptor、digest 與 lifecycle，不保存 prompt、memory、output 或任意 error。結構與 hash chain 偵測不一致，不提供不可否認性；CLI 本機 DB 的存取權由作業系統控制。
 
 #### 查詢任務狀態 (status)
 ```bash

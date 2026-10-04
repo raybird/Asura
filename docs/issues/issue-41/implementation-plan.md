@@ -70,7 +70,7 @@
 - 責任：全部驗收的交付證據，不新增驗收編號。
 - 完成判準：PR Proof of Test 完整，獨立 review PASS 且 artifact 已保存；等待使用者合併。
 - 驗證：review-evidence.md；有 MUST FIX 則修正並重審。
-- 狀態：⏳ 2026-10-04，實作與驗證完成；PR／固定 HEAD 獨立審查中，完成狀態由 review artifact 的流程判定確認。
+- 狀態：⏳ 2026-10-04，PR [#42](https://github.com/raybird/Asura/pull/42) 已建立，首輪 [review-30cc401.md](./review-30cc401.md) RETURN 的三項 MUST FIX 及 CI WAL regression 已修正，最終完整 race／vet／build 通過；等待新固定 HEAD 重審，最新有效 review artifact 為 PASS 時本 Task 完成並等待合併，RETURN 時繼續修正。
 
 ## 測試策略
 

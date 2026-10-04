@@ -1,0 +1,6 @@
+=== RUN   TestExecutionAuditConcurrentWriter
+    sqlite_execution_audit_test.go:500: observation failed under concurrent metadata writer: audit_persistence_failed
+--- FAIL: TestExecutionAuditConcurrentWriter (0.05s)
+FAIL
+FAIL	asura/internal/storage	0.055s
+FAIL

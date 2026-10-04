@@ -129,6 +129,7 @@ func handleAsk(args []string, stdout, stderr io.Writer) int {
 		MemoryRecall: recallMode,
 	})
 	if err != nil {
+		printAdmissionRejection(stderr, err, *customID, *mode, bID)
 		fmt.Fprintf(stderr, "error: %v\n", err)
 		return 1
 	}

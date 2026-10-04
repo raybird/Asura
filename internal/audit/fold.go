@@ -11,9 +11,7 @@ func Fold(h Header, events []Event, taskState string) (Record, error) {
 	if h.Validate() != nil || len(events) > MaxEvents {
 		return r, ErrInvalid
 	}
-	switch taskState {
-	case "pending", "queued", "running", "cancelling", "completed", "failed", "cancelled":
-	default:
+	if !validTaskState(taskState) {
 		return r, ErrInvalid
 	}
 	for _, b := range h.Admission.Bindings {
@@ -208,19 +206,29 @@ func (r *Record) Validate() error {
 		return ErrInvalid
 	}
 	if r.Completeness == "legacy" {
-		if len(r.Events) != 0 || r.Terminal != nil || len(r.Header.TaskID) > 256 || len(r.Stages) > 3 || r.Integrity != "valid" && r.Integrity != "unavailable" {
+		if len(r.Events) != 0 || r.Terminal != nil || !validTaskState(r.TaskState) || !validIdentity(r.Header.TaskID) || r.Header.Schema != Version || r.Header.CreatedAt.IsZero() {
 			return ErrInvalid
 		}
-		if r.Header.ContractDigest != "" && r.Header.Validate() != nil {
-			return ErrInvalid
-		}
-		for _, s := range r.Stages {
-			if s.Status != "not_started" || s.Reachability != "not_reached" || s.RunIntent || s.RunReturned || s.ActualRuntime != "" {
+		if r.Header.ContractDigest != "" {
+			if r.Integrity != "valid" {
+				return ErrInvalid
+			}
+			prefix, err := Fold(r.Header, []Event{}, "pending")
+			if err != nil || Digest(prefix.Stages) != Digest(r.Stages) {
+				return ErrInvalid
+			}
+		} else {
+			if r.Header.Mode != "" && r.Header.Mode != "direct" && r.Header.Mode != "three-face" || r.Integrity != "unavailable" || len(r.Stages) != 0 {
+				return ErrInvalid
+			}
+			expected := Header{Schema: Version, TaskID: r.Header.TaskID, Mode: r.Header.Mode, CreatedAt: r.Header.CreatedAt}
+			if Digest(expected) != Digest(r.Header) {
 				return ErrInvalid
 			}
 		}
 		return nil
 	}
+
 	expected, err := Fold(r.Header, r.Events, r.TaskState)
 	if err != nil || Digest(expected) != Digest(r) {
 		return ErrInvalid

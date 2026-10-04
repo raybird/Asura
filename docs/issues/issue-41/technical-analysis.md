@@ -87,3 +87,10 @@ EXAUD-016 覆蓋所有實作的既有功能回歸。
 ## 待決與限制
 
 2026-10-04 使用者已核准上述保存與失敗政策，以及 README 的 EXAUD-001～019。特別是 rejection 僅即時回應、fail-closed 寫入和 crash 計數 unknown 均是可觀察行為選擇，不以 `/dev-cycle issue:41` 自動視為同意。raw PipelineTrace 與 Task.Result 既有保存不在本期擴大清理，安全保證對本期新增 audit persistence／query／projection 適用。
+
+
+## 實作查核補充（2026-10-04）
+
+2026-10-04：獨立 review 的 legacy auto 查核確認 capability-v1 原 SelectionDecision 是整個 Task 一次選擇。audit 保留該候選的全 mode match、priority、policy 與 sealed selected，在各必要 stage 引用同一歷史決策；不補造 stage-binding-v1 的 per-stage selection。legacy 無 contract 則只接受最小 allowlist header 與 mode/state，非法自由文字回固定 invalid。CLI submission 以 typed safe rejection 傳遞 immediate summary/digest，保留既有 error 契約，仍不保存 rejected Task。
+
+2026-10-04：CI 揭露 WAL deferred transaction 的 read→write 升級競態。audit append／recovery 在任何讀取前取得 writer lock（無 row 被改動的 UPDATE WHERE 0），避免另一個 metadata writer commit 後 snapshot 過期。query 保持 read-only；CAS／CreateTask 已先寫入，不新增 runtime retry 或 admission。故障仍 fail-closed。

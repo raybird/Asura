@@ -1,0 +1,21 @@
+ok  	asura/cmd/asura	5.036s
+ok  	asura/docs/issues/issue-19/evidence	2.634s
+ok  	asura/internal/audit	1.012s
+ok  	asura/internal/auth	1.010s
+ok  	asura/internal/backend	1.186s
+ok  	asura/internal/backend/antigravity	1.017s
+ok  	asura/internal/backend/clisandbox	3.619s
+ok  	asura/internal/backend/codex	1.357s
+ok  	asura/internal/backend/omp	1.059s
+ok  	asura/internal/backend/opencode	23.244s
+ok  	asura/internal/contextwin	1.015s
+ok  	asura/internal/cron	1.609s
+ok  	asura/internal/daemon	20.335s
+ok  	asura/internal/engine	10.764s
+ok  	asura/internal/gitmem	8.336s
+ok  	asura/internal/pipeline	1.444s
+ok  	asura/internal/recall	1.017s
+ok  	asura/internal/storage	83.099s
+ok  	asura/internal/web	1.828s
+ok  	asura/tests/integration	255.908s
+exit_code=0

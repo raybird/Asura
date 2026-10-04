@@ -4,8 +4,10 @@ import (
 	"asura/internal/audit"
 	"asura/internal/backend"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -380,5 +382,123 @@ func TestExecutionAuditLegacyContracts(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// 2026-10-04：獨立 review R1，舊 capability auto 決策仍可讀且不 backfill。
+func TestExecutionAuditLegacyAuto(t *testing.T) {
+	for _, mode := range []string{"direct", "three-face"} {
+		t.Run(mode, func(t *testing.T) {
+			s, err := NewSQLiteStore(filepath.Join(t.TempDir(), "db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer s.Close()
+			reg := backend.NewRegistry()
+			reg.Register(&auditRuntime{})
+			c, err := backend.AdmitRuntime(context.Background(), reg, mode, "auto")
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.InventorySnapshot = nil
+			c.StageBindingPlan = nil
+			c.ContractVersion = backend.CapabilityContractVersion
+			c.Match, err = backend.MatchCapabilities(c.Requirements, c.Runtime)
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.SelectionDecision.Candidates[0].Match = c.Match
+			if err = c.Validate(mode, "codex"); err != nil {
+				t.Fatal(err)
+			}
+			raw, _ := json.Marshal(map[string]any{"execution_contract": c})
+			_, err = s.db.Exec(`INSERT INTO tasks(id,workspace,prompt,status,execution_mode,backend,resolved_context,created_at,updated_at) VALUES('legacy-auto','/a','private','completed',?,'codex',?,?,?)`, mode, string(raw), time.Now().UTC(), time.Now().UTC())
+			if err != nil {
+				t.Fatal(err)
+			}
+			r, err := s.GetTaskAudit(context.Background(), "legacy-auto")
+			if err != nil {
+				t.Fatalf("valid historical auto rejected: %v", err)
+			}
+			if r.Completeness != "legacy" || r.Header.RequestedBackend != "auto" || len(r.Events) != 0 || r.Validate() != nil {
+				t.Fatalf("unsafe auto history %+v", r)
+			}
+			for _, b := range r.Header.Admission.Bindings {
+				if b.Policy != backend.SelectionPolicyID || b.Selected != "codex" || len(b.Candidates) != 1 {
+					t.Fatalf("lost decision %+v", b)
+				}
+			}
+		})
+	}
+}
+
+// 2026-10-04：獨立 review R2，非法 legacy mode/state 不可原樣回傳。
+func TestExecutionAuditLegacyInvalidEnums(t *testing.T) {
+	for _, column := range []string{"execution_mode", "status"} {
+		t.Run(column, func(t *testing.T) {
+			s, err := NewSQLiteStore(filepath.Join(t.TempDir(), "db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer s.Close()
+			if err = s.CreateTask(context.Background(), &Task{ID: "legacy-bad", Status: StatusCompleted}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = s.db.Exec(`UPDATE tasks SET `+column+`=? WHERE id='legacy-bad'`, "secret-sentinel\nforged history"); err != nil {
+				t.Fatal(err)
+			}
+			r, err := s.GetTaskAudit(context.Background(), "legacy-bad")
+			if err == nil && r.Validate() == nil {
+				t.Fatal("unsafe legacy enum accepted")
+			}
+		})
+	}
+}
+
+// 2026-10-04：CI regression，WAL 同時有其他 metadata writer 時 observation 不應失敗。
+func TestExecutionAuditConcurrentWriter(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "db")
+	s, err := NewSQLiteStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	for i := 0; i < 40; i++ {
+		task := executionAuditTask(t, fmt.Sprintf("writer-%d", i))
+		if err = s.CreateTask(context.Background(), task); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = s.UpdateTaskStatusIfPendingOrQueued(context.Background(), task.ID, StatusRunning); err != nil {
+			t.Fatal(err)
+		}
+	}
+	other, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Close()
+	other.SetMaxOpenConns(1)
+	if _, err = other.Exec(`PRAGMA busy_timeout=100`); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	ready := make(chan struct{})
+	go func() {
+		defer close(done)
+		close(ready)
+		for ctx.Err() == nil {
+			_, _ = other.ExecContext(ctx, `UPDATE tasks SET updated_at=CASE WHEN updated_at='2026-10-04T00:00:00Z' THEN '2026-10-04T00:00:01Z' ELSE '2026-10-04T00:00:00Z' END`)
+			time.Sleep(time.Millisecond)
+		}
+	}()
+	<-ready
+	defer func() { cancel(); <-done }()
+	for i := 0; i < 40; i++ {
+		id := fmt.Sprintf("writer-%d", i)
+		err = s.AppendTaskAudit(context.Background(), id, audit.Event{Kind: "guard_started", Stage: backend.RoleOracle, Scope: "stage_execution", State: "running", Reason: "none", Layer: "guard"})
+		if err != nil {
+			t.Fatalf("observation failed under concurrent metadata writer: %v", err)
+		}
 	}
 }

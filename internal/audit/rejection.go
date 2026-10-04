@@ -69,3 +69,12 @@ func (r *Rejection) Validate() error {
 	}
 	return nil
 }
+
+// 2026-10-04：保留既有 error 契約，另外傳遞有界即時 projection。
+type RejectionError struct {
+	Rejection *Rejection
+	Cause     error
+}
+
+func (e *RejectionError) Error() string { return e.Cause.Error() }
+func (e *RejectionError) Unwrap() error { return e.Cause }

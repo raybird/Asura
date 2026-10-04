@@ -2,10 +2,12 @@ package main
 
 import (
 	"asura/internal/audit"
+	"asura/internal/backend"
 	"asura/internal/daemon"
 	"asura/internal/storage"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -85,4 +87,20 @@ func handleAudit(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "Terminal: %s reason=%s layer=%s stage=%s completed=%d intents=%d returns=%d evidence=%s model_calls=%s cancel_phase=%s\n", t.State, t.Reason, t.FailureLayer, t.FailingStage, t.CompletedStages, t.RunIntents, t.ConfirmedReturns, t.InvocationEvidence, t.ModelCalls, t.CancelPhase)
 	}
 	return 0
+}
+
+func printAdmissionRejection(w io.Writer, err error, request, mode, requested string) {
+	var transported *audit.RejectionError
+	var inventory *backend.InventoryAdmissionError
+	var projection *audit.Rejection
+	if errors.As(err, &transported) {
+		projection = transported.Rejection
+	} else if errors.As(err, &inventory) {
+		projection = audit.AdmissionRejection(request, mode, requested, inventory.Snapshot)
+	}
+	if projection == nil || projection.Validate() != nil {
+		return
+	}
+	raw, _ := json.Marshal(projection)
+	fmt.Fprintf(w, "Admission rejection: %s\n", raw)
 }

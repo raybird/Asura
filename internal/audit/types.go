@@ -230,6 +230,19 @@ func NewHeader(id, request string, at time.Time, c *backend.ExecutionContract) (
 			}
 			h.Admission.Bindings = append(h.Admission.Bindings, p)
 		}
+	} else if c.SelectionDecision != nil {
+		// 2026-10-04：capability-v1 的 selection 是整個 Task 的一次決策，保留原候選 match。
+		d := c.SelectionDecision
+		for _, x := range d.Candidates {
+			h.Admission.Runtimes = append(h.Admission.Runtimes, Runtime{ObservedAt: x.Runtime.CapturedAt.UTC(), ID: x.Runtime.ID, Version: x.Runtime.Version, Capabilities: x.Runtime.Capabilities, Availability: backend.Available, Reason: backend.ProbeOK})
+		}
+		for _, req := range c.Requirements {
+			b := Binding{Stage: req.Role, Requirements: req, Candidates: []Candidate{}, Priority: append([]string{}, d.Priority...), Selected: d.Selected.ID, Policy: d.PolicyID, PolicyVersion: d.PolicyVersion}
+			for _, x := range d.Candidates {
+				b.Candidates = append(b.Candidates, Candidate{RuntimeID: x.Runtime.ID, Missing: append([]backend.Capability{}, x.Match.Missing...)})
+			}
+			h.Admission.Bindings = append(h.Admission.Bindings, b)
+		}
 	} else {
 		h.Admission.Runtimes = append(h.Admission.Runtimes, Runtime{ObservedAt: c.Runtime.CapturedAt.UTC(), ID: c.Runtime.ID, Version: c.Runtime.Version, Capabilities: c.Runtime.Capabilities, Availability: backend.Available, Reason: backend.ProbeOK})
 		for _, req := range c.Requirements {
@@ -311,7 +324,11 @@ func (h Header) Validate() error {
 				return ErrInvalid
 			}
 			seen[c.RuntimeID] = true
-			m, e := backend.MatchCapabilities([]backend.ExecutionRequirements{b.Requirements}, backend.RuntimeDescriptor{ID: r.ID, Version: r.Version, Capabilities: r.Capabilities})
+			requirements := []backend.ExecutionRequirements{b.Requirements}
+			if h.ContractVersion == backend.CapabilityContractVersion {
+				requirements = req
+			}
+			m, e := backend.MatchCapabilities(requirements, backend.RuntimeDescriptor{ID: r.ID, Version: r.Version, Capabilities: r.Capabilities})
 			if e != nil || !reflect.DeepEqual(m.Missing, c.Missing) {
 				return ErrInvalid
 			}
@@ -478,6 +495,14 @@ func reason(r string) bool {
 func layer(l string) bool {
 	switch l {
 	case "", "guard", "runtime", "prepare", "context", "processing", "critic", "task", "persistence", "recovery", "cancellation":
+		return true
+	}
+	return false
+}
+
+func validTaskState(state string) bool {
+	switch state {
+	case "pending", "queued", "running", "cancelling", "completed", "failed", "cancelled":
 		return true
 	}
 	return false

@@ -817,13 +817,17 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			contract, admissionErr := d.engine.Preflight(connCtx, reqMode, req.Backend)
 			if admissionErr != nil {
 				response := IPCResponse{Error: fmt.Sprintf("capability admission: %v", admissionErr)}
+				correlationID := req.RequestID
+				if correlationID == "" {
+					correlationID = engine.GenerateTaskID()
+				}
 				var rejection *backend.InventoryAdmissionError
 				if errors.As(admissionErr, &rejection) {
 					response.Inventory = rejection.Snapshot
-					response.AdmissionRejection = audit.AdmissionRejection(req.RequestID, reqMode, req.Backend, rejection.Snapshot)
+					response.AdmissionRejection = audit.AdmissionRejection(correlationID, reqMode, req.Backend, rejection.Snapshot)
 				}
 				if response.AdmissionRejection == nil {
-					response.AdmissionRejection = audit.AdmissionRejection(req.RequestID, reqMode, req.Backend, nil)
+					response.AdmissionRejection = audit.AdmissionRejection(correlationID, reqMode, req.Backend, nil)
 				}
 				_ = encoder.Encode(response)
 				continue
@@ -1506,6 +1510,9 @@ func (c *Client) Submit(ctx context.Context, req engine.SubmitRequest) (*storage
 	if resp.Error != "" {
 		if resp.Error == ErrCapacityExceeded.Error() {
 			return resp.Task, ErrCapacityExceeded
+		}
+		if resp.AdmissionRejection != nil && resp.AdmissionRejection.Validate() == nil {
+			return resp.Task, &audit.RejectionError{Rejection: resp.AdmissionRejection, Cause: errors.New(resp.Error)}
 		}
 		return resp.Task, errors.New(resp.Error)
 	}

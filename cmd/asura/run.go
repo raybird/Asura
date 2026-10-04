@@ -436,6 +436,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 		Backend:   bID,
 	})
 	if err != nil {
+		printAdmissionRejection(stderr, err, reqID, *mode, bID)
 		fmt.Fprintf(stderr, "error: %v\n", err)
 		return 1
 	}

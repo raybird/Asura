@@ -1,0 +1,34 @@
+=== RUN   TestExecutionAuditAdmissionAtomic
+--- PASS: TestExecutionAuditAdmissionAtomic (0.12s)
+=== RUN   TestExecutionAuditTerminalAndRecovery
+--- PASS: TestExecutionAuditTerminalAndRecovery (0.26s)
+=== RUN   TestExecutionAuditConcurrentWriter
+--- PASS: TestExecutionAuditConcurrentWriter (1.24s)
+=== RUN   TestExecutionAuditAdmissionAtomic
+--- PASS: TestExecutionAuditAdmissionAtomic (0.12s)
+=== RUN   TestExecutionAuditTerminalAndRecovery
+--- PASS: TestExecutionAuditTerminalAndRecovery (0.26s)
+=== RUN   TestExecutionAuditConcurrentWriter
+--- PASS: TestExecutionAuditConcurrentWriter (4.42s)
+=== RUN   TestExecutionAuditAdmissionAtomic
+--- PASS: TestExecutionAuditAdmissionAtomic (0.14s)
+=== RUN   TestExecutionAuditTerminalAndRecovery
+--- PASS: TestExecutionAuditTerminalAndRecovery (0.25s)
+=== RUN   TestExecutionAuditConcurrentWriter
+    sqlite_execution_audit_test.go:500: observation failed under concurrent metadata writer: audit_persistence_failed
+--- FAIL: TestExecutionAuditConcurrentWriter (11.17s)
+=== RUN   TestExecutionAuditAdmissionAtomic
+--- PASS: TestExecutionAuditAdmissionAtomic (0.12s)
+=== RUN   TestExecutionAuditTerminalAndRecovery
+--- PASS: TestExecutionAuditTerminalAndRecovery (0.31s)
+=== RUN   TestExecutionAuditConcurrentWriter
+--- PASS: TestExecutionAuditConcurrentWriter (8.54s)
+=== RUN   TestExecutionAuditAdmissionAtomic
+--- PASS: TestExecutionAuditAdmissionAtomic (0.11s)
+=== RUN   TestExecutionAuditTerminalAndRecovery
+--- PASS: TestExecutionAuditTerminalAndRecovery (0.24s)
+=== RUN   TestExecutionAuditConcurrentWriter
+--- PASS: TestExecutionAuditConcurrentWriter (2.20s)
+FAIL
+FAIL	asura/internal/storage	29.539s
+FAIL
