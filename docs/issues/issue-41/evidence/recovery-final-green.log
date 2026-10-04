@@ -1,0 +1,8 @@
+=== RUN   TestExecutionAuditAdmissionAtomic
+--- PASS: TestExecutionAuditAdmissionAtomic (0.01s)
+=== RUN   TestExecutionAuditTerminalAndRecovery
+--- PASS: TestExecutionAuditTerminalAndRecovery (0.02s)
+=== RUN   TestExecutionAuditTerminalRollback
+--- PASS: TestExecutionAuditTerminalRollback (0.01s)
+PASS
+ok  	asura/internal/storage	0.041s

@@ -1,0 +1,10 @@
+=== RUN   TestExecutionAuditTaskTerminalLayers
+=== RUN   TestExecutionAuditTaskTerminalLayers/critic
+    execution_audit_test.go:363: terminal conflates lifecycle &{CancelPhase: State:failed Reason:processing_failed FailureLayer:processing FailingStage:critic CompletedStages:2 RunIntents:3 ConfirmedReturns:3 InvocationEvidence:confirmed_returns ModelCalls:unknown At:2026-10-04 06:17:38.756370429 +0000 UTC}
+=== RUN   TestExecutionAuditTaskTerminalLayers/task
+--- FAIL: TestExecutionAuditTaskTerminalLayers (0.04s)
+    --- FAIL: TestExecutionAuditTaskTerminalLayers/critic (0.03s)
+    --- PASS: TestExecutionAuditTaskTerminalLayers/task (0.01s)
+FAIL
+FAIL	asura/internal/engine	0.043s
+FAIL

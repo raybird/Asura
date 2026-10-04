@@ -1,0 +1,12 @@
+ok  	asura/internal/audit	0.001s
+ok  	asura/internal/storage	3.764s
+ok  	asura/internal/engine	0.946s
+ok  	asura/internal/pipeline	0.500s
+ok  	asura/internal/daemon	7.037s
+ok  	asura/internal/web	0.102s
+--- FAIL: TestCapabilityStatusPersistedAndLegacy (0.05s)
+    --- FAIL: TestCapabilityStatusPersistedAndLegacy/future (0.01s)
+        capability_status_test.go:88: audit_invalid
+FAIL
+FAIL	asura/cmd/asura	0.465s
+FAIL

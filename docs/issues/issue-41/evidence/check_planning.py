@@ -10,7 +10,7 @@ approval = re.findall(r"^\| EXAUD-(\d{3}) \|", readme, re.M)
 expected = {f"{i:03}" for i in range(1, 20)}
 assert len(scenarios) == len(approval) == 19
 assert set(scenarios) == set(approval) == expected
-assert len(list(root.glob("*.md"))) == 4
+assert all((root / name).is_file() for name in ("README.md", "requirement-analysis.md", "technical-analysis.md", "implementation-plan.md"))
 for path in root.glob("*.md"):
     for target in re.findall(r"\]\(([^)]+)\)", path.read_text()):
         if not target.startswith("http"):

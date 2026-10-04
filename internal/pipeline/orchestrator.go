@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"asura/internal/audit"
 	"asura/internal/backend"
 	"asura/internal/contextwin"
 	"asura/internal/engine"
@@ -218,6 +219,9 @@ func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, 
 		start := time.Now()
 		req, pErr := o.striker.Prepare(execCtx, nil)
 		if pErr != nil {
+			if saveErr := stageOutcome(ctx, execCtx, backend.RoleStriker, pErr, "prepare_failed", "prepare"); saveErr != nil {
+				return "", nil, saveErr
+			}
 			return "", nil, fmt.Errorf("striker prepare error: %w", pErr)
 		}
 
@@ -225,6 +229,10 @@ func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, 
 		var admPtr *contextwin.StageAdmission = &adm
 
 		if adm.Verdict == contextwin.VerdictRejected {
+			rejected := &audit.Failure{Reason: "context_rejected", Layer: "context", Cause: fmt.Errorf("context limit exceeded: %s", adm.Reason)}
+			if saveErr := stageOutcome(ctx, execCtx, backend.RoleStriker, rejected, "context_rejected", "context"); saveErr != nil {
+				return "", nil, saveErr
+			}
 			duration := time.Since(start).Milliseconds()
 			trace := &PipelineTrace{
 				ExecutionContract: contract,
@@ -246,10 +254,13 @@ func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, 
 				DurationMs:  duration,
 				FinalResult: "",
 			}
-			return "", trace, fmt.Errorf("context limit exceeded: %s", adm.Reason)
+			return "", trace, &audit.Failure{Reason: "context_rejected", Layer: "context", Cause: fmt.Errorf("context limit exceeded: %s", adm.Reason)}
 		}
 
 		out, execRes, err := o.striker.ExecutePrepared(ctx, execCtx, req)
+		if saveErr := stageOutcome(ctx, execCtx, backend.RoleStriker, err, "processing_failed", "processing"); saveErr != nil {
+			return "", nil, saveErr
+		}
 		duration := time.Since(start).Milliseconds()
 
 		status := StageCompleted
@@ -311,10 +322,17 @@ func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, 
 	}
 	req1, pErr := o.oracle.Prepare(execCtx)
 	if pErr != nil {
+		if saveErr := stageOutcome(ctx, execCtx, backend.RoleOracle, pErr, "prepare_failed", "prepare"); saveErr != nil {
+			return "", nil, saveErr
+		}
 		return "", trace, fmt.Errorf("oracle prepare error: %w", pErr)
 	}
 	adm1 := o.evaluateAdmission("oracle", req1.Prompt, req1.Model)
 	if adm1.Verdict == contextwin.VerdictRejected {
+		rejected := &audit.Failure{Reason: "context_rejected", Layer: "context", Cause: fmt.Errorf("context limit exceeded: %s", adm1.Reason)}
+		if saveErr := stageOutcome(ctx, execCtx, backend.RoleOracle, rejected, "context_rejected", "context"); saveErr != nil {
+			return "", nil, saveErr
+		}
 		trace.Stages = append(trace.Stages, StageTrace{
 			Name:           "oracle",
 			Status:         StageFailed,
@@ -325,11 +343,14 @@ func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, 
 			Error:          fmt.Sprintf("context limit exceeded: %s", adm1.Reason),
 		})
 		trace.DurationMs = time.Since(pipelineStart).Milliseconds()
-		return "", trace, fmt.Errorf("context limit exceeded: %s", adm1.Reason)
+		return "", trace, &audit.Failure{Reason: "context_rejected", Layer: "context", Cause: fmt.Errorf("context limit exceeded: %s", adm1.Reason)}
 	}
 
 	s1 := time.Now()
 	plan, res1, err := o.oracle.ExecutePrepared(ctx, execCtx, req1)
+	if saveErr := stageOutcome(ctx, execCtx, backend.RoleOracle, err, "processing_failed", "processing"); saveErr != nil {
+		return "", nil, saveErr
+	}
 	d1 := time.Since(s1).Milliseconds()
 	trace.ModelCalls++
 
@@ -378,10 +399,17 @@ func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, 
 	}
 	req2, pErr := o.striker.Prepare(execCtx, plan)
 	if pErr != nil {
+		if saveErr := stageOutcome(ctx, execCtx, backend.RoleStriker, pErr, "prepare_failed", "prepare"); saveErr != nil {
+			return "", nil, saveErr
+		}
 		return "", trace, fmt.Errorf("striker prepare error: %w", pErr)
 	}
 	adm2 := o.evaluateAdmission("striker", req2.Prompt, req2.Model)
 	if adm2.Verdict == contextwin.VerdictRejected {
+		rejected := &audit.Failure{Reason: "context_rejected", Layer: "context", Cause: fmt.Errorf("context limit exceeded: %s", adm2.Reason)}
+		if saveErr := stageOutcome(ctx, execCtx, backend.RoleStriker, rejected, "context_rejected", "context"); saveErr != nil {
+			return "", nil, saveErr
+		}
 		trace.Stages = append(trace.Stages, StageTrace{
 			Name:           "striker",
 			Status:         StageFailed,
@@ -392,11 +420,14 @@ func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, 
 			Error:          fmt.Sprintf("context limit exceeded: %s", adm2.Reason),
 		})
 		trace.DurationMs = time.Since(pipelineStart).Milliseconds()
-		return "", trace, fmt.Errorf("context limit exceeded: %s", adm2.Reason)
+		return "", trace, &audit.Failure{Reason: "context_rejected", Layer: "context", Cause: fmt.Errorf("context limit exceeded: %s", adm2.Reason)}
 	}
 
 	s2 := time.Now()
 	strikerOut, res2, err := o.striker.ExecutePrepared(ctx, execCtx, req2)
+	if saveErr := stageOutcome(ctx, execCtx, backend.RoleStriker, err, "processing_failed", "processing"); saveErr != nil {
+		return "", nil, saveErr
+	}
 	d2 := time.Since(s2).Milliseconds()
 	trace.ModelCalls++
 
@@ -447,10 +478,17 @@ func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, 
 	}
 	req3, pErr := o.critic.Prepare(execCtx, plan, strikerOut)
 	if pErr != nil {
+		if saveErr := stageOutcome(ctx, execCtx, backend.RoleCritic, pErr, "prepare_failed", "prepare"); saveErr != nil {
+			return "", nil, saveErr
+		}
 		return strikerOut, trace, fmt.Errorf("critic prepare error: %w", pErr)
 	}
 	adm3 := o.evaluateAdmission("critic", req3.Prompt, req3.Model)
 	if adm3.Verdict == contextwin.VerdictRejected {
+		rejected := &audit.Failure{Reason: "context_rejected", Layer: "context", Cause: fmt.Errorf("context limit exceeded: %s", adm3.Reason)}
+		if saveErr := stageOutcome(ctx, execCtx, backend.RoleCritic, rejected, "context_rejected", "context"); saveErr != nil {
+			return "", nil, saveErr
+		}
 		trace.Stages = append(trace.Stages, StageTrace{
 			Name:           "critic",
 			Status:         StageFailed,
@@ -461,11 +499,14 @@ func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, 
 			Error:          fmt.Sprintf("context limit exceeded: %s", adm3.Reason),
 		})
 		trace.DurationMs = time.Since(pipelineStart).Milliseconds()
-		return strikerOut, trace, fmt.Errorf("context limit exceeded: %s", adm3.Reason)
+		return strikerOut, trace, &audit.Failure{Reason: "context_rejected", Layer: "context", Cause: fmt.Errorf("context limit exceeded: %s", adm3.Reason)}
 	}
 
 	s3 := time.Now()
 	review, res3, err := o.critic.ExecutePrepared(ctx, execCtx, req3)
+	if saveErr := stageOutcome(ctx, execCtx, backend.RoleCritic, err, "processing_failed", "processing"); saveErr != nil {
+		return "", nil, saveErr
+	}
 	d3 := time.Since(s3).Milliseconds()
 	trace.ModelCalls++
 
@@ -511,7 +552,7 @@ func (o *PipelineOrchestrator) Execute(ctx context.Context, mode ExecutionMode, 
 		if review.Summary == "" {
 			errMsg = "critic review verdict failed"
 		}
-		return strikerOut, trace, errors.New(errMsg)
+		return strikerOut, trace, &audit.Failure{Reason: "critic_rejected", Layer: "critic", Cause: errors.New(errMsg)}
 	}
 
 	return strikerOut, trace, nil

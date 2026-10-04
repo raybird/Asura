@@ -103,7 +103,7 @@ func (s *DefaultStrikerStage) ExecutePrepared(ctx context.Context, execCtx *engi
 	}
 
 	if activeBackend != nil {
-		res, err := activeBackend.Run(ctx, req)
+		res, err := observedRun(ctx, execCtx, activeBackend, req)
 		if err != nil {
 			if res != nil && res.PartialOutput != "" {
 				return res.PartialOutput, res, err

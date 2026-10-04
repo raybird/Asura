@@ -1,0 +1,12 @@
+=== RUN   TestExecutionAuditCLI
+--- PASS: TestExecutionAuditCLI (0.01s)
+PASS
+ok  	asura/cmd/asura	0.016s
+=== RUN   TestExecutionAuditHTTPBoundary
+--- PASS: TestExecutionAuditHTTPBoundary (0.00s)
+PASS
+ok  	asura/internal/web	0.002s
+=== RUN   TestRuntimeSelectionAdmissionAndRedelivery
+--- PASS: TestRuntimeSelectionAdmissionAndRedelivery (0.02s)
+PASS
+ok  	asura/internal/daemon	0.026s

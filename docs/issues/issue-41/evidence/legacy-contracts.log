@@ -1,0 +1,10 @@
+=== RUN   TestExecutionAuditLegacyContracts
+=== RUN   TestExecutionAuditLegacyContracts/capability-v1
+=== RUN   TestExecutionAuditLegacyContracts/stage-binding-v1
+=== RUN   TestExecutionAuditLegacyContracts/runtime-inventory-v1
+--- PASS: TestExecutionAuditLegacyContracts (0.03s)
+    --- PASS: TestExecutionAuditLegacyContracts/capability-v1 (0.01s)
+    --- PASS: TestExecutionAuditLegacyContracts/stage-binding-v1 (0.01s)
+    --- PASS: TestExecutionAuditLegacyContracts/runtime-inventory-v1 (0.01s)
+PASS
+ok  	asura/internal/storage	0.036s

@@ -22,7 +22,7 @@
 - 責任驗收：EXAUD-017（產品證據由 P1.1/P3.1 支援）。
 - 完成判準：先確認既有交易與取消單一終態，再以觸發器注入確認 audit 缺失的真實紅燈。
 - 驗證：既有 storage/engine cancellation characterization；故障注入對照組，記錄命令/exit code。
-- 狀態：⏳ 進行中。
+- 狀態：✅ 完成；2026-10-04，證據見 [verification.md](./evidence/verification.md)。
 
 ### Task P1.1 — Audit 模型、admission 正規化與 SQLite persistence
 - 產出與範圍：internal/audit、storage header/events/migration、Task+recall+audit 同交易、readonly fold/validation。
@@ -30,7 +30,7 @@
 - 責任驗收：EXAUD-003、004、014、015。
 - 完成判準：有界 allowlist、immutable/idempotent events、offline provenance、tamper 拒絕；故障全部 rollback。
 - 驗證：單元紅綠驗 canonical/transition/security；SQLite 整合紅綠驗交易與 query 不變動。
-- 狀態：📝 待實作。
+- 狀態：✅ 完成；2026-10-04，責任驗收及紅綠映射見 [verification.md](./evidence/verification.md)。
 
 ### Task P2.1 — Admission 與實際執行 observations
 - 產出與範圍：pipeline guard/stage/Run、engine context recorder、local/daemon/cron admission、rejection projection。
@@ -38,7 +38,7 @@
 - 責任驗收：EXAUD-001、002、005、006、007、008、018、019。
 - 完成判準：Direct/mixed fixtures；guard failure Run=0；runtime/processing/terminal 分層；intent 與 confirmed return 不混淆。
 - 驗證：計數 backend + 真 SQLite 外層；guard 和 stage 內層紅綠；不 mock recorder。
-- 狀態：📝 待實作。
+- 狀態：✅ 完成；2026-10-04，責任驗收及紅綠映射見 [verification.md](./evidence/verification.md)。
 
 ### Task P3.1 — Cancellation、restart、redelivery 與 terminal 原子性
 - 產出與範圍：storage CAS/terminal/recovery、engine cancel、daemon startup/redelivery。
@@ -46,7 +46,7 @@
 - 責任驗收：EXAUD-009、010、011、013。
 - 完成判準：取消協調器宣告終態、completed stage 不改寫；reopen/crash 保留 prefix；events/header 不重複；legacy 不造歷史。
 - 驗證：同步 barrier 競態、SQLite reopen 與 fault injection；回歸真 process-group cancellation。
-- 狀態：📝 待實作。
+- 狀態：✅ 完成；2026-10-04，責任驗收及紅綠映射見 [verification.md](./evidence/verification.md)。
 
 ### Task P4.1 — Read-only IPC、CLI、Web audit
 - 產出與範圍：GetTaskAudit、task_audit IPC、asura audit、GET task audit 及固定 Web projection。
@@ -54,7 +54,7 @@
 - 責任驗收：EXAUD-012。
 - 完成判準：每個 query probe/selection/Run=0、授權不可旁路、response bounded、sentinel 不出現在任何新 surface。
 - 驗證：真 IPC/HTTP 與 CLI 紅綠；實際 renderer 檢查；支援 EXAUD-001/002/014/019。
-- 狀態：📝 待實作。
+- 狀態：✅ 完成；2026-10-04，責任驗收及紅綠映射見 [verification.md](./evidence/verification.md)。
 
 ### Task P5.1 — 常青文件、精煉與完整回歸
 - 產出與範圍：README/架構文件、範圍內 code-simplify、測試與證據映射。
@@ -62,7 +62,7 @@
 - 責任驗收：EXAUD-016。
 - 完成判準：go vet ./...、go test -count=1 -race ./...、go build ./cmd/asura 全通過；全部 Scenario 的實際證據集合相等。
 - 驗證：四 runtime hermetic 回歸；靜態文件檢查；無真模型呼叫。
-- 狀態：📝 待實作。
+- 狀態：✅ 完成；2026-10-04，vet／完整 race（含 tests/integration）／build 與文件檢查 exit 0，見 [verification.md](./evidence/verification.md)。
 
 ### Task P5.2 — PR 與獨立審查交付
 - 產出與範圍：create-commit、create-pr、固定 BASE/HEAD 的獨立 reviewer 與持久化報告。
@@ -70,7 +70,7 @@
 - 責任：全部驗收的交付證據，不新增驗收編號。
 - 完成判準：PR Proof of Test 完整，獨立 review PASS 且 artifact 已保存；等待使用者合併。
 - 驗證：review-evidence.md；有 MUST FIX 則修正並重審。
-- 狀態：📝 待實作。
+- 狀態：⏳ 2026-10-04，實作與驗證完成；PR／固定 HEAD 獨立審查中，完成狀態由 review artifact 的流程判定確認。
 
 ## 測試策略
 

@@ -1,0 +1,8 @@
+=== RUN   TestExecutionAuditObservationFailureStopsExecution
+=== RUN   TestExecutionAuditObservationFailureStopsExecution/run_intent
+=== RUN   TestExecutionAuditObservationFailureStopsExecution/stage_outcome
+--- PASS: TestExecutionAuditObservationFailureStopsExecution (0.04s)
+    --- PASS: TestExecutionAuditObservationFailureStopsExecution/run_intent (0.02s)
+    --- PASS: TestExecutionAuditObservationFailureStopsExecution/stage_outcome (0.02s)
+PASS
+ok  	asura/internal/engine	0.041s

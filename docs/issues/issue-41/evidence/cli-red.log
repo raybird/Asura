@@ -1,0 +1,21 @@
+=== RUN   TestExecutionAuditCLI
+    execution_audit_test.go:18: audit command missing code=1 error: unknown command "audit"
+
+        Usage: asura <command> [options] [arguments]
+
+        Commands:
+          daemon  Start the central execution daemon
+          run     Submit and execute a task in a workspace
+          ask     Submit a natural language AI task via Daemon
+          status  Query the execution status and result of a task
+          cancel  Cancel a pending or running task
+          web     Start the local web remote entry console
+          cron    Manage periodic scheduled tasks
+          memory  Manage project-level long-term memories
+          runtime Query runtime inventory and admission availability
+
+        Run 'asura <command> -h' for details on each command.
+--- FAIL: TestExecutionAuditCLI (0.01s)
+FAIL
+FAIL	asura/cmd/asura	0.012s
+FAIL

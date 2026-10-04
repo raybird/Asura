@@ -123,6 +123,8 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
     <div style="margin-top:0.5rem; font-weight:600; font-size:0.9rem;">記憶與召回稽核：</div>
     <h4>Runtime 執行契約</h4>
     <pre id="capability-audit">(尚未查詢任務)</pre>
+    <h4>持久化執行稽核</h4>
+    <pre id="execution-audit">(尚未查詢任務)</pre>
     <pre id="memory-audit">(尚未查詢任務)</pre>
   </div>
 </div>
@@ -151,6 +153,7 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
   const taskStatus = document.getElementById('task-status');
   const taskResult = document.getElementById('task-result');
   const capabilityAudit = document.getElementById('capability-audit');
+  const executionAudit = document.getElementById('execution-audit');
   const memoryAudit = document.getElementById('memory-audit');
 
   const memoryList = document.getElementById('memory-list');
@@ -176,6 +179,7 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
     taskResult.textContent = '(尚未查詢任務)';
     memoryAudit.textContent = '(尚未查詢任務)';
     capabilityAudit.textContent = '(尚未查詢任務)';
+    executionAudit.textContent = '(尚未查詢任務)';
     taskIdInput.value = '';
     requestIDDisplay.textContent = '(尚未提交)';
     memoryCursor = '';
@@ -665,12 +669,56 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
     taskResult.textContent = '(等待提交回應...)';
     memoryAudit.textContent = '(尚未查詢任務)';
     capabilityAudit.textContent = '(尚未查詢任務)';
+    executionAudit.textContent = '(尚未查詢任務)';
     sendTask(payload, taskToken);
   });
 
   retryBtn.addEventListener('click', () => {
     if (pendingRequest) sendTask(pendingRequest, taskGeneration);
   });
+
+  function renderExecutionAudit(record) {
+    if (!record || !record.header || record.header.schema !== 'execution-audit-v1' || !['complete','partial','legacy'].includes(record.completeness) || !Array.isArray(record.stages) || record.stages.length > 3) {
+      executionAudit.textContent = 'Execution audit：invalid/unavailable'; return;
+    }
+    const header = record.header;
+    const admission = header.admission || {};
+    const lines = ['Audit：' + record.completeness + ' / ' + record.integrity,
+      'Intent：' + (header.mode || 'unknown') + ' / ' + (header.requested_backend || 'legacy'),
+      'Admission：' + (admission.state || 'legacy')];
+    for (const runtime of admission.runtimes || []) lines.push('Inventory ' + runtime.id + '：' + runtime.availability + ' / ' + runtime.reason);
+    for (const binding of admission.bindings || []) {
+      lines.push('Decision ' + binding.stage + '：' + binding.policy + '/' + binding.policy_version + ' priority=' + binding.priority.join(',') + ' selected=' + binding.selected);
+      for (const candidate of binding.candidates || []) lines.push('Capability ' + candidate.runtime_id + '：' + (candidate.missing.length ? 'reject / ' + candidate.missing.join(',') : 'pass'));
+    }
+    for (const stage of record.stages) {
+      lines.push('Stage ' + stage.name + '：sealed=' + stage.sealed_runtime + ' ' + stage.sealed_version);
+      lines.push('Guard：' + stage.guard.state + ' / ' + stage.guard.reason);
+      lines.push('Observed：' + (stage.observed_runtime || 'unknown') + ' ' + (stage.observed_version || ''));
+      lines.push('Actual returned：' + (stage.actual_runtime || 'unconfirmed') + ' ' + (stage.actual_version || ''));
+      lines.push('Outcome：' + stage.status + ' / ' + stage.reason);
+    }
+    if (record.terminal) {
+      const terminal = record.terminal;
+      lines.push('Terminal：' + terminal.state + ' / ' + terminal.reason + ' / ' + (terminal.failure_layer || 'none'));
+      lines.push('Calls：intents=' + terminal.run_intents + ' returns=' + terminal.confirmed_returns + ' evidence=' + terminal.invocation_evidence + ' model=' + terminal.model_calls);
+      if (terminal.cancel_phase) lines.push('Cancellation：' + terminal.cancel_phase);
+    }
+    executionAudit.textContent = lines.join('\n');
+  }
+
+  async function loadExecutionAudit(tid, taskToken, generation) {
+    try {
+      const response = await fetch('/api/tasks/' + encodeURIComponent(tid) + '/audit');
+      if (taskToken !== taskGeneration || generation !== memoryGeneration) return;
+      if (response.status === 401) { sessionExpired(); return; }
+      if (!response.ok) { executionAudit.textContent = 'Execution audit：invalid/unavailable'; return; }
+      const record = await response.json();
+      if (taskToken === taskGeneration && generation === memoryGeneration) renderExecutionAudit(record);
+    } catch (err) {
+      if (taskToken === taskGeneration && generation === memoryGeneration) executionAudit.textContent = 'Execution audit：unavailable';
+    }
+  }
 
   function renderCapabilityAudit(task) {
     if (!task.resolved_context) { capabilityAudit.textContent = 'Runtime 契約：legacy/unavailable'; return; }
@@ -863,6 +911,7 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
     taskResult.textContent = '(查詢中...)';
     memoryAudit.textContent = '(查詢中...)';
     capabilityAudit.textContent = '(查詢中...)';
+    executionAudit.textContent = '(查詢中...)';
     const generation = memoryGeneration;
     try {
       const res = await fetch('/api/tasks/' + encodeURIComponent(tid));
@@ -873,6 +922,8 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
         if (generation !== memoryGeneration || taskToken !== taskGeneration) return;
         taskStatus.textContent = task.status || '-';
         renderMemoryAudit(task);
+        await loadExecutionAudit(task.id, taskToken, generation);
+        if (taskToken !== taskGeneration || generation !== memoryGeneration) return;
         if (task.status === 'completed') {
           if (task.result && task.result.length > 500) {
             await loadFullResultPaged(task.id, taskToken);
@@ -907,6 +958,7 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
     taskResult.textContent = '(查詢中...)';
     memoryAudit.textContent = '(查詢中...)';
     capabilityAudit.textContent = '(查詢中...)';
+    executionAudit.textContent = '(查詢中...)';
     const generation = memoryGeneration;
     try {
       const res = await fetch('/api/tasks/' + encodeURIComponent(tid));
@@ -917,6 +969,8 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
         if (generation !== memoryGeneration || taskToken !== taskGeneration) return;
         taskStatus.textContent = task.status || '-';
         renderMemoryAudit(task);
+        await loadExecutionAudit(task.id, taskToken, generation);
+        if (taskToken !== taskGeneration || generation !== memoryGeneration) return;
         if (task.status === 'completed' && task.result && task.result.length > 500) {
           await loadFullResultPaged(task.id, taskToken);
           if (taskToken !== taskGeneration) return;
@@ -960,6 +1014,8 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
         if (generation !== memoryGeneration || taskToken !== taskGeneration) return;
         taskStatus.textContent = task.status || 'cancelled';
         renderMemoryAudit(task);
+        await loadExecutionAudit(task.id, taskToken, generation);
+        if (taskToken !== taskGeneration || generation !== memoryGeneration) return;
         showMessage(opMsg, '任務已成功取消：' + task.id, false);
       } else {
         const errText = await res.text();

@@ -1,0 +1,16 @@
+=== RUN   TestExecutionAuditCompleted
+=== RUN   TestExecutionAuditCompleted/direct
+=== RUN   TestExecutionAuditCompleted/three-face
+--- PASS: TestExecutionAuditCompleted (0.04s)
+    --- PASS: TestExecutionAuditCompleted/direct (0.02s)
+    --- PASS: TestExecutionAuditCompleted/three-face (0.02s)
+=== RUN   TestExecutionAuditFailures
+=== RUN   TestExecutionAuditFailures/missing
+=== RUN   TestExecutionAuditFailures/runtime
+=== RUN   TestExecutionAuditFailures/processing
+--- PASS: TestExecutionAuditFailures (0.05s)
+    --- PASS: TestExecutionAuditFailures/missing (0.01s)
+    --- PASS: TestExecutionAuditFailures/runtime (0.02s)
+    --- PASS: TestExecutionAuditFailures/processing (0.02s)
+PASS
+ok  	asura/internal/engine	0.093s

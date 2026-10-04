@@ -414,3 +414,16 @@ Queue/redelivery 不 admission，intent fingerprint 不含 selected ID、候選�
 2026-10-04：execution 只查 sealed ID，再以該 handle 的必要本機 probe guard，錯誤在 Run 前 fail-closed；不做 inventory-driven fallback 或 retry。queue/redelivery/restart 保留既有契約與恢復政策，capability-v1／stage-binding-v1 不回填 inventory。CLI runtime inventory／daemon inventory IPC／Web 唯讀 inventory 路徑共用 semantics；Task status/audit 只呈現封存值及 actual guard。admission 被拒絕時 snapshot 隨 IPC/Web 錯誤返回，不建立 rejected Task。
 
 最後驗證日期：2026-10-04；驗收與證據見 [Issue 39](../../issues/issue-39/implementation-plan.md)。
+
+
+## Phase 4E：Execution Audit / Provenance（2026-10-04）
+
+2026-10-04：`internal/audit` 提供 execution-audit-v1 immutable admission header、typed append-only events 與唯讀 fold。runtime-inventory-v1 contract 仍是唯一 execution authority；audit 正規化 descriptor 與 candidate refs 只供解釋，不重新選擇。Store 只抽取 contract 並驗證 digest，不載入 prompt/result/trace。
+
+2026-10-04：SQLite 新增 tasks.execution_audit_version 標記及 task_execution_audits／task_execution_audit_events。新 admission 的 Task、recall ledger 與 header 同交易；每次 lifecycle CAS 與其 event 同交易，只有成功 CAS 能產生 lifecycle event。標記區分歷史無 audit 與新 header 遺失，後者回 invalid。observation 保存失敗不啟動後續 Run；terminal 失敗不宣稱已保存；recovery 與 failed terminal 同交易，失敗停止 daemon startup。corrupt Task projection 可保存 failure terminal，但對外 query 仍拒絕不一致的 contract。
+
+2026-10-04：事件只保存 guard、Run intent／returned、stage outcome、cancel、recovery、terminal 的固定欄位。stage 完成與 Task final validation／Critic verdict 分開；runtime 返回數與 provider model calls 分開。crash 後 completed stage 保留，running stage interrupted，其餘 not_started/not_reached；不 resume、不 backfill。既有 pipeline trace 保留診斷用途。
+
+2026-10-04：bounds 為三 stage、32 runtimes/candidates、32 events、單 event 2 KiB、header 64 KiB、record 128 KiB、response 160 KiB。IPC task_audit、CLI audit 與 Web GET task audit 使用同一 validated fold，沿用 workspace/session/origin 邊界。重送返回原 Task，不 probe/admission/Run，event identity 同 payload 可重試、不同 payload conflict。header digest、seq、event identity 與 hash chain 僅偵測結構損壞，不抵抗一致全量重寫。
+
+2026-10-04：驗收、故障注入及完整回歸證據見 [Issue 41](../../issues/issue-41/evidence/verification.md)。

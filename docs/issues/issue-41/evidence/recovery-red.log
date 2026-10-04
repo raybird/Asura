@@ -1,0 +1,8 @@
+=== RUN   TestExecutionAuditTerminalAndRecovery
+    sqlite_execution_audit_test.go:92: EXAUD-010 missing crash provenance: audit_invalid
+--- FAIL: TestExecutionAuditTerminalAndRecovery (0.02s)
+=== RUN   TestExecutionAuditTerminalRollback
+--- PASS: TestExecutionAuditTerminalRollback (0.01s)
+FAIL
+FAIL	asura/internal/storage	0.030s
+FAIL

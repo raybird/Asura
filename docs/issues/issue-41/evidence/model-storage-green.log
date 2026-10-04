@@ -1,0 +1,33 @@
+=== RUN   TestAuditRejectForeignFields
+--- PASS: TestAuditRejectForeignFields (0.00s)
+PASS
+ok  	asura/internal/audit	0.001s
+=== RUN   TestExecutionAuditAdmissionAtomic
+--- PASS: TestExecutionAuditAdmissionAtomic (0.01s)
+=== RUN   TestUtilityCapacityProbe
+    sqlite_utility_probe_test.go:15: opt-in 10k/100k SQLite probe
+--- SKIP: TestUtilityCapacityProbe (0.00s)
+=== RUN   TestUtilityLedgerAdmission
+--- PASS: TestUtilityLedgerAdmission (0.01s)
+=== RUN   TestUtilityAtomicRetryRebuild
+--- PASS: TestUtilityAtomicRetryRebuild (0.01s)
+=== RUN   TestUtilityAdmissionRollback
+--- PASS: TestUtilityAdmissionRollback (0.00s)
+=== RUN   TestUtilityRecoveryAndDeletion
+--- PASS: TestUtilityRecoveryAndDeletion (0.01s)
+=== RUN   TestUtilityPageBounds
+--- PASS: TestUtilityPageBounds (0.00s)
+=== RUN   TestUtilityWeight
+--- PASS: TestUtilityWeight (0.00s)
+=== RUN   TestUtilityTerminalOutcomes
+=== RUN   TestUtilityTerminalOutcomes/cancelled0"completed"}]}
+=== RUN   TestUtilityTerminalOutcomes/failed1"completed"}]}
+=== RUN   TestUtilityTerminalOutcomes/failed0s":"failed"}]}
+--- PASS: TestUtilityTerminalOutcomes (0.01s)
+    --- PASS: TestUtilityTerminalOutcomes/cancelled0"completed"}]} (0.00s)
+    --- PASS: TestUtilityTerminalOutcomes/failed1"completed"}]} (0.00s)
+    --- PASS: TestUtilityTerminalOutcomes/failed0s":"failed"}]} (0.00s)
+=== RUN   TestUtilityFailureStatus
+--- PASS: TestUtilityFailureStatus (0.00s)
+PASS
+ok  	asura/internal/storage	0.061s

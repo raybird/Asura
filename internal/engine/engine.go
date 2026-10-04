@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"asura/internal/audit"
 	"asura/internal/auth"
 	"asura/internal/backend"
 	"asura/internal/recall"
@@ -51,15 +52,17 @@ func (m *ProjectMemorySnapshot) UnmarshalJSON(data []byte) error {
 
 // ExecutionContext 代表任務執行時之完整密封上下文
 type ExecutionContext struct {
-	BoundBackend      backend.Backend            `json:"-"`
-	ExecutionContract *backend.ExecutionContract `json:"execution_contract,omitempty"`
-	Recall            *recall.Decision           `json:"recall,omitempty"`
-	OriginalPrompt    string                     `json:"original_prompt"`
-	Workspace         string                     `json:"workspace"`
-	Backend           string                     `json:"backend,omitempty"`
-	ProjectMemories   []ProjectMemorySnapshot    `json:"project_memories"`
-	MemoryRefs        []string                   `json:"memory_refs"`
-	CreatedAt         time.Time                  `json:"created_at"`
+	Audit               audit.Observer             `json:"-"`
+	AuditRuntimeVersion string                     `json:"-"`
+	BoundBackend        backend.Backend            `json:"-"`
+	ExecutionContract   *backend.ExecutionContract `json:"execution_contract,omitempty"`
+	Recall              *recall.Decision           `json:"recall,omitempty"`
+	OriginalPrompt      string                     `json:"original_prompt"`
+	Workspace           string                     `json:"workspace"`
+	Backend             string                     `json:"backend,omitempty"`
+	ProjectMemories     []ProjectMemorySnapshot    `json:"project_memories"`
+	MemoryRefs          []string                   `json:"memory_refs"`
+	CreatedAt           time.Time                  `json:"created_at"`
 }
 
 // 2026-10-04：stage 契約禁止缺少綁定 handle 時回到其他 runtime。
@@ -395,6 +398,15 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 	// 3. 條件式轉移狀態至 running (支援 pending 與 queued)
 	updated, err := e.store.UpdateTaskStatusIfPendingOrQueued(ctx, task.ID, storage.StatusRunning)
 	if err != nil {
+		if errors.Is(err, audit.ErrInvalid) {
+			failedCtx := audit.WithFailure(context.Background(), "contract_invalid", "guard")
+			if saveErr := e.store.UpdateTaskStatus(failedCtx, task.ID, storage.StatusFailed, "", "invalid execution audit"); saveErr != nil {
+				return nil, errors.Join(err, saveErr)
+			}
+			task.Status = storage.StatusFailed
+			task.ErrorMessage = "invalid execution audit"
+			return task, err
+		}
 		if errors.Is(ctx.Err(), context.Canceled) {
 			task.Status = storage.StatusCancelled
 			task.ErrorMessage = "task cancelled by user"
@@ -508,6 +520,7 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 		execCtx.Backend = backendID
 	}
 
+	execCtx.Audit = &taskAuditObserver{store: e.store, id: task.ID}
 	var output string
 	var runErr error
 	var traceJSON string
@@ -614,6 +627,8 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 	}
 
 	if runErr != nil {
+		reason, layer := audit.Classify(runErr, "execution_failed", "task")
+		persistCtx = audit.WithFailure(persistCtx, reason, layer)
 		updated, persistErr := e.store.UpdateTaskStatusIfRunning(persistCtx, task.ID, storage.StatusFailed, output, runErr.Error())
 		if persistErr != nil {
 			return task, fmt.Errorf("%w (persist task status failed: %v)", runErr, persistErr)
@@ -635,6 +650,7 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 
 	// 6. 空輸出與未解決結構化錯誤防禦檢查（遵循 SCN-007，修復 R-09 與 F-04）
 	if isErr, errMsg := hasUnresolvedErrorOrEmpty(output); isErr {
+		persistCtx = audit.WithFailure(persistCtx, "result_invalid", "task")
 		updated, persistErr := e.store.UpdateTaskStatusIfRunning(persistCtx, task.ID, storage.StatusFailed, output, errMsg)
 		if persistErr != nil {
 			return task, fmt.Errorf("%w (persist task status failed: %v)", ErrEmptyOutput, persistErr)

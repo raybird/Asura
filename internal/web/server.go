@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"asura/internal/audit"
 	"asura/internal/backend"
 	"asura/internal/daemon"
 	"asura/internal/storage"
@@ -85,6 +86,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.mu.Unlock()
 		http.SetCookie(w, &http.Cookie{Name: sessionCookie, Path: "/", MaxAge: -1, HttpOnly: true, Secure: s.secure, SameSite: http.SameSiteStrictMode})
 		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/tasks/") && strings.HasSuffix(r.URL.Path, "/audit") {
+		if r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		s.handleTaskAudit(w, r)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/git-memory/") {
@@ -206,6 +215,16 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if resp.Error != "" {
+		if resp.AdmissionRejection != nil && resp.AdmissionRejection.Validate() == nil {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(struct {
+				Error     string                     `json:"error"`
+				Rejection *audit.Rejection           `json:"admission_rejection"`
+				Inventory *backend.InventorySnapshot `json:"inventory_snapshot,omitempty"`
+			}{"runtime admission rejected", resp.AdmissionRejection, resp.Inventory})
+			return
+		}
 		if resp.Inventory != nil && resp.Inventory.Validate() == nil {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusBadRequest)
@@ -352,6 +371,10 @@ func (s *Server) exchange(parent context.Context, req daemon.IPCRequest) (daemon
 	var bounded *io.LimitedReader
 	if strings.HasPrefix(req.Action, "git_memory_") {
 		bounded = &io.LimitedReader{R: conn, N: (1 << 20) + 1}
+		reader = bounded
+	}
+	if req.Action == "task_audit" {
+		bounded = &io.LimitedReader{R: conn, N: audit.MaxResponseBytes + 1}
 		reader = bounded
 	}
 	err = json.NewDecoder(reader).Decode(&resp)

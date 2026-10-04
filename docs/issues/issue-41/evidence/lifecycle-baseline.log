@@ -1,0 +1,89 @@
+=== RUN   TestLifecycleCandidateLimitAndUtility
+--- PASS: TestLifecycleCandidateLimitAndUtility (0.10s)
+=== RUN   TestSQLiteStore_RecoverInterruptedTasks
+--- PASS: TestSQLiteStore_RecoverInterruptedTasks (0.01s)
+=== RUN   TestRecoverInterruptedTasks_Cancelling
+--- PASS: TestRecoverInterruptedTasks_Cancelling (0.01s)
+=== RUN   TestUtilityCapacityProbe
+    sqlite_utility_probe_test.go:15: opt-in 10k/100k SQLite probe
+--- SKIP: TestUtilityCapacityProbe (0.00s)
+=== RUN   TestUtilityLedgerAdmission
+--- PASS: TestUtilityLedgerAdmission (0.01s)
+=== RUN   TestUtilityAtomicRetryRebuild
+--- PASS: TestUtilityAtomicRetryRebuild (0.01s)
+=== RUN   TestUtilityAdmissionRollback
+--- PASS: TestUtilityAdmissionRollback (0.00s)
+=== RUN   TestUtilityRecoveryAndDeletion
+--- PASS: TestUtilityRecoveryAndDeletion (0.01s)
+=== RUN   TestUtilityPageBounds
+--- PASS: TestUtilityPageBounds (0.00s)
+=== RUN   TestUtilityWeight
+--- PASS: TestUtilityWeight (0.00s)
+=== RUN   TestUtilityTerminalOutcomes
+=== RUN   TestUtilityTerminalOutcomes/cancelled0"completed"}]}
+=== RUN   TestUtilityTerminalOutcomes/failed1"completed"}]}
+=== RUN   TestUtilityTerminalOutcomes/failed0s":"failed"}]}
+--- PASS: TestUtilityTerminalOutcomes (0.01s)
+    --- PASS: TestUtilityTerminalOutcomes/cancelled0"completed"}]} (0.00s)
+    --- PASS: TestUtilityTerminalOutcomes/failed1"completed"}]} (0.00s)
+    --- PASS: TestUtilityTerminalOutcomes/failed0s":"failed"}]} (0.00s)
+=== RUN   TestUtilityFailureStatus
+--- PASS: TestUtilityFailureStatus (0.00s)
+PASS
+ok  	asura/internal/storage	0.172s
+=== RUN   TestEngineCancel
+--- PASS: TestEngineCancel (0.11s)
+=== RUN   TestEngineCancel_SynchronouslyTerminatesProcessGroup
+--- PASS: TestEngineCancel_SynchronouslyTerminatesProcessGroup (0.03s)
+=== RUN   TestEngineCancel_UnknownIdentityDoesNotMarkCancelled
+--- PASS: TestEngineCancel_UnknownIdentityDoesNotMarkCancelled (0.02s)
+=== RUN   TestEngineCancel_ActiveRunnerUnknownIdentityDoesNotMarkCancelled
+--- PASS: TestEngineCancel_ActiveRunnerUnknownIdentityDoesNotMarkCancelled (0.02s)
+=== RUN   TestEngineCancel_DoesNotOverwriteCommittedTerminalState
+=== RUN   TestEngineCancel_DoesNotOverwriteCommittedTerminalState/completed_status_must_not_be_overwritten
+=== RUN   TestEngineCancel_DoesNotOverwriteCommittedTerminalState/failed_status_must_not_be_overwritten
+--- PASS: TestEngineCancel_DoesNotOverwriteCommittedTerminalState (0.02s)
+    --- PASS: TestEngineCancel_DoesNotOverwriteCommittedTerminalState/completed_status_must_not_be_overwritten (0.01s)
+    --- PASS: TestEngineCancel_DoesNotOverwriteCommittedTerminalState/failed_status_must_not_be_overwritten (0.01s)
+=== RUN   TestEngineCancel_StalePendingSnapshotDoesNotOverwriteTerminalState
+=== RUN   TestEngineCancel_StalePendingSnapshotDoesNotOverwriteTerminalState/stale_pending_snapshot_must_not_overwrite_completed_(no_registration)
+=== RUN   TestEngineCancel_StalePendingSnapshotDoesNotOverwriteTerminalState/stale_pending_snapshot_must_not_overwrite_failed_(no_registration)
+=== RUN   TestEngineCancel_StalePendingSnapshotDoesNotOverwriteTerminalState/stale_pending_snapshot_must_not_overwrite_completed_(with_registration)
+=== RUN   TestEngineCancel_StalePendingSnapshotDoesNotOverwriteTerminalState/stale_pending_snapshot_must_not_overwrite_failed_(with_registration)
+--- PASS: TestEngineCancel_StalePendingSnapshotDoesNotOverwriteTerminalState (0.15s)
+    --- PASS: TestEngineCancel_StalePendingSnapshotDoesNotOverwriteTerminalState/stale_pending_snapshot_must_not_overwrite_completed_(no_registration) (0.04s)
+    --- PASS: TestEngineCancel_StalePendingSnapshotDoesNotOverwriteTerminalState/stale_pending_snapshot_must_not_overwrite_failed_(no_registration) (0.04s)
+    --- PASS: TestEngineCancel_StalePendingSnapshotDoesNotOverwriteTerminalState/stale_pending_snapshot_must_not_overwrite_completed_(with_registration) (0.04s)
+    --- PASS: TestEngineCancel_StalePendingSnapshotDoesNotOverwriteTerminalState/stale_pending_snapshot_must_not_overwrite_failed_(with_registration) (0.04s)
+=== RUN   TestEngineCancel_FinalizeGetTaskErrorFailsClosed
+--- PASS: TestEngineCancel_FinalizeGetTaskErrorFailsClosed (0.01s)
+=== RUN   TestEngineCancel_ClearPGIDErrorFailsClosed
+--- PASS: TestEngineCancel_ClearPGIDErrorFailsClosed (0.03s)
+=== RUN   TestEngine_R05_PersistOnCancelledParentContext
+--- PASS: TestEngine_R05_PersistOnCancelledParentContext (0.03s)
+=== RUN   TestEngine_R06_PreservePartialOutputOnCancel
+--- PASS: TestEngine_R06_PreservePartialOutputOnCancel (0.01s)
+=== RUN   TestEngine_R10_DoNotOverwriteCancelledStatus
+--- PASS: TestEngine_R10_DoNotOverwriteCancelledStatus (0.01s)
+=== RUN   TestReviewCancelBeforeRunner
+--- PASS: TestReviewCancelBeforeRunner (0.01s)
+=== RUN   TestReviewCancelInRunningBeforeRunner
+--- PASS: TestReviewCancelInRunningBeforeRunner (0.01s)
+=== RUN   TestLatestReview_G02_PersistOnCancelBeforeRunner
+--- PASS: TestLatestReview_G02_PersistOnCancelBeforeRunner (0.02s)
+=== RUN   TestDirectUtilityUnknown
+=== RUN   TestDirectUtilityUnknown/success
+=== RUN   TestDirectUtilityUnknown/failed
+--- PASS: TestDirectUtilityUnknown (0.02s)
+    --- PASS: TestDirectUtilityUnknown/success (0.01s)
+    --- PASS: TestDirectUtilityUnknown/failed (0.01s)
+=== RUN   TestThreeFaceUtilityPersistence
+=== RUN   TestThreeFaceUtilityPersistence/used
+=== RUN   TestThreeFaceUtilityPersistence/invalid
+=== RUN   TestThreeFaceUtilityPersistence/legacy
+--- PASS: TestThreeFaceUtilityPersistence (0.03s)
+    --- PASS: TestThreeFaceUtilityPersistence/used (0.01s)
+    --- PASS: TestThreeFaceUtilityPersistence/invalid (0.01s)
+    --- PASS: TestThreeFaceUtilityPersistence/legacy (0.01s)
+PASS
+ok  	asura/internal/engine	0.509s
