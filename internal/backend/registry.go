@@ -15,6 +15,7 @@ type Registry interface {
 	// List 列出所有已註冊之後端 ID (排序)
 	List() []string
 	Snapshot() []Backend
+	RegisteredSnapshot() []RegisteredRuntime
 	// Default 取得預設後端
 	Default() Backend
 	// SetDefault 設定預設後端 ID
@@ -132,5 +133,17 @@ func (r *InMemoryRegistry) Snapshot() []Backend {
 	for _, id := range ids {
 		result = append(result, r.backends[id])
 	}
+	return result
+}
+
+// 2026-10-04：保留註冊時的 authoritative key，不以 probe 重新命名。
+func (r *InMemoryRegistry) RegisteredSnapshot() []RegisteredRuntime {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	result := make([]RegisteredRuntime, 0, len(r.backends))
+	for id, b := range r.backends {
+		result = append(result, RegisteredRuntime{ID: id, Backend: b})
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
 	return result
 }

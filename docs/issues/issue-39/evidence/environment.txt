@@ -1,0 +1,8 @@
+2026-10-04
+Go: go1.27.1 linux/amd64
+GOOS=linux
+GOARCH=amd64
+CGO_ENABLED=1
+Source commit: 6681b0c0db89f3769cf945069b5884cead12c0a3
+Source hashes: source-sha256.txt (tracked .go, go.mod, go.sum)
+Offline runtime fixture tests; existing conditional live tests retain their original Skip conditions.

@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"asura/internal/backend"
 	"asura/internal/daemon"
 	"asura/internal/storage"
 )
@@ -96,6 +97,24 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/api/memories" || strings.HasPrefix(r.URL.Path, "/api/memories/") {
 		s.handleMemories(w, r)
+		return
+	}
+	if r.URL.Path == "/api/runtime-inventory" && r.Method == http.MethodGet {
+		if source := r.Header.Get("Origin"); source != "" && source != s.origin {
+			http.Error(w, "forbidden origin", http.StatusForbidden)
+			return
+		}
+		resp, err := s.exchange(r.Context(), daemon.IPCRequest{Action: "inventory"})
+		if err != nil || resp.Error != "" {
+			http.Error(w, "runtime inventory unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		if resp.Inventory == nil || resp.Inventory.Validate() != nil {
+			http.Error(w, "invalid inventory", http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_ = json.NewEncoder(w).Encode(resp.Inventory)
 		return
 	}
 	if r.URL.Path == "/api/projects" && r.Method == http.MethodGet {
@@ -187,6 +206,15 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if resp.Error != "" {
+		if resp.Inventory != nil && resp.Inventory.Validate() == nil {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(struct {
+				Error     string                     `json:"error"`
+				Inventory *backend.InventorySnapshot `json:"inventory_snapshot"`
+			}{Error: "runtime admission rejected", Inventory: resp.Inventory})
+			return
+		}
 		code := http.StatusBadRequest
 		message := "task operation rejected"
 		switch {

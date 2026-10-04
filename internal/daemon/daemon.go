@@ -11,7 +11,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -227,23 +226,19 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 		opencodeLogicalBackend := opencode.NewRoleRoutingBackend(readOnlyAdapter, strikerAdapter)
 		reg := backend.NewRegistry()
 		_ = reg.Register(opencodeLogicalBackend)
-		if codexPath, err := exec.LookPath("codex"); err == nil && codexPath != "" {
-			_ = reg.Register(codex.NewAdapter(codex.AdapterConfig{
-				BinaryPath:      codexPath,
-				ExpectedVersion: "0.155.0",
-				OnProcessStarted: func(ctx context.Context, pgid int) {
-					if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
-						_ = store.UpdateTaskPGID(context.Background(), taskID, pgid)
-					}
-				},
-				OnProcessExited: func(ctx context.Context, pgid int) {
-					if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
-						_ = store.UpdateTaskPGID(context.Background(), taskID, 0)
-					}
-				},
-			}))
-		}
-
+		_ = reg.Register(codex.NewAdapter(codex.AdapterConfig{
+			ExpectedVersion: "0.155.0",
+			OnProcessStarted: func(ctx context.Context, pgid int) {
+				if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
+					_ = store.UpdateTaskPGID(context.Background(), taskID, pgid)
+				}
+			},
+			OnProcessExited: func(ctx context.Context, pgid int) {
+				if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
+					_ = store.UpdateTaskPGID(context.Background(), taskID, 0)
+				}
+			},
+		}))
 		// 2026-09-30：新增 adapter 僅在 composition root 註冊，預設身份維持 opencode。
 		onStarted := func(ctx context.Context, pgid int) {
 			if id := engine.TaskIDFromContext(ctx); id != "" {
@@ -525,6 +520,7 @@ type IPCRequest struct {
 
 // IPCResponse 定義傳回用戶端之結果
 type IPCResponse struct {
+	Inventory        *backend.InventorySnapshot `json:"inventory_snapshot,omitempty"`
 	MemoryDetail     *storage.MemoryDetail      `json:"memory_detail,omitempty"`
 	UtilityPage      *storage.UtilityPage       `json:"utility_page,omitempty"`
 	CandidatePage    *GitCandidatePage          `json:"candidate_page,omitempty"`
@@ -656,6 +652,13 @@ func (d *Daemon) handleConn(conn net.Conn) {
 		}
 
 		switch action {
+		case "inventory":
+			snapshot, err := d.engine.Inventory(connCtx)
+			if err != nil {
+				_ = encoder.Encode(IPCResponse{Error: "runtime inventory unavailable"})
+			} else {
+				_ = encoder.Encode(IPCResponse{Inventory: snapshot})
+			}
 		case "status":
 			if req.TaskID == "" {
 				_ = encoder.Encode(IPCResponse{Error: "task_id required for status query"})
@@ -801,7 +804,12 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			// 2026-10-03：去重後、接受與派送前取得 immutable runtime contract。
 			contract, admissionErr := d.engine.Preflight(connCtx, reqMode, req.Backend)
 			if admissionErr != nil {
-				_ = encoder.Encode(IPCResponse{Error: fmt.Sprintf("capability admission: %v", admissionErr)})
+				response := IPCResponse{Error: fmt.Sprintf("capability admission: %v", admissionErr)}
+				var rejection *backend.InventoryAdmissionError
+				if errors.As(admissionErr, &rejection) {
+					response.Inventory = rejection.Snapshot
+				}
+				_ = encoder.Encode(response)
 				continue
 			}
 

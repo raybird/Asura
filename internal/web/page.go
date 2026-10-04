@@ -46,6 +46,11 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
   </div>
 
   <div id="op-msg" class="msg hidden"></div>
+  <div class="card">
+    <h3>Runtime 可用性清冊</h3>
+    <button type="button" id="inventory-refresh" class="secondary">探測可用性</button>
+    <pre id="inventory-audit">(尚未探測)</pre>
+  </div>
 
   <form id="submit-form" onsubmit="return false;">
     <label for="project-select">授權專案 (Workspace)</label>
@@ -569,7 +574,20 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
     }
   });
 
+  document.getElementById('inventory-refresh').addEventListener('click', async () => {
+    const generation = sessionGeneration;
+    const display = document.getElementById('inventory-audit');
+    display.textContent = '(探測中...)';
+    try {
+      const response = await fetch('/api/runtime-inventory');
+      if (!response.ok) throw new Error('Runtime inventory unavailable');
+      const snapshot = await response.json();
+      if (generation === sessionGeneration) display.textContent = formatInventorySnapshot(snapshot).join('\n');
+    } catch (err) { if (generation === sessionGeneration) display.textContent = 'Runtime inventory unavailable'; }
+  });
+
   logoutBtn.addEventListener('click', async () => {
+    document.getElementById('inventory-audit').textContent = '(尚未探測)';
     sessionGeneration++;
     clearMemoryState();
     appSection.classList.add('hidden');
@@ -661,7 +679,7 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
     catch (err) { capabilityAudit.textContent = 'Runtime 契約：unsupported/unavailable'; return; }
     const contract = context && context.execution_contract;
     if (!contract) { capabilityAudit.textContent = 'Runtime 契約：legacy/unavailable'; return; }
-    if (contract.contract_version === 'stage-binding-v1') {
+    if (['stage-binding-v1','runtime-inventory-v1'].includes(contract.contract_version)) {
       const plan = contract.stage_binding_plan;
       const expected = contract.mode === 'direct' ? ['striker'] : contract.mode === 'three-face' ? ['oracle','striker','critic'] : [];
       if (contract.policy_version !== 'capability-v1' || !plan || plan.mode !== contract.mode || !Array.isArray(plan.bindings) || plan.bindings.length !== expected.length || !expected.length) {
@@ -669,7 +687,12 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
       }
       let trace;
       try { trace = task.pipeline_trace ? JSON.parse(task.pipeline_trace) : null; } catch (err) { trace = null; }
-      const lines = ['Runtime 契約：stage-binding-v1', 'Requested backend：' + JSON.stringify(contract.requested_backend)];
+      const lines = ['Runtime 契約：' + contract.contract_version, 'Requested backend：' + JSON.stringify(contract.requested_backend)];
+      if (contract.contract_version === 'runtime-inventory-v1') {
+        const inventoryLines = formatInventorySnapshot(contract.inventory_snapshot);
+        if (inventoryLines[0] === 'Inventory：unsupported/unavailable') { capabilityAudit.textContent = inventoryLines[0]; return; }
+        lines.push(...inventoryLines);
+      } else lines.push('Inventory：legacy/unsealed');
       for (let i = 0; i < expected.length; i++) {
         const binding = plan.bindings[i];
         const d = binding && binding.selection_decision;
@@ -703,6 +726,7 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
     const runtime = contract.runtime;
     const match = contract.match;
     const lines = [
+      'Inventory：legacy/unsealed',
       'Runtime 契約：' + contract.contract_version + '；policy ' + contract.policy_version,
       'Requested backend：' + JSON.stringify(contract.requested_backend),
       '接受時 runtime：' + runtime.id + ' ' + runtime.version,
@@ -733,6 +757,18 @@ pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; 
     try { trace = task.pipeline_trace ? JSON.parse(task.pipeline_trace) : null; } catch (err) { trace = null; }
     if (trace && trace.guard_error) lines.push('Execution guard：rejected（' + trace.guard_error + '）');
     capabilityAudit.textContent = lines.join('\n');
+  }
+
+  function formatInventorySnapshot(snapshot) {
+    if (!snapshot || snapshot.contract_version !== 'runtime-inventory-v1' || snapshot.policy_version !== 'inventory-v1' ||
+        !snapshot.observed_at || !Array.isArray(snapshot.entries) || snapshot.entries.length > 32) return ['Inventory：unsupported/unavailable'];
+    const lines = ['Inventory snapshot：' + snapshot.observed_at + '；policy ' + snapshot.policy_version];
+    for (const entry of snapshot.entries) {
+      if (!entry || entry.registration_state !== 'registered' || !['available','unavailable','unknown'].includes(entry.availability_state)) return ['Inventory：unsupported/unavailable'];
+      lines.push(entry.runtime_id + ' registration=' + entry.registration_state + ' availability=' + entry.availability_state +
+        ' version=' + (entry.descriptor ? entry.descriptor.version : 'unavailable') + ' reason=' + entry.reason_code);
+    }
+    return lines;
   }
 
   function renderMemoryAudit(task) {

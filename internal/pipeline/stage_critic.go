@@ -67,7 +67,7 @@ func (s *DefaultCriticStage) ExecutePrepared(ctx context.Context, execCtx *engin
 		return nil, nil, errors.New("execution request is nil")
 	}
 
-	if execCtx != nil && execCtx.ExecutionContract != nil && (execCtx.ExecutionContract.ContractVersion == backend.StageBindingContractVersion || execCtx.ExecutionContract.StageBindingPlan != nil) {
+	if execCtx != nil && execCtx.ExecutionContract != nil && (execCtx.ExecutionContract.ContractVersion == backend.StageBindingContractVersion || execCtx.ExecutionContract.ContractVersion == backend.InventoryContractVersion || execCtx.ExecutionContract.StageBindingPlan != nil) {
 		if err := execCtx.ValidateStageBackend(req.Role); err != nil {
 			return nil, nil, err
 		}

@@ -55,13 +55,14 @@ func TestRuntimeSelectionThreeFaceEligibility(t *testing.T) {
 	}
 }
 
-func TestRuntimeSelectionVersionFailureClosed(t *testing.T) {
+// 2026-10-04：RTINV-004 取代 Phase 4B 的全候選 capture failure 政策。
+func TestRuntimeSelectionVersionFailureIsolated(t *testing.T) {
 	reg := NewRegistry()
 	reg.Register(&descriptorBackend{mockBackend: mockBackend{id: "opencode", caps: []Capability{CapWorkspaceWrite}}})
 	reg.Register(&descriptorBackend{mockBackend: mockBackend{id: "omp", caps: []Capability{CapWorkspaceWrite}}, err: errors.New("version unavailable")})
-	_, err := AdmitRuntime(context.Background(), reg, "direct", "auto")
-	if err == nil || errors.Is(err, ErrBackendNotFound) {
-		t.Fatalf("not a snapshot rejection: %v", err)
+	c, err := AdmitRuntime(context.Background(), reg, "direct", "auto")
+	if err != nil || c.Runtime.ID != "opencode" || c.InventorySnapshot.Entries[0].AvailabilityState != Unavailable {
+		t.Fatalf("failure not isolated: %v", err)
 	}
 }
 

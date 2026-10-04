@@ -37,6 +37,7 @@ type CapabilityMatch struct {
 }
 
 type ExecutionContract struct {
+	InventorySnapshot *InventorySnapshot        `json:"inventory_snapshot,omitempty"`
 	StageBindingPlan  *StageBindingPlan         `json:"stage_binding_plan,omitempty"`
 	SelectionDecision *RuntimeSelectionDecision `json:"selection_decision,omitempty"`
 	ContractVersion   string                    `json:"contract_version"`
@@ -184,41 +185,40 @@ func AdmitRuntime(ctx context.Context, reg Registry, mode, requested string, pri
 	if id == "" {
 		id = "opencode"
 	}
-	if mode == "" {
-		mode = "direct"
-	}
 	b, err := reg.Get(id)
 	if err != nil {
 		return nil, err
 	}
-	// 2026-10-03：先以安全能力拒絕，不因版本探測失敗掩蓋唯讀能力不足。
-	match, err := MatchCapabilities(req, RuntimeDescriptor{ID: b.ID(), Capabilities: b.Capabilities()})
+	snapshot, err := CaptureInventory(ctx, []RegisteredRuntime{{ID: id, Backend: b}})
+	if err != nil {
+		return nil, err
+	}
+	ds := snapshot.AvailableDescriptors()
+	if len(ds) == 0 {
+		return nil, &InventoryAdmissionError{Snapshot: snapshot, Cause: ErrBackendUnavailable}
+	}
+	match, err := MatchCapabilities(req, ds[0])
 	if err != nil {
 		return nil, err
 	}
 	if !match.Compatible {
 		return nil, &CapabilityAdmissionError{RequestedBackend: requested, Match: match}
 	}
-	runtime, err := CaptureRuntime(ctx, b)
+	plan, err := planStageBindings(mode, RuntimeSelectionRequest{Mode: "explicit", RuntimeID: id}, ds, nil)
 	if err != nil {
-		return nil, err
+		return nil, &InventoryAdmissionError{Snapshot: snapshot, Cause: err}
 	}
-	match, err = MatchCapabilities(req, runtime)
-	if err != nil {
-		return nil, err
-	}
-	if !match.Compatible {
-		return nil, &CapabilityAdmissionError{RequestedBackend: requested, Match: match}
-	}
-	plan, err := planStageBindings(mode, RuntimeSelectionRequest{Mode: "explicit", RuntimeID: id}, []RuntimeDescriptor{runtime}, nil)
-	if err != nil {
-		return nil, err
-	}
-	return contractFromPlan(plan, requested)
+	return sealInventory(plan, requested, snapshot)
 }
 
 // 2026-10-03：執行時核對封存結構，不以目前 registry 重算接受時判定。
 func (c *ExecutionContract) Validate(mode, id string) error {
+	if c != nil && c.ContractVersion == InventoryContractVersion {
+		return c.validateInventory(mode, id)
+	}
+	if c != nil && c.InventorySnapshot != nil {
+		return fmt.Errorf("%w: unexpected inventory", ErrInvalidContract)
+	}
 	if c != nil && c.ContractVersion == StageBindingContractVersion {
 		return c.validateStagePlan(mode, id)
 	}

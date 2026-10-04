@@ -401,3 +401,16 @@ Pipeline 先 guard 全部必要 sealed IDs，再於各 stage 取得目前 handle
 Queue/redelivery 不 admission，intent fingerprint 不含 selected ID、候選或版本。restart recovery 沿既有標 failed，保留原 plan，不 resume。能力退化或 runtime 消失不 fallback；兩個 Run 之間檢查只能阻止後續副作用，不回滾先前完成工作。契約完整性為結構一致性，不提供針對一致全量重寫的 cryptographic tamper evidence。
 
 最後驗證日期：2026-10-04；驗收與證據見 [Issue 37](../../issues/issue-37/implementation-plan.md)。
+
+
+## Phase 4D：Runtime Inventory / Availability（2026-10-04）
+
+2026-10-04：新 admission 契約為 runtime-inventory-v1；Registry 原子快照保留註冊時 authoritative key 與 adapter handle，獨立 inventory orchestrator 並行 probe，統一 UTC observation timestamp／descriptor capture timestamp，按 runtime ID 與 canonical capabilities 排序。每 runtime 3 秒、whole snapshot 5 秒，最多 32 個 probe；前者超時為 unknown/probe_timeout，整批尚未完成為 unknown/inventory_timeout，上游取消則拒絕 admission。
+
+2026-10-04：四 adapter 實作 optional RuntimeProber（保留 Backend API），只檢查必要本機條件；OpenCode 兩角色配置與版本、Codex ExpectedVersion、OMP CLI/Bun pin 與 bwrap、Antigravity CLI pin 與 bwrap。無 RuntimeProber 的既有 adapter 以 Version/Capabilities 捕獲 descriptor。panic/general error 各自 unavailable，不保存原始 error/panic/output。Go 無法強制終止任意不合作的 in-process adapter；observer 可有界返回，資源回收保證由內建 context-aware probe 與進程組清理測試支持，不宣稱任意第三方 adapter 可被強制回收。
+
+2026-10-04：auto 先 availability、再 capability、最後原 deterministic priority；explicit 只探測指定 registered ID 並保持 authoritative。新 ExecutionContract 保存一次 InventorySnapshot，StageBindingPlan 保留有界 candidate 值副本，validator 以 sealed available descriptors 核對全部 stage candidate 集合及既有 planner 結果。inventory 64 KiB／diagnostic 512 bytes／ID 64 bytes／version 256 bytes／完整 contract 256 KiB；沿用每 decision 64 KiB、plan 192 KiB。無 schema migration、TTL cache、background scheduler 或重選。
+
+2026-10-04：execution 只查 sealed ID，再以該 handle 的必要本機 probe guard，錯誤在 Run 前 fail-closed；不做 inventory-driven fallback 或 retry。queue/redelivery/restart 保留既有契約與恢復政策，capability-v1／stage-binding-v1 不回填 inventory。CLI runtime inventory／daemon inventory IPC／Web 唯讀 inventory 路徑共用 semantics；Task status/audit 只呈現封存值及 actual guard。admission 被拒絕時 snapshot 隨 IPC/Web 錯誤返回，不建立 rejected Task。
+
+最後驗證日期：2026-10-04；驗收與證據見 [Issue 39](../../issues/issue-39/implementation-plan.md)。

@@ -268,11 +268,6 @@ func NewAdapter(cfg AdapterConfig) *Adapter {
 	if cfg.ExpectedVersion == "" {
 		cfg.ExpectedVersion = "1.18"
 	}
-	if cfg.BinaryPath == "" {
-		if resolved, err := ResolveOpenCodeBinary("", cfg.ExpectedVersion); err == nil {
-			cfg.BinaryPath = resolved
-		}
-	}
 	return &Adapter{cfg: cfg}
 }
 

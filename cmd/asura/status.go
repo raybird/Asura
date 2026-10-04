@@ -83,6 +83,11 @@ func handleStatus(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintln(stdout, "Capability contract: unsupported/unavailable")
 		} else {
 			fmt.Fprintf(stdout, "Capability contract: %s (policy %s)\n", contract.ContractVersion, contract.PolicyVersion)
+			if contract.InventorySnapshot != nil {
+				printInventory(stdout, contract.InventorySnapshot)
+			} else {
+				fmt.Fprintln(stdout, "Runtime Inventory: legacy/unsealed")
+			}
 			fmt.Fprintf(stdout, "Requested backend: %q\n", contract.RequestedBackend)
 			fmt.Fprintf(stdout, "Runtime snapshot: %s %s (%s)\n", contract.Runtime.ID, contract.Runtime.Version, contract.Runtime.CapturedAt.Format("2006-01-02T15:04:05Z07:00"))
 			fmt.Fprintf(stdout, "Requirements: %v\n", contract.Match.Required)

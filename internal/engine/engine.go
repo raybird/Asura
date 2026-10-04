@@ -472,7 +472,7 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 			return task, fmt.Errorf("decode sealed context: %w", err)
 		}
 		// 2026-10-04：持久化 Task 的相容投影也必須與 plan 一致。
-		if contract := decoded.ExecutionContract; contract != nil && (contract.ContractVersion == backend.StageBindingContractVersion || contract.StageBindingPlan != nil) {
+		if contract := decoded.ExecutionContract; contract != nil && (contract.ContractVersion == backend.StageBindingContractVersion || contract.ContractVersion == backend.InventoryContractVersion || contract.StageBindingPlan != nil) {
 			if err := contract.Validate(task.ExecutionMode, task.Backend); err != nil {
 				persistCtx, persistCancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer persistCancel()
@@ -685,4 +685,14 @@ func (e *Engine) SubmitTask(ctx context.Context, req SubmitRequest) (*storage.Ta
 // RecoverInterruptedTasks 委派儲存層執行中斷任務的狀態恢復（遵循 SCN-006）
 func (e *Engine) RecoverInterruptedTasks(ctx context.Context) (int64, error) {
 	return e.store.RecoverInterruptedTasks(ctx)
+}
+
+// 2026-10-04：共用 pipeline Registry 的 fresh inventory，不執行任務。
+func (e *Engine) Inventory(ctx context.Context) (*backend.InventorySnapshot, error) {
+	if source, ok := e.pipelineRunner.(interface {
+		Inventory(context.Context) (*backend.InventorySnapshot, error)
+	}); ok {
+		return source.Inventory(ctx)
+	}
+	return nil, fmt.Errorf("runtime inventory unavailable")
 }
