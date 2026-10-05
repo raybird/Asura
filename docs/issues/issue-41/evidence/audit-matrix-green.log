@@ -1,0 +1,58 @@
+=== RUN   TestExecutionAuditCompleted
+=== RUN   TestExecutionAuditCompleted/direct
+=== RUN   TestExecutionAuditCompleted/three-face
+--- PASS: TestExecutionAuditCompleted (0.09s)
+    --- PASS: TestExecutionAuditCompleted/direct (0.05s)
+    --- PASS: TestExecutionAuditCompleted/three-face (0.04s)
+=== RUN   TestExecutionAuditFailures
+=== RUN   TestExecutionAuditFailures/missing
+=== RUN   TestExecutionAuditFailures/runtime
+=== RUN   TestExecutionAuditFailures/processing
+--- PASS: TestExecutionAuditFailures (0.09s)
+    --- PASS: TestExecutionAuditFailures/missing (0.02s)
+    --- PASS: TestExecutionAuditFailures/runtime (0.04s)
+    --- PASS: TestExecutionAuditFailures/processing (0.03s)
+=== RUN   TestExecutionAuditCancellation
+=== RUN   TestExecutionAuditCancellation/before_stage
+=== RUN   TestExecutionAuditCancellation/during_guard
+=== RUN   TestExecutionAuditCancellation/during_run
+--- PASS: TestExecutionAuditCancellation (0.07s)
+    --- PASS: TestExecutionAuditCancellation/before_stage (0.02s)
+    --- PASS: TestExecutionAuditCancellation/during_guard (0.02s)
+    --- PASS: TestExecutionAuditCancellation/during_run (0.03s)
+PASS
+ok  	asura/internal/engine	0.268s
+=== RUN   TestExecutionAuditAdmissionAtomic
+--- PASS: TestExecutionAuditAdmissionAtomic (0.01s)
+=== RUN   TestExecutionAuditTerminalAndRecovery
+--- PASS: TestExecutionAuditTerminalAndRecovery (0.03s)
+=== RUN   TestExecutionAuditTerminalRollback
+--- PASS: TestExecutionAuditTerminalRollback (0.01s)
+=== RUN   TestExecutionAuditNormalizationAndTamper
+--- PASS: TestExecutionAuditNormalizationAndTamper (0.01s)
+=== RUN   TestExecutionAuditEventOrderAndBounds
+--- PASS: TestExecutionAuditEventOrderAndBounds (0.01s)
+PASS
+ok  	asura/internal/storage	0.091s
+=== RUN   TestExecutionAuditWebRender
+--- PASS: TestExecutionAuditWebRender (0.06s)
+=== RUN   TestExecutionAuditHTTPBoundary
+--- PASS: TestExecutionAuditHTTPBoundary (0.00s)
+PASS
+ok  	asura/internal/web	0.065s
+=== RUN   TestExecutionAuditIPC
+--- PASS: TestExecutionAuditIPC (0.03s)
+PASS
+ok  	asura/internal/daemon	0.030s
+=== RUN   TestCapabilityStatusPersistedAndLegacy
+=== RUN   TestCapabilityStatusPersistedAndLegacy/sealed
+=== RUN   TestCapabilityStatusPersistedAndLegacy/legacy
+=== RUN   TestCapabilityStatusPersistedAndLegacy/future
+--- PASS: TestCapabilityStatusPersistedAndLegacy (0.04s)
+    --- PASS: TestCapabilityStatusPersistedAndLegacy/sealed (0.01s)
+    --- PASS: TestCapabilityStatusPersistedAndLegacy/legacy (0.01s)
+    --- PASS: TestCapabilityStatusPersistedAndLegacy/future (0.01s)
+=== RUN   TestExecutionAuditCLI
+--- PASS: TestExecutionAuditCLI (0.01s)
+PASS
+ok  	asura/cmd/asura	0.052s

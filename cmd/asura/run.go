@@ -62,6 +62,8 @@ func RunCLI(args []string, stdout, stderr io.Writer) int {
 		return handleAsk(subargs, stdout, stderr)
 	case "runtime":
 		return handleRuntime(subargs, stdout, stderr)
+	case "audit":
+		return handleAudit(subargs, stdout, stderr)
 	case "status":
 		return handleStatus(subargs, stdout, stderr)
 	case "cancel":
@@ -86,6 +88,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  daemon  Start the central execution daemon")
 	fmt.Fprintln(w, "  run     Submit and execute a task in a workspace")
 	fmt.Fprintln(w, "  ask     Submit a natural language AI task via Daemon")
+	fmt.Fprintln(w, "  audit   Query persisted execution provenance")
 	fmt.Fprintln(w, "  status  Query the execution status and result of a task")
 	fmt.Fprintln(w, "  cancel  Cancel a pending or running task")
 	fmt.Fprintln(w, "  web     Start the local web remote entry console")
@@ -433,6 +436,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 		Backend:   bID,
 	})
 	if err != nil {
+		printAdmissionRejection(stderr, err, reqID, *mode, bID)
 		fmt.Fprintf(stderr, "error: %v\n", err)
 		return 1
 	}

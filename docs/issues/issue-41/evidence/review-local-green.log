@@ -1,0 +1,4 @@
+=== RUN   TestExecutionAuditLocalRejection
+--- PASS: TestExecutionAuditLocalRejection (0.01s)
+PASS
+ok  	asura/cmd/asura	0.014s

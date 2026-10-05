@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"asura/internal/audit"
 	"asura/internal/auth"
 	"asura/internal/backend"
 	"asura/internal/backend/antigravity"
@@ -413,7 +414,14 @@ func (d *Daemon) Start() error {
 
 	// 5. 執行重啟恢復：將前次未完成的殘留任務安全轉移為 failed，揭露中斷原因（SCN-006）
 	if d.store != nil {
-		_, _ = d.store.RecoverInterruptedTasks(context.Background())
+		if _, err := d.store.RecoverInterruptedTasks(context.Background()); err != nil {
+			_ = d.listener.Close()
+			d.listener = nil
+			_ = syscall.Flock(int(d.lockFile.Fd()), syscall.LOCK_UN)
+			_ = d.lockFile.Close()
+			d.lockFile = nil
+			return fmt.Errorf("task recovery failed: %w", err)
+		}
 		utilityCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		if err := d.store.RecoverUtility(utilityCtx); err != nil {
 			fmt.Fprintf(os.Stderr, "utility recovery pending: %v\n", err)
@@ -520,28 +528,30 @@ type IPCRequest struct {
 
 // IPCResponse 定義傳回用戶端之結果
 type IPCResponse struct {
-	Inventory        *backend.InventorySnapshot `json:"inventory_snapshot,omitempty"`
-	MemoryDetail     *storage.MemoryDetail      `json:"memory_detail,omitempty"`
-	UtilityPage      *storage.UtilityPage       `json:"utility_page,omitempty"`
-	CandidatePage    *GitCandidatePage          `json:"candidate_page,omitempty"`
-	GitCapture       *GitCaptureReply           `json:"git_capture,omitempty"`
-	GitError         string                     `json:"git_error,omitempty"`
-	Task             *storage.Task              `json:"task,omitempty"`
-	Projects         []string                   `json:"projects,omitempty"`
-	CronSchedule     *storage.CronSchedule      `json:"cron_schedule,omitempty"`
-	CronSchedules    []storage.CronSchedule     `json:"cron_schedules,omitempty"`
-	CronRuns         []storage.CronRun          `json:"cron_runs,omitempty"`
-	Memory           *storage.Memory            `json:"memory,omitempty"`
-	Memories         []storage.Memory           `json:"memories,omitempty"`
-	MemoryPage       *storage.MemoryPage        `json:"memory_page,omitempty"`
-	Candidate        *storage.MemoryCandidate   `json:"candidate,omitempty"`
-	Candidates       []storage.CandidateSummary `json:"candidates,omitempty"`
-	CandidateCount   int64                      `json:"candidate_count,omitempty"`
-	GitFacts         *gitmem.CaptureFacts       `json:"git_facts,omitempty"`
-	ApprovedMemoryID string                     `json:"approved_memory_id,omitempty"`
-	IsReused         bool                       `json:"is_reused,omitempty"`
-	Message          string                     `json:"message,omitempty"`
-	Error            string                     `json:"error,omitempty"`
+	Audit              *audit.Record              `json:"execution_audit,omitempty"`
+	AdmissionRejection *audit.Rejection           `json:"admission_rejection,omitempty"`
+	Inventory          *backend.InventorySnapshot `json:"inventory_snapshot,omitempty"`
+	MemoryDetail       *storage.MemoryDetail      `json:"memory_detail,omitempty"`
+	UtilityPage        *storage.UtilityPage       `json:"utility_page,omitempty"`
+	CandidatePage      *GitCandidatePage          `json:"candidate_page,omitempty"`
+	GitCapture         *GitCaptureReply           `json:"git_capture,omitempty"`
+	GitError           string                     `json:"git_error,omitempty"`
+	Task               *storage.Task              `json:"task,omitempty"`
+	Projects           []string                   `json:"projects,omitempty"`
+	CronSchedule       *storage.CronSchedule      `json:"cron_schedule,omitempty"`
+	CronSchedules      []storage.CronSchedule     `json:"cron_schedules,omitempty"`
+	CronRuns           []storage.CronRun          `json:"cron_runs,omitempty"`
+	Memory             *storage.Memory            `json:"memory,omitempty"`
+	Memories           []storage.Memory           `json:"memories,omitempty"`
+	MemoryPage         *storage.MemoryPage        `json:"memory_page,omitempty"`
+	Candidate          *storage.MemoryCandidate   `json:"candidate,omitempty"`
+	Candidates         []storage.CandidateSummary `json:"candidates,omitempty"`
+	CandidateCount     int64                      `json:"candidate_count,omitempty"`
+	GitFacts           *gitmem.CaptureFacts       `json:"git_facts,omitempty"`
+	ApprovedMemoryID   string                     `json:"approved_memory_id,omitempty"`
+	IsReused           bool                       `json:"is_reused,omitempty"`
+	Message            string                     `json:"message,omitempty"`
+	Error              string                     `json:"error,omitempty"`
 }
 
 const boundedMemoryQueryTimeout = 9 * time.Second
@@ -659,6 +669,8 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			} else {
 				_ = encoder.Encode(IPCResponse{Inventory: snapshot})
 			}
+		case "task_audit":
+			_ = encoder.Encode(d.taskAudit(connCtx, req.TaskID))
 		case "status":
 			if req.TaskID == "" {
 				_ = encoder.Encode(IPCResponse{Error: "task_id required for status query"})
@@ -805,9 +817,17 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			contract, admissionErr := d.engine.Preflight(connCtx, reqMode, req.Backend)
 			if admissionErr != nil {
 				response := IPCResponse{Error: fmt.Sprintf("capability admission: %v", admissionErr)}
+				correlationID := req.RequestID
+				if correlationID == "" {
+					correlationID = engine.GenerateTaskID()
+				}
 				var rejection *backend.InventoryAdmissionError
 				if errors.As(admissionErr, &rejection) {
 					response.Inventory = rejection.Snapshot
+					response.AdmissionRejection = audit.AdmissionRejection(correlationID, reqMode, req.Backend, rejection.Snapshot)
+				}
+				if response.AdmissionRejection == nil {
+					response.AdmissionRejection = audit.AdmissionRejection(correlationID, reqMode, req.Backend, nil)
 				}
 				_ = encoder.Encode(response)
 				continue
@@ -1490,6 +1510,9 @@ func (c *Client) Submit(ctx context.Context, req engine.SubmitRequest) (*storage
 	if resp.Error != "" {
 		if resp.Error == ErrCapacityExceeded.Error() {
 			return resp.Task, ErrCapacityExceeded
+		}
+		if resp.AdmissionRejection != nil && resp.AdmissionRejection.Validate() == nil {
+			return resp.Task, &audit.RejectionError{Rejection: resp.AdmissionRejection, Cause: errors.New(resp.Error)}
 		}
 		return resp.Task, errors.New(resp.Error)
 	}

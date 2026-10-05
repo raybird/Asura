@@ -1,0 +1,8 @@
+=== RUN   TestExecutionAuditTaskTerminalLayers
+=== RUN   TestExecutionAuditTaskTerminalLayers/critic
+=== RUN   TestExecutionAuditTaskTerminalLayers/task
+--- PASS: TestExecutionAuditTaskTerminalLayers (0.04s)
+    --- PASS: TestExecutionAuditTaskTerminalLayers/critic (0.03s)
+    --- PASS: TestExecutionAuditTaskTerminalLayers/task (0.01s)
+PASS
+ok  	asura/internal/engine	0.044s

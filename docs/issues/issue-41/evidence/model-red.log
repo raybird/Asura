@@ -1,0 +1,6 @@
+=== RUN   TestAuditRejectForeignFields
+    types_test.go:15: foreign fields accepted: {Seq:0 Key: Kind:terminal Stage: Scope:secret-sentinel State:failed Reason:execution_failed Layer:task RuntimeID: RuntimeVersion: At:0001-01-01 00:00:00 +0000 UTC PreviousDigest: Digest:}
+--- FAIL: TestAuditRejectForeignFields (0.00s)
+FAIL
+FAIL	asura/internal/audit	0.001s
+FAIL

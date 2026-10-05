@@ -1,0 +1,32 @@
+=== RUN   TestExecutionAuditAdmissionAtomic
+--- PASS: TestExecutionAuditAdmissionAtomic (0.13s)
+=== RUN   TestExecutionAuditTerminalAndRecovery
+--- PASS: TestExecutionAuditTerminalAndRecovery (0.25s)
+=== RUN   TestExecutionAuditConcurrentWriter
+--- PASS: TestExecutionAuditConcurrentWriter (3.06s)
+=== RUN   TestExecutionAuditAdmissionAtomic
+--- PASS: TestExecutionAuditAdmissionAtomic (0.12s)
+=== RUN   TestExecutionAuditTerminalAndRecovery
+--- PASS: TestExecutionAuditTerminalAndRecovery (0.25s)
+=== RUN   TestExecutionAuditConcurrentWriter
+--- PASS: TestExecutionAuditConcurrentWriter (2.76s)
+=== RUN   TestExecutionAuditAdmissionAtomic
+--- PASS: TestExecutionAuditAdmissionAtomic (0.11s)
+=== RUN   TestExecutionAuditTerminalAndRecovery
+--- PASS: TestExecutionAuditTerminalAndRecovery (0.24s)
+=== RUN   TestExecutionAuditConcurrentWriter
+--- PASS: TestExecutionAuditConcurrentWriter (1.34s)
+=== RUN   TestExecutionAuditAdmissionAtomic
+--- PASS: TestExecutionAuditAdmissionAtomic (0.11s)
+=== RUN   TestExecutionAuditTerminalAndRecovery
+--- PASS: TestExecutionAuditTerminalAndRecovery (0.25s)
+=== RUN   TestExecutionAuditConcurrentWriter
+--- PASS: TestExecutionAuditConcurrentWriter (7.52s)
+=== RUN   TestExecutionAuditAdmissionAtomic
+--- PASS: TestExecutionAuditAdmissionAtomic (0.13s)
+=== RUN   TestExecutionAuditTerminalAndRecovery
+--- PASS: TestExecutionAuditTerminalAndRecovery (0.26s)
+=== RUN   TestExecutionAuditConcurrentWriter
+--- PASS: TestExecutionAuditConcurrentWriter (1.32s)
+PASS
+ok  	asura/internal/storage	18.908s

@@ -1,0 +1,70 @@
+=== RUN   TestAuditRejectForeignFields
+--- PASS: TestAuditRejectForeignFields (0.00s)
+PASS
+ok  	asura/internal/audit	0.002s
+=== RUN   TestExecutionAuditAdmissionAtomic
+--- PASS: TestExecutionAuditAdmissionAtomic (0.01s)
+=== RUN   TestExecutionAuditTerminalAndRecovery
+--- PASS: TestExecutionAuditTerminalAndRecovery (0.03s)
+=== RUN   TestExecutionAuditTerminalRollback
+--- PASS: TestExecutionAuditTerminalRollback (0.01s)
+=== RUN   TestExecutionAuditNormalizationAndTamper
+--- PASS: TestExecutionAuditNormalizationAndTamper (0.01s)
+=== RUN   TestExecutionAuditEventOrderAndBounds
+--- PASS: TestExecutionAuditEventOrderAndBounds (0.02s)
+=== RUN   TestExecutionAuditMissingHeaderIsNotLegacy
+--- PASS: TestExecutionAuditMissingHeaderIsNotLegacy (0.01s)
+=== RUN   TestExecutionAuditLegacyContracts
+=== RUN   TestExecutionAuditLegacyContracts/capability-v1
+=== RUN   TestExecutionAuditLegacyContracts/stage-binding-v1
+=== RUN   TestExecutionAuditLegacyContracts/runtime-inventory-v1
+--- PASS: TestExecutionAuditLegacyContracts (0.03s)
+    --- PASS: TestExecutionAuditLegacyContracts/capability-v1 (0.01s)
+    --- PASS: TestExecutionAuditLegacyContracts/stage-binding-v1 (0.01s)
+    --- PASS: TestExecutionAuditLegacyContracts/runtime-inventory-v1 (0.01s)
+=== RUN   TestExecutionAuditLegacyAuto
+=== RUN   TestExecutionAuditLegacyAuto/direct
+=== RUN   TestExecutionAuditLegacyAuto/three-face
+--- PASS: TestExecutionAuditLegacyAuto (0.02s)
+    --- PASS: TestExecutionAuditLegacyAuto/direct (0.01s)
+    --- PASS: TestExecutionAuditLegacyAuto/three-face (0.01s)
+=== RUN   TestExecutionAuditLegacyInvalidEnums
+=== RUN   TestExecutionAuditLegacyInvalidEnums/execution_mode
+=== RUN   TestExecutionAuditLegacyInvalidEnums/status
+--- PASS: TestExecutionAuditLegacyInvalidEnums (0.02s)
+    --- PASS: TestExecutionAuditLegacyInvalidEnums/execution_mode (0.01s)
+    --- PASS: TestExecutionAuditLegacyInvalidEnums/status (0.01s)
+PASS
+ok  	asura/internal/storage	0.167s
+=== RUN   TestExecutionAuditIPC
+--- PASS: TestExecutionAuditIPC (0.03s)
+=== RUN   TestExecutionAuditRecoveryStartupFailure
+--- PASS: TestExecutionAuditRecoveryStartupFailure (0.02s)
+=== RUN   TestRuntimeSelectionAdmissionAndRedelivery
+--- PASS: TestRuntimeSelectionAdmissionAndRedelivery (0.02s)
+=== RUN   TestRuntimeSelectionNoEligible
+--- PASS: TestRuntimeSelectionNoEligible (0.01s)
+=== RUN   TestRuntimeSelectionRestart
+--- PASS: TestRuntimeSelectionRestart (0.02s)
+=== RUN   TestRuntimeSelectionConcurrentWinner
+--- PASS: TestRuntimeSelectionConcurrentWinner (0.02s)
+=== RUN   TestRuntimeSelectionThreeFaceAndQueueGuard
+--- PASS: TestRuntimeSelectionThreeFaceAndQueueGuard (0.04s)
+PASS
+ok  	asura/internal/daemon	0.169s
+=== RUN   TestExecutionAuditCLI
+--- PASS: TestExecutionAuditCLI (0.01s)
+=== RUN   TestExecutionAuditCLIAdmissionRejection
+--- PASS: TestExecutionAuditCLIAdmissionRejection (0.00s)
+=== RUN   TestRuntimeSelectionLocalAuto
+--- PASS: TestRuntimeSelectionLocalAuto (0.02s)
+=== RUN   TestRuntimeSelectionCLIBoundaries
+--- PASS: TestRuntimeSelectionCLIBoundaries (0.00s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.05s)
+=== RUN   TestRuntimeSelectionCancelDuringVersionProbe
+--- PASS: TestRuntimeSelectionCancelDuringVersionProbe (0.12s)
+=== RUN   TestRuntimeSelectionHeldStartLock
+--- PASS: TestRuntimeSelectionHeldStartLock (0.01s)
+PASS
+ok  	asura/cmd/asura	0.220s

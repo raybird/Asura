@@ -1,0 +1,7 @@
+ok  	asura/internal/audit	0.002s
+ok  	asura/internal/storage	3.901s
+ok  	asura/internal/engine	1.004s
+ok  	asura/internal/pipeline	0.434s
+ok  	asura/internal/daemon	7.112s
+ok  	asura/internal/web	0.152s
+ok  	asura/cmd/asura	0.425s

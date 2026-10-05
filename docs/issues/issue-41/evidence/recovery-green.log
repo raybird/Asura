@@ -1,0 +1,32 @@
+=== RUN   TestExecutionAuditAdmissionAtomic
+--- PASS: TestExecutionAuditAdmissionAtomic (0.01s)
+=== RUN   TestExecutionAuditTerminalAndRecovery
+    sqlite_execution_audit_test.go:91: audit_invalid
+--- FAIL: TestExecutionAuditTerminalAndRecovery (0.02s)
+=== RUN   TestExecutionAuditTerminalRollback
+--- PASS: TestExecutionAuditTerminalRollback (0.01s)
+FAIL
+FAIL	asura/internal/storage	0.044s
+=== RUN   TestExecutionAuditCompleted
+=== RUN   TestExecutionAuditCompleted/direct
+=== RUN   TestExecutionAuditCompleted/three-face
+--- PASS: TestExecutionAuditCompleted (0.04s)
+    --- PASS: TestExecutionAuditCompleted/direct (0.02s)
+    --- PASS: TestExecutionAuditCompleted/three-face (0.03s)
+=== RUN   TestExecutionAuditFailures
+=== RUN   TestExecutionAuditFailures/missing
+=== RUN   TestExecutionAuditFailures/runtime
+=== RUN   TestExecutionAuditFailures/processing
+--- PASS: TestExecutionAuditFailures (0.05s)
+    --- PASS: TestExecutionAuditFailures/missing (0.01s)
+    --- PASS: TestExecutionAuditFailures/runtime (0.03s)
+    --- PASS: TestExecutionAuditFailures/processing (0.02s)
+=== RUN   TestStageBindingTaskProjection
+--- PASS: TestStageBindingTaskProjection (0.01s)
+PASS
+ok  	asura/internal/engine	0.110s
+=== RUN   TestRuntimeSelectionAdmissionAndRedelivery
+--- PASS: TestRuntimeSelectionAdmissionAndRedelivery (0.02s)
+PASS
+ok  	asura/internal/daemon	0.026s
+FAIL

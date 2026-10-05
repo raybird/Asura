@@ -1,0 +1,6 @@
+=== RUN   TestExecutionAuditAdmissionAtomic
+    sqlite_execution_audit_test.go:34: EXAUD-017 missing durable admission: count=0 err=SQL logic error: no such table: task_execution_audits (1)
+--- FAIL: TestExecutionAuditAdmissionAtomic (0.01s)
+FAIL
+FAIL	asura/internal/storage	0.011s
+FAIL

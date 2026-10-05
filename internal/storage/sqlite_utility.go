@@ -87,13 +87,31 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 	if task == nil {
 		return errors.New("task cannot be nil")
 	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err = s.createTask(ctx, task, tx); err != nil {
+		return err
+	}
+	if err = s.createExecutionAuditTx(ctx, tx, task); err != nil {
+		return err
+	}
+	if err = s.createTaskRecallTx(ctx, tx, task); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *SQLiteStore) createTaskRecallTx(ctx context.Context, tx *sql.Tx, task *Task) error {
 	var sealed struct {
 		Workspace string         `json:"workspace"`
 		Recall    *UtilityRecall `json:"recall"`
 	}
 	// 2026-10-01：legacy context 不補建歷史事件，維持既有 CreateTask 契約。
 	if task.ResolvedContext == "" || json.Unmarshal([]byte(task.ResolvedContext), &sealed) != nil || sealed.Recall == nil || sealed.Recall.RecallID == "" {
-		return s.createTask(ctx, task, s.db)
+		return nil
 	}
 	r := sealed.Recall
 	if sealed.Workspace != task.Workspace || r.Mode != "bounded" || len(r.AutoIDs) > 4 || len(r.Selected) != len(r.AutoIDs) || (r.UtilityPolicy != "observe" && r.UtilityPolicy != "apply") || r.UtilityVersion != UtilityVersion {
@@ -107,14 +125,6 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 	}
 	if len(audit) > 65536 || len(r.RecallID) > 256 {
 		return errors.New("utility audit exceeds bounds")
-	}
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if err = s.createTask(ctx, task, tx); err != nil {
-		return err
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO recall_events(recall_id,task_id,request_id,workspace,audit,created_at) VALUES(?,?,?,?,?,?)`, r.RecallID, task.ID, task.RequestID, task.Workspace, string(audit), task.CreatedAt.UTC().Format(time.RFC3339Nano))
 	if err != nil {
@@ -139,7 +149,7 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *Task) error {
 			return err
 		}
 	}
-	return tx.Commit()
+	return nil
 }
 
 func (s *SQLiteStore) PersistUtility(ctx context.Context, workspace, recallID string, input []UtilityAssessment) error {

@@ -87,7 +87,7 @@ func (s *DefaultCriticStage) ExecutePrepared(ctx context.Context, execCtx *engin
 	var rawOutput string
 	var execRes *backend.ExecutionResult
 	if activeBackend != nil {
-		res, err := activeBackend.Run(ctx, req)
+		res, err := observedRun(ctx, execCtx, activeBackend, req)
 		execRes = res
 		if err != nil {
 			return nil, execRes, fmt.Errorf("critic backend error: %w", err)

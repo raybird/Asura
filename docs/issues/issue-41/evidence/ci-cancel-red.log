@@ -1,0 +1,9 @@
+--- FAIL: TestRuntimeSelectionLocalCancel (5.00s)
+    runtime_selection_test.go:112: runtime did not start
+--- FAIL: TestRuntimeSelectionLocalCancel (5.01s)
+    runtime_selection_test.go:112: runtime did not start
+--- FAIL: TestRuntimeSelectionLocalCancel (5.01s)
+    runtime_selection_test.go:112: runtime did not start
+FAIL
+FAIL	asura/cmd/asura	25.007s
+FAIL

@@ -1,0 +1,30 @@
+=== RUN   TestExecutionAuditWebRender
+--- PASS: TestExecutionAuditWebRender (0.45s)
+=== RUN   TestExecutionAuditHTTPBoundary
+--- PASS: TestExecutionAuditHTTPBoundary (0.00s)
+=== RUN   TestExecutionAuditHTTPResponseBound
+--- PASS: TestExecutionAuditHTTPResponseBound (0.01s)
+PASS
+ok  	asura/internal/web	1.473s
+=== RUN   TestExecutionAuditAdmissionAtomic
+--- PASS: TestExecutionAuditAdmissionAtomic (0.12s)
+=== RUN   TestExecutionAuditTerminalAndRecovery
+--- PASS: TestExecutionAuditTerminalAndRecovery (0.26s)
+=== RUN   TestExecutionAuditTerminalRollback
+--- PASS: TestExecutionAuditTerminalRollback (0.13s)
+=== RUN   TestExecutionAuditNormalizationAndTamper
+--- PASS: TestExecutionAuditNormalizationAndTamper (0.16s)
+=== RUN   TestExecutionAuditEventOrderAndBounds
+--- PASS: TestExecutionAuditEventOrderAndBounds (0.18s)
+=== RUN   TestExecutionAuditMissingHeaderIsNotLegacy
+--- PASS: TestExecutionAuditMissingHeaderIsNotLegacy (0.14s)
+=== RUN   TestExecutionAuditLegacyContracts
+=== RUN   TestExecutionAuditLegacyContracts/capability-v1
+=== RUN   TestExecutionAuditLegacyContracts/stage-binding-v1
+=== RUN   TestExecutionAuditLegacyContracts/runtime-inventory-v1
+--- PASS: TestExecutionAuditLegacyContracts (0.34s)
+    --- PASS: TestExecutionAuditLegacyContracts/capability-v1 (0.11s)
+    --- PASS: TestExecutionAuditLegacyContracts/stage-binding-v1 (0.11s)
+    --- PASS: TestExecutionAuditLegacyContracts/runtime-inventory-v1 (0.11s)
+PASS
+ok  	asura/internal/storage	2.332s

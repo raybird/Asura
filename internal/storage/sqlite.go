@@ -152,6 +152,10 @@ func NewSQLiteStore(dbPath string) (*SQLiteStore, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("init utility schema: %w", err)
 	}
+	if err := store.initExecutionAuditSchema(); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	return store, nil
 }
 
@@ -719,7 +723,7 @@ func (s *SQLiteStore) UpdateTaskStatus(ctx context.Context, id string, status Ta
 	WHERE id = ?
 	`
 	now := time.Now().UTC()
-	res, err := s.db.ExecContext(ctx, query, string(status), result, errMsg, now, id)
+	res, err := s.updateTaskStateAudit(ctx, id, status, query, string(status), result, errMsg, now, id)
 	if err != nil {
 		return fmt.Errorf("update task status: %w", err)
 	}
@@ -741,7 +745,7 @@ func (s *SQLiteStore) UpdateTaskStatusIfPending(ctx context.Context, id string, 
 	WHERE id = ? AND status = ?
 	`
 	now := time.Now().UTC()
-	res, err := s.db.ExecContext(ctx, query, string(status), now, id, string(StatusPending))
+	res, err := s.updateTaskStateAudit(ctx, id, status, query, string(status), now, id, string(StatusPending))
 	if err != nil {
 		return false, fmt.Errorf("update task status if pending: %w", err)
 	}
@@ -760,7 +764,7 @@ func (s *SQLiteStore) UpdateTaskStatusIfPendingOrQueued(ctx context.Context, id 
 	WHERE id = ? AND (status = ? OR status = ?)
 	`
 	now := time.Now().UTC()
-	res, err := s.db.ExecContext(ctx, query, string(status), now, id, string(StatusPending), string(StatusQueued))
+	res, err := s.updateTaskStateAudit(ctx, id, status, query, string(status), now, id, string(StatusPending), string(StatusQueued))
 	if err != nil {
 		return false, fmt.Errorf("update task status if pending or queued: %w", err)
 	}
@@ -779,7 +783,7 @@ func (s *SQLiteStore) UpdateTaskStatusIfRunning(ctx context.Context, id string, 
 	WHERE id = ? AND status = ?
 	`
 	now := time.Now().UTC()
-	res, err := s.db.ExecContext(ctx, query, string(status), result, errMsg, now, id, string(StatusRunning))
+	res, err := s.updateTaskStateAudit(ctx, id, status, query, string(status), result, errMsg, now, id, string(StatusRunning))
 	if err != nil {
 		return false, fmt.Errorf("update task status if running: %w", err)
 	}
@@ -798,7 +802,7 @@ func (s *SQLiteStore) UpdateTaskStatusIfPendingOrQueuedWithMsg(ctx context.Conte
 	WHERE id = ? AND (status = ? OR status = ?)
 	`
 	now := time.Now().UTC()
-	res, err := s.db.ExecContext(ctx, query, string(status), result, errMsg, now, id, string(StatusPending), string(StatusQueued))
+	res, err := s.updateTaskStateAudit(ctx, id, status, query, string(status), result, errMsg, now, id, string(StatusPending), string(StatusQueued))
 	if err != nil {
 		return false, fmt.Errorf("update task status if pending or queued: %w", err)
 	}
@@ -817,7 +821,7 @@ func (s *SQLiteStore) UpdateTaskStatusIfCancelling(ctx context.Context, id strin
 	WHERE id = ? AND status = ?
 	`
 	now := time.Now().UTC()
-	res, err := s.db.ExecContext(ctx, query, string(status), result, errMsg, now, id, string(StatusCancelling))
+	res, err := s.updateTaskStateAudit(ctx, id, status, query, string(status), result, errMsg, now, id, string(StatusCancelling))
 	if err != nil {
 		return false, fmt.Errorf("update task status if cancelling: %w", err)
 	}
@@ -875,18 +879,7 @@ func (s *SQLiteStore) UpdateTaskPGID(ctx context.Context, id string, pgid int) e
 // RecoverInterruptedTasks 掃描並將所有處於 running, pending, queued 或 cancelling 狀態的孤兒任務標記為 failed
 // 遵循 SCN-006 與 MUST FIX 5：守護程序重啟時保留已完成結果，揭露中斷工作，杜絕假成功、自動重新執行或排隊殘留
 func (s *SQLiteStore) RecoverInterruptedTasks(ctx context.Context) (int64, error) {
-	query := `
-	UPDATE tasks
-	SET status = ?, error_message = ?, updated_at = ?
-	WHERE status IN (?, ?, ?, ?)
-	`
-	now := time.Now().UTC()
-	msg := "task interrupted: system restarted or terminated unexpectedly"
-	res, err := s.db.ExecContext(ctx, query, StatusFailed, msg, now, StatusRunning, StatusPending, StatusQueued, StatusCancelling)
-	if err != nil {
-		return 0, fmt.Errorf("recover interrupted tasks: %w", err)
-	}
-	return res.RowsAffected()
+	return s.recoverInterruptedTasksAudit(ctx)
 }
 
 // DeleteTask 依 ID 刪除指定任務

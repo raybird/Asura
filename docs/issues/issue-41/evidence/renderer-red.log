@@ -1,0 +1,6 @@
+=== RUN   TestExecutionAuditWebRender
+    execution_audit_render_test.go:32: EXAUD-002 persisted audit renderer missing
+--- FAIL: TestExecutionAuditWebRender (0.03s)
+FAIL
+FAIL	asura/internal/web	0.030s
+FAIL

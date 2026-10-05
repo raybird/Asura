@@ -1,0 +1,5 @@
+Test & Build	Test with Race Detector	2026-10-04T11:17:51.2220608Z === RUN   TestRuntimeSelectionLocalCancel
+Test & Build	Test with Race Detector	2026-10-04T11:17:51.2221768Z     runtime_selection_test.go:112: runtime did not start
+Test & Build	Test with Race Detector	2026-10-04T11:17:51.2222811Z --- FAIL: TestRuntimeSelectionLocalCancel (5.01s)
+Test & Build	Test with Race Detector	2026-10-04T11:17:51.2223797Z === RUN   TestRuntimeSelectionCancelDuringVersionProbe
+Test & Build	Test with Race Detector	2026-10-04T11:17:51.2224916Z --- PASS: TestRuntimeSelectionCancelDuringVersionProbe (0.35s)

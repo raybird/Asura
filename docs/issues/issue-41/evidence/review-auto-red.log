@@ -1,0 +1,11 @@
+=== RUN   TestExecutionAuditLegacyAuto
+=== RUN   TestExecutionAuditLegacyAuto/direct
+    sqlite_execution_audit_test.go:416: valid historical auto rejected: audit_invalid
+=== RUN   TestExecutionAuditLegacyAuto/three-face
+    sqlite_execution_audit_test.go:416: valid historical auto rejected: audit_invalid
+--- FAIL: TestExecutionAuditLegacyAuto (0.02s)
+    --- FAIL: TestExecutionAuditLegacyAuto/direct (0.01s)
+    --- FAIL: TestExecutionAuditLegacyAuto/three-face (0.01s)
+FAIL
+FAIL	asura/internal/storage	0.021s
+FAIL

@@ -1,0 +1,12 @@
+ok  	asura/internal/audit	0.001s
+ok  	asura/internal/storage	3.613s
+--- FAIL: TestStageBindingTaskProjection (0.01s)
+    stage_binding_test.go:39: projection inconsistency executed: task=<nil> err=update task to running: update task status if pending or queued: audit_invalid calls=0
+FAIL
+FAIL	asura/internal/engine	0.888s
+ok  	asura/internal/pipeline	0.488s
+--- FAIL: TestRuntimeSelectionAdmissionAndRedelivery (3.02s)
+    runtime_selection_test.go:48: task did not finish
+FAIL
+FAIL	asura/internal/daemon	9.935s
+FAIL

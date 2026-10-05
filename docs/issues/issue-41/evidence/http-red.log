@@ -1,0 +1,6 @@
+=== RUN   TestExecutionAuditHTTPBoundary
+    execution_audit_http_test.go:13: audit route absent: 404
+--- FAIL: TestExecutionAuditHTTPBoundary (0.00s)
+FAIL
+FAIL	asura/internal/web	0.002s
+FAIL

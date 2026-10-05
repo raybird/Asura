@@ -1,0 +1,5 @@
+--- FAIL: TestRuntimeSelectionLocalCancel (0.17s)
+    runtime_selection_test.go:118: cancel: error: failed to cancel task: task is not running: task status is failed
+FAIL
+FAIL	asura/cmd/asura	7.467s
+FAIL
