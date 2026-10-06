@@ -4,7 +4,7 @@
 
 ## 專案邊界與驗證入口
 
-單一 Go module（`go.mod`），CLI 入口 `cmd/asura`，各能力是 `internal/` 下的獨立 package，邊界見根目錄 README「目錄結構」。
+單一 Go module（`go.mod`），CLI 入口 `cmd/asura`，各能力是 `internal/` 下的獨立 package，邊界見 `docs/development.md`「目錄結構」。
 
 完整驗證以 `.github/workflows/ci.yml` 為準；本機最小回歸（2026-10-06 確認）：
 
@@ -24,9 +24,11 @@ CI 另跑記憶 lifecycle 效能探測（`-tags lifecycleperf`）與 Web UI／�
 
 用專案實際路徑建立「變更 → 文件」對照：部署拓撲／路由與依賴 → 架構文件；領域規則／實體關係 → 領域文件；部署／告警 → 操作文件；使用者功能 → 使用手冊。只列已有或此次確實需要建立的文件。
 
-- 使用者功能／CLI 命令（daemon, run, ask, status, cancel, audit, runtime, web, cron, memory 參數與輸出）→ 根目錄 `README.md`
-- 發佈版本 → `CHANGELOG.md` 新增版本節，README「v1.0 Baseline」範圍表隨之更新
-- 專案級基礎記憶管理契約（五欄位、精確 scope 隔離、撤權保留、重啟持久化、零 AI 調用）→ 根目錄 `README.md`
+- CLI 命令參數與輸出（daemon, run, ask, status, cancel, audit, runtime, cron）→ `docs/guides/cli-reference.md`；新增或移除子命令時同步根目錄 README「指令一覽」
+- Runtime adapter 版本、admission、auto 選擇、stage 綁定、清冊、稽核與上下文窗口 → `docs/guides/runtimes.md`；固定版本變動時同步 README「安裝」的 runtime 表
+- Web Console 功能與 API → `docs/guides/web-console.md`
+- 發佈版本 → `CHANGELOG.md` 新增版本節，README「v1.0 範圍」表隨之更新
+- 專案記憶契約（基礎管理、Git 候選、有界召回、效用回饋、版本取代）與 `memory` 子命令 → `docs/guides/memory.md`
 - 系統架構設計、排程拓撲、進程樹模型與技術決策 → `docs/superpowers/specs/2026-09-11-asura-architecture-design.md`
 
 ## 本地 gate 與案例
