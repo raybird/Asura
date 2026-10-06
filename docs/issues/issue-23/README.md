@@ -196,9 +196,10 @@ Feature: Git 變更感知與審核式專案記憶擷取
 | 2026-09-29 | 依 PR #24 第十二輪 Review `5339956094` 以 durable migration marker 修復 legacy unknown 隔離的 crash-safety，修復 H-01 跨行程取消握手競態，並完整傳遞 Checkpoint ancestry callback 錯誤 | - |
 | 2026-09-29 | 依 PR #24 第十三輪 Review `5346736021` 修正 pre-marker 已隔離 Range 在升級時再次隔離 replacement、造成 UNIQUE 衝突的問題；驗證見 [回歸證據](evidence/e2e-regression.md#2026-09-29-第十三輪審查修復驗證) | - |
 | 2026-09-29 | 使用者回覆「那就核准」，重新核准 GITMEM-009 的可選介面、未配置模型時明確拒絕之交付範圍；正式模型 adapter 留待後續規劃 | - |
+| 2026-09-29 | PR #24 合併至 main（merge commit `19cb3d4`），issue 結案 | Raybird |
 
 ---
 **建立日期**: 2026-09-25  
 **分級**: Large  
 **風險**: High  
-**狀態**: 已完成（待交付結案）
+**狀態**: 已完成 — PR #24 於 2026-09-29 合併（merge commit `19cb3d4`）

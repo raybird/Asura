@@ -200,6 +200,7 @@ And MEM、CTXMEM、RECALL、WEBMEM、GITMEM、WEBGIT、CTXWIN、TFACE、MBACK、
 
 | 日期 | 異動 | 負責人 |
 |---|---|---|
+| 2026-10-01 | PR #30 合併至 main（merge commit `1b21d58`），issue 結案 | Raybird |
 | 2026-10-01 | P0～P4、完整回歸、正式 CI 完成；PR #30 交付，獨立 review 結論以固定版本 artifact 為準 | Codex |
 | 2026-10-01 | 使用者「核准」UFL-001～012 與 K-TBD-1～10；沿用現有模型設定 | 使用者／Codex |
 | 2026-10-01 | 讀取 issue、盤點基準、建立待核准規格與設計方案 | Codex |
@@ -208,4 +209,4 @@ And MEM、CTXMEM、RECALL、WEBMEM、GITMEM、WEBGIT、CTXWIN、TFACE、MBACK、
 **建立日期**: 2026-10-01
 **分級**: Large — 跨 storage、Daemon、engine、pipeline、recall 與 CLI
 **風險**: High
-**狀態**: 交付驗證完成；獨立 review PASS 後等待合併
+**狀態**: 已完成 — PR #30 於 2026-10-01 合併（merge commit `1b21d58`）

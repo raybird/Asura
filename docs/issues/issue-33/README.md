@@ -229,9 +229,11 @@ Feature: 可稽核且 fail-closed 的 explicit runtime 執行契約
 
 | 2026-10-03 | 16 項驗收完成，PR #34 建立，完整獨立審查 PASS；未合併 | Codex |
 
+| 2026-10-03 | PR #34 合併至 main（merge commit `37e034b`），issue 結案 | Raybird |
+
 ---
 
 **建立日期**: 2026-10-03  
 **分級**: Large — backend／pipeline／engine／daemon／CLI／Web 跨模組契約  
 **風險**: High  
-**狀態**: runtime 契約已實作且最終全回歸通過；等待合併 — PR #34 已建立，完整獨立審查 PASS；CI 執行中（結果以 PR checks 為準）
+**狀態**: 已完成 — PR #34 於 2026-10-03 合併（merge commit `37e034b`）

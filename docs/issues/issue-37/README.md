@@ -183,6 +183,7 @@ Feature: admission 封存 stage runtime 並依原 plan 執行
 
 | 日期 | 異動 | 負責人 |
 |---|---|---|
+| 2026-10-04 | PR #38 合併至 main（merge commit `625e62d`），issue 結案 | Raybird |
 | 2026-10-04 | 使用者「核准」完整提案與驗收 | 使用者 |
 | 2026-10-04 | 建立 PR #38，固定交付規格、source manifest 與完整測試證據；獨立 review 判定由被審查 HEAD 對應報告保存 | Codex |
 | 2026-10-04 | 完成 stage contract、pipeline guards、queue/restart/audit 驗收，最終 race/vet/build 全綠 | Codex |
@@ -193,4 +194,4 @@ Feature: admission 封存 stage runtime 並依原 plan 執行
 **建立日期**: 2026-10-04
 **分級**: Large — 跨 admission、pipeline、persistence 與 audit 邊界
 **風險**: High
-**狀態**: [PR #38](https://github.com/raybird/Asura/pull/38) 已交付；審查判定依本目錄有效 review artifact，尚未合併
+**狀態**: 已完成 — PR #38 於 2026-10-04 合併（merge commit `625e62d`）

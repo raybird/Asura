@@ -180,6 +180,7 @@ Feature: 明確啟用且有界的專案記憶召回
 
 | 日期 | 異動 | 負責人 |
 |---|---|---|
+| 2026-09-23 | PR #20 合併至 main（merge commit `9d5c2a3`），issue 結案 | Raybird |
 | 2026-09-22 | bounded explicit ID canonicalization 修復完成；最新產品 HEAD 獨立 review PASS，等待合併 | Codex |
 | 2026-09-22 | PR #20 review 發現 bounded explicit ID 空白正規化不一致；完成紅綠修復與全套回歸，等待新 HEAD 獨立審查 | Codex |
 | 2026-09-22 | 實作與驗證完成；獨立 review PASS，建立 PR #20，等待合併 | Codex |
@@ -190,4 +191,4 @@ Feature: 明確啟用且有界的專案記憶召回
 **建立日期**: 2026-09-22  
 **分級**: Large — 涉及儲存、Daemon、CLI 與 execution context 邊界  
 **風險**: High — 資料隔離、成本及冪等性  
-**狀態**: 等待合併
+**狀態**: 已完成 — PR #20 於 2026-09-23 合併（merge commit `9d5c2a3`）

@@ -242,11 +242,12 @@ Feature: Multi-Backend Foundation (OpenCode + Codex CLI)
 | 2026-09-18 | 完成 Phase 1 ~ Phase 8 全數實作，通過 MBACK-001 至 MBACK-012 外迴圈驗收與全系統回歸 | - |
 | 2026-09-18 | 針對審查提出的 4 MUST FIX + 2 SHOULD FIX 徹底完成架構修復與測試補齊，產出審查報告 review-af3a43e.md | - |
 | 2026-09-19 | 針對複審提出的 2 MUST FIX + 3 SHOULD FIX 完成 Codex 版本 Exact Match、Task PGID 生命週期接入與取消驗證，產出審查報告 review-1db1441.md（PASS） | - |
+| 2026-09-21 | PR #16 合併至 main（merge commit `b153c01`），issue 結案 | Raybird |
 
 ---
 **建立日期**: 2026-09-18  
 **分級**: Large  
 **風險**: High  
-**狀態**: 待合併
+**狀態**: 已完成 — PR #16 於 2026-09-21 合併（merge commit `b153c01`）
 
 

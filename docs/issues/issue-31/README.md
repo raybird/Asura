@@ -188,6 +188,7 @@ go build ./cmd/asura
 ## Timeline
 | 日期 | 異動 | 負責人 |
 |---|---|---|
+| 2026-10-01 | PR #32 合併至 main（merge commit `41b5220`），issue 結案 | Raybird |
 | 2026-10-01 | 使用者「審查通過」核准 MLIFE-001～012 與 L-TBD 提案 | 使用者 |
 | 2026-10-01 | 依立項提案完成現況調查與候選規格建檔，保留待核准狀態 | Codex |
 
@@ -195,4 +196,4 @@ go build ./cmd/asura
 **建立日期**: 2026-10-01
 **分級**: Large — 跨 storage、daemon、sealed context、recall 與 CLI，新增持久化契約
 **風險**: High
-**狀態**: 修正與本地驗證完成，等待正式 CI／第二輪審查
+**狀態**: 已完成 — PR #32 於 2026-10-01 合併（merge commit `41b5220`）

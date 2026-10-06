@@ -218,9 +218,11 @@ Feature: deterministic capability-aware runtime selection
 
 | 2026-10-03 | 使用者「提案也核准」，核准完整驗收與技術方案 | 使用者 |
 
+| 2026-10-04 | PR #36 合併至 main（merge commit `d3a40e6`），issue 結案 | Raybird |
+
 ---
 
 **建立日期**: 2026-10-03
 **分級**: Large — 跨 runtime registry、admission、execution 與 audit contract
 **風險**: High
-**狀態**: [PR #36](https://github.com/raybird/Asura/pull/36) 已交付；審查判定見本目錄 review artifact，尚未合併
+**狀態**: 已完成 — PR #36 於 2026-10-04 合併（merge commit `d3a40e6`）

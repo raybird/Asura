@@ -201,6 +201,7 @@ Feature: 有界且可稽核的 runtime admission inventory
 
 | 日期 | 異動 | 負責人 |
 |---|---|---|
+| 2026-10-04 | PR #40 合併至 main（merge commit `2f583c7`），issue 結案 | Raybird |
 | 2026-10-04 | 使用者「核准」RI-TBD-1～15、全部驗收與 TBD-1～5 | 使用者 |
 | 2026-10-04 | 讀取 #39 與已合併 Phase 4C，建立現況分析、RI-TBD 提案與待核准驗收；未修改 production code | Codex |
 
@@ -209,4 +210,4 @@ Feature: 有界且可稽核的 runtime admission inventory
 **建立日期**: 2026-10-04
 **分級**: Large — 跨 runtime adapter、admission、execution guard、persistence 與 audit
 **風險**: High
-**狀態**: 實作與驗證完成，等待獨立審查及合併；最終審查判定以 `review-{HEAD7}.md` 為準
+**狀態**: 已完成 — PR #40 於 2026-10-04 合併（merge commit `2f583c7`）

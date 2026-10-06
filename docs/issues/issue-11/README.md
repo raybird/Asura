@@ -169,9 +169,10 @@ Feature: 專案記憶與 AI 任務 Context 整合
 | 2026-09-17 | 讀取 GitHub Issue #11 啟動 new-issue，完成現況分析、技術選型取捨與實作計畫，建立 Issue 11 文件與候選驗收規格 | - |
 | 2026-09-17 | 逐題確認 TBD-1～TBD-4；核准持久化方案、CLI 旗標規格、Prompt 組裝格式，並正式核准 CTXMEM-001～CTXMEM-007 全部驗收劇本 | - |
 | 2026-09-17 | 依 TDD 完成 Phase 1～4 全部 Task，通過 CTXMEM-001～007 外迴圈端到端整合與全專案回歸驗證 | - |
+| 2026-09-17 | PR #12 合併至 main（merge commit `799625c`），issue 結案 | Raybird |
 
 ---
 **建立日期**: 2026-09-17  
 **分級**: Large  
 **風險**: High  
-**狀態**: 已完成（Phase 1～4 全部驗收通過）
+**狀態**: 已完成 — PR #12 於 2026-09-17 合併（merge commit `799625c`）

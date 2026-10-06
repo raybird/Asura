@@ -146,6 +146,7 @@ Feature: 可控且可追蹤的本機任務執行
 | 2026-09-12 | 依使用者核准修復 review-7e76e74.md 提出的 K-01 核心 StartTime 身分驗證與三態安全回收防禦，通過 go test -race 驗證 | Antigravity |
 | 2026-09-12 | 依使用者核准修復 review-6683a0f.md 提出的 L-01 進程組孤兒生命週期身分校驗與安全回收防禦，通過 go test -race 驗證 | Antigravity |
 | 2026-09-12 | 依使用者核准修復 review-6c8895b.md 提出的 M-01 孤兒進程組身分未知保留與假成功防禦，通過 go test -race 驗證 | Antigravity |
+| 2026-09-12 | PR #1 合併至 main（merge commit `1cd0301`），issue 結案 | Raybird |
 
 ---
 
@@ -155,4 +156,4 @@ Feature: 可控且可追蹤的本機任務執行
 
 **風險**: High（所規劃的執行系統）
 
-**狀態**: 進行中（Phase 1 最小執行核心）
+**狀態**: 已完成 — PR #1 於 2026-09-12 合併（merge commit `1cd0301`）
