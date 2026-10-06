@@ -1,0 +1,54 @@
+name: Release
+
+# 2026-10-06：只發佈 Linux。進程組回收、/proc 身分驗證與 bwrap 隔離皆依賴 Linux。
+on:
+  push:
+    tags: [ "v*" ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "要補上執行檔的既有 tag（例如 v1.0.0）"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  binaries:
+    name: Build & Upload Linux Binaries
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.TAG }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build archives
+        run: |
+          mkdir -p dist
+          for arch in amd64 arm64; do
+            name="asura_${TAG}_linux_${arch}"
+            mkdir -p "dist/${name}"
+            CGO_ENABLED=0 GOOS=linux GOARCH="${arch}" \
+              go build -trimpath -ldflags "-s -w" -o "dist/${name}/asura" ./cmd/asura
+            cp LICENSE README.md CHANGELOG.md "dist/${name}/"
+            tar -C dist -czf "dist/${name}.tar.gz" "${name}"
+          done
+          (cd dist && sha256sum *.tar.gz > "asura_${TAG}_checksums.txt")
+
+      - name: Upload to release
+        run: |
+          if ! gh release view "${TAG}" > /dev/null 2>&1; then
+            awk -v tag="${TAG}" '$0 ~ "^## \\[" tag "\\]" {f=1; next} /^## \[/ {if (f) exit} f' CHANGELOG.md > notes.md
+            gh release create "${TAG}" --verify-tag --title "${TAG}" --notes-file notes.md
+          fi
+          gh release upload "${TAG}" dist/*.tar.gz "dist/asura_${TAG}_checksums.txt" --clobber

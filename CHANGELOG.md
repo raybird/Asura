@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### ⚙️ 建置與發佈
+- **[ci]**：新增 Release workflow，推送 `v*` tag 或手動指定 tag 時，編譯 Linux amd64／arm64 靜態執行檔並附上 checksum 上傳到 GitHub Release
+
 ## [v1.0.0] - 2026-10-06
 
 第一版基準：**Asura v1.0 Local Agent Runtime Control Plane baseline**。涵蓋 main 上 Issue #1～#41 的全部交付（程式碼截至 `db7967c`，其後僅有發佈文件整理）。v0.1.0 只有文件基礎設施，本版是第一個含程式碼的發佈，沒有相對於前版的不相容變更。
