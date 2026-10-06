@@ -227,6 +227,7 @@ Feature: Context Window Management Foundation (Capability Probe, Budget and Obse
 
 | 日期 | 異動 | 負責人 |
 |------|------|--------|
+| 2026-09-22 | PR #18 合併至 main（merge commit `8576dd0`），issue 結案 | Raybird |
 | 2026-09-21 | 解決 PR #18 審查回饋：修復 OpenCode Scanner 大型事件遺失 usage 漏洞（擴大緩衝至 4MB 並顯式檢查 scanner.Err） | - |
 | 2026-09-21 | 解決 PR #18 獨立審查回饋：修復 NaN 繞過、OpenCode nullable 聚合契約、live probe 產物與跳過語意、模型目錄與輸出保留空間基準釐清 | - |
 | 2026-09-21 | 完成 Phase 1 至 Phase 6 全部實作，CTXWIN-001 ～ CTXWIN-008 與全系統回歸測試 100% 通過（全綠），更新文件待審查 | - |
@@ -238,4 +239,4 @@ Feature: Context Window Management Foundation (Capability Probe, Budget and Obse
 **建立日期**: 2026-09-21  
 **分級**: Large  
 **風險**: High  
-**狀態**: 待審查
+**狀態**: 已完成 — PR #18 於 2026-09-22 合併（merge commit `8576dd0`）

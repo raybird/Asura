@@ -182,9 +182,10 @@ Feature: 可替換的四後端執行契約
 | 2026-09-30 | 使用者對 Antigravity 模型選項回覆「1」，選定 gemini-3.8-flash-low | 使用者 |
 | 2026-09-30 | 使用者對正式登入選項回覆「1」，選定原 CLI 登入／唯讀快照／過期後手動更新；不持久化自動續期 | 使用者 |
 | 2026-09-30 | 使用者對 Antigravity 部署選項回覆「1」，核准 bwrap／HOME／IPC 隔離及 unavailable 行為 | 使用者 |
+| 2026-09-30 | PR #26 合併至 main（merge commit `231d846`），issue 結案 | Raybird |
 
 ---
 **建立日期**: 2026-09-29
 **分級**: Large
 **風險**: High
-**狀態**: GitHub review #5362647041 RETURN；修正 CI runtime prerequisite，等待新 HEAD 正式 CI 與再次審查
+**狀態**: 已完成 — PR #26 於 2026-09-30 合併（merge commit `231d846`）

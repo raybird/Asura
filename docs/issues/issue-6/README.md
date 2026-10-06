@@ -170,6 +170,7 @@ Feature: 常駐中樞容量政策與動態 Cron 排程管理
 | 2026-09-14 | 獨立審查員產出複審報告（`review-3250ef4.md`），指出 7 項 MUST FIX（併發喚醒丟失、pool 隊列拋棄、symlink 鎖外洩、待確認事項說明矛盾、回歸鑑別力不足），判定 RETURN TO execute-task |
 | 2026-09-14 | 完成三次審查修復：條件更新 StatusQueued 防範 pending 喚醒丟失、新增 SubmitEnqueuedClassifiedWithDone 避免喚醒任務被 pool 二次拋棄、鎖定不可變 wsKey 杜絕 symlink 釋放外洩、修復 Santiago 等午夜 DST 步進、修正待確認事項為標準表格、補齊具鑑別力回歸測試與全套雙迴圈日誌 |
 | 2026-09-14 | 獨立審查員產出複審報告（`review-4b4e09d.md`），確認 7 項 MUST FIX 已全數徹底解決，判定 PASS |
+| 2026-09-14 | PR #7 合併至 main（merge commit `202f1b3`），issue 結案 |
 
 ## 待確認事項
 
@@ -184,4 +185,4 @@ Feature: 常駐中樞容量政策與動態 Cron 排程管理
 **修訂日期**: 2026-09-14  
 **分級**: Large（跨 Daemon 容量與排程、Storage Schema 擴充、CLI 子命令與整合測試）  
 **風險**: High（定時自主觸發與檔案寫入互斥）  
-**狀態**: 已通過獨立審查（PASS），待合併 PR #7
+**狀態**: 已完成 — PR #7 於 2026-09-14 合併（merge commit `202f1b3`）

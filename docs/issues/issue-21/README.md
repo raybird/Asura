@@ -176,9 +176,10 @@ Feature: 已登入 Web Console 的專案記憶與召回操作
 | 2026-09-23 | PR #22 獨立審查要求修正 HTTP 5xx 後隱藏的原請求重試入口；503 UI 探測先紅後綠，待新 HEAD 回歸與再審 | Codex |
 | 2026-09-24 | 收到 PR #22 新審查的同 workspace Task 競態意見；以 Task 顯示世代修正並補長結果與輪詢探測，另顯示接受時首次 Stage 預估 | Codex |
 | 2026-09-24 | 修正 PR #22 SHOULD FIX：記憶 page/detail IPC 完整斷線可取消 SQLite 查詢，保留同步解碼並以安全複製的 Unix fd 監看掛斷；補兩種記憶查詢半關閉回覆及錯誤 JSON 順序測試。舊 reader 負向對照先紅，修正後兩案例 race 連跑 20 次全綠；全套 race、vet、build 與 UI probe 正在新 HEAD 重驗 | Codex |
+| 2026-09-24 | PR #22 合併至 main（merge commit `c1569a0`），issue 結案 | Raybird |
 
 ---
 **建立日期**: 2026-09-23
 **分級**: Large — Web、Daemon、SQLite 與 Task 稽核跨模組
 **風險**: High — 授權外洩、無界傳輸與重送副作用
-**狀態**: PR #22 已建立；2026-09-24 審查意見修正與再審中
+**狀態**: 已完成 — PR #22 於 2026-09-24 合併（merge commit `c1569a0`）

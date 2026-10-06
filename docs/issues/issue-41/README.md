@@ -231,6 +231,7 @@ Feature: 有界且可信的 Control Plane execution provenance
 
 | 日期 | 異動 | 負責人 |
 |---|---|---|
+| 2026-10-05 | PR #42 合併至 main（merge commit `db7967c`），issue 結案 | Raybird |
 | 2026-10-04 | 使用者「核准」完整提案、驗收與四項政策，開始實作 | 使用者 |
 | 2026-10-04 | 依 GitHub #41 盤點已合併 Phase 4D，建立四份規劃文件與 EA-TBD 提案，等待安全／失敗政策及驗收核准 | Codex |
 
@@ -241,6 +242,6 @@ Feature: 有界且可信的 Control Plane execution provenance
 
 **風險**: High — provenance 原子性、crash/cancel 一致性與秘密保存邊界
 
-**狀態**: 修正與完整驗證完成，等待新固定 HEAD 的獨立重審判定；PASS 後等待合併
+**狀態**: 已完成 — PR #42 於 2026-10-05 合併（merge commit `db7967c`）
 
 2026-10-04：實作證據與逐項 EXAUD 映射見 [verification.md](./evidence/verification.md)；核准 Gherkin 保持不變。

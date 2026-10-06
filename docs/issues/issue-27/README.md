@@ -149,9 +149,10 @@ Feature: Web Git candidate capture and review
 |---|---|---|
 | 2026-09-30 | 讀取立項提案，盤點程式碼與既有測試，建立待核准規格及計畫 | Codex |
 | 2026-09-30 | 使用者核准全部 WEBGIT 與 J-TBD；進入實作 | 使用者 |
+| 2026-10-01 | PR #28 合併至 main（merge commit `7785a20`），issue 結案 | Raybird |
 
 ---
 **建立日期**: 2026-09-30  
 **分級**: Large — 跨 Web、Daemon、storage 與 Git cancellation 整合  
 **風險**: High  
-**狀態**: 實作與本機驗證完成；待正式 CI、獨立審查與合併
+**狀態**: 已完成 — PR #28 於 2026-10-01 合併（merge commit `7785a20`）

@@ -1,5 +1,8 @@
 # 本機核心合併後的階段規劃
 
+> [!NOTE]
+> 2026-10-06：本文件規劃的 Phase 1.5、2A、2B 與 Phase 3 各項能力，連同後續 Phase 4（Runtime 控制平面）已全部合併，並以 v1.0.0 發佈（見 [CHANGELOG](../../CHANGELOG.md)）。本文件保留為歷史規劃，不再更新；v1.0 之後的工作另行立項。
+
 建立日期：2026-09-12。基準為 main `1cd0301a82472567c527d2048db327a4101cb0ae`（Issue 1 合併）。2026-09-12 使用者要求「那依照你的建議拆分」，授權本次文件拆分；不代表新增行為驗收已核准或授權開始 production code 實作。
 
 本文件是後續工作的規劃入口，承接 [Issue 1 高階計畫](../issues/issue-1/implementation-plan.md) 與 [decomposition](../issues/issue-1/implementation-plan-decomposition.md)。Issue 1 的交付與核准紀錄維持歷史原貌；下列階段是新工作，不重新開啟已完成的審查。正式 issue 編號待立項時指定，不假設本機編號等於遠端 tracker 編號。

@@ -2,8 +2,9 @@
 
 > **Personal autonomous AI agent orchestrator and control plane**
 
-[![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go)](https://go.dev/)
+[![Go Version](https://img.shields.io/badge/Go-1.26+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/badge/release-v1.0.0-success)](CHANGELOG.md)
 
 **Asura（阿修羅）** 是一套以 Go 語言打造的個人自主 AI 控制平面與輕量編排中樞（Personal Autonomous AI Control Plane & Orchestrator）。
 
@@ -11,6 +12,23 @@
 - **三面（Three Faces）**：由 **智者之面 (Oracle)**、**執行之面 (Striker)** 與 **審查之面 (Critic)** 組成的動態協同管線，告別單一 Prompt 的混亂負擔。
 - **六臂（Six Execution Arms）**：向外伸展的通訊與執行通道（本機 CLI、常駐守護進程、記憶中樞、Agent 執行池等）。
 - **單一中樞守護（Unified Daemon）**：以 Go 語言編譯為單一靜態二進位檔案，徹底終結多進程對 SQLite 的檔案鎖與 Migration 競爭。
+
+---
+
+## v1.0 Baseline：Local Agent Runtime Control Plane
+
+2026-10-06：`v1.0.0` 將 main（Issue #1～#41）定為第一版基準。Asura 在單一 Linux 主機上管理 agent runtime 的**執行**：誰可以提交、在哪個 workspace、用哪個 runtime、能力是否相符、何時取消，以及事後如何稽核。skills、MCP、workflow 與 domain logic 由各 runtime 自行處理。
+
+| 範圍 | v1.0 內容 |
+|---|---|
+| 執行中樞 | CLI 與 Daemon 共用任務、容量與取消契約；PGID 進程樹回收；SQLite 單一狀態引擎 |
+| 入口 | 本機 CLI、單人 Web Console、Cron 排程 |
+| Runtime | OpenCode、Codex、OMP、Antigravity 四個 adapter；能力感知 admission、`auto` 選擇、stage 級綁定、可用性清冊 |
+| 管線 | `direct`（單一 Striker）與 `three-face`（Oracle → Striker → Critic） |
+| 記憶 | 專案級記憶、有界詞彙召回、Git 候選審核、效用回饋、版本取代 |
+| 稽核 | 接受時封存契約，`status`／`audit`／Web 唯讀查詢執行來源 |
+
+**v1.0 不包含**：Telegram 等其他遠端入口、自動 failover 或 retry、模型內部 Context 編輯／壓縮、語意（向量）召回、多使用者或跨主機部署，以及系統層級的效能與長期穩定性量測門檻（架構決策 D-09 未定義）。`--allowed-roots` 是入口授權政策，不是作業系統沙箱。完整異動見 [CHANGELOG](CHANGELOG.md)。
 
 ---
 
@@ -25,8 +43,12 @@
   - 啟動區間平坦排他鎖（`.task-<hash>.lock`），徹底消除啟動與取消間的競態。
   - 單一 SQLite 狀態引擎，統一管理任務佇列、執行狀態、日誌與追蹤資料。
 - 🧩 **後端契約與異常防禦**：
-  - 抽象化 Runner 契約，無縫對接 OpenCode、Claude 等執行環境。
-  - 內建 429 速率限制 1.1 秒快速失敗、410 模型下架精確攔截、空輸出防禦與部分失敗保護。
+  - 抽象化 Runner 契約，支援 OpenCode、Codex、OMP、Antigravity 四種固定版本 runtime。
+  - 速率限制（429）錯誤辨識、空輸出防禦與部分失敗保護；失敗即 fail-closed，不自動切換 runtime。
+- 🧭 **Runtime 控制平面**：
+  - 接受任務前以共同 capability matcher 預檢，不相容即拒絕且零模型呼叫。
+  - `--backend auto` 依 fresh inventory 與可調優先序選擇 runtime；Three-Face 可逐 stage 綁定。
+  - 接受時封存需求、選擇與綁定，`asura audit` 可唯讀追溯執行來源。
 
 ---
 
@@ -34,7 +56,7 @@
 
 ### 1. 編譯建置
 
-需求環境：Go 1.22+，Linux 環境。
+需求環境：Go 1.26+，Linux 環境。
 
 ```bash
 # 複製專案
@@ -335,22 +357,35 @@ Detail 回傳 lifecycle、durable、直接 predecessor／successor、Git provena
 ## 架構設計與議題文件
 
 - **系統架構設計規範**：請參閱 [架構設計文件](docs/superpowers/specs/2026-09-11-asura-architecture-design.md)，涵蓋信任邊界、排程拓撲、進程模型與 D-01 至 D-09 技術決策。
-- **議題追蹤與驗收劇本**：
-  - [Issue 1 本機執行核心](docs/issues/issue-1/README.md) 與 [實作計畫](docs/issues/issue-1/implementation-plan.md)
+- **議題追蹤與驗收劇本**（v1.0 涵蓋的全部 issue）：
+  - [Issue 1 本機執行核心與後端契約探測 (Phase 1)](docs/issues/issue-1/README.md) 與 [實作計畫](docs/issues/issue-1/implementation-plan.md)
   - [Issue 2 本機 AI 執行路徑整合 (Phase 1.5)](docs/issues/issue-2/README.md) 與 [實作計畫拆解](docs/issues/issue-2/implementation-plan-decomposition.md)
   - [Issue 4 單一 Web 遠端入口 (Phase 2A)](docs/issues/issue-4/README.md) 與 [實作計畫拆解](docs/issues/issue-4/implementation-plan-decomposition.md)
   - [Issue 6 定時排程與容量調度 (Phase 2B)](docs/issues/issue-6/README.md) 與 [實作計畫拆解](docs/issues/issue-6/implementation-plan-decomposition.md)
   - [Issue 9 專案級基礎記憶 (Phase 3A)](docs/issues/issue-9/README.md) 與 [實作計畫](docs/issues/issue-9/implementation-plan.md)
+  - [Issue 11 專案記憶與 AI 任務 Context 整合 (Phase 3B)](docs/issues/issue-11/README.md) 與 [實作計畫](docs/issues/issue-11/implementation-plan.md)
   - [Issue 13 Three-Face Fixed Pipeline (Phase 3C)](docs/issues/issue-13/README.md) 與 [實作計畫](docs/issues/issue-13/implementation-plan.md)
-  - [Issue 19 Bounded Automatic Recall](docs/issues/issue-19/README.md) 與 [實作計畫](docs/issues/issue-19/implementation-plan.md)
+  - [Issue 15 Multi-Backend Foundation (Phase 3D)](docs/issues/issue-15/README.md) 與 [實作計畫](docs/issues/issue-15/implementation-plan.md)
   - [Issue 17 Context Window Management Foundation (Phase 3E)](docs/issues/issue-17/README.md) 與 [實作計畫](docs/issues/issue-17/implementation-plan.md)
+  - [Issue 19 Bounded Automatic Recall (Phase 3F)](docs/issues/issue-19/README.md) 與 [實作計畫](docs/issues/issue-19/implementation-plan.md)
+  - [Issue 21 Web Console 專案記憶管理與召回操作 (Phase 3G)](docs/issues/issue-21/README.md) 與 [實作計畫](docs/issues/issue-21/implementation-plan.md)
   - [Issue 23 Git-Aware Project Memory Capture (Phase 3H)](docs/issues/issue-23/README.md) 與 [實作計畫](docs/issues/issue-23/implementation-plan.md)
+  - [Issue 25 Backend Adapter Expansion & Conformance (Phase 3I)](docs/issues/issue-25/README.md) 與 [實作計畫](docs/issues/issue-25/implementation-plan.md)
+  - [Issue 27 Web Git Memory Capture & Review (Phase 3J)](docs/issues/issue-27/README.md) 與 [實作計畫](docs/issues/issue-27/implementation-plan.md)
+  - [Issue 29 Memory Utility Feedback Loop Foundation (Phase 3K)](docs/issues/issue-29/README.md) 與 [實作計畫](docs/issues/issue-29/implementation-plan.md)
+  - [Issue 31 Memory Lifecycle & Supersession Foundation (Phase 3L)](docs/issues/issue-31/README.md) 與 [實作計畫](docs/issues/issue-31/implementation-plan.md)
+  - [Issue 33 Runtime Capability & Execution Requirements (Phase 4A)](docs/issues/issue-33/README.md) 與 [實作計畫](docs/issues/issue-33/implementation-plan.md)
+  - [Issue 35 Capability-aware Runtime Selection (Phase 4B)](docs/issues/issue-35/README.md) 與 [實作計畫](docs/issues/issue-35/implementation-plan.md)
+  - [Issue 37 Stage-specific Runtime Binding (Phase 4C)](docs/issues/issue-37/README.md) 與 [實作計畫](docs/issues/issue-37/implementation-plan.md)
+  - [Issue 39 Runtime Inventory / Availability (Phase 4D)](docs/issues/issue-39/README.md) 與 [實作計畫](docs/issues/issue-39/implementation-plan.md)
+  - [Issue 41 Control Plane Execution Audit (Phase 4E)](docs/issues/issue-41/README.md) 與 [實作計畫](docs/issues/issue-41/implementation-plan.md)
+- **階段規劃歷史**：[本機核心合併後的階段規劃](docs/plans/post-core-roadmap.md)（已由 v1.0 完成）
 
 ---
 
 ## 基礎設施與 AI 開發規範
 
-本專案之 AI 開發規範、文件體系與工作流程遵循 [`dev-rules-kit`](../dev-rules-kit) 標準架構：
+本專案之 AI 開發規範、文件體系與工作流程遵循 [`dev-rules-kit`](https://github.com/raybird/dev-rules-kit) 標準架構：
 
 - **核心行為準則**：請參見根目錄 [AGENTS.md](AGENTS.md)，涵蓋「編寫前先思考」、「簡單優先」、「手術式修改」、「目標驅動執行與驗證」及「BDD + TDD 雙迴圈」等原則。
 - **Claude Code 導覽**：請參見根目錄 [CLAUDE.md](CLAUDE.md)。
@@ -361,26 +396,35 @@ Detail 回傳 lifecycle、durable、直接 predecessor／successor、Git provena
 ```
 Asura/
 ├── .gitignore             # Git 忽略設定（排除本地資料庫與暫存檔）
+├── .github/workflows/     # CI（vet、test、build；固定版本 OpenCode 與 bubblewrap）
 ├── README.md              # 專案說明文件
 ├── CHANGELOG.md           # 變更修訂紀錄
+├── LICENSE                # MIT 授權
 ├── AGENTS.md              # 跨平台 AI 核心開發規則
 ├── CLAUDE.md              # Claude Code 進入點與導覽
 ├── cmd/
-│   └── asura/             # CLI 程式進入點 (run, cancel, status, ask, cron, memory, web)
+│   └── asura/             # CLI 程式進入點 (daemon, run, ask, status, cancel, audit, runtime, web, cron, memory)
 ├── internal/
+│   ├── audit/             # 執行稽核契約與查詢 (execution-audit-v1)
 │   ├── auth/              # 工作目錄與授權政策 (Policy)
-│   ├── backend/           # 執行後端整合 (opencode process, parser)
+│   ├── backend/           # Runtime adapter (opencode, codex, omp, antigravity)、能力需求、選擇、綁定與清冊
 │   ├── contextwin/        # 上下文窗口管理、預算、估算器與准入引擎
 │   ├── cron/              # 定時排程器與日曆計算
 │   ├── daemon/            # 守護進程服務中樞
 │   ├── engine/            # 任務狀態引擎 (Engine, Worker Pool)
+│   ├── gitmem/            # Git 變更感知與候選記憶擷取
 │   ├── pipeline/          # Three-Face 管線核心 (Oracle, Striker, Critic, Orchestrator)
+│   ├── recall/            # 有界記憶召回與效用調權
 │   ├── storage/           # SQLite 持久化儲存層
 │   └── web/               # 單人 Web 遠端入口 (SPA 控制台與同源 API)
+├── scripts/               # 各 issue 的後端契約探測腳本
 ├── tests/
 │   └── integration/       # 端到端整合測試 (SCN, CRON, MEM, TFACE, CTXWIN 驗收)
 └── docs/                  # 專案技術文件與議題紀錄
     ├── AGENTS.md          # docs/ 目錄規範與開發閉環指引
+    ├── agents/            # 驗收、驗證、審查規範與專案客製規範
+    ├── _templates/        # 架構、領域與修訂紀錄模板
+    ├── plans/             # 階段規劃歷史
     ├── superpowers/       # 架構設計規格書 (Architecture Spec)
     └── issues/            # 議題閉環追蹤 (Issue 1 ~ N)
 ```
@@ -397,4 +441,4 @@ new-issue ──► decompose (僅 Large) ──► execute-task (BDD + TDD) ─
 
 ---
 
-*最新更新日期：2026-10-01*
+*最新更新日期：2026-10-06（v1.0.0）*
