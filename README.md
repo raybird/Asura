@@ -385,7 +385,7 @@ Detail 回傳 lifecycle、durable、直接 predecessor／successor、Git provena
 
 ## 基礎設施與 AI 開發規範
 
-本專案之 AI 開發規範、文件體系與工作流程遵循 [`dev-rules-kit`](../dev-rules-kit) 標準架構：
+本專案之 AI 開發規範、文件體系與工作流程遵循 [`dev-rules-kit`](https://github.com/raybird/dev-rules-kit) 標準架構：
 
 - **核心行為準則**：請參見根目錄 [AGENTS.md](AGENTS.md)，涵蓋「編寫前先思考」、「簡單優先」、「手術式修改」、「目標驅動執行與驗證」及「BDD + TDD 雙迴圈」等原則。
 - **Claude Code 導覽**：請參見根目錄 [CLAUDE.md](CLAUDE.md)。
