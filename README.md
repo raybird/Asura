@@ -54,9 +54,17 @@
 
 ## 快速開始 (Quick Start)
 
-### 1. 編譯建置
+### 1. 下載或編譯
 
-需求環境：Go 1.26+，Linux 環境。
+2026-10-06：[Releases](https://github.com/raybird/Asura/releases) 提供 Linux amd64／arm64 預先編譯版本（靜態連結，附 `checksums.txt`）。只支援 Linux：進程組回收、`/proc` 身分驗證與 `bwrap` 隔離皆依賴 Linux。
+
+```bash
+curl -LO https://github.com/raybird/Asura/releases/download/v1.0.0/asura_v1.0.0_linux_amd64.tar.gz
+tar -xzf asura_v1.0.0_linux_amd64.tar.gz
+./asura_v1.0.0_linux_amd64/asura
+```
+
+自行編譯需求環境：Go 1.26+，Linux 環境。
 
 ```bash
 # 複製專案
@@ -396,7 +404,7 @@ Detail 回傳 lifecycle、durable、直接 predecessor／successor、Git provena
 ```
 Asura/
 ├── .gitignore             # Git 忽略設定（排除本地資料庫與暫存檔）
-├── .github/workflows/     # CI（vet、test、build；固定版本 OpenCode 與 bubblewrap）
+├── .github/workflows/     # CI（vet、test、build；固定版本 OpenCode 與 bubblewrap）與 Release（推送 v* tag 時發佈 Linux 執行檔）
 ├── README.md              # 專案說明文件
 ├── CHANGELOG.md           # 變更修訂紀錄
 ├── LICENSE                # MIT 授權
