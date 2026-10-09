@@ -161,8 +161,14 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
 - 驗收編號：DIST-010
 - 完成判準：DIST-010 六個 Example 各自回傳可判別錯誤且訊息不含 fixture 中的 sentinel 值；缺檔回傳「無 config」而非錯誤；XDG 解析以字面路徑期望驗證各 fallback。
 - 驗證：單元測試為主；DIST-010「不啟動 daemon」的外部行為由 3.2 的 CLI 外迴圈承擔。
-- 狀態：📝 待實作
+- 狀態：✅ 已完成（2026-10-09）
 - 證據：
+  - 產出：`internal/config/config.go`（`DefaultPaths`、`CheckSocketPath`、`Load`；nil 欄位代表未設定）、`internal/config/config_test.go`；`go.mod`／`go.sum` 新增 `github.com/BurntSushi/toml v1.5.0`（其餘 go.mod 排列維持原狀，`go mod verify` all modules verified）。
+  - 紅燈：先以只有型別、函式回傳零值的骨架取得行為紅燈：`go test -count=1 -v ./internal/config` → `TestDefaultPaths`、`TestCheckSocketPath`、`TestLoadValid`、`TestLoadRejectsInvalid`、`TestLoadRejectsUnsafeFile` FAIL（29 個子測試）；`TestLoadMissing` 在骨架下已通過（骨架正好回 nil, nil），如實記錄。首輪 `TestLoadValid` 因 nil 解參考 panic 中斷後續測試，補 nil 防護後才取得完整紅燈。
+  - 綠燈：`go test -count=1 -race -v ./internal/config` → 6 PASS。DIST-010 Examples：語法錯誤（`syntax error at line 2`）、未知欄位（含 `[context]` 巢狀，回報鍵名）、未支援／缺少 schema_version、enum／context 規則（沿用 `contextwin.LoadConfigWithLookup`）、runtime_priority（沿用 `backend.ParseRuntimePriority`，拒絕含逗號元素）、相對 db／socket／allowed_roots、超過 107 bytes 的 socket、workers／queue < 1、型別不符、無法讀取、group／others 可寫的檔案或目錄、非本人擁有（`/etc/passwd`）皆拒絕，且錯誤不含植入的 `SECRET-SENTINEL-7f3a`；XDG 解析以字面路徑驗證 runtime→state→HOME fallback 與相對 XDG 忽略。
+  - 判準反向自檢（本地變異，事後還原）：拿掉 `Undecoded` 檢查 → unknown-field 兩例 FAIL；XDG 改為接受相對路徑 → `relative-xdg-ignored` FAIL；語法錯誤改為轉述 parser 原文 → `syntax` FAIL（訊息含 sentinel）；目錄權限檢查失效 → `other-writable-dir` FAIL（首次變異造成未使用變數編譯失敗，修正變異後確認）。
+  - 精煉：toml 型別不符錯誤為一般 error，改以 regexp 只取行號與鍵名，不轉述原文；`go vet ./...` exit 0；`go test -count=1 -race ./internal/config ./internal/contextwin ./internal/backend ./cmd/asura` ok（2026-10-09，go1.27.1 linux/amd64）。
+  - 範圍說明：DIST-010「不啟動 daemon」的 CLI 外部行為由 3.2 承擔。
 
 ### Task 3.2 — CLI 接線與逐設定 precedence
 - 產出與範圍：各 handler 在 parse 前載入 config 取得預設，`flag.Visit` 辨識顯式 flag；逐設定 CLI > ENV > config > 內建；不修改 process ENV；有 config 時 status／cancel／audit／inventory 以 config socket 嘗試 daemon、失敗回落 config db；bad config 時需載入設定的指令非零退出且不啟動 daemon；無 config 行為與 0.1 基線一致。
