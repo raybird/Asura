@@ -209,8 +209,15 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
 - 驗收編號：DIST-006、DIST-007
 - 完成判準：stub runtime 組合分別得到 READY、DEGRADED（optional 缺失或版本不符、無 user service）、NOT_READY（無 runtime、必要 system／config 失敗）與對應 exit；輸出含有界 reason 與能力摘要；不提交 Task、不呼叫模型（stub 記錄）。
 - 驗證：CLI 外迴圈 + 判定邏輯單元測試，雙迴圈。
-- 狀態：📝 待實作
+- 狀態：✅ 已完成（2026-10-09）
 - 證據：
+  - 產出：`cmd/asura/doctor.go`（System／Config／Runtimes／Service 四段檢查、`doctorStatus`、以 `backend.RequirementsForMode` 比對能力的 `availableModes`、只用 metadata 與 access(2) 的 `assessDir`、有界 `systemctl --user is-active asura.service` 與 2 秒 daemon dial）；`inventory.go` 抽出 `newLocalRegistry` 供 inventory 與 doctor 共用；`config.go` 拆出不建立目錄的 `socketPath`（`DefaultSocketPath` 行為不變）；`run.go` 加 `doctor` dispatch；測試 `cmd/asura/doctor_test.go`。
+  - 紅燈：以回傳 -1／零值的骨架執行 `go test -count=1 -run 'TestDoctor' -v ./cmd/asura` → 9 個（子）測試 FAIL（狀態判定、模式、DEGRADED 輸出、四種 NOT_READY、用法錯誤）。
+  - 綠燈：`go test -count=1 -race -run 'TestDoctor' -v ./cmd/asura` 全 PASS。單元：`levelWarn`→DEGRADED/0、`levelFail`→NOT_READY/1、全 ok/info→READY/0；只有 workspace_write 的 runtime 只得 direct，加上 read_only_sandbox 得 direct＋three-face。CLI（stub runtime、隔離 HOME／XDG）：codex 可用＋opencode 版本不符 → `DEGRADED` exit 0，列出 `executable=<stub 路徑>`、`reason=version_failed`、omp／antigravity 原因、`systemctl not found`、daemon not running、`permission check only; nothing was written` 與不驗證登入的聲明；stub 只收到 `--version`（無模型呼叫或 Task）。無 runtime、壞 config（含 sentinel，不回顯）、DB 目錄不可寫、allowed root 不存在 → `NOT_READY` exit 1；多餘參數 exit 2。
+  - 過程中發現並修正：opencode 版本不符時 `executable=unknown`——RoleRouting 先探唯讀角色並提前返回，4.1 只回報 striker；改為 striker 無結果時回報唯讀角色。先強化 `TestProbeExecutableReportsProbedBinary`（RoleRouting 在唯讀角色 probe 失敗後仍須回報路徑），以 4.1 版程式取得紅燈（`role routing after read-only probe failure: ""`），修正後綠燈。
+  - 回歸：`go vet ./...` exit 0、`go build ./cmd/asura` exit 0、`go test -count=1 -race ./...` 全部 ok（2026-10-09，go1.27.1 linux/amd64）；backend SKIP 同 4.1。
+  - 精煉：no-op——檢查項以單一 `add` 收集、輸出統一格式，未見可再簡化之處；沿用上列綠燈。
+  - 範圍說明：整體 10 秒 deadline、輸出上限與 secret sentinel 屬 4.3。READY 需四個 runtime 與 user service 皆可用，本機無法在測試中提供 OMP／Antigravity 的固定 hash binary，READY 由單元測試覆蓋。
 
 ### Task 4.3 — Doctor secret 與唯讀邊界
 - 產出與範圍：整體 10 秒 deadline、輸出上限、只輸出固定 reason、ENV／config 只顯示是否設定與路徑；不開 SQLite、不寫 config／DB／credential、不建立 unit；runtime 探測暫存只在私有 temp 並清理。

@@ -78,10 +78,14 @@ func (a *Adapter) ProbeExecutable() string {
 	return ""
 }
 
-// ProbeExecutable 回報 striker 角色 probe 的 binary；兩角色解析同一個 OpenCode。
+// ProbeExecutable 回報最近一次 probe 到的 binary；Probe 先探唯讀角色，失敗時 striker 不會被探測。
 func (b *RoleRoutingBackend) ProbeExecutable() string {
-	if r, ok := b.striker.(backend.ExecutableReporter); ok {
-		return r.ProbeExecutable()
+	for _, adapter := range []backend.Backend{b.striker, b.readOnly} {
+		if r, ok := adapter.(backend.ExecutableReporter); ok {
+			if path := r.ProbeExecutable(); path != "" {
+				return path
+			}
+		}
 	}
 	return ""
 }

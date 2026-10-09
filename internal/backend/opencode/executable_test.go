@@ -51,8 +51,9 @@ func TestProbeExecutableReportsProbedBinary(t *testing.T) {
 	if got := pinned.ProbeExecutable(); got != explicit {
 		t.Fatalf("version-mismatched binary must still be reported: %q", got)
 	}
-	logical := NewRoleRoutingBackend(NewAdapter(AdapterConfig{BinaryPath: explicit}), pinned)
+	logical := NewRoleRoutingBackend(NewAdapter(AdapterConfig{BinaryPath: explicit}), NewAdapter(AdapterConfig{BinaryPath: explicit}))
+	logical.Probe(context.Background())
 	if got := logical.ProbeExecutable(); got != explicit {
-		t.Fatalf("role routing: %q", got)
+		t.Fatalf("role routing after read-only probe failure: %q", got)
 	}
 }

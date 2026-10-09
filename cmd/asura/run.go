@@ -87,6 +87,8 @@ func RunCLI(args []string, stdout, stderr io.Writer) int {
 		return handleMemory(subargs, stdout, stderr)
 	case "version":
 		return handleVersion(subargs, stdout, stderr)
+	case "doctor":
+		return handleDoctor(subargs, stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "error: unknown command %q\n\n", subcmd)
 		printUsage(stderr)

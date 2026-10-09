@@ -23,6 +23,23 @@ func printInventory(w io.Writer, s *backend.InventorySnapshot) {
 		fmt.Fprintf(w, "%s registration=%s availability=%s version=%q reason=%s\n", e.RuntimeID, e.RegistrationState, e.AvailabilityState, version, e.ReasonCode)
 	}
 }
+
+// newLocalRegistry 建立與 daemon 相同組成的本機 runtime registry；cleanup 移除隔離的唯讀設定目錄。
+func newLocalRegistry() (*backend.InMemoryRegistry, func(), error) {
+	config, cleanup, err := opencode.CreateIsolatedReadOnlyConfigDir()
+	if err != nil {
+		return nil, nil, err
+	}
+	reg := backend.NewRegistry()
+	read := opencode.NewAdapter(opencode.AdapterConfig{ConfigDir: config, Isolated: true, Pure: true, DisableAuto: true, DisableProjectConfig: true, Role: opencode.RoleOracle, Agent: opencode.AsuraReadOnlyAgentName, Permission: daemon.DefaultReadOnlyPermissionPolicy})
+	write := opencode.NewAdapter(opencode.AdapterConfig{Role: opencode.RoleStriker, Permission: daemon.DefaultApprovedPermissionPolicy})
+	reg.Register(opencode.NewRoleRoutingBackend(read, write))
+	reg.Register(codex.NewAdapter(codex.AdapterConfig{}))
+	reg.Register(omp.NewAdapter(omp.AdapterConfig{}))
+	reg.Register(antigravity.NewAdapter(antigravity.AdapterConfig{}))
+	return reg, cleanup, nil
+}
+
 func handleRuntime(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 || args[0] != "inventory" {
 		fmt.Fprintln(stderr, "Usage: asura runtime inventory [--socket path]")
@@ -48,19 +65,12 @@ func handleRuntime(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	if snapshot == nil {
-		config, cleanup, err := opencode.CreateIsolatedReadOnlyConfigDir()
+		reg, cleanup, err := newLocalRegistry()
 		if err != nil {
 			fmt.Fprintln(stderr, "error: read-only runtime configuration unavailable")
 			return 1
 		}
 		defer cleanup()
-		reg := backend.NewRegistry()
-		read := opencode.NewAdapter(opencode.AdapterConfig{ConfigDir: config, Isolated: true, Pure: true, DisableAuto: true, DisableProjectConfig: true, Role: opencode.RoleOracle, Agent: opencode.AsuraReadOnlyAgentName, Permission: daemon.DefaultReadOnlyPermissionPolicy})
-		write := opencode.NewAdapter(opencode.AdapterConfig{Role: opencode.RoleStriker, Permission: daemon.DefaultApprovedPermissionPolicy})
-		reg.Register(opencode.NewRoleRoutingBackend(read, write))
-		reg.Register(codex.NewAdapter(codex.AdapterConfig{}))
-		reg.Register(omp.NewAdapter(omp.AdapterConfig{}))
-		reg.Register(antigravity.NewAdapter(antigravity.AdapterConfig{}))
 		snapshot, err = backend.CaptureInventory(ctx, reg.RegisteredSnapshot())
 		if err != nil {
 			fmt.Fprintf(stderr, "error: inventory: %v\n", err)

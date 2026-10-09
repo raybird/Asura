@@ -34,23 +34,29 @@ func loadCLIConfig() (*cliConfig, error) {
 	return &cliConfig{cfg: cfg, paths: paths}, nil
 }
 
-// DefaultSocketPath 回傳統一預設的 Unix Socket 路徑
-// 優先序：環境變數 ASURA_SOCKET -> config socket -> XDG socket；無 config 時 -> ~/.asura/asura.sock -> /tmp/asura.sock
+// DefaultSocketPath 回傳統一預設的 Unix Socket 路徑；無 config 且未設 ASURA_SOCKET 時沿用 v1.0 建立 ~/.asura。
 func DefaultSocketPath() string {
+	path := activeConfig.socketPath()
+	if activeConfig == nil && os.Getenv("ASURA_SOCKET") == "" {
+		_ = os.MkdirAll(filepath.Dir(path), 0755)
+	}
+	return path
+}
+
+// socketPath 解析 socket 但不建立目錄。
+// 優先序：環境變數 ASURA_SOCKET -> config socket -> XDG socket；無 config 時 -> ~/.asura/asura.sock -> /tmp/asura.sock
+func (c *cliConfig) socketPath() string {
 	if env := os.Getenv("ASURA_SOCKET"); env != "" {
 		return env
 	}
-	if c := activeConfig; c != nil {
+	if c != nil {
 		if c.cfg.Socket != nil {
 			return *c.cfg.Socket
 		}
 		return c.paths.Socket
 	}
-	home, err := os.UserHomeDir()
-	if err == nil {
-		asuraDir := filepath.Join(home, ".asura")
-		_ = os.MkdirAll(asuraDir, 0755)
-		return filepath.Join(asuraDir, "asura.sock")
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".asura", "asura.sock")
 	}
 	return filepath.Join(os.TempDir(), "asura.sock")
 }
