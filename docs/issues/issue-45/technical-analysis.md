@@ -82,6 +82,14 @@
 
 2026-10-09 決策：使用者第 8 題回答「1」，採方案 A；doctor 維持嚴格唯讀，可寫性只做權限／metadata 評估並標明限制。DIST-TBD-15 其餘 secret、deadline 與 path 失敗政策於 2026-10-09 第 15、16 題與總結確認定案，見下表。
 
+### Review 後決策（2026-10-09）
+
+獨立 review（PR #46）指出：config 可省略 `allowed_roots` 時，setup 會 panic，service 則以 HOME 為 allowed root；setup 不固定 db／socket，shell 與 systemd 環境不同時可能分歧；unit 依 CLI 的 `XDG_CONFIG_HOME` 寫入，user manager 不會搜尋。
+
+- 第 17 題（DIST-TBD-16）使用者回答「1」：setup 與 service install 要求 `allowed_roots`；方案 2「允許缺少」會讓 service 以 HOME 為 allowed root，未採用。
+- 第 18 題（DIST-TBD-17）使用者回答「1」：setup 新建 config 時寫入解析後的絕對 `db`／`socket`；方案 2「unit 固定更多 XDG 變數」與方案 3「維持現狀」未採用。
+- 缺陷修正（不需決策）：unit 目錄依 `systemctl --user show-environment` 的 `XDG_CONFIG_HOME`（未設時為 `$HOME/.config`）；CLI 端 config 目錄與 manager 不同時才寫入 `Environment=XDG_CONFIG_HOME=`。
+
 ## 其餘建議契約
 
 | 決策 | 內容（2026-10-09 全部已確認） | 理由與決策來源 |
