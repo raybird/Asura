@@ -73,7 +73,8 @@ func handleDaemon(args []string, stdout, stderr io.Writer) int {
 
 	policy := auth.NewPolicy(roots)
 
-	if activeConfig != nil {
+	// 有 config 時檢查 socket 長度；CLI／ENV 給的相對路徑沿用 v1.0 行為。
+	if activeConfig != nil && filepath.IsAbs(*sockPath) {
 		if err := config.CheckSocketPath(*sockPath); err != nil {
 			fmt.Fprintf(stderr, "error: %v\n", err)
 			return 1

@@ -184,6 +184,16 @@ queue = 7
 		}
 	})
 
+	// 2026-10-09：review N7，有 config 時 CLI 給的相對 socket 與 v1.0 一樣可用。
+	t.Run("cli-relative-socket", func(t *testing.T) {
+		e := newXDGEnv(t)
+		e.writeConfig(t, "schema_version = 1\n")
+		line := startDaemon(t, bin, t.TempDir(), append(e.vars(), "PATH="+t.TempDir()), "--socket", "rel.sock")
+		if want := "Daemon started on socket rel.sock (workers: 2, queue: 10)\n"; line != want {
+			t.Fatalf("line=%q want %q", line, want)
+		}
+	})
+
 	t.Run("xdg-when-config-omits-paths", func(t *testing.T) {
 		e := newXDGEnv(t)
 		e.writeConfig(t, "schema_version = 1\n")

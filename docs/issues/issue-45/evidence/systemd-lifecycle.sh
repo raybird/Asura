@@ -1,19 +1,19 @@
 #!/bin/sh
 # 2026-10-09：issue-45 Task 5.3，真實 systemd user bus 上的 asura service lifecycle 驗證（DIST-013）。
-# 會暫時建立 ~/.config/asura/config.toml、~/.config/systemd/user/asura.service 與測試用 drop-in，
-# 並實際啟動、停止、強制結束 daemon；結束時 uninstall 並移除所有暫存。DB／socket 位於暫存目錄。
-# 只在這些路徑都不存在時執行。用法（repo 根目錄）：ASURA_LIFECYCLE_CONFIRM=1 sh docs/issues/issue-45/evidence/systemd-lifecycle.sh
+# 會暫時建立 ~/.config/systemd/user/asura.service 與測試用 drop-in，並實際啟動、停止、強制結束 daemon；
+# 結束時 uninstall 並移除所有暫存。CLI 以暫存的 XDG_CONFIG_HOME 讀 config（2026-10-09 review M2：
+# unit 必須落在 user manager 搜尋的目錄並固定 XDG_CONFIG_HOME），DB／socket 位於暫存目錄。
+# 只在 unit 與 drop-in 都不存在時執行。用法（repo 根目錄）：ASURA_LIFECYCLE_CONFIRM=1 sh docs/issues/issue-45/evidence/systemd-lifecycle.sh
 set -eu
 
 [ "${ASURA_LIFECYCLE_CONFIRM:-}" = 1 ] || {
 	echo "set ASURA_LIFECYCLE_CONFIRM=1 to modify your systemd user session" >&2
 	exit 2
 }
-unset XDG_CONFIG_HOME ASURA_SOCKET
-cfgdir="$HOME/.config/asura"
+unset ASURA_SOCKET
 unit="$HOME/.config/systemd/user/asura.service"
 dropin="$unit.d"
-for p in "$cfgdir" "$unit" "$dropin"; do
+for p in "$unit" "$dropin"; do
 	if [ -e "$p" ]; then
 		echo "refuse: $p already exists" >&2
 		exit 1
@@ -22,9 +22,11 @@ done
 
 work=$(mktemp -d /tmp/asura-lc.XXXXXX)
 A="$work/asura"
+export XDG_CONFIG_HOME="$work/xc"
+cfgdir="$XDG_CONFIG_HOME/asura"
 cleanup() {
 	"$A" service uninstall >/dev/null 2>&1 || true
-	rm -rf "$dropin" "$cfgdir"
+	rm -rf "$dropin"
 	rm -f "$unit"
 	systemctl --user daemon-reload
 	systemctl --user reset-failed asura.service >/dev/null 2>&1 || true
@@ -63,7 +65,7 @@ cat >"$work/stubbin/codex" <<'EOF'
 exec sleep 600
 EOF
 chmod 0755 "$work/stubbin/codex"
-mkdir -m 0700 "$cfgdir"
+mkdir -p -m 0700 "$XDG_CONFIG_HOME" "$cfgdir"
 cat >"$cfgdir/config.toml" <<EOF
 schema_version = 1
 allowed_roots = ["$work/project"]
@@ -84,6 +86,7 @@ for p in KillMode TimeoutStopUSec Restart RestartUSec StartLimitIntervalUSec Sta
 done
 check "unit properties" '[ "$(prop KillMode)" = mixed ] && [ "$(prop TimeoutStopUSec)" = 1min ] && [ "$(prop Restart)" = on-failure ] && [ "$(prop RestartUSec)" = 5s ] && [ "$(prop StartLimitIntervalUSec)" = 1min ] && [ "$(prop StartLimitBurst)" = 3 ]'
 check "unit has no secret or linger directive" '! grep -Eiq "linger|key|token|secret" "$unit"'
+check "unit in manager directory pins the CLI config home" 'grep -qx "Environment=\"XDG_CONFIG_HOME=$XDG_CONFIG_HOME\"" "$unit"'
 
 echo "== start and long task"
 "$A" service start
@@ -126,7 +129,9 @@ for i in 1 2 3; do
 	kill -KILL "$pid"
 	if [ "$i" -lt 3 ]; then
 		check "crash $i restarted" 'wait_for 15 restarted_from "$before"'
-		echo "crash $i: restart after $(($(date +%s) - t0))s (NRestarts=$(prop NRestarts))"
+		delay=$(($(date +%s) - t0))
+		echo "crash $i: restart after ${delay}s (NRestarts=$(prop NRestarts))"
+		check "crash $i restart delay follows RestartSec=5s (4-8s)" '[ "$delay" -ge 4 ] && [ "$delay" -le 8 ]'
 	fi
 done
 # 第 4 次啟動被拒：unit 停在 failed、不再有 MainPID，journal 留有 systemd 的限流訊息。

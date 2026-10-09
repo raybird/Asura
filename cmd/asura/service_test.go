@@ -57,6 +57,7 @@ func serviceEnv(t *testing.T, withSystemctl bool) (xdgEnv, string) {
 		stub := `#!/bin/sh
 echo "$*" >> ` + log + `
 [ "$SYSTEMCTL_BUS" = down ] && exit 1
+[ "$2" = show-environment ] && printf '%b' "$SYSTEMCTL_ENV"
 case "$2" in
   is-active) echo "${SYSTEMCTL_STATE:-inactive}" ;;
   is-enabled) echo enabled ;;
@@ -67,6 +68,8 @@ exit 0
 	}
 	t.Setenv("PATH", bin)
 	t.Setenv("SYSTEMCTL_BUS", "")
+	// user manager 與 CLI 使用相同的 XDG_CONFIG_HOME。
+	t.Setenv("SYSTEMCTL_ENV", "HOME="+e.home+"\\nXDG_CONFIG_HOME="+e.configHome+"\\n")
 	t.Chdir(t.TempDir())
 	return e, log
 }
@@ -92,7 +95,7 @@ func TestServiceInstallAndLifecycle(t *testing.T) {
 		t.Fatalf("install: %d %s", code, out)
 	}
 	b, err := os.ReadFile(unit)
-	if err != nil || string(b) != renderUserUnit(exe, e.configHome) {
+	if err != nil || string(b) != renderUserUnit(exe, "") {
 		t.Fatalf("unit content:\n%s", b)
 	}
 	if info, _ := os.Stat(unit); info.Mode().Perm() != 0644 {
@@ -126,19 +129,57 @@ func TestServiceInstallAndLifecycle(t *testing.T) {
 	}
 }
 
-func TestServiceDefaultConfigHomeOmitsEnvironment(t *testing.T) {
-	e, _ := serviceEnv(t, true)
-	t.Setenv("XDG_CONFIG_HOME", "")
-	home := filepath.Join(e.home, ".config")
-	os.MkdirAll(filepath.Join(home, "asura"), 0700)
-	cfg, _ := os.ReadFile(filepath.Join(e.configHome, "asura", "config.toml"))
-	os.WriteFile(filepath.Join(home, "asura", "config.toml"), cfg, 0600)
-	if code, out := runService("install"); code != 0 {
-		t.Fatalf("install: %s", out)
+// 2026-10-09：review M2，unit 寫入 user manager 搜尋的目錄；CLI 端 config 目錄不同時才固定 XDG_CONFIG_HOME。
+func TestServiceUnitFollowsManagerConfigHome(t *testing.T) {
+	t.Run("manager-default-cli-custom", func(t *testing.T) {
+		e, _ := serviceEnv(t, true)
+		t.Setenv("SYSTEMCTL_ENV", "HOME="+e.home+"\\n")
+		if code, out := runService("install"); code != 0 {
+			t.Fatalf("install: %s", out)
+		}
+		exe, _ := os.Executable()
+		b, err := os.ReadFile(filepath.Join(e.home, ".config", "systemd", "user", "asura.service"))
+		if err != nil || string(b) != renderUserUnit(exe, e.configHome) {
+			t.Fatalf("unit not in manager directory or not pinned: %v\n%s", err, b)
+		}
+		if _, err := os.Stat(filepath.Join(e.configHome, "systemd")); !os.IsNotExist(err) {
+			t.Fatal("unit written under the CLI-only XDG_CONFIG_HOME")
+		}
+		if code, out := runService("uninstall"); code != 0 {
+			t.Fatalf("uninstall: %s", out)
+		}
+	})
+	t.Run("both-default", func(t *testing.T) {
+		e, _ := serviceEnv(t, true)
+		t.Setenv("SYSTEMCTL_ENV", "HOME="+e.home+"\\n")
+		t.Setenv("XDG_CONFIG_HOME", "")
+		home := filepath.Join(e.home, ".config")
+		os.MkdirAll(filepath.Join(home, "asura"), 0700)
+		cfg, _ := os.ReadFile(filepath.Join(e.configHome, "asura", "config.toml"))
+		os.WriteFile(filepath.Join(home, "asura", "config.toml"), cfg, 0600)
+		if code, out := runService("install"); code != 0 {
+			t.Fatalf("install: %s", out)
+		}
+		b, _ := os.ReadFile(filepath.Join(home, "systemd", "user", "asura.service"))
+		if strings.Contains(string(b), "Environment=") {
+			t.Fatalf("default config home pinned:\n%s", b)
+		}
+	})
+}
+
+// 2026-10-09：review M1／第 17 題，config 沒有 allowed_roots 時拒絕安裝 service。
+func TestServiceInstallRequiresAllowedRoots(t *testing.T) {
+	e, log := serviceEnv(t, true)
+	e.writeConfig(t, "schema_version = 1\nworkers = 3\n")
+	code, out := runService("install")
+	if code != 1 || !strings.Contains(out, "has no allowed_roots") {
+		t.Fatalf("%d %s", code, out)
 	}
-	b, _ := os.ReadFile(filepath.Join(home, "systemd", "user", "asura.service"))
-	if strings.Contains(string(b), "Environment=") {
-		t.Fatalf("default config home pinned:\n%s", b)
+	if _, err := os.Stat(filepath.Join(e.configHome, "systemd")); !os.IsNotExist(err) {
+		t.Fatal("unit written without allowed_roots")
+	}
+	if b, _ := os.ReadFile(log); strings.Contains(string(b), "enable") {
+		t.Fatalf("service enabled: %s", b)
 	}
 }
 

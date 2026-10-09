@@ -40,7 +40,7 @@ asura doctor
 | `DEGRADED` | 0 | 必要條件與至少一個 runtime 可用；有 optional runtime 或 user service 等缺項 |
 | `NOT_READY` | 1 | 必要條件失敗，或沒有任何可用 runtime |
 
-用法錯誤時 exit 2。目錄可寫性只依權限與檔案系統唯讀狀態評估，不實際寫入。doctor 不開 DB、不寫 config 或 credential、不呼叫模型，也不保證 runtime 已登入或模型請求會成功。所有探測在 10 秒內結束；輸出不包含環境變數值、設定值或 runtime 原始輸出。
+用法錯誤時 exit 2。目錄可寫性只依權限與檔案系統唯讀狀態評估，不實際寫入。doctor 不開 DB、不寫 config 或 credential、不呼叫模型，也不保證 runtime 已登入或模型請求會成功。所有探測在 10 秒內結束；環境變數與 config 只顯示是否設定及其中的路徑，不顯示其他值，也不轉述 runtime 或 systemctl 的原始輸出。
 
 ## 設定：config.toml
 
@@ -48,10 +48,10 @@ asura doctor
 
 ```toml
 schema_version = 1
-allowed_roots = ["/home/me/projects"]
-# 以下皆可省略
-db = "/home/me/.local/share/asura/asura.db"
+allowed_roots = ["/home/me/projects"]           # setup 與 service install 要求；standalone daemon 可省略
+db = "/home/me/.local/share/asura/asura.db"     # setup 新建時寫入解析後的絕對路徑
 socket = "/run/user/1000/asura/asura.sock"
+# 以下皆可省略
 workers = 2
 queue = 10
 runtime_priority = ["codex", "opencode"]
@@ -87,7 +87,8 @@ asura setup --allowed-roots /home/me/projects       # 腳本模式
 asura setup --allowed-roots /home/me/projects --service
 ```
 
-- 建立 config（目錄 0700、檔案 0600）與 data 目錄（0700），不初始化 SQLite。
+- 建立 config（目錄 0700、檔案 0600）與 data 目錄（0700），不初始化 SQLite。新建的 config 會寫入當下依 XDG 解析的絕對 `db` 與 `socket`，讓 shell、service 與 doctor 一定使用同一個 DB 和 socket。
+- 既有 config 沒有 `allowed_roots` 時會失敗並提示手動加入，不改寫 config，也不宣稱完成。
 - 非互動模式必須提供 `--allowed-roots`，不會等待輸入；每個 root 都必須是既有目錄。
 - 只有互動時明確回答同意，或給了 `--service`，才會安裝、啟用並啟動 user service。
 - 重跑時保留既有設定、資料與 unit；`--allowed-roots` 與既有 config 不同時直接失敗，請手動修改 config。
@@ -97,12 +98,13 @@ asura setup --allowed-roots /home/me/projects --service
 ## User service：asura service
 
 ```bash
-asura service install    # 寫入 ~/.config/systemd/user/asura.service、daemon-reload、enable（不啟動）
+asura service install    # 寫入 user manager 的 unit 目錄（通常是 ~/.config/systemd/user/asura.service）、daemon-reload、enable（不啟動）
 asura service start | stop | restart | status
 asura service uninstall  # disable --now、移除 unit、daemon-reload
 ```
 
-- 由 systemd user service 管理 daemon，使用正式 config；`install` 需要先有 config（執行 `asura setup`）。
+- 由 systemd user service 管理 daemon，使用正式 config；`install` 需要先有含 `allowed_roots` 的 config（執行 `asura setup`），避免 service 以 HOME 作為 allowed root。
+- unit 放在 systemd user manager 實際搜尋的目錄（依 manager 自己的 `XDG_CONFIG_HOME`，未設定時為 `~/.config`）。CLI 端若使用不同的 `XDG_CONFIG_HOME`，unit 會加上 `Environment=XDG_CONFIG_HOME=...`，讓 service 讀到同一份 config。
 - 停止時先等待任務排空，最多 60 秒，逾時由 systemd 回收整個 unit 的進程；中斷的任務在下次啟動時標為 failed，不自動重跑。
 - 異常結束 5 秒後重啟，60 秒內最多啟動 3 次；手動 `stop` 不會自動重啟。不設定 linger，unit 不含 secret。
 - 只管理帶有 Asura 標記的 unit；同名但非 Asura 建立的 unit 會被拒絕處理。

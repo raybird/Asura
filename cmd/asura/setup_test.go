@@ -54,7 +54,9 @@ func TestSetupFreshNonInteractive(t *testing.T) {
 	}
 	cfgPath := filepath.Join(e.configHome, "asura", "config.toml")
 	cfg, err := config.Load(cfgPath)
-	if err != nil || cfg == nil || strings.Join(cfg.AllowedRoots, ",") != root || cfg.DB != nil || cfg.Socket != nil {
+	// 第 18 題：新建 config 固定建立當下解析的絕對 db／socket。
+	if err != nil || cfg == nil || strings.Join(cfg.AllowedRoots, ",") != root || cfg.DB == nil || *cfg.DB != filepath.Join(e.dataHome, "asura", "asura.db") ||
+		cfg.Socket == nil || *cfg.Socket != filepath.Join(e.runtimeDir, "asura", "asura.sock") {
 		t.Fatalf("config=%+v err=%v", cfg, err)
 	}
 	for path, mode := range map[string]os.FileMode{cfgPath: 0600, filepath.Dir(cfgPath): 0700, filepath.Join(e.dataHome, "asura"): 0700} {
@@ -122,7 +124,7 @@ func TestSetupServiceAndIdempotency(t *testing.T) {
 			t.Fatalf("rerun changed %s", p)
 		}
 	}
-	units, _ := os.ReadDir(filepath.Join(e.configHome, "systemd", "user"))
+	units, _ := os.ReadDir(filepath.Join(e.home, ".config", "systemd", "user"))
 	if len(units) != 1 {
 		t.Fatalf("units=%v", units)
 	}
@@ -149,8 +151,28 @@ func TestSetupPartialFailureIsResumable(t *testing.T) {
 	if code, out := runSetup("--allowed-roots", root, "--service"); code != 0 || !strings.Contains(out, "Setup complete.") {
 		t.Fatalf("resume: %d\n%s", code, out)
 	}
-	if units, _ := os.ReadDir(filepath.Join(e.configHome, "systemd", "user")); len(units) != 1 {
+	if units, _ := os.ReadDir(filepath.Join(e.home, ".config", "systemd", "user")); len(units) != 1 {
 		t.Fatalf("units=%v", units)
+	}
+}
+
+// 2026-10-09：review M1／第 17 題，既有 config 缺 allowed_roots 時失敗、不改寫、不宣稱完成，也不安裝 service。
+func TestSetupRejectsConfigWithoutAllowedRoots(t *testing.T) {
+	e, _, log := setupEnv(t)
+	e.writeConfig(t, "schema_version = 1\nworkers = 3\n")
+	cfgPath := filepath.Join(e.configHome, "asura", "config.toml")
+	before, _ := os.ReadFile(cfgPath)
+	for _, args := range [][]string{nil, {"--service"}} {
+		code, out := runSetup(args...)
+		if code != 1 || !strings.Contains(out, cfgPath+" has no allowed_roots") || strings.Contains(out, "Setup complete.") {
+			t.Fatalf("%v: code=%d\n%s", args, code, out)
+		}
+	}
+	if after, _ := os.ReadFile(cfgPath); !bytes.Equal(before, after) {
+		t.Fatal("config rewritten")
+	}
+	if b, _ := os.ReadFile(log); strings.Contains(string(b), "enable") || strings.Contains(string(b), "start") {
+		t.Fatalf("service touched: %s", b)
 	}
 }
 

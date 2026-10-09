@@ -42,7 +42,7 @@ done
 
 # 前置工具與平台檢查都在任何下載或檔案變更之前完成。
 if have curl; then
-	fetch() { curl -fsSL -o "$2" "$1"; }
+	fetch() { curl -fsSL --proto '=https' -o "$2" "$1"; }
 elif have wget; then
 	fetch() { wget -qO "$2" "$1"; }
 else
@@ -73,6 +73,10 @@ if [ -L "$target" ] || { [ -e "$target" ] && [ ! -f "$target" ]; }; then
 fi
 
 check_version() {
+	case $1 in
+	*'
+'*) err "invalid version: contains a newline" ;;
+	esac
 	printf '%s\n' "$1" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' || err "invalid version: $1"
 	ver=${1#v}
 	major=${ver%%.*}
@@ -92,7 +96,7 @@ cleanup() {
 	if [ -n "$stage" ]; then rm -f "$stage"; fi
 }
 trap cleanup EXIT
-trap 'exit 1' INT TERM
+trap 'exit 1' HUP INT TERM
 
 if [ -z "$tag" ]; then
 	fetch "https://api.github.com/repos/$repo/releases/latest" "$tmp/latest.json" || err "cannot query latest release"
@@ -125,15 +129,17 @@ while IFS= read -r name; do
 	*/../*) err "unsafe archive entry: $name" ;;
 	esac
 done <"$tmp/names"
-if awk 'substr($0, 1, 1) != "-" && substr($0, 1, 1) != "d"' "$tmp/listing" | grep -q .; then
+# busybox tar 把 hardlink 列為一般檔案，另以連結標記（" -> "、" link to "）拒絕。
+if awk 'substr($0, 1, 1) != "-" && substr($0, 1, 1) != "d" || / -> | link to /' "$tmp/listing" | grep -q .; then
 	err "unsafe archive entry type in $asset"
 fi
 grep -qx "$root/asura" "$tmp/names" || err "archive $asset does not contain $root/asura"
-tar -xzf "$tmp/$asset" -C "$tmp" "$root/asura" || err "cannot extract $root/asura"
+# 以串流取出內容，不在檔案系統建立 archive 描述的任何 link。
+tar -xOzf "$tmp/$asset" "$root/asura" >"$tmp/asura.bin" || err "cannot extract $root/asura"
 
 mkdir -p "$dir" || err "cannot write to $dir"
-stage="$dir/.asura.tmp.$$"
-cp "$tmp/$root/asura" "$stage" 2>/dev/null || err "cannot write to $dir"
+stage=$(mktemp "$dir/.asura.XXXXXX" 2>/dev/null) || err "cannot write to $dir"
+cat "$tmp/asura.bin" >"$stage" || err "cannot write to $dir"
 chmod 0755 "$stage"
 reported=$("$stage" version --json 2>/dev/null) || err "staged binary cannot report its version"
 for want in "\"version\":\"$tag\"" '"os":"linux"' "\"arch\":\"$arch\""; do

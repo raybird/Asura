@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 const doctorSecret = "SECRET-SENTINEL-d0c7"
@@ -153,5 +154,12 @@ func TestDoctorBoundsLongDetails(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "(truncated)") {
 		t.Fatalf("long detail not marked truncated:\n%s", out.String())
+	}
+	// 2026-10-09：review N2，多位元組路徑截斷後仍是合法 UTF-8。
+	t.Setenv("ASURA_SOCKET", "/"+strings.Repeat("界", 400))
+	out.Reset()
+	RunCLI([]string{"doctor"}, &out, &stderr)
+	if !utf8.ValidString(out.String()) || !strings.Contains(out.String(), "(truncated)") {
+		t.Fatal("truncation produced invalid UTF-8")
 	}
 }

@@ -67,7 +67,10 @@ func handleSetup(args []string, stdout, stderr io.Writer) int {
 				return incomplete("%v", err)
 			}
 		}
-		if err := writeNewConfig(paths.ConfigFile, roots); err != nil {
+		if err := config.CheckSocketPath(paths.Socket); err != nil {
+			return incomplete("%v", err)
+		}
+		if err := writeNewConfig(paths, roots); err != nil {
 			return incomplete("cannot create %s: %v", paths.ConfigFile, err)
 		}
 		fmt.Fprintf(stdout, "Created %s\n", paths.ConfigFile)
@@ -76,6 +79,9 @@ func handleSetup(args []string, stdout, stderr io.Writer) int {
 		}
 	} else {
 		fmt.Fprintf(stdout, "Using existing config %s\n", paths.ConfigFile)
+		if activeConfig.cfg.AllowedRoots == nil {
+			return incomplete("%s has no allowed_roots; add allowed_roots = [\"/path/to/project\"] to it manually", paths.ConfigFile)
+		}
 		if roots != nil && !sameRoots(roots, activeConfig.cfg.AllowedRoots) {
 			return incomplete("--allowed-roots conflicts with existing config %s; edit that file manually to change allowed_roots", paths.ConfigFile)
 		}
@@ -145,8 +151,10 @@ func sameRoots(a, b []string) bool {
 	return slices.Equal(a, b)
 }
 
-// writeNewConfig 以 0700 目錄、0600 檔案建立 config；以 link 發佈，既有檔案不會被覆寫。
-func writeNewConfig(path string, roots []string) error {
+// writeNewConfig 以 0700 目錄、0600 檔案建立 config，固定建立當下解析的 db／socket，
+// 讓 shell 與 systemd service 不因 XDG 環境不同而分歧；以 link 發佈，既有檔案不會被覆寫。
+func writeNewConfig(paths config.Paths, roots []string) error {
+	path := paths.ConfigFile
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
@@ -160,7 +168,9 @@ func writeNewConfig(path string, roots []string) error {
 	body := struct {
 		SchemaVersion int      `toml:"schema_version"`
 		AllowedRoots  []string `toml:"allowed_roots"`
-	}{config.SchemaVersion, roots}
+		DB            string   `toml:"db"`
+		Socket        string   `toml:"socket"`
+	}{config.SchemaVersion, roots, paths.DB, paths.Socket}
 	if err := toml.NewEncoder(tmp).Encode(body); err != nil {
 		tmp.Close()
 		return err

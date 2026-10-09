@@ -16,8 +16,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"asura/internal/backend"
 	"asura/internal/config"
@@ -117,7 +117,11 @@ func handleDoctor(args []string, stdout, stderr io.Writer) int {
 	add := func(section string, level checkLevel, name, format string, a ...any) {
 		detail := fmt.Sprintf(format, a...)
 		if len(detail) > doctorMaxDetail {
-			detail = detail[:doctorMaxDetail] + "...(truncated)"
+			cut := doctorMaxDetail
+			for cut > 0 && !utf8.RuneStart(detail[cut]) {
+				cut--
+			}
+			detail = detail[:cut] + "...(truncated)"
 		}
 		checks = append(checks, doctorCheck{section: section, name: name, level: level, detail: detail})
 	}
@@ -261,26 +265,22 @@ func doctorRuntimes(ctx context.Context, add func(string, checkLevel, string, st
 	return snapshot.Entries
 }
 
-// userServiceState 以有界的 systemctl 查詢回傳固定狀態字，不轉述 systemctl 原始輸出；
-// 逾時回收整個 process group，避免殘留子行程持有輸出管線。
-func userServiceState(parent context.Context) string {
-	ctx, cancel := context.WithTimeout(parent, doctorProbeTimeout)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "systemctl", "--user", "is-active", serviceUnit)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.WaitDelay = 100 * time.Millisecond
-	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
-	out, _ := cmd.Output()
-	if ctx.Err() != nil {
+// userServiceState 以有界的 systemctl 查詢回傳固定狀態字，不轉述 systemctl 原始輸出。
+func userServiceState(ctx context.Context) string {
+	state, err := systemctl(ctx, doctorProbeTimeout, "is-active", serviceUnit)
+	if errors.Is(err, context.DeadlineExceeded) {
 		return "status unavailable (timeout)"
 	}
-	state := strings.TrimSpace(string(out))
-	switch state {
+	switch state = firstWord(state, ""); state {
 	case "active", "activating", "deactivating", "failed":
 		return state
 	}
-	if _, err := os.Stat(userUnitPath()); err == nil {
-		return state + " (installed)"
+	dir, err := managerUnitDir(ctx)
+	if err != nil {
+		return "status unavailable (user bus)"
+	}
+	if _, err := os.Stat(unitPathIn(dir)); err == nil {
+		return "inactive (installed)"
 	}
 	return "not-installed"
 }

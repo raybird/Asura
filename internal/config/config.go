@@ -5,6 +5,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -94,20 +95,26 @@ func CheckSocketPath(path string) error {
 
 // Load 讀取並嚴格驗證 config；檔案不存在時回傳 (nil, nil)。錯誤訊息不回顯設定值。
 func Load(path string) (*Config, error) {
-	info, err := os.Stat(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
-	}
 	fail := func(format string, args ...any) (*Config, error) {
 		return nil, fmt.Errorf("config %s: "+format, append([]any{path}, args...)...)
 	}
+	// 以同一個 fd 檢查權限並讀取，避免檢查與讀取之間檔案被替換。
+	fh, err := os.Open(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return fail("cannot read file")
+	}
+	defer fh.Close()
+	info, err := fh.Stat()
 	if err != nil {
 		return fail("cannot read file")
 	}
 	if err := checkOwnerAndMode(path, info); err != nil {
 		return fail("%v", err)
 	}
-	raw, err := os.ReadFile(path)
+	raw, err := io.ReadAll(fh)
 	if err != nil {
 		return fail("cannot read file")
 	}
@@ -196,12 +203,22 @@ func checkOwnerAndMode(path string, info fs.FileInfo) error {
 	if st, ok := info.Sys().(*syscall.Stat_t); ok && int(st.Uid) != os.Getuid() {
 		return errors.New("file is not owned by the current user")
 	}
-	dir, err := os.Stat(filepath.Dir(path))
-	if err != nil {
-		return errors.New("cannot read config directory")
-	}
-	if info.Mode().Perm()&0o022 != 0 || dir.Mode().Perm()&0o022 != 0 {
+	if info.Mode().Perm()&0o022 != 0 {
 		return errors.New("file or its directory is writable by group or others; run chmod 600 on the file and chmod 700 on its directory")
+	}
+	// symlink config 同時檢查連結與目標所在的目錄。
+	dirs := []string{filepath.Dir(path)}
+	if resolved, err := filepath.EvalSymlinks(path); err == nil && filepath.Dir(resolved) != dirs[0] {
+		dirs = append(dirs, filepath.Dir(resolved))
+	}
+	for _, d := range dirs {
+		dir, err := os.Stat(d)
+		if err != nil {
+			return errors.New("cannot read config directory")
+		}
+		if dir.Mode().Perm()&0o022 != 0 {
+			return errors.New("file or its directory is writable by group or others; run chmod 600 on the file and chmod 700 on its directory")
+		}
 	}
 	return nil
 }

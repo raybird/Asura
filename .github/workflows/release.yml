@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "要補上執行檔的既有 tag（例如 v1.0.0）"
+        description: "要補上執行檔的既有 tag（v1.1.0 起；tag 須含 scripts/release/build-archives.sh）"
         required: true
 
 permissions:

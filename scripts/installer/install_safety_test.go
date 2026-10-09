@@ -6,6 +6,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -195,4 +196,50 @@ func TestInstallReinstallUpgradeDowngrade(t *testing.T) {
 			t.Fatalf("%s install-dir=%s", s.name, got)
 		}
 	}
+}
+
+// 2026-10-09：issue-45 review S1／N1，hardlink 不得把 archive 外的檔案帶進安裝（GNU 與 busybox tar），版本字串不得含換行。
+func TestInstallRejectsHardlinkAndMultilineVersion(t *testing.T) {
+	for _, impl := range []string{"gnu", "busybox"} {
+		t.Run("hardlink-"+impl, func(t *testing.T) {
+			h := newHarness(t)
+			if impl == "busybox" {
+				bb, err := exec.LookPath("busybox")
+				if err != nil {
+					t.Skip("busybox not installed")
+				}
+				os.Remove(filepath.Join(h.sysbin, "tar"))
+				if err := os.Symlink(bb, filepath.Join(h.sysbin, "tar")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			s := h.installSentinel()
+			// archive 外的檔案內容恰好能通過版本核對，若被連結進來就會被安裝。
+			outside := filepath.Join(h.Home, "outside-asura")
+			os.WriteFile(outside, fixtureBinary(stableTag, "amd64"), 0700)
+			r := newRelease(t, stableTag)
+			r.isLatest = true
+			r.assets[assetName(stableTag, "amd64")] = buildArchive(t, []entry{{name: "asura_v1.1.0_linux_amd64/asura", typeflag: tar.TypeLink, link: outside}})
+			h.publish(r)
+			res := h.run(installScript(t))
+			if res.Code == 0 {
+				t.Fatalf("hardlink archive installed: %s", res.Stdout)
+			}
+			if v := h.violations(s); len(v) > 0 {
+				t.Fatalf("existing install damaged: %v", v)
+			}
+		})
+	}
+	t.Run("multiline-version", func(t *testing.T) {
+		h, _ := latestRelease(t)
+		res := h.run(installScript(t), "--version", "v1.1.0\n../x")
+		if res.Code == 0 || !strings.Contains(res.Stderr, "invalid version") {
+			t.Fatalf("code=%d stderr=%s", res.Code, res.Stderr)
+		}
+		for _, r := range res.Requests {
+			if strings.HasPrefix(r, "http") {
+				t.Fatalf("downloaded with invalid version: %v", res.Requests)
+			}
+		}
+	})
 }
