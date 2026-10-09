@@ -181,3 +181,21 @@ func TestInstallUsageErrors(t *testing.T) {
 		assertNothingInstalled(t, h, res)
 	}
 }
+
+// 2026-10-09：issue-45 Task 2.2，arm64 主機選用 arm64 asset（DIST-002）。
+func TestInstallArm64Asset(t *testing.T) {
+	for _, machine := range []string{"aarch64", "arm64"} {
+		t.Run(machine, func(t *testing.T) {
+			h, _ := latestRelease(t)
+			h.UnameM = machine
+			res := h.run(installScript(t))
+			if res.Code != 0 {
+				t.Fatalf("code=%d stderr=%s", res.Code, res.Stderr)
+			}
+			assertInstalled(t, filepath.Join(h.InstallDir, "asura"), stableTag, "arm64")
+			if !requested(res, downloadURL+"v1.1.0/asura_v1.1.0_linux_arm64.tar.gz") || requested(res, downloadURL+"v1.1.0/asura_v1.1.0_linux_amd64.tar.gz") {
+				t.Fatalf("requests=%v", res.Requests)
+			}
+		})
+	}
+}

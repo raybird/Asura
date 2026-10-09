@@ -132,8 +132,10 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
 - 驗收編號：DIST-002
 - 完成判準：下載 URL 為 arm64 asset 且 checksum 相符；arm64 執行證據標明原生或模擬環境；缺可執行環境時記未驗證，不以 amd64 結果代替。
 - 驗證：沿用 2.1 harness 的外迴圈。
-- 狀態：📝 待實作
+- 狀態：⏳ 進行中（2026-10-09：asset 選擇已驗證；arm64 binary 執行未驗證）
 - 證據：
+  - asset 選擇：`TestInstallArm64Asset`（`scripts/installer/install_test.go`）以 `uname -m` 為 `aarch64`／`arm64` 安裝，內容等於 arm64 fixture、只請求 arm64 asset；`go test -count=1 -run TestInstallArm64Asset -v ./scripts/installer` → 2 PASS。對應程式已由 2.1 的架構對應實作，無法另取紅燈；改以變異實驗確認判準：把 arm64 對應改成 amd64（事後還原、未提交）→ 兩個子測試 FAIL。
+  - 未驗證：本機（x86_64）無 qemu-user 與 aarch64 binfmt，無法執行真實 arm64 binary 的 `version --json`。可行途徑為原生 arm64 主機，或經使用者同意以特權容器註冊 binfmt；不以 amd64 結果代替。真實 arm64 archive 的 ELF 架構與版本注入已由 1.2 核對。
 
 ### Task 2.3 — 安裝失敗保留、重裝與升降版
 - 產出與範圍：installer 防護與版本行為：SHA-256 比對（含 shasum fallback）、唯一精確 manifest 項目、archive 路徑／型別檢查、staged `version --json` 核對 tag／arch；checksum 不符、缺 asset／manifest 項目、重複項目、下載中斷、危險 archive、rename 失敗、既有目標為 symlink／目錄／非一般檔案、`--version v1.0.0` 拒絕並提示手動下載；同版重跑重新下載驗證、升級、顯式降版；不動 config／DB、不重啟 daemon。
