@@ -269,13 +269,20 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
   - 精煉：no-op——流程依序一次執行、失敗統一經 `incomplete` 回報；沿用上列綠燈。
 
 ### Task 5.3 — 真實 systemd user bus lifecycle
-- 產出與範圍：在可用 user bus 的主機以隔離 unit 名與暫存 XDG 執行 install／start／stop／restart／status／uninstall；驗證 60 秒停止期限、異常退出 5 秒重啟與 60 秒內 3 次上限、手動 stop 不重啟、中斷任務下次啟動標記 failed。
+- 產出與範圍：在可用 user bus 的主機，以正式 unit 名 `asura.service` 與暫時 config（db／socket 指向暫存目錄）執行 install／start／stop／status／uninstall；systemd user manager 只從自身搜尋路徑載入 unit，故不採暫存 XDG unit 路徑，改以事前確認路徑不存在、事後全部移除保持隔離；驗證 60 秒停止期限、異常退出 5 秒重啟與 60 秒內 3 次上限、手動 stop 不重啟、中斷任務下次啟動標記 failed。
 - 相依：5.1
 - 驗收編號：DIST-013
 - 完成判準：`systemctl --user show` 與 journal 記錄的狀態轉換、時間與重啟次數符合核准值；長任務 fixture 逾時被回收且下次啟動為 failed、未重跑；測試後無殘留 unit。缺 user bus 時記未驗證，不以 stub 代替。
 - 驗證：手動／腳本化真實環境驗證，記錄主機、systemd 版本與命令輸出；不屬 `go test` 預設套件。
-- 狀態：📝 待實作
+- 狀態：✅ 已完成（2026-10-09）
 - 證據：
+  - 授權：2026-10-09 使用者對「可以在這台機器上跑嗎？」選擇「在本機執行並清理（建議）」。
+  - 腳本：`docs/issues/issue-45/evidence/systemd-lifecycle.sh`（需 `ASURA_LIFECYCLE_CONFIRM=1`；`~/.config/asura`、unit 或 drop-in 已存在即拒絕執行）。daemon 由 `go build` 產出的 branch binary 執行；測試專用 drop-in 只設定 PATH 以使用 stub codex（版本探測回 0.155.0，執行任務時 `sleep 600`），正式 unit 不含 PATH。
+  - 環境：本機 systemd 259（259.5-0ubuntu3.4）user bus，x86_64；執行前 `asura*` unit 0 個、Linger=no。
+  - 結果：`ASURA_LIFECYCLE_CONFIRM=1 sh docs/issues/issue-45/evidence/systemd-lifecycle.sh` exit 0、`== LIFECYCLE OK`。`systemctl --user show` 實測 `KillMode=mixed`、`TimeoutStopUSec=1min`、`Restart=on-failure`、`RestartUSec=5s`、`StartLimitIntervalUSec=1min`、`StartLimitBurst=3`、`UnitFileState=enabled`、`FragmentPath=~/.config/systemd/user/asura.service`；unit 無 linger／key／token／secret 字樣。長任務 running 時 `asura service stop` 耗時 61 秒後 unit 停止，stub 進程全數被回收；再次 start 後該 Task 為 `failed` 且未重跑。手動 stop 後 8 秒仍 inactive、NRestarts 不變。`reset-failed` 後 start，連續 SIGKILL 主進程：第 1、2 次各 5 秒後重啟，第 3 次後停在 `failed`、`MainPID=0`、`NRestarts=3`，journal 有 `Start request repeated too quickly`。uninstall 移除 unit，config 與 DB 雜湊不變、Task 仍可讀，Linger 未變。
+  - 判準修訂（如實記錄）：首輪以 `Result=start-limit-hit` 判定限流，systemd 259 在此情境記為 `Result=signal`（unit 已停在 failed、未再啟動），判準因此誤報失敗；改為「failed 且 MainPID=0 維持 8 秒」加上 journal 限流訊息。反向自檢：若第 4 次啟動成功，unit 會是 active 且有 MainPID，新判準會失敗。另修正腳本中 `wait_for` 計數變數覆蓋外層迴圈變數的錯誤，以及 `ask` 未指定 `--backend codex` 的問題，修正後整段重跑。
+  - 清理：執行後確認 `~/.config/asura`、`~/.config/systemd/user/asura.service`、`asura.service.d` 與 `/tmp/asura-lc.*` 皆不存在，`systemctl --user list-unit-files 'asura*'` 為 0。
+  - 證據分類：真實 systemd user bus＋stub runtime。
 
 ## Phase 6 — 文件、clean onboarding 與完整回歸
 
