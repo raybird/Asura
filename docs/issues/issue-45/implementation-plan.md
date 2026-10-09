@@ -112,13 +112,19 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
 ## Phase 2 — 安裝器
 
 ### Task 2.1 — `install.sh` 主流程、平台判定與前置工具檢查
-- 產出與範圍：repo 根目錄 POSIX `install.sh`：`--version`／`--install-dir`，預設 `~/.local/bin`；Linux 限定、`x86_64`→amd64、`aarch64`／`arm64`→arm64；需 `curl` 或 `wget`、`tar`、`sha256sum` 或 `shasum -a 256`、`uname`，缺任一項在變更 filesystem 前失敗；`releases/latest` 取 stable；私有 temp 下載、唯一精確 manifest 項目、archive 路徑／型別檢查、同目錄 stage（0755）＋ `version --json` 核對後 rename；install-dir 不存在則建立；不在 PATH 只提示；不改 shell rc、不用 sudo。
+- 產出與範圍：repo 根目錄 POSIX `install.sh`：`--version`／`--install-dir`，預設 `~/.local/bin`；Linux 限定、`x86_64`→amd64、`aarch64`／`arm64`→arm64；需 `curl` 或 `wget`、`tar`、`sha256sum` 或 `shasum -a 256`、`uname`，缺任一項在變更 filesystem 前失敗；`releases/latest` 取 stable；私有 temp 下載、同目錄 stage（0755）後 rename；install-dir 不存在則建立；不在 PATH 只提示；不改 shell rc、不用 sudo。
 - 相依：0.2、1.1
+- 範圍調整（2026-10-09）：checksum 比對、唯一精確 manifest 項目、archive 路徑／型別檢查、staged `version --json` 核對與 shasum fallback 移至 2.3，讓每項防護各自取得紅燈；2.1 只交付主流程。
 - 驗收編號：DIST-001、DIST-005
 - 完成判準：0.2 harness 下 amd64 fresh install 取得 checksum 相符 binary 且 `version --json` 對應 fixture tag；非 Linux、不支援架構、缺工具各自非零且 install-dir 無 binary；含空白的 install-dir 可用；執行過程無 sudo 呼叫（stub 記錄）。
 - 驗證：外迴圈 harness 驅動真實 sh；installer 無獨立單元層，單迴圈合併理由記於證據。
-- 狀態：📝 待實作
+- 狀態：✅ 已完成（2026-10-09）
 - 證據：
+  - 產出：repo 根目錄 `install.sh`（POSIX sh，dash 執行）、`scripts/installer/install_test.go`；harness PATH 改為 stub 加白名單系統工具（`systemTools`），並新增記錄呼叫的 `sudo`／`systemctl` stub 與 `drop`。
+  - 外迴圈紅燈：`go test -count=1 -run 'TestInstall' ./scripts/installer` → 18 個（子）測試 FAIL，原因為 `install.sh` 不存在。首輪 `TestInstallMissingTools`、`TestInstallUsageErrors` 因暫存路徑含工具名而假綠，改為比對 `asura-install: error: missing required tool: …` 與 `Usage: install.sh …` 字面訊息後才全數轉紅。
+  - 綠燈：`go test -count=1 -run 'TestInstall' -v ./scripts/installer` → 全部 PASS：amd64 fresh install 內容等於 fixture、0755、只請求 latest／amd64 asset／manifest、無 sudo／systemctl、install-dir 只有 `asura`、TMPDIR 無殘留、輸出 `… is not in PATH` 提示且未建立 `.profile`；含空白的 `--install-dir` 可用且不建立預設目錄；Darwin/x86_64、Linux/riscv64、Linux/i686 回 `unsupported platform`；缺 curl+wget、tar、sha256sum+shasum、uname 各自在下載與檔案變更前失敗；無 curl 時改用 wget；未知參數與缺值回 exit 2。
+  - 精煉：移除尚未使用的 sha256 函式與只因函式未被呼叫而必然通過的 shasum fallback 測試（移至 2.3）。`go vet ./...` exit 0、`go test -count=1 -race ./scripts/...` ok；本機無 shellcheck，未執行（2026-10-09，dash／go1.27.1 linux/amd64）。
+  - 單迴圈理由：installer 為獨立 shell 腳本，沒有可分離的單元層；harness 以真實 sh、tar、檔案系統執行，網路以 stub 取代（屬 HTTP fixture 證據，非正式 Release E2E）。
 
 ### Task 2.2 — arm64 安裝證據
 - 產出與範圍：harness 以 `uname -m` 為 `aarch64`／`arm64` 時下載 arm64 asset；arm64 binary 在原生 arm64 或明確標示的 qemu-user 環境執行 `version --json`。
@@ -130,7 +136,7 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
 - 證據：
 
 ### Task 2.3 — 安裝失敗保留、重裝與升降版
-- 產出與範圍：installer 失敗路徑與版本行為：checksum 不符、缺 asset／manifest 項目、重複項目、下載中斷、危險 archive、rename 失敗、既有目標為 symlink／目錄／非一般檔案、`--version v1.0.0` 拒絕並提示手動下載；同版重跑重新下載驗證、升級、顯式降版；不動 config／DB、不重啟 daemon。
+- 產出與範圍：installer 防護與版本行為：SHA-256 比對（含 shasum fallback）、唯一精確 manifest 項目、archive 路徑／型別檢查、staged `version --json` 核對 tag／arch；checksum 不符、缺 asset／manifest 項目、重複項目、下載中斷、危險 archive、rename 失敗、既有目標為 symlink／目錄／非一般檔案、`--version v1.0.0` 拒絕並提示手動下載；同版重跑重新下載驗證、升級、顯式降版；不動 config／DB、不重啟 daemon。
 - 相依：2.1
 - 驗收編號：DIST-003、DIST-004
 - 完成判準：每個失敗 Example 非零退出、0.2 判準證明 sentinel 內容與權限不變且無殘留暫存檔；成功 Example 安裝的 binary 版本對應指定 tag；harness 前後 config／DB fixture hash 不變；stub 記錄無 `systemctl`／kill 呼叫。

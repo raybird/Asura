@@ -56,6 +56,20 @@ case "$1" in
 esac
 `
 
+// sudoStub 只記錄呼叫並失敗；installer 不得呼叫 sudo 或 systemctl。
+const sudoStub = `#!/bin/sh
+printf '%s %s\n' "$(basename "$0")" "$*" >> "$STUB_LOG"
+exit 1
+`
+
+// drop 讓 stub 或系統工具在 PATH 中消失，用於缺工具情境。
+func (h *harness) drop(tools ...string) {
+	for _, tool := range tools {
+		os.Remove(filepath.Join(h.stubs, tool))
+		os.Remove(filepath.Join(h.sysbin, tool))
+	}
+}
+
 // fixtureBinary 是放進 archive 的假 asura：只回應 version --json。
 func fixtureBinary(tag, arch string) []byte {
 	return []byte(fmt.Sprintf("#!/bin/sh\nif [ \"$1 $2\" = \"version --json\" ]; then echo '{\"version\":\"%s\",\"commit\":\"fixture\",\"os\":\"linux\",\"arch\":\"%s\"}'; exit 0; fi\nexit 1\n", tag, arch))
@@ -144,30 +158,40 @@ func (r *release) manifestLines() []string {
 	return lines
 }
 
+// systemTools 是 harness PATH 中唯一可見的系統工具；installer 只能依賴這些基本工具與 stub。
+var systemTools = []string{"sh", "tar", "gzip", "sha256sum", "shasum", "mktemp", "awk", "sed", "grep", "mkdir", "cp", "chmod", "mv", "rm", "cat", "head", "wc", "tr", "basename", "dirname", "ls", "ln", "id"}
+
 type harness struct {
-	t                          *testing.T
-	root, stubs, fixtures, log string
-	routes                     *os.File
-	Home, InstallDir, TmpDir   string
-	UnameS, UnameM             string
-	ExtraEnv                   []string
+	t                                  *testing.T
+	root, stubs, sysbin, fixtures, log string
+	routes                             *os.File
+	Home, InstallDir, TmpDir           string
+	UnameS, UnameM                     string
+	ExtraEnv                           []string
 }
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
 	root := t.TempDir()
-	h := &harness{t: t, root: root, stubs: filepath.Join(root, "stubs"), fixtures: filepath.Join(root, "fixtures"),
+	h := &harness{t: t, root: root, stubs: filepath.Join(root, "stubs"), sysbin: filepath.Join(root, "sysbin"), fixtures: filepath.Join(root, "fixtures"),
 		log: filepath.Join(root, "requests.log"), Home: filepath.Join(root, "home"), TmpDir: filepath.Join(root, "tmp"),
 		UnameS: "Linux", UnameM: "x86_64"}
 	h.InstallDir = filepath.Join(h.Home, ".local", "bin")
-	for _, d := range []string{h.stubs, h.fixtures, h.Home, h.TmpDir} {
+	for _, d := range []string{h.stubs, h.sysbin, h.fixtures, h.Home, h.TmpDir} {
 		if err := os.MkdirAll(d, 0700); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for name, body := range map[string]string{"curl": fetchStub, "wget": fetchStub, "uname": unameStub} {
+	for name, body := range map[string]string{"curl": fetchStub, "wget": fetchStub, "uname": unameStub, "sudo": sudoStub, "systemctl": sudoStub} {
 		if err := os.WriteFile(filepath.Join(h.stubs, name), []byte(body), 0755); err != nil {
 			t.Fatal(err)
+		}
+	}
+	for _, tool := range systemTools {
+		if path, err := exec.LookPath(tool); err == nil {
+			if err := os.Symlink(path, filepath.Join(h.sysbin, tool)); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 	f, err := os.Create(filepath.Join(root, "routes.tsv"))
@@ -215,10 +239,10 @@ type result struct {
 // run 以真實 sh 執行 script，PATH 以 stub 目錄優先，其餘工具使用系統版本。
 func (h *harness) run(script string, args ...string) result {
 	h.t.Helper()
-	cmd := exec.Command("sh", append([]string{script}, args...)...)
+	cmd := exec.Command(filepath.Join(h.sysbin, "sh"), append([]string{script}, args...)...)
 	cmd.Dir = h.root
 	cmd.Env = append([]string{
-		"HOME=" + h.Home, "TMPDIR=" + h.TmpDir, "PATH=" + h.stubs + ":" + os.Getenv("PATH"),
+		"HOME=" + h.Home, "TMPDIR=" + h.TmpDir, "PATH=" + h.stubs + ":" + h.sysbin,
 		"STUB_LOG=" + h.log, "STUB_ROUTES=" + h.routes.Name(), "STUB_UNAME_S=" + h.UnameS, "STUB_UNAME_M=" + h.UnameM,
 	}, h.ExtraEnv...)
 	var out, errb bytes.Buffer
