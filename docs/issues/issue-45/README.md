@@ -216,7 +216,7 @@ Feature: Linux Distribution & Bootstrap
 
 ## Gherkin 核准紀錄
 
-- **核准 commit**: 待提交
+- **核准 commit**: 384a0d1
 - **核准來源**: 2026-10-07 使用者對第 1 題回答「1」，接受「沒有設定檔時沿用原本 DB／socket 路徑；執行 setup 後使用 XDG。舊資料不自動搬移」。已確認 DIST-TBD-8 與 DIST-009／011／012／014／015／017 的路徑相容部分；其他行為尚待確認，未將整個 Scenario 記為已核准。
 - **第 2 題來源**: 2026-10-07 使用者回答「1」，接受 TOML（config.toml）與 schema_version = 1，拒絕未知欄位／無效設定，缺檔沿用舊行為、壞檔明確失敗。確認 DIST-TBD-6；影響 DIST-009／010／011／012／017 的設定格式與解析部分，其餘必要決策未完成前不把完整 Scenario 記為已核准。
 - **第 3 題來源**: 2026-10-07 使用者回答「1」，接受新增 asura service install／start／stop／restart／status／uninstall，由 systemd 管理，移除 service 保留設定與資料。確認 DIST-TBD-11；影響 DIST-013／014／015 的管理介面，不推定核准 setup 自動啟用或 unit restart／shutdown 政策。
@@ -337,4 +337,4 @@ PY
 **建立日期**: 2026-10-07  
 **分級**: Large — 跨 CLI、operator config、installer、release 與 user service  
 **風險**: High — binary／資料保留與供應鏈安全  
-**狀態**: 已核准，待 decompose 拆解 Phase／Task
+**狀態**: 進行中；2026-10-09 已核准並完成拆解，下一步 Task 0.1
