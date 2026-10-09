@@ -343,4 +343,4 @@ PY
 **建立日期**: 2026-10-07  
 **分級**: Large — 跨 CLI、operator config、installer、release 與 user service  
 **風險**: High — binary／資料保留與供應鏈安全  
-**狀態**: 進行中；2026-10-09 Task 0.1／0.2／1.1／1.2／2.1／2.3／3.1／3.2／4.1／4.2／4.3／5.1／5.2／5.3／6.1／2.2 完成；6.2 fixture 部分完成、正式 Release 驗證待發佈；下一步 Task 6.3
+**狀態**: 進行中；2026-10-09 除 Task 6.2 正式 Release 驗證（Gate 豁免，發佈後補）外全部 Task 完成；下一步 create-pr 與獨立 review

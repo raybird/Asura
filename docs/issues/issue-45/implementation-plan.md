@@ -315,12 +315,18 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
 
 ### Task 6.3 — 完整回歸與相容矩陣
 - 產出與範圍：無 config、有 config、CLI override 三種狀態下 daemon／ask／run／status／cancel／audit／inventory／Cron／memory／Web 的相容矩陣；Phase 4 authority（StageBindingPlan、ExecutionContract、ExecutionAudit）不變；`go vet ./...`、`go test -count=1 -race -v ./...`、`go build ./cmd/asura`；SKIP 逐項記名稱與原因。
-- 相依：0.1、2.3、3.2、4.3、5.2、5.3、6.2
+- 相依：0.1、2.3、3.2、4.3、5.2、5.3、6.2（HTTP fixture 部分；正式 Release 驗證依 README Gate 豁免紀錄於發佈後補）
 - 驗收編號：DIST-017
 - 完成判準：三條命令 exit 0；0.1 基線全綠；矩陣每格有結果；SKIP 清單不計為通過；觸及 `internal/web` 或 memory lifecycle 時依 ci.yml 執行對應探測。
 - 驗證：回歸證據彙整，固定被測提交。
-- 狀態：📝 待實作
+- 狀態：✅ 已完成（2026-10-09）
 - 證據：
+  - 新增 `cmd/asura/compat_matrix_test.go`：有 config 時 daemon 啟動於 config socket，`cron list`、`memory list` 經 config socket 成功、加 `--socket` 指向不存在路徑即失敗，`web -h` 的預設 socket 為 config 值。行為已由 3.2 實作，屬回歸刻畫無紅燈；變異實驗（`socketPath` 忽略 config，事後還原）→ 首版只有 web 斷言轉紅（daemon 與 client 同步改用舊路徑而仍連得上），補上 daemon 啟動行斷言後於啟動行即轉紅。
+  - 相容矩陣（指令 × 無 config／有 config／CLI 覆寫 → 測試）：daemon → `TestNoConfigDaemonDefaults`／`TestConfigDaemonPrecedence`（config-over-builtin、xdg-when-config-omits-paths）／`TestConfigDaemonPrecedence`（env-over-config、cli-over-env-and-config）；ask → `TestNoConfigDaemonDefaults`、`TestNoConfigFlagDefaults`／`TestConfigDaemonPrecedence`／cli-over 子測試的 `--socket`；run → `TestNoConfigRunDefaults`／`TestConfigRuntimePriorityAndContext`／同測試的 ENV 覆寫與 `--db`；status、cancel、audit → `TestNoConfigLocalFallbackUsesCwdDB`／`TestConfigLocalFallbackUsesConfigDB`（含 `--db` 覆寫）；runtime inventory → 同上兩測試；cron、memory → `TestNoConfigFlagDefaults`／`TestCompatClientsUseConfigSocket`（含 `--socket` 覆寫）；web → `TestNoConfigFlagDefaults`／`TestCompatClientsUseConfigSocket`；壞 config 對全部指令 → `TestConfigInvalidFailsClosed`。
+  - Phase 4 authority：`git diff --stat 1be939b -- internal/engine internal/pipeline internal/audit internal/storage internal/daemon internal/auth` 無輸出（StageBindingPlan、ExecutionContract、ExecutionAudit、SQLite schema 未變）；`internal/backend` 僅新增 `ExecutableReporter` 與各 adapter 的回報方法，inventory／contract 結構未變（4.1）。
+  - 完整回歸（2026-10-09，HEAD `3311bb4` 加上本 Task 的測試檔，go1.27.1 linux/amd64）：`go vet ./...` exit 0；`go build ./cmd/asura` exit 0；`go test -count=1 -race -v ./...` exit 0，23 個 package ok，無 FAIL。
+  - SKIP（不計為通過）：`TestCodexProbe_BinaryVersion`、`TestCodexProbe_NonInteractive_JSONL`、`TestCodexProbe_ReadOnlySandbox`、`TestCodexProbe_WorkspaceWriteSandbox`、`TestCodexProbe_ContextCancellation`、`TestAdapter_Run_Live`、`TestCodexProbe_Live`（本機 codex 0.160.1 ≠ 固定 0.155.0）；`TestINT001`、`TestINT007`、`TestDaemon_ThreeFace_HostileWorkspaceConfig_CannotEscapeReadOnly`（本機 opencode 1.18.31 ≠ 固定 1.18.23）；`TestLiveAdapter` ×2（live OAuth model call opt-in）；`TestUtilityLiveProbe`（需 `ASURA_UFL_PROBE_DIR`）；`TestUtilityCapacityProbe`（opt-in 10k/100k SQLite probe）。
+  - 本次未修改 `internal/web` 與 storage memory lifecycle，依 project.md 不需加跑 ci.yml 的 Web UI／lifecycleperf 探測；CI 會照常執行。
 
 ## 使用方式對照
 
