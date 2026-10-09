@@ -18,13 +18,15 @@ Asura 是一個以 Go 撰寫的單一執行檔，在一台 Linux 主機上統一
 
 ## 安裝
 
-只支援 Linux（進程組回收、`/proc` 身分驗證與 `bwrap` 隔離皆依賴 Linux）。2026-10-06 起 [Releases](https://github.com/raybird/Asura/releases) 提供 amd64／arm64 靜態連結版本，附 `checksums.txt`：
+只支援 Linux（進程組回收、`/proc` 身分驗證與 `bwrap` 隔離皆依賴 Linux）。v1.1.0 起可用 installer 安裝 amd64／arm64 正式版，下載後先核對 SHA-256 與版本才替換，不需 root：
 
 ```bash
-curl -LO https://github.com/raybird/Asura/releases/download/v1.0.0/asura_v1.0.0_linux_amd64.tar.gz
-tar -xzf asura_v1.0.0_linux_amd64.tar.gz
-./asura_v1.0.0_linux_amd64/asura
+curl -fsSL https://raw.githubusercontent.com/raybird/Asura/main/install.sh | sh
+asura doctor    # 唯讀檢查主機與 runtime
+asura setup     # 建立 config，可選擇啟用 systemd user service
 ```
+
+v1.0.0 沒有版本資訊，請從 [Releases](https://github.com/raybird/Asura/releases) 手動下載 tar.gz 並以 checksum 檔核對。安裝、設定、service 與移除細節見 [安裝與設定](docs/guides/setup.md)。
 
 或自行編譯（Go 1.26+）：
 
@@ -82,6 +84,10 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web --listen 127.0.0.1:8080 --socket
 | `cron` | 定時排程 | [CLI 參考](docs/guides/cli-reference.md#cron) |
 | `memory` | 專案記憶、Git 候選、效用與版本取代 | [專案記憶](docs/guides/memory.md) |
 | `web` | 單人 Web Console | [Web Console](docs/guides/web-console.md) |
+| `version` | 顯示版本、commit 與平台（`--json` 供腳本使用） | [安裝與設定](docs/guides/setup.md#安裝) |
+| `doctor` | 唯讀檢查主機、config 與 runtime 是否就緒 | [安裝與設定](docs/guides/setup.md#診斷asura-doctor) |
+| `setup` | 建立 config 與資料目錄，可選擇啟用 user service | [安裝與設定](docs/guides/setup.md#初始設定asura-setup) |
+| `service` | 管理 systemd user service | [安裝與設定](docs/guides/setup.md#user-serviceasura-service) |
 
 ## v1.0 範圍
 
@@ -100,7 +106,7 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web --listen 127.0.0.1:8080 --socket
 
 ## 文件
 
-- 使用指南：[CLI 參考](docs/guides/cli-reference.md)、[Runtime 與執行控制](docs/guides/runtimes.md)、[專案記憶](docs/guides/memory.md)、[Web Console](docs/guides/web-console.md)
+- 使用指南：[安裝與設定](docs/guides/setup.md)、[CLI 參考](docs/guides/cli-reference.md)、[Runtime 與執行控制](docs/guides/runtimes.md)、[專案記憶](docs/guides/memory.md)、[Web Console](docs/guides/web-console.md)
 - 開發者：[開發指南](docs/development.md)（目錄結構、開發流程、issue 索引）、[架構設計](docs/superpowers/specs/2026-09-11-asura-architecture-design.md)
 - AI 開發助理規範：[AGENTS.md](AGENTS.md)、[docs/AGENTS.md](docs/AGENTS.md)
 
@@ -108,4 +114,4 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web --listen 127.0.0.1:8080 --socket
 
 [MIT](LICENSE)
 
-*最新更新日期：2026-10-06（v1.0.0）*
+*最新更新日期：2026-10-09（Issue #45 安裝與設定）*

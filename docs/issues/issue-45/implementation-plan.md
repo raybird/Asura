@@ -278,13 +278,16 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
 ## Phase 6 — 文件、clean onboarding 與完整回歸
 
 ### Task 6.1 — 常青文件與使用指南
-- 產出與範圍：README（安裝、指令一覽）、`docs/guides/cli-reference.md`（version／doctor／setup／service 與 config precedence）、安裝／設定／service／移除與資料保留說明、`docs/guides/runtimes.md`（doctor 與 inventory 關係）、`docs/development.md` issue 索引、`CHANGELOG.md` v1.1.0 節。
+- 產出與範圍：README（安裝、指令一覽）、`docs/guides/cli-reference.md`（version／doctor／setup／service 與 config precedence）、安裝／設定／service／移除與資料保留說明、`docs/guides/runtimes.md`（doctor 與 inventory 關係）、`docs/development.md` issue 索引、`CHANGELOG.md` Unreleased 條目（版本節於發佈 v1.1.0 時建立）。
 - 相依：2.3、4.3、5.2
 - 驗收編號：交付成果（支援 DIST-015）
 - 完成判準：文件中的命令、flag、路徑與實作一致；相對連結存在；移除步驟與資料位置明列。
 - 驗證：不改變可觀察行為；以連結與命令存在性的靜態檢查腳本為等價證據。
-- 狀態：📝 待實作
+- 狀態：✅ 已完成（2026-10-09）
 - 證據：
+  - 產出：新增 `docs/guides/setup.md`（installer、version、doctor 狀態與 exit、config 欄位／XDG／相容模式／precedence 對照表／fail-closed 規則、setup、service lifecycle 與 60 秒停止期限／重啟政策、移除步驟與資料位置）；更新 `README.md`（安裝改為 installer＋doctor＋setup、v1.0.0 手動下載說明、指令一覽新增 version／doctor／setup／service、文件清單）、`docs/guides/cli-reference.md`（config precedence 說明與四個新子命令）、`docs/guides/runtimes.md`（doctor 與 inventory 的關係、executable 不進封存契約）、`docs/development.md`（Issue 45 索引）、`CHANGELOG.md`（Unreleased 新增功能、建置與相容性條目）。
+  - 不改變可觀察行為：純文件。等價證據為 2026-10-09 從 repo 根目錄執行的靜態檢查（Python 內嵌腳本）：掃描上列 6 份文件的 102 個相對連結，目標檔案皆存在，`#錨點` 依 GitHub slug 規則（小寫、移除非字母數字、空白轉連字號）皆對應到實際標題；以 `go build` 產出的 binary 核對文件提到的 `version -json`、`setup -allowed-roots／-service`、`Usage: asura doctor`、`service install|start|stop|restart|status|uninstall` 皆出現在實際 usage；`install.sh` 含 `--version`、`--install-dir` 與文件所列入口 URL。結果：`PASS: links, anchors, commands and flags`。
+  - 內容依據：各段行為對照 2.1～5.2 的測試與實作（例如 `version --json` 以 Go map 序列化，鍵依字母排序）；未宣稱尚未驗證的真實 systemd lifecycle 或正式 Release。
 
 ### Task 6.2 — Clean Linux onboarding 與 release 契約
 - 產出與範圍：無 Go／repo 的 clean Linux 容器，以 1.2 相同命令建出的 HTTP fixture release 執行 install → doctor → setup → standalone daemon；核對 asset 名稱、archive 路徑、tag／version／commit／arch 與 checksum。正式 v1.1.0 Release 發佈後以真實 URL 重跑 install 與 version 核對。

@@ -1,6 +1,8 @@
 # CLI 參考
 
-`asura` 各子命令的用法與行為契約。Runtime 選擇與稽核語意見 [Runtime 與執行控制](runtimes.md)，記憶相關命令見 [專案記憶](memory.md)，Web 入口見 [Web Console](web-console.md)。
+`asura` 各子命令的用法與行為契約。Runtime 選擇與稽核語意見 [Runtime 與執行控制](runtimes.md)，記憶相關命令見 [專案記憶](memory.md)，Web 入口見 [Web Console](web-console.md)，安裝與設定見 [安裝與設定](setup.md)。
+
+2026-10-09：存在 `config.toml` 時，下列 flag 與環境變數的預設值改由 config 提供，優先序為 CLI flag > 環境變數 > config > 內建預設；沒有 config 時行為與 v1.0 相同。config 無效時，需要 socket 或 DB 的指令以 exit 1 結束。對照表見 [安裝與設定](setup.md#設定configtoml)。
 
 ## daemon
 
@@ -11,7 +13,7 @@
 
 2026-09-13：經 Daemon 提交、查詢、取消或重送任務時，都套用服務端 `--allowed-roots`。專案移出清單後，其歷史任務仍保存在資料庫，但不能透過 Daemon 讀取或取消；指向清單外的符號連結亦遭拒絕。此清單是入口授權政策，不是作業系統沙箱。
 
-Daemon 讀取的環境變數：
+Daemon 讀取的環境變數（也可寫在 config，環境變數優先）：
 
 | 變數 | 用途 | 說明 |
 |---|---|---|
@@ -137,6 +139,37 @@ Daemon 讀取的環境變數：
 ## memory
 
 見 [專案記憶](memory.md)。
+
+## version
+
+```bash
+./bin/asura version          # 人類可讀
+./bin/asura version --json   # version／commit／os／arch，供腳本與 installer 使用
+```
+
+## doctor
+
+```bash
+./bin/asura doctor
+```
+
+唯讀 readiness 診斷：READY／DEGRADED exit 0，NOT_READY exit 1，用法錯誤 exit 2。詳見 [安裝與設定](setup.md#診斷asura-doctor)。
+
+## setup
+
+```bash
+./bin/asura setup [--allowed-roots DIR[,DIR...]] [--service]
+```
+
+建立 config 與資料目錄；非互動時必須給 `--allowed-roots`。詳見 [安裝與設定](setup.md#初始設定asura-setup)。
+
+## service
+
+```bash
+./bin/asura service install|start|stop|restart|status|uninstall
+```
+
+管理 systemd user service `asura.service`；`uninstall` 保留 config 與資料。詳見 [安裝與設定](setup.md#user-serviceasura-service)。
 
 ## web
 

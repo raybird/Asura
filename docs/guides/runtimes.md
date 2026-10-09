@@ -57,6 +57,8 @@ Asura 如何決定一個任務由哪個 runtime 執行、執行前檢查什麼�
 
 2026-10-04：Available 僅代表必要本機 executable、固定版本／hash、配置及依賴有效；probe 不呼叫模型、不讀取 token、不保證遠端登入、配額或 Run 成功。sealed runtime 消失或本機條件失效，執行前拒絕且不重新選擇；版本更新仍沿用 adapter 既有政策，不要求等於歷史版本。Inventory JSON 最多 64 KiB，完整新契約最多 256 KiB；diagnostic 為固定安全訊息（最多 512 bytes），不保存原始 stderr/error/environment。
 
+2026-10-09：`asura doctor` 以與 daemon 相同的本機 registry 執行同一份 inventory 判定，另由 adapter 回報 probe 實際使用的 executable 供顯示；executable 路徑不寫入 inventory 或封存的執行契約。見 [安裝與設定](setup.md#診斷asura-doctor)。
+
 Runtime inventory／binding 最後驗證日期：2026-10-04；證據見 [Issue 39](../issues/issue-39/implementation-plan.md)。
 
 ## 執行稽核

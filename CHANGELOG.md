@@ -4,8 +4,17 @@
 
 ## [Unreleased]
 
+### 🚀 新增功能 (Features)
+- **[installer]**：`install.sh` 安裝正式 Release：核對唯一 checksum 項目、archive 內容與暫存 binary 回報的版本後才替換；任何失敗都保留原 binary；支援 `--version`／`--install-dir`，不需 root (#45)
+- **[cli]**：`asura version`（`--json`）、唯讀 `asura doctor`、`asura setup`、`asura service install|start|stop|restart|status|uninstall` (#45)
+- **[config]**：`config.toml`（`schema_version = 1`）提供 operator defaults，逐設定採 CLI > ENV > config > 內建預設；嚴格驗證、不安全權限拒絕載入；有 config 時改用 XDG 路徑 (#45)
+
 ### ⚙️ 建置與發佈
 - **[ci]**：新增 Release workflow，推送 `v*` tag 或手動指定 tag 時，編譯 Linux amd64／arm64 靜態執行檔並附上 checksum 上傳到 GitHub Release
+- **[ci]**：Release 建置注入 tag／commit 供 `asura version` 回報；已發佈 asset 不再覆寫 (#45)
+
+### 🔄 相容性
+- 沒有 config 檔時，所有指令維持 v1.0 的 DB／socket 預設與本機 fallback；建立 config 後不自動搬移既有 DB (#45)
 
 ## [v1.0.0] - 2026-10-06
 
