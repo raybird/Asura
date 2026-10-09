@@ -66,8 +66,15 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
 - 驗收編號：風險證據（支援 DIST-003／004）
 - 完成判準：對照組驗證判準本身——「會覆寫 sentinel 的控制腳本」使判準紅、「不動檔案的控制腳本」使判準綠、「留下暫存檔的控制腳本」被殘留檢查抓到；控制腳本只存在測試中。
 - 驗證：判準自檢即本 Task 證據（尚無 installer，不記 installer 紅燈）。
-- 狀態：📝 待實作
+- 狀態：✅ 已完成（2026-10-09）
 - 證據：
+  - 產出：`scripts/installer/harness_test.go`（fixture Release、curl／wget／uname stub、`sentinel` 判準與 `violations`）、`scripts/installer/harness_selfcheck_test.go`。stub 以 `routes.tsv` 精確比對 URL，未登錄者回 404（exit 22），`partial` 回前 64 bytes 並 exit 18；fixture archive root 與內容對齊 `release.yml`。
+  - 判準自檢 `TestSentinelOracleDetectsDamage`：noop 控制腳本無違反；覆寫、chmod、刪除、換成 symlink、install-dir 暫存殘留、TMPDIR 殘留各自回報對應違反（7 個子測試 PASS）。
+  - Fixture 可區分性 `TestFixtureFaultsAreDistinguishable`：控制腳本以 stub 取 latest／asset／manifest 並自行核對，正常 amd64／arm64 exit 0 並列出對應 root；竄改 exit 4（checksum mismatch）、缺 asset exit 22、manifest 缺項／重複項 exit 3（entries 0／2）、中斷 exit 18；`../`、絕對路徑與 symlink archive 可被 `tar -t` 列出，供 2.3 驗證 installer 拒絕（10 個子測試 PASS）。
+  - 變異實驗（本地、未提交，事後確認原碼還原）：stub 對未登錄 URL 改回成功 → `missing-asset` FAIL；判準略過權限比對 → `chmod` FAIL。
+  - 命令：`go vet ./...` exit 0；`go test -count=1 -race -v ./...` 全部 package ok（2026-10-09，branch `issue-45-distribution-bootstrap`，go1.27.1 linux/amd64）；既有 SKIP 為 runtime live／contract 前置條件缺少（`TestLiveAdapter`、`TestCodexProbe_*`、`TestAdapter_Run_Live`、`TestINT001`、`TestINT007`、`TestDaemon_ThreeFace_HostileWorkspaceConfig_CannotEscapeReadOnly`、`TestUtilityLiveProbe`、`TestUtilityCapacityProbe`），本 Task 未觸及 `internal/backend`，不計為通過；`gofmt -l scripts` 無輸出。
+  - 精煉：code-simplify 移除與 `isLatest` 重複的 `noLatest` 欄位，重跑 `go test -count=1 -race ./scripts/installer` ok。
+  - 尚無 installer，本 Task 不記 installer 紅燈；紅燈由 2.1／2.3 取得。
 
 ## Phase 1 — Version 與 release 契約
 
