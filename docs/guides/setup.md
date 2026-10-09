@@ -17,6 +17,8 @@ curl -fsSL https://raw.githubusercontent.com/raybird/Asura/main/install.sh | sh 
 - 預設安裝到 `~/.local/bin/asura`；不修改 shell rc，安裝目錄不在 `PATH` 時只提示。
 - 需要 `curl` 或 `wget`、`tar`、`sha256sum` 或 `shasum`、`uname`；缺少任一項會在下載與變更檔案前失敗。
 
+信任邊界：checksum manifest 與 archive 來自同一個 GitHub Release，SHA-256 能偵測下載損壞與檔案不一致，但不能獨立證明發布者身分；目前沒有簽章或 artifact attestation 驗證。
+
 替換前依序檢查：checksum manifest 只能有一筆對應 asset、SHA-256 相符、archive 只含預期目錄下的一般檔案、暫存的新 binary 執行 `version --json` 回報的版本與架構正確。任一步失敗都會保留原本的 binary 並清除暫存檔。`<install-dir>/asura` 若是 symlink 或目錄會直接拒絕，請自行移除或改用 `--install-dir`。重新安裝與升降版都會重新下載驗證；installer 不修改設定或資料，也不重啟執行中的 daemon。
 
 ```bash
@@ -32,7 +34,7 @@ asura version --json   # {"arch":"amd64","commit":"abc1234","os":"linux","versio
 asura doctor
 ```
 
-唯讀檢查平台、`/proc`、`bwrap`、config、DB 與 socket 目錄、allowed roots、各 runtime（與 daemon 相同的 inventory 判定，並列出實際使用的 executable）、user service 與 daemon 連線。
+唯讀檢查平台、`/proc`、`bwrap`、config、DB 與 socket 目錄、allowed roots、各 runtime（與 daemon 相同的 inventory 判定，並列出實際使用的 executable）、user service，以及 daemon socket 是否接受連線（只做連線，不驗證對方身分或健康狀態）。
 
 | 狀態 | exit | 意義 |
 |---|---|---|
@@ -94,6 +96,7 @@ asura setup --allowed-roots /home/me/projects --service
 - 重跑時保留既有設定、資料與 unit；`--allowed-roots` 與既有 config 不同時直接失敗，請手動修改 config。
 - 目前目錄有舊的 `asura.db` 時只提示如何在 config 設定 `db`，不搬移或刪除。
 - 不安裝或登入 runtime、不修改 shell rc、不啟動 Web。中途失敗會顯示 `Setup incomplete`，修正後重跑即可完成。
+- 結尾執行 doctor。設定建立後 setup 即以 exit 0 結束；doctor 為 NOT_READY 時改顯示 `Setup complete; environment NOT_READY`，請依 doctor 的 `[fail]` 項目補齊（例如安裝並登入 runtime）。
 
 ## User service：asura service
 
@@ -107,7 +110,7 @@ asura service uninstall  # disable --now、移除 unit、daemon-reload
 - unit 放在 systemd user manager 實際搜尋的目錄（依 manager 自己的 `XDG_CONFIG_HOME`，未設定時為 `~/.config`）。CLI 端若使用不同的 `XDG_CONFIG_HOME`，unit 會加上 `Environment=XDG_CONFIG_HOME=...`，讓 service 讀到同一份 config。
 - 停止時先等待任務排空，最多 60 秒，逾時由 systemd 回收整個 unit 的進程；中斷的任務在下次啟動時標為 failed，不自動重跑。
 - 異常結束 5 秒後重啟，60 秒內最多啟動 3 次；手動 `stop` 不會自動重啟。不設定 linger，unit 不含 secret。
-- 只管理帶有 Asura 標記的 unit；同名但非 Asura 建立的 unit 會被拒絕處理。
+- 只管理帶有 Asura 標記的 unit；同名但非 Asura 建立的 unit，install、start、stop、restart、uninstall 都會拒絕處理（status 只讀取）。
 - 沒有 systemd 或 user bus 時，`asura service` 會明確失敗；直接執行 `asura daemon` 即可依 config 運作，doctor 會回報 DEGRADED。
 
 ## 移除與資料保留

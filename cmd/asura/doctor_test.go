@@ -86,7 +86,7 @@ func TestDoctorDegradedWithOneRuntime(t *testing.T) {
 		"[warn] opencode: unavailable reason=version_failed executable=" + filepath.Join(os.Getenv("PATH"), "opencode"),
 		"[warn] omp: unavailable reason=",
 		"[warn] user service: systemctl not found",
-		"[info] daemon: not running",
+		"[info] daemon socket: no listener at",
 		"[info] config: none at " + filepath.Join(e.configHome, "asura", "config.toml") + "; using v1.0 defaults",
 		"Modes: direct",
 		"permission check only; nothing was written",

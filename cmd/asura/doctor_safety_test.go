@@ -122,6 +122,10 @@ func TestDoctorSecretSafetyAndReadOnly(t *testing.T) {
 	if code != 1 || !strings.Contains(all, "NOT_READY") {
 		t.Fatalf("code=%d (all runtimes fail):\n%s", code, all)
 	}
+	// 2026-10-09：外部審查 P2，只做連線時不宣稱 daemon 身分或健康狀態。
+	if !strings.Contains(all, "daemon socket: accepting connections at "+socket+" (daemon identity and health not verified)") {
+		t.Fatalf("socket wording:\n%s", all)
+	}
 	if !strings.Contains(all, "user service: asura.service status unavailable (timeout)") {
 		t.Fatalf("hung systemctl not reported:\n%s", all)
 	}

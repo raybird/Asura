@@ -198,9 +198,9 @@ func handleDoctor(args []string, stdout, stderr io.Writer) int {
 	dialer := net.Dialer{Timeout: doctorProbeTimeout}
 	if conn, err := dialer.DialContext(ctx, "unix", socket); err == nil {
 		conn.Close()
-		add("Service", levelInfo, "daemon", "running at %s", socket)
+		add("Service", levelInfo, "daemon socket", "accepting connections at %s (daemon identity and health not verified)", socket)
 	} else {
-		add("Service", levelInfo, "daemon", "not running at %s", socket)
+		add("Service", levelInfo, "daemon socket", "no listener at %s", socket)
 	}
 
 	status, code := doctorStatus(checks)

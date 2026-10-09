@@ -115,9 +115,14 @@ func handleSetup(args []string, stdout, stderr io.Writer) int {
 	}
 
 	fmt.Fprintln(stdout)
-	handleDoctor(nil, stdout, stderr)
+	readiness := handleDoctor(nil, stdout, stderr)
 	fmt.Fprintln(stdout)
-	fmt.Fprintln(stdout, "Setup complete.")
+	// setup 的成功是指設定已建立；doctor 為 NOT_READY 時仍 exit 0，但不宣稱環境已就緒。
+	if readiness != 0 {
+		fmt.Fprintln(stdout, "Setup complete; environment NOT_READY — fix the [fail] items in the doctor output above (for example install and log in to a runtime), then run `asura doctor`.")
+	} else {
+		fmt.Fprintln(stdout, "Setup complete.")
+	}
 	fmt.Fprintf(stdout, "Next: asura ask --workspace %s \"<task>\"\n", activeConfig.cfg.AllowedRoots[0])
 	return 0
 }

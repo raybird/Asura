@@ -189,7 +189,8 @@ func TestServiceRefusesUnmanagedUnit(t *testing.T) {
 	os.MkdirAll(filepath.Dir(unit), 0700)
 	foreign := "[Service]\nExecStart=/usr/bin/other\n"
 	os.WriteFile(unit, []byte(foreign), 0644)
-	for _, verb := range []string{"install", "uninstall"} {
+	// 2026-10-09：外部審查 P1，start／stop／restart 也不得操作非 Asura 管理的 unit。
+	for _, verb := range []string{"install", "start", "stop", "restart", "uninstall"} {
 		code, out := runService(verb)
 		if code != 1 || !strings.Contains(out, "is not managed by asura") {
 			t.Fatalf("%s: %d %s", verb, code, out)
@@ -199,8 +200,14 @@ func TestServiceRefusesUnmanagedUnit(t *testing.T) {
 		}
 	}
 	for _, c := range calls(t, log) {
-		if strings.Contains(c, "enable") || strings.Contains(c, "disable") {
+		if c != "--user show-environment" {
 			t.Fatalf("systemctl changed state of unmanaged unit: %s", c)
+		}
+	}
+	os.Remove(unit)
+	for _, verb := range []string{"start", "stop", "restart"} {
+		if code, out := runService(verb); code != 1 || !strings.Contains(out, "asura.service is not installed") {
+			t.Fatalf("%s without unit: %d %s", verb, code, out)
 		}
 	}
 }

@@ -151,7 +151,12 @@ func handleService(args []string, stdout, stderr io.Writer) int {
 		}
 		fmt.Fprintf(stdout, "Installed %s and enabled %s; start it with `asura service start`.\n", unit, serviceUnit)
 	case "start", "stop", "restart":
-		// stop／restart 最多等待 unit 的 60 秒停止期限。
+		// 只操作 Asura 管理的 unit；stop／restart 最多等待 unit 的 60 秒停止期限。
+		if err := checkManagedUnit(unit); errors.Is(err, fs.ErrNotExist) {
+			return fail("%s is not installed; run `asura service install` first", serviceUnit)
+		} else if err != nil {
+			return fail("%v", err)
+		}
 		if _, err := systemctl(ctx, 90*time.Second, verb, serviceUnit); err != nil {
 			return fail("systemctl --user %s %s failed", verb, serviceUnit)
 		}

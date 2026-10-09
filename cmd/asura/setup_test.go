@@ -176,6 +176,16 @@ func TestSetupRejectsConfigWithoutAllowedRoots(t *testing.T) {
 	}
 }
 
+// 2026-10-09：第 19 題，doctor 為 NOT_READY 時 setup 仍 exit 0，但不宣稱環境已就緒。
+func TestSetupReportsNotReady(t *testing.T) {
+	_, root, _ := setupEnv(t)
+	os.Remove(filepath.Join(os.Getenv("PATH"), "codex"))
+	code, out := runSetup("--allowed-roots", root)
+	if code != 0 || !strings.Contains(out, "Asura doctor: NOT_READY") || !strings.Contains(out, "Setup complete; environment NOT_READY") || strings.Contains(out, "Setup complete.\n") {
+		t.Fatalf("code=%d\n%s", code, out)
+	}
+}
+
 func TestSetupReportsLegacyDatabase(t *testing.T) {
 	_, root, _ := setupEnv(t)
 	cwd, _ := os.Getwd()
