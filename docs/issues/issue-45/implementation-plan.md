@@ -108,6 +108,7 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
   - 判準反向自檢：本地移除腳本中的 `-X` 注入（事後還原，未提交）→ `TestBuildArchivesContract` FAIL（`amd64 binary lacks injected version metadata`）。
   - 精煉：首版以 `go version -m` 讀 ldflags，實測 `-trimpath -s -w` 建置不含該資訊而改為字面值比對；manifest 命令還原為與 v1.0.0 相同的 `sha256sum *.tar.gz`。最終 `go vet ./...` exit 0、`go test -count=1 -race ./cmd/asura ./scripts/...` ok；`release.yml` 以 PyYAML 解析成功；本機無 actionlint，未執行（2026-10-09，go1.27.1 linux/amd64）。
   - 限制：真實 tag 觸發的 workflow 與 GitHub 上傳行為（含同名 asset 存在時失敗）未在本機執行，屬 6.2 發佈後驗證。
+  - Review N8：`workflow_dispatch` 說明改為「v1.1.0 起；tag 須含 build-archives.sh」，純文字。
 
 ## Phase 2 — 安裝器
 
@@ -154,6 +155,7 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
   - 真實 archive：`TestInstallRealReleaseArchive` 以 `build-archives.sh` 建出的 amd64 archive 經 installer 安裝，安裝後執行輸出 `asura v1.1.0-real (commit 0123456789ab, linux/amd64)`，確認 installer 能解析真實 binary 的 `version --json`（欄位順序與 fixture 不同）。
   - 精煉：版本核對由兩段 case 改為逐欄迴圈；重跑上列測試全綠，`go vet ./...` exit 0（2026-10-09，dash／go1.27.1 linux/amd64）。
   - 限制：「binary replace 失敗」以唯讀 install-dir 使 stage 寫入失敗呈現；同目錄 `mv` 本身失敗未另行注入。網路為 stub fixture，非正式 Release。
+  - Review S1／N1／N5：先於 `install_safety_test.go` 新增 `TestInstallRejectsHardlinkAndMultilineVersion` 取得紅燈——busybox tar 下 hardlink archive 把 archive 外內容安裝成功（`hardlink archive installed`），含換行的 `--version` 進入下載；GNU tar 案例原本即被型別檢查擋下。修正：listing 拒絕含 ` -> `／` link to ` 的項目、改以 `tar -xOzf` 串流取出不建立 link、`check_version` 拒絕換行；另將 stage 改為 `mktemp "$dir/.asura.XXXXXX"`、trap 加 HUP、curl 加 `--proto '=https'`（這三項為防禦性修正，沿用既有殘留與失敗測試，無新增紅燈）。綠燈：`go test -count=1 -race ./scripts/...` ok（HEAD 5f57e82）。
 
 ## Phase 3 — Config／XDG 與 CLI 接線
 
@@ -171,6 +173,7 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
   - 判準反向自檢（本地變異，事後還原）：拿掉 `Undecoded` 檢查 → unknown-field 兩例 FAIL；XDG 改為接受相對路徑 → `relative-xdg-ignored` FAIL；語法錯誤改為轉述 parser 原文 → `syntax` FAIL（訊息含 sentinel）；目錄權限檢查失效 → `other-writable-dir` FAIL（首次變異造成未使用變數編譯失敗，修正變異後確認）。
   - 精煉：toml 型別不符錯誤為一般 error，改以 regexp 只取行號與鍵名，不轉述原文；`go vet ./...` exit 0；`go test -count=1 -race ./internal/config ./internal/contextwin ./internal/backend ./cmd/asura` ok（2026-10-09，go1.27.1 linux/amd64）。
   - 範圍說明：DIST-010「不啟動 daemon」的 CLI 外部行為由 3.2 承擔。
+  - Review N3：`Load` 改以同一個 fd 執行 Stat、權限檢查與讀取，symlink config 另檢查目標所在目錄；屬防禦性修正，沿用既有 `TestLoadRejects*` 綠燈，未新增可重現的紅燈。N4（HOME 非絕對路徑時靜默回到相容模式）未修改，維持現行為。
 
 ### Task 3.2 — CLI 接線與逐設定 precedence
 - 產出與範圍：RunCLI 對需要 socket／DB 的指令載入 config，各 handler 以「ENV > config > 內建」解析結果作為 flag 預設值，使任何顯式 flag（含空值與等於預設的值）自然勝出，不需 `flag.Visit`；逐設定 CLI > ENV > config > 內建；不修改 process ENV；有 config 時 status／cancel／audit／inventory 以 config socket 嘗試 daemon、失敗回落 config db；bad config 時需載入設定的指令非零退出且不啟動 daemon；無 config 行為與 0.1 基線一致。
@@ -186,6 +189,7 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
   - 綠燈：`go test -count=1 -race -v ./cmd/asura` ok。daemon 子行程字面驗證：config 值（`cfg.sock`、workers 5、queue 7、cfg.db、只允許 config root）勝過內建且未觸及 cwd `asura.db` 與 `~/.asura`；`ASURA_SOCKET` 勝過 config；`--socket`／`--db`／`--workers 2`（等於內建預設）／`--allowed-roots ""`（顯式空值回到 cwd root）勝過 ENV 與 config；config 未列路徑時使用 `$XDG_RUNTIME_DIR/asura/asura.sock` 與 `$XDG_DATA_HOME/asura/asura.db`。status／cancel／audit 在 socket 連不上時回落 config db、`--db` 優先；`run --backend auto` 依 config priority 選 codex，ENV 改為 opencode 優先後選 opencode；config `[context]` reject 生效，`ASURA_CONTEXT_POLICY=observe` 覆寫。bad config（未知欄位含 sentinel、schema 7、0666 權限、超長 XDG socket）下 daemon／run／ask／status／cancel／audit／inventory／web／cron／memory 皆 exit 1、stderr 含 config 且不含 sentinel、未建立 socket，`version` 不受影響。
   - 回歸：0.1 `TestNoConfig*` 全綠（首輪因 `activeConfig` 跨測試殘留使 `TestNoConfigDefaultSocketPath` FAIL，改為每次 RunCLI 結束清除後通過）。`go vet ./...` exit 0、`go build ./cmd/asura` exit 0、`go test -count=1 -race ./...` 23 個 package ok；SKIP 與 0.2 記錄相同（runtime live／contract 前置條件缺少），未觸及 `internal/backend`（2026-10-09，go1.27.1 linux/amd64）。
   - 精煉：合併測試 helper（`newXDGEnv` 只建目錄，`writeConfig` 寫檔），重跑 `go test -count=1 -race -run 'TestConfig' ./cmd/asura` ok。
+  - Review N7／N10：新增 `TestConfigDaemonPrecedence/cli-relative-socket`，紅燈為 `error: socket path must be absolute`；改為有 config 時只檢查絕對路徑 socket 的長度後通過。更正敘述：`TestConfigInvalidFailsClosed` 的 socket-too-long 子測試只驗證 daemon，其餘指令的 fail-closed 由未知欄位與 schema 子測試覆蓋。
 
 ## Phase 4 — Doctor
 
@@ -220,6 +224,7 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
   - 回歸：`go vet ./...` exit 0、`go build ./cmd/asura` exit 0、`go test -count=1 -race ./...` 全部 ok（2026-10-09，go1.27.1 linux/amd64）；backend SKIP 同 4.1。
   - 精煉：no-op——檢查項以單一 `add` 收集、輸出統一格式，未見可再簡化之處；沿用上列綠燈。
   - 範圍說明：整體 10 秒 deadline、輸出上限與 secret sentinel 屬 4.3。READY 需四個 runtime 與 user service 皆可用，本機無法在測試中提供 OMP／Antigravity 的固定 hash binary，READY 由單元測試覆蓋。
+  - Review N6：doctor 改用 service 的 `systemctl` helper 與 `managerUnitDir`，未知狀態只顯示 `inactive (installed)`／`not-installed`／`status unavailable (...)`，不轉述 systemctl 輸出；`go test -count=1 -race ./cmd/asura` ok（HEAD 5f57e82）。
 
 ### Task 4.3 — Doctor secret 與唯讀邊界
 - 產出與範圍：整體 10 秒 deadline、輸出上限、只輸出固定 reason、ENV／config 只顯示是否設定與路徑；不開 SQLite、不寫 config／DB／credential、不建立 unit；runtime 探測暫存只在私有 temp 並清理。
@@ -234,6 +239,7 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
   - 綠燈：`go test -count=1 -race -run 'TestDoctor' -v ./cmd/asura` 全 PASS；安全測試 5.01 秒完成（≤ 10 秒期限）。情境：`OPENAI_API_KEY`／`ASURA_WEB_KEY`、`~/.codex/auth.json` 與失敗 probe 的 stdout／stderr 都植入 `SECRET-SENTINEL-d0c7`，opencode probe 與 systemctl 掛住、daemon socket 只接受不回應；輸出不含 sentinel、回報 `asura.service status unavailable (timeout)`、NOT_READY exit 1；HOME／XDG 整棵目錄（config、DB fixture、credential、runtime dir）前後路徑與內容雜湊一致、未建立 `~/.asura` 或 systemd unit 目錄、cwd 無新檔、私有 TMPDIR 無殘留；每行 ≤ 600 bytes。超長 `ASURA_SOCKET` 的 detail 被截斷並標記。
   - 回歸：`go vet ./...` exit 0；`go test -count=1 -race ./...` 全部 ok（2026-10-09，go1.27.1 linux/amd64）。
   - 精煉：no-op——期限以單一 context 傳遞，截斷集中在 `add`；沿用上列綠燈。
+  - Review N2：`TestDoctorBoundsLongDetails` 追加多位元組路徑，紅燈為 `truncation produced invalid UTF-8`；截斷退到 rune 邊界後通過。
 
 ## Phase 5 — User service 與 setup
 
@@ -252,6 +258,7 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
   - 回歸：`go vet ./...` exit 0；`go test -count=1 -race ./...` 全部 ok（2026-10-09，go1.27.1 linux/amd64）。
   - 精煉：no-op——systemctl 呼叫集中於單一 helper，unit 字串由單一函式產生；沿用上列綠燈。
   - 限制：systemctl 為 stub，真實 user bus lifecycle 由 5.3 驗證。
+  - Review M1（service 部分）／M2／S3：先取得紅燈——`TestServiceInstallRequiresAllowedRoots`（缺 allowed_roots 仍安裝）、`TestServiceUnitFollowsManagerConfigHome`（CLI 自訂 XDG_CONFIG_HOME 時 unit 不在 manager 目錄）、`TestServiceInstallAndLifecycle`（unit 預期改為不固定 Environment）。修正：unit 目錄由 `systemctl --user show-environment` 的 `XDG_CONFIG_HOME`（否則 HOME/.config）決定，CLI 端 config 目錄與之不同才寫 `Environment=`；install 要求 `allowed_roots`；移除另行解析的 `userUnitPath`，doctor 共用同一判定。stub 新增 `SYSTEMCTL_ENV` 模擬 manager 環境。綠燈：`go test -count=1 -race ./cmd/asura` ok（HEAD 5f57e82）。
 
 ### Task 5.2 — `asura setup` 互動／腳本模式與冪等
 - 產出與範圍：`asura setup`：TTY 互動選 allowed roots 與 service；非 TTY 需 `--allowed-roots`，僅 `--service` 安裝並啟動 service；建立 XDG config（0600）／data（0700）；顯示 doctor 結果與下一步；重跑保留設定與資料，參數衝突明確失敗並提示手動修改；不安裝／登入 runtime、不改 shell rc、不啟動 Web、不搬移舊 DB，偵測舊 DB 時顯示指定舊路徑的指引；半途失敗不宣稱完成。
@@ -267,6 +274,7 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
   - 過程記錄：首輪 fresh 測試把 systemctl stub 的呼叫紀錄檔（setup 結尾執行 doctor 時查詢 service 狀態所寫）當成使用者狀態變更；該檔為測試設施，比對時排除後通過，其餘比對範圍不變。
   - 回歸：`go vet ./...` exit 0；`go test -count=1 -race ./...` 全部 ok（2026-10-09，go1.27.1 linux/amd64）。
   - 精煉：no-op——流程依序一次執行、失敗統一經 `incomplete` 回報；沿用上列綠燈。
+  - Review M1／第 17、18 題：新增 `TestSetupRejectsConfigWithoutAllowedRoots`，紅燈為 panic（`index out of range`，重現 review 的 M1）；`TestSetupFreshNonInteractive` 依第 18 題改為要求 config 含 `$XDG_DATA_HOME/asura/asura.db` 與 `$XDG_RUNTIME_DIR/asura/asura.sock`（紅燈 `DB:<nil>`）；idempotency／partial 測試的 unit 位置改為 manager 目錄。修正：既有 config 缺 `allowed_roots` 時在任何寫入與 service 操作前失敗並指出檔案；新建 config 寫入解析後的絕對 db／socket，socket 超過上限時先失敗。綠燈：`go test -count=1 -race ./cmd/asura` ok（HEAD 5f57e82）。
 
 ### Task 5.3 — 真實 systemd user bus lifecycle
 - 產出與範圍：在可用 user bus 的主機，以正式 unit 名 `asura.service` 與暫時 config（db／socket 指向暫存目錄）執行 install／start／stop／status／uninstall；systemd user manager 只從自身搜尋路徑載入 unit，故不採暫存 XDG unit 路徑，改以事前確認路徑不存在、事後全部移除保持隔離；驗證 60 秒停止期限、異常退出 5 秒重啟與 60 秒內 3 次上限、手動 stop 不重啟、中斷任務下次啟動標記 failed。
@@ -283,6 +291,7 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
   - 判準修訂（如實記錄）：首輪以 `Result=start-limit-hit` 判定限流，systemd 259 在此情境記為 `Result=signal`（unit 已停在 failed、未再啟動），判準因此誤報失敗；改為「failed 且 MainPID=0 維持 8 秒」加上 journal 限流訊息。反向自檢：若第 4 次啟動成功，unit 會是 active 且有 MainPID，新判準會失敗。另修正腳本中 `wait_for` 計數變數覆蓋外層迴圈變數的錯誤，以及 `ask` 未指定 `--backend codex` 的問題，修正後整段重跑。
   - 清理：執行後確認 `~/.config/asura`、`~/.config/systemd/user/asura.service`、`asura.service.d` 與 `/tmp/asura-lc.*` 皆不存在，`systemctl --user list-unit-files 'asura*'` 為 0。
   - 證據分類：真實 systemd user bus＋stub runtime。
+  - Review M2／N10 重跑（2026-10-09，HEAD 5f57e82，同一授權範圍）：腳本改為 CLI 使用暫存 `XDG_CONFIG_HOME`（不建立 `~/.config/asura`），新增「unit 位於 manager 目錄並固定 `Environment="XDG_CONFIG_HOME=…"`」與「crash 重啟延遲 4–8 秒」斷言。結果 exit 0、`== LIFECYCLE OK`：`FragmentPath=~/.config/systemd/user/asura.service`、stop 60 秒、兩次 crash 皆 5 秒後重啟、第三次後 failed 並記錄限流；執行後 unit、drop-in、`/tmp/asura-lc.*` 皆不存在，`asura*` unit 0 個。
 
 ## Phase 6 — 文件、clean onboarding 與完整回歸
 
@@ -297,6 +306,7 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
   - 產出：新增 `docs/guides/setup.md`（installer、version、doctor 狀態與 exit、config 欄位／XDG／相容模式／precedence 對照表／fail-closed 規則、setup、service lifecycle 與 60 秒停止期限／重啟政策、移除步驟與資料位置）；更新 `README.md`（安裝改為 installer＋doctor＋setup、v1.0.0 手動下載說明、指令一覽新增 version／doctor／setup／service、文件清單）、`docs/guides/cli-reference.md`（config precedence 說明與四個新子命令）、`docs/guides/runtimes.md`（doctor 與 inventory 的關係、executable 不進封存契約）、`docs/development.md`（Issue 45 索引）、`CHANGELOG.md`（Unreleased 新增功能、建置與相容性條目）。
   - 不改變可觀察行為：純文件。等價證據為 2026-10-09 從 repo 根目錄執行的靜態檢查（Python 內嵌腳本）：掃描上列 6 份文件的 102 個相對連結，目標檔案皆存在，`#錨點` 依 GitHub slug 規則（小寫、移除非字母數字、空白轉連字號）皆對應到實際標題；以 `go build` 產出的 binary 核對文件提到的 `version -json`、`setup -allowed-roots／-service`、`Usage: asura doctor`、`service install|start|stop|restart|status|uninstall` 皆出現在實際 usage；`install.sh` 含 `--version`、`--install-dir` 與文件所列入口 URL。結果：`PASS: links, anchors, commands and flags`。
   - 內容依據：各段行為對照 2.1～5.2 的測試與實作（例如 `version --json` 以 Go map 序列化，鍵依字母排序）；未宣稱尚未驗證的真實 systemd lifecycle 或正式 Release。
+  - Review N9／決策同步：`docs/guides/setup.md` 改寫 doctor 輸出敘述（只顯示是否設定與路徑）、config 範例標明 `allowed_roots` 為 setup／service 必要且 setup 寫入絕對 db／socket、setup 缺 allowed_roots 失敗、unit 依 user manager 目錄與 `Environment=` 規則。
 
 ### Task 6.2 — Clean Linux onboarding 與 release 契約
 - 產出與範圍：無 Go／repo 的 clean Linux 容器，以 1.2 相同命令建出的 HTTP fixture release 執行 install → doctor → setup → standalone daemon；核對 asset 名稱、archive 路徑、tag／version／commit／arch 與 checksum。正式 v1.1.0 Release 發佈後以真實 URL 重跑 install 與 version 核對。
@@ -312,6 +322,7 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
   - 2026-10-09 腳本新增平台參數與 `arch` 比對後重跑：amd64 預設平台通過（commit `929bda4…`），arm64 結果見 2.2。
   - 證據分類：HTTP fixture＋stub runtime；asset 名稱、archive 路徑與 checksum 由 1.2 測試與本流程的 installer 校驗共同核對。尚未以正式 GitHub Release 與真實 runtime 驗證。
   - 待辦（等待外部驗收窗）：v1.1.0 tag 發佈後，以 `curl -fsSL https://raw.githubusercontent.com/raybird/Asura/main/install.sh | sh` 在 clean Linux 安裝，核對 `version --json` 的 tag／commit 與 Release asset、checksum 一致，並確認同 tag 重跑 workflow 不覆寫 asset。窗口為 v1.1.0 實際發佈日（尚未排定）。
+  - Review 後重跑（HEAD 5f57e82）：`sh scripts/release/onboarding-e2e.sh alpine:3.20.3 linux/amd64` 與 `… linux/arm64` 皆 `== ONBOARDING OK`，`version --json` 的 commit 為 `5f57e8242a82…`；busybox 下以 `tar -xOzf` 串流取出正常，setup 寫入的 socket 為 `~/.local/state/asura/asura.sock`（容器無 XDG_RUNTIME_DIR）且 daemon 依此啟動。
 
 ### Task 6.3 — 完整回歸與相容矩陣
 - 產出與範圍：無 config、有 config、CLI override 三種狀態下 daemon／ask／run／status／cancel／audit／inventory／Cron／memory／Web 的相容矩陣；Phase 4 authority（StageBindingPlan、ExecutionContract、ExecutionAudit）不變；`go vet ./...`、`go test -count=1 -race -v ./...`、`go build ./cmd/asura`；SKIP 逐項記名稱與原因。
@@ -327,6 +338,7 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
   - 完整回歸（2026-10-09，HEAD `3311bb4` 加上本 Task 的測試檔，go1.27.1 linux/amd64）：`go vet ./...` exit 0；`go build ./cmd/asura` exit 0；`go test -count=1 -race -v ./...` exit 0，23 個 package ok，無 FAIL。
   - SKIP（不計為通過）：`TestCodexProbe_BinaryVersion`、`TestCodexProbe_NonInteractive_JSONL`、`TestCodexProbe_ReadOnlySandbox`、`TestCodexProbe_WorkspaceWriteSandbox`、`TestCodexProbe_ContextCancellation`、`TestAdapter_Run_Live`、`TestCodexProbe_Live`（本機 codex 0.160.1 ≠ 固定 0.155.0）；`TestINT001`、`TestINT007`、`TestDaemon_ThreeFace_HostileWorkspaceConfig_CannotEscapeReadOnly`（本機 opencode 1.18.31 ≠ 固定 1.18.23）；`TestLiveAdapter` ×2（live OAuth model call opt-in）；`TestUtilityLiveProbe`（需 `ASURA_UFL_PROBE_DIR`）；`TestUtilityCapacityProbe`（opt-in 10k/100k SQLite probe）。
   - 本次未修改 `internal/web` 與 storage memory lifecycle，依 project.md 不需加跑 ci.yml 的 Web UI／lifecycleperf 探測；CI 會照常執行。
+  - Review 後完整回歸（HEAD 5f57e82）：`go vet ./...` exit 0、`go build ./cmd/asura` exit 0、`go test -count=1 -race -v ./...` exit 0，23 個 package ok，無 FAIL；SKIP 與前次相同（14 筆，原因同上）。
 
 ## 使用方式對照
 
