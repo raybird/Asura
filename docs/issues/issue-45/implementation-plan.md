@@ -143,8 +143,15 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
 - 驗收編號：DIST-003、DIST-004
 - 完成判準：每個失敗 Example 非零退出、0.2 判準證明 sentinel 內容與權限不變且無殘留暫存檔；成功 Example 安裝的 binary 版本對應指定 tag；harness 前後 config／DB fixture hash 不變；stub 記錄無 `systemctl`／kill 呼叫。
 - 驗證：外迴圈 harness；每個 Example 先取得紅燈（2.1 主流程缺對應防護時）再補實作。
-- 狀態：📝 待實作
+- 狀態：✅ 已完成（2026-10-09）
 - 證據：
+  - 產出：`install.sh` 新增 SHA-256 比對（sha256sum，否則 shasum -a 256）、manifest 唯一精確項目、archive 項目限 root 下一般檔案／目錄且拒絕 `..`、staged binary `version --json` 核對 tag／os／arch、非一般檔案目標拒絕（下載前）、版本格式驗證與 v1.1.0 以前拒絕（`--version` 時在下載前）；測試 `scripts/installer/install_safety_test.go`、`install_real_test.go`。
+  - 外迴圈紅燈：`go test -count=1 -run 'TestInstall(FailuresPreserve|RefusesNonRegular|ReinstallUpgrade)' -v ./scripts/installer` → checksum 不符（含僅 shasum）、manifest 缺項／重複、`..`、root 外、絕對路徑、symlink binary、版本不符、架構不符皆「仍安裝成功」FAIL；唯讀 install-dir 只有 cp 原生錯誤；`--version v1.0.0` 與 `v1.1.0/../x` 進入下載才失敗；symlink 目標被替換、目錄目標被 `mv` 放進目錄內而回報成功。首輪 checksum 兩例因 fixture 改了 archive root 而以錯誤原因失敗，修正 fixture（同 root 加入竄改檔）後確認是「竄改仍安裝」的紅燈。
+  - 已由 2.1 滿足、無紅燈的情境（如實記錄）：缺 asset、下載中斷、archive 缺 binary，以及 `TestInstallReinstallUpgradeDowngrade`（升級到 latest、同版重裝重新下載 asset 與 manifest、`--version` 降版、prerelease 安裝且不查 latest）。
+  - 綠燈：`go test -count=1 -race -v ./scripts/...` 全部 PASS（14 個頂層測試）；每個失敗情境非零退出、stderr 含 `asura-install: error:` 與對應訊息，sentinel 內容／0755 不變、install-dir 與 TMPDIR 無殘留、config.toml／XDG DB／舊 cwd DB fixture 內容不變、無 sudo／systemctl 呼叫；非一般檔案目標保持原樣，symlink 指向的檔案未被寫入。
+  - 真實 archive：`TestInstallRealReleaseArchive` 以 `build-archives.sh` 建出的 amd64 archive 經 installer 安裝，安裝後執行輸出 `asura v1.1.0-real (commit 0123456789ab, linux/amd64)`，確認 installer 能解析真實 binary 的 `version --json`（欄位順序與 fixture 不同）。
+  - 精煉：版本核對由兩段 case 改為逐欄迴圈；重跑上列測試全綠，`go vet ./...` exit 0（2026-10-09，dash／go1.27.1 linux/amd64）。
+  - 限制：「binary replace 失敗」以唯讀 install-dir 使 stage 寫入失敗呈現；同目錄 `mv` 本身失敗未另行注入。網路為 stub fixture，非正式 Release。
 
 ## Phase 3 — Config／XDG 與 CLI 接線
 
