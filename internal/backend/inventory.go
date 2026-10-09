@@ -372,3 +372,9 @@ func sealInventory(plan *StageBindingPlan, requested string, s *InventorySnapsho
 	}
 	return c, nil
 }
+
+// ExecutableReporter 回報 probe 實際使用的 executable 路徑，僅供 doctor 顯示；
+// 不寫入 RuntimeInventoryEntry 或 ExecutionContract。空字串代表無法提供。
+type ExecutableReporter interface {
+	ProbeExecutable() string
+}

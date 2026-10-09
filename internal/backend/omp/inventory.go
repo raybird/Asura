@@ -31,3 +31,12 @@ func (a *Adapter) Probe(ctx context.Context) (string, error) {
 	}
 	return "omp/" + Version, nil
 }
+
+// ProbeExecutable 回報 Probe 驗證的 OMP CLI 路徑（建構時已解析 symlink）；找不到時為空字串。
+// 找不到時建構結果為 EvalSymlinks("") 的 "."，因此只回報絕對路徑。
+func (a *Adapter) ProbeExecutable() string {
+	if filepath.IsAbs(a.cfg.BinaryPath) {
+		return a.cfg.BinaryPath
+	}
+	return ""
+}

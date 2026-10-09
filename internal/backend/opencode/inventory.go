@@ -25,15 +25,18 @@ func (a *Adapter) Probe(ctx context.Context) (string, error) {
 		if home, err := os.UserHomeDir(); err == nil {
 			candidate := filepath.Join(home, ".cache/asura-probe-issue-2/install/node_modules/.bin/opencode")
 			if version, err := backend.ProbeVersionCommand(ctx, candidate); err == nil && strings.HasPrefix(version, a.cfg.ExpectedVersion) {
+				a.probedExecutable.Store(&candidate)
 				return version, nil
 			}
 		}
 		var err error
 		path, err = exec.LookPath("opencode")
 		if err != nil {
+			a.probedExecutable.Store(&path)
 			return "", &backend.ProbeError{Reason: backend.ExecutableNotFound}
 		}
 	}
+	a.probedExecutable.Store(&path)
 	version, err := backend.ProbeVersionCommand(ctx, path)
 	if err != nil {
 		return "", err
@@ -65,4 +68,24 @@ func (b *RoleRoutingBackend) Probe(ctx context.Context) (string, error) {
 		return "", &backend.ProbeError{Reason: backend.ConfigurationInvalid}
 	}
 	return versions[1], nil
+}
+
+// ProbeExecutable 回報最近一次 Probe 執行的 binary；尚未 probe 或找不到時為空字串。
+func (a *Adapter) ProbeExecutable() string {
+	if p := a.probedExecutable.Load(); p != nil {
+		return *p
+	}
+	return ""
+}
+
+// ProbeExecutable 回報最近一次 probe 到的 binary；Probe 先探唯讀角色，失敗時 striker 不會被探測。
+func (b *RoleRoutingBackend) ProbeExecutable() string {
+	for _, adapter := range []backend.Backend{b.striker, b.readOnly} {
+		if r, ok := adapter.(backend.ExecutableReporter); ok {
+			if path := r.ProbeExecutable(); path != "" {
+				return path
+			}
+		}
+	}
+	return ""
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"asura/internal/backend"
+	"asura/internal/config"
 	"flag"
 	"fmt"
 	"io"
@@ -12,7 +13,6 @@ import (
 	"syscall"
 
 	"asura/internal/auth"
-	"asura/internal/contextwin"
 	"asura/internal/daemon"
 	"asura/internal/storage"
 )
@@ -22,32 +22,29 @@ func handleDaemon(args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 
 	sockPath := fs.String("socket", DefaultSocketPath(), "path to daemon unix socket")
-	dbPath := fs.String("db", "asura.db", "path to SQLite database")
-	allowedRoots := fs.String("allowed-roots", "", "comma-separated list of allowed root directories")
-	workers := fs.Int("workers", 2, "maximum concurrent workers")
-	queue := fs.Int("queue", 10, "maximum queue capacity")
+	dbPath := fs.String("db", activeConfig.dbPath(), "path to SQLite database")
+	allowedRoots := fs.String("allowed-roots", activeConfig.allowedRoots(), "comma-separated list of allowed root directories")
+	workers := fs.Int("workers", activeConfig.workers(), "maximum concurrent workers")
+	queue := fs.Int("queue", activeConfig.queue(), "maximum queue capacity")
 	permission := fs.String("permission", "", "override OPENCODE_PERMISSION JSON policy")
 
 	if err := fs.Parse(args); err != nil {
 		return 1
 	}
 
-	contextCfg, err := contextwin.LoadConfig()
+	contextCfg, err := activeConfig.contextConfig()
 	if err != nil {
 		fmt.Fprintf(stderr, "error: invalid context configuration: %v\n", err)
 		return 1
 	}
 
-	runtimePriority, err := backend.ParseRuntimePriority(os.Getenv("ASURA_RUNTIME_PRIORITY"))
+	runtimePriority, err := backend.ParseRuntimePriority(activeConfig.runtimePriority())
 	if err != nil {
 		fmt.Fprintf(stderr, "error: runtime priority: %v\n", err)
 		return 1
 	}
 
-	utilityPolicy := os.Getenv("ASURA_MEMORY_UTILITY_POLICY")
-	if utilityPolicy == "" {
-		utilityPolicy = "observe"
-	}
+	utilityPolicy := activeConfig.memoryUtilityPolicy()
 	if utilityPolicy != "observe" && utilityPolicy != "apply" {
 		fmt.Fprintln(stderr, "error: invalid utility policy")
 		return 1
@@ -75,6 +72,18 @@ func handleDaemon(args []string, stdout, stderr io.Writer) int {
 	}
 
 	policy := auth.NewPolicy(roots)
+
+	// 有 config 時檢查 socket 長度；CLI／ENV 給的相對路徑沿用 v1.0 行為。
+	if activeConfig != nil && filepath.IsAbs(*sockPath) {
+		if err := config.CheckSocketPath(*sockPath); err != nil {
+			fmt.Fprintf(stderr, "error: %v\n", err)
+			return 1
+		}
+	}
+	if err := activeConfig.prepareDirs(*sockPath, *dbPath); err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
 
 	store, err := storage.NewSQLiteStore(*dbPath)
 	if err != nil {

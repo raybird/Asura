@@ -11,15 +11,14 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
 	"time"
 )
 
 func handleAudit(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("audit", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	db := fs.String("db", "asura.db", "path to SQLite database")
-	socket := fs.String("socket", os.Getenv("ASURA_SOCKET"), "path to daemon unix socket")
+	db := fs.String("db", activeConfig.dbPath(), "path to SQLite database")
+	socket := fs.String("socket", localSocketDefault(), "path to daemon unix socket")
 	id := fs.String("id", "", "task ID")
 	jsonOutput := fs.Bool("json", false, "print machine-readable audit")
 	if fs.Parse(args) != nil {
