@@ -241,8 +241,15 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
 - 驗收編號：DIST-014、DIST-015
 - 完成判準：systemctl stub 記錄的 argv 與 unit 內容符合上列；無 systemd 時 service 回明確原因且 standalone daemon 依 config 可啟動、doctor 為 DEGRADED exit 0；uninstall 前後 config 與 SQLite／Task／Memory 可讀且 hash 不變；不啟動其他 supervisor。
 - 驗證：CLI 外迴圈 + unit 生成單元測試；systemctl stub 不等於 lifecycle 證據（見 5.3）。
-- 狀態：📝 待實作
+- 狀態：✅ 已完成（2026-10-09）
 - 證據：
+  - 產出：`cmd/asura/service.go`（`renderUserUnit`、`checkManagedUnit` 以首行標記辨識受管理 unit、同目錄暫存檔加 rename 的 `writeUnit`、獨立 process group 且有逾時的 `systemctl --user` 呼叫；install 需有效 config，寫入 unit 後 daemon-reload 並 enable、不啟動；start／stop／restart 最多等 90 秒；status 只輸出 is-active／is-enabled 的第一個字；uninstall 執行 `disable --now`、刪 unit、daemon-reload）；`run.go` 將 `service` 納入 config 載入與 dispatch；`doctor.go` 改用共用的 `serviceUnit`／`userUnitPath`。測試 `cmd/asura/service_test.go`。
+  - 紅燈：以空骨架執行 `go test -count=1 -run 'TestService|TestRenderUserUnit' -v ./cmd/asura` → 9 個（子）測試 FAIL。
+  - 綠燈：`go test -count=1 -race -run 'TestService|TestRenderUserUnit|TestDoctor' -v ./cmd/asura` 全 PASS。unit 字面比對含 `KillMode=mixed`、`TimeoutStopSec=60s`、`Restart=on-failure`、`RestartSec=5s`、`StartLimitIntervalSec=60s`、`StartLimitBurst=3`，路徑中的空白、`"`、`%`、`$`、`\` 依 systemd 規則跳脫且不經 shell；非預設 `XDG_CONFIG_HOME` 寫入 `Environment=`，預設值不寫；unit 0644、無 linger／secret；重跑 install 不產生重複 unit；systemctl stub 記錄的 argv 為 `show-environment`→`daemon-reload`→`enable asura.service`、各 verb、`disable --now`→`daemon-reload`；非 Asura 的同名 unit 在 install／uninstall 皆被拒且內容不變、未呼叫 enable／disable；無 config 時 install 提示 `asura setup`；uninstall 後 config 與 DB 雜湊不變、`kept-task` 與 `kept-memory` 可讀，再次 uninstall 回報 not installed；用法錯誤 exit 2。
+  - DIST-014：無 systemctl 時六個子命令皆 exit 1 並提示 `systemctl not found; run \`asura daemon\` standalone`；user bus 不可用時 install 失敗且未寫入 unit 目錄。standalone daemon 依 config 啟動由 3.2 `TestConfigDaemonPrecedence` 證明，無 systemctl 時 doctor 為 DEGRADED exit 0 由 4.2 `TestDoctorDegradedWithOneRuntime` 證明（同一被測版本，證據重用）；service 程式只呼叫 systemctl，未啟動其他 supervisor。
+  - 回歸：`go vet ./...` exit 0；`go test -count=1 -race ./...` 全部 ok（2026-10-09，go1.27.1 linux/amd64）。
+  - 精煉：no-op——systemctl 呼叫集中於單一 helper，unit 字串由單一函式產生；沿用上列綠燈。
+  - 限制：systemctl 為 stub，真實 user bus lifecycle 由 5.3 驗證。
 
 ### Task 5.2 — `asura setup` 互動／腳本模式與冪等
 - 產出與範圍：`asura setup`：TTY 互動選 allowed roots 與 service；非 TTY 需 `--allowed-roots`，僅 `--service` 安裝並啟動 service；建立 XDG config（0600）／data（0700）；顯示 doctor 結果與下一步；重跑保留設定與資料，參數衝突明確失敗並提示手動修改；不安裝／登入 runtime、不改 shell rc、不啟動 Web、不搬移舊 DB，偵測舊 DB 時顯示指定舊路徑的指引；半途失敗不宣稱完成。

@@ -42,7 +42,6 @@ type doctorCheck struct {
 }
 
 const (
-	doctorServiceUnit   = "asura.service"
 	doctorDeadline      = 10 * time.Second
 	doctorMaxDetail     = 512
 	doctorProbeTimeout  = 2 * time.Second
@@ -185,11 +184,11 @@ func handleDoctor(args []string, stdout, stderr io.Writer) int {
 		state := userServiceState(ctx)
 		switch state {
 		case "active":
-			add("Service", levelOK, "user service", "%s active", doctorServiceUnit)
+			add("Service", levelOK, "user service", "%s active", serviceUnit)
 		case "not-installed":
-			add("Service", levelWarn, "user service", "%s not installed", doctorServiceUnit)
+			add("Service", levelWarn, "user service", "%s not installed", serviceUnit)
 		default:
-			add("Service", levelWarn, "user service", "%s %s", doctorServiceUnit, state)
+			add("Service", levelWarn, "user service", "%s %s", serviceUnit, state)
 		}
 	}
 	dialer := net.Dialer{Timeout: doctorProbeTimeout}
@@ -267,7 +266,7 @@ func doctorRuntimes(ctx context.Context, add func(string, checkLevel, string, st
 func userServiceState(parent context.Context) string {
 	ctx, cancel := context.WithTimeout(parent, doctorProbeTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "systemctl", "--user", "is-active", doctorServiceUnit)
+	cmd := exec.CommandContext(ctx, "systemctl", "--user", "is-active", serviceUnit)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.WaitDelay = 100 * time.Millisecond
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
@@ -284,15 +283,6 @@ func userServiceState(parent context.Context) string {
 		return state + " (installed)"
 	}
 	return "not-installed"
-}
-
-func userUnitPath() string {
-	base := os.Getenv("XDG_CONFIG_HOME")
-	if !filepath.IsAbs(base) {
-		home, _ := os.UserHomeDir()
-		base = filepath.Join(home, ".config")
-	}
-	return filepath.Join(base, "systemd", "user", doctorServiceUnit)
 }
 
 // assessDir 只以 metadata 與 access(2) 評估目錄可寫性；不存在時評估最近的既有上層目錄。
