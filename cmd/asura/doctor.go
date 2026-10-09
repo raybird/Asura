@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"asura/internal/backend"
@@ -42,6 +43,8 @@ type doctorCheck struct {
 
 const (
 	doctorServiceUnit   = "asura.service"
+	doctorDeadline      = 10 * time.Second
+	doctorMaxDetail     = 512
 	doctorProbeTimeout  = 2 * time.Second
 	doctorDisclaimer    = "Doctor does not verify runtime login, quota or model responses."
 	doctorPermissionTag = "(permission check only; nothing was written)"
@@ -109,9 +112,15 @@ func handleDoctor(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "Usage: asura doctor")
 		return 2
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), doctorDeadline)
+	defer cancel()
 	var checks []doctorCheck
 	add := func(section string, level checkLevel, name, format string, a ...any) {
-		checks = append(checks, doctorCheck{section: section, name: name, level: level, detail: fmt.Sprintf(format, a...)})
+		detail := fmt.Sprintf(format, a...)
+		if len(detail) > doctorMaxDetail {
+			detail = detail[:doctorMaxDetail] + "...(truncated)"
+		}
+		checks = append(checks, doctorCheck{section: section, name: name, level: level, detail: detail})
 	}
 
 	if runtime.GOOS == "linux" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64") {
@@ -168,12 +177,12 @@ func handleDoctor(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 
-	entries := doctorRuntimes(add)
+	entries := doctorRuntimes(ctx, add)
 
 	if _, err := exec.LookPath("systemctl"); err != nil {
 		add("Service", levelWarn, "user service", "systemctl not found; run the daemon standalone")
 	} else {
-		state := userServiceState()
+		state := userServiceState(ctx)
 		switch state {
 		case "active":
 			add("Service", levelOK, "user service", "%s active", doctorServiceUnit)
@@ -183,7 +192,8 @@ func handleDoctor(args []string, stdout, stderr io.Writer) int {
 			add("Service", levelWarn, "user service", "%s %s", doctorServiceUnit, state)
 		}
 	}
-	if conn, err := net.DialTimeout("unix", socket, doctorProbeTimeout); err == nil {
+	dialer := net.Dialer{Timeout: doctorProbeTimeout}
+	if conn, err := dialer.DialContext(ctx, "unix", socket); err == nil {
 		conn.Close()
 		add("Service", levelInfo, "daemon", "running at %s", socket)
 	} else {
@@ -210,7 +220,7 @@ func handleDoctor(args []string, stdout, stderr io.Writer) int {
 }
 
 // doctorRuntimes 以與 daemon 相同的本機 registry 探測 runtime，並附上 adapter 回報的 executable。
-func doctorRuntimes(add func(string, checkLevel, string, string, ...any)) []backend.RuntimeInventoryEntry {
+func doctorRuntimes(ctx context.Context, add func(string, checkLevel, string, string, ...any)) []backend.RuntimeInventoryEntry {
 	reg, cleanup, err := newLocalRegistry()
 	if err != nil {
 		add("Runtimes", levelFail, "runtimes", "read-only runtime configuration unavailable")
@@ -218,7 +228,7 @@ func doctorRuntimes(add func(string, checkLevel, string, string, ...any)) []back
 	}
 	defer cleanup()
 	registered := reg.RegisteredSnapshot()
-	snapshot, err := backend.CaptureInventory(context.Background(), registered)
+	snapshot, err := backend.CaptureInventory(ctx, registered)
 	if err != nil {
 		add("Runtimes", levelFail, "runtimes", "inventory unavailable")
 		return nil
@@ -252,11 +262,16 @@ func doctorRuntimes(add func(string, checkLevel, string, string, ...any)) []back
 	return snapshot.Entries
 }
 
-// userServiceState 以有界的 systemctl 查詢回傳固定狀態字，不轉述 systemctl 原始輸出。
-func userServiceState() string {
-	ctx, cancel := context.WithTimeout(context.Background(), doctorProbeTimeout)
+// userServiceState 以有界的 systemctl 查詢回傳固定狀態字，不轉述 systemctl 原始輸出；
+// 逾時回收整個 process group，避免殘留子行程持有輸出管線。
+func userServiceState(parent context.Context) string {
+	ctx, cancel := context.WithTimeout(parent, doctorProbeTimeout)
 	defer cancel()
-	out, _ := exec.CommandContext(ctx, "systemctl", "--user", "is-active", doctorServiceUnit).Output()
+	cmd := exec.CommandContext(ctx, "systemctl", "--user", "is-active", doctorServiceUnit)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.WaitDelay = 100 * time.Millisecond
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	out, _ := cmd.Output()
 	if ctx.Err() != nil {
 		return "status unavailable (timeout)"
 	}

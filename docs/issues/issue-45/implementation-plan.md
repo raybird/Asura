@@ -225,8 +225,13 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
 - 驗收編號：DIST-008
 - 完成判準：ENV、credential 檔與 probe stderr 植入 sentinel，probe 失敗與逾時（含掛起的 daemon peer）下 stdout／stderr 皆無 sentinel；doctor 在 deadline 內結束；前後 config／DB／credential hash 與 user unit 目錄不變；私有 temp 無殘留。
 - 驗證：CLI 外迴圈；先以掛起 peer／洩漏 stub 取得紅燈。
-- 狀態：📝 待實作
+- 狀態：✅ 已完成（2026-10-09）
 - 證據：
+  - 產出：`doctor.go` 以 10 秒整體 context 涵蓋 inventory、systemctl 與 daemon dial；systemctl 以獨立 process group 執行，逾時 SIGKILL 整組並設 `WaitDelay`；每項 detail 上限 512 bytes 並標 `...(truncated)`。測試 `cmd/asura/doctor_safety_test.go`。
+  - 紅燈：`go test -count=1 -run 'TestDoctorSecretSafetyAndReadOnly|TestDoctorBoundsLongDetails' -v ./cmd/asura` → 前者 `doctor exceeded its deadline: 33.005956786s`（stub systemctl 的子行程 sleep 持有輸出管線，`exec.CommandContext` 逾時後仍等待管線關閉），後者 `unbounded line: 2074 bytes`。首輪因 stub 使用的 `sleep` 不在測試 PATH 上而未真正卡住、以錯誤原因失敗，改用 `sleep` 絕對路徑後才取得上述紅燈。
+  - 綠燈：`go test -count=1 -race -run 'TestDoctor' -v ./cmd/asura` 全 PASS；安全測試 5.01 秒完成（≤ 10 秒期限）。情境：`OPENAI_API_KEY`／`ASURA_WEB_KEY`、`~/.codex/auth.json` 與失敗 probe 的 stdout／stderr 都植入 `SECRET-SENTINEL-d0c7`，opencode probe 與 systemctl 掛住、daemon socket 只接受不回應；輸出不含 sentinel、回報 `asura.service status unavailable (timeout)`、NOT_READY exit 1；HOME／XDG 整棵目錄（config、DB fixture、credential、runtime dir）前後路徑與內容雜湊一致、未建立 `~/.asura` 或 systemd unit 目錄、cwd 無新檔、私有 TMPDIR 無殘留；每行 ≤ 600 bytes。超長 `ASURA_SOCKET` 的 detail 被截斷並標記。
+  - 回歸：`go vet ./...` exit 0；`go test -count=1 -race ./...` 全部 ok（2026-10-09，go1.27.1 linux/amd64）。
+  - 精煉：no-op——期限以單一 context 傳遞，截斷集中在 `add`；沿用上列綠燈。
 
 ## Phase 5 — User service 與 setup
 
