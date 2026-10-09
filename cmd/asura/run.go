@@ -23,7 +23,6 @@ import (
 	"asura/internal/backend/codex"
 	"asura/internal/backend/omp"
 	"asura/internal/backend/opencode"
-	"asura/internal/contextwin"
 	"asura/internal/daemon"
 	"asura/internal/engine"
 	"asura/internal/pipeline"
@@ -52,6 +51,18 @@ func RunCLI(args []string, stdout, stderr io.Writer) int {
 
 	subcmd := args[0]
 	subargs := args[1:]
+
+	// 需要 socket／DB 的指令先載入 operator config；壞檔明確失敗，不退回內建預設。
+	switch subcmd {
+	case "daemon", "run", "ask", "runtime", "audit", "status", "cancel", "web", "cron", "memory":
+		cc, err := loadCLIConfig()
+		if err != nil {
+			fmt.Fprintf(stderr, "error: %v\n", err)
+			return 1
+		}
+		activeConfig = cc
+		defer func() { activeConfig = nil }()
+	}
 
 	switch subcmd {
 	case "daemon":
@@ -124,10 +135,10 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("run", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
-	dbPath := fs.String("db", "asura.db", "path to SQLite database")
+	dbPath := fs.String("db", activeConfig.dbPath(), "path to SQLite database")
 	customID := fs.String("id", "", "optional custom task ID")
 	workspace := fs.String("workspace", "", "target workspace directory")
-	allowedRoots := fs.String("allowed-roots", "", "comma-separated list of allowed root directories")
+	allowedRoots := fs.String("allowed-roots", activeConfig.allowedRoots(), "comma-separated list of allowed root directories")
 	mode := fs.String("mode", string(pipeline.ModeDirect), "execution mode (direct or three-face)")
 	backendFlag := fs.String("backend", "opencode", "execution backend (opencode, codex, omp, antigravity, auto)")
 
@@ -140,7 +151,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	contextCfg, err := contextwin.LoadConfig()
+	contextCfg, err := activeConfig.contextConfig()
 	if err != nil {
 		fmt.Fprintf(stderr, "error: invalid context configuration: %v\n", err)
 		return 1
@@ -157,7 +168,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 
 	var runtimePriority []string
 	if bID == "auto" {
-		runtimePriority, err = backend.ParseRuntimePriority(os.Getenv("ASURA_RUNTIME_PRIORITY"))
+		runtimePriority, err = backend.ParseRuntimePriority(activeConfig.runtimePriority())
 		if err != nil {
 			fmt.Fprintf(stderr, "error: runtime priority: %v\n", err)
 			return 1
@@ -195,6 +206,10 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 
 	policy := auth.NewPolicy(roots)
 
+	if err := activeConfig.prepareDirs(*dbPath); err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
 	store, err := storage.NewSQLiteStore(*dbPath)
 	if err != nil {
 		fmt.Fprintf(stderr, "error: failed to initialize storage: %v\n", err)

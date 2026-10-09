@@ -171,13 +171,19 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
   - 範圍說明：DIST-010「不啟動 daemon」的 CLI 外部行為由 3.2 承擔。
 
 ### Task 3.2 — CLI 接線與逐設定 precedence
-- 產出與範圍：各 handler 在 parse 前載入 config 取得預設，`flag.Visit` 辨識顯式 flag；逐設定 CLI > ENV > config > 內建；不修改 process ENV；有 config 時 status／cancel／audit／inventory 以 config socket 嘗試 daemon、失敗回落 config db；bad config 時需載入設定的指令非零退出且不啟動 daemon；無 config 行為與 0.1 基線一致。
+- 產出與範圍：RunCLI 對需要 socket／DB 的指令載入 config，各 handler 以「ENV > config > 內建」解析結果作為 flag 預設值，使任何顯式 flag（含空值與等於預設的值）自然勝出，不需 `flag.Visit`；逐設定 CLI > ENV > config > 內建；不修改 process ENV；有 config 時 status／cancel／audit／inventory 以 config socket 嘗試 daemon、失敗回落 config db；bad config 時需載入設定的指令非零退出且不啟動 daemon；無 config 行為與 0.1 基線一致。
 - 相依：0.1、3.1
 - 驗收編號：DIST-009
 - 完成判準：以四層不同字面值逐層移除 override 觀察生效值；CLI 顯式空值／等於預設值不被低順位覆蓋；bad config 下 daemon 非零且 socket 未建立；0.1 基線全綠。
 - 驗證：外迴圈 CLI 測試觀察 daemon／client 實際使用的路徑；單元層由 3.1 承擔，兩層失敗面不同。
-- 狀態：📝 待實作
+- 狀態：✅ 已完成（2026-10-09）
 - 證據：
+  - 產出：`cmd/asura/config.go`（`cliConfig` 與 nil-safe 解析方法、`loadCLIConfig`、`localSocketDefault`、config 模式下 `DefaultSocketPath` 不建立 `~/.asura`、`prepareDirs` 以 0700 建 DB／socket 目錄）；`run.go` 在 dispatch 前載入 config，壞檔 exit 1，結束時清除 `activeConfig`；daemon／run／status／cancel／audit／inventory 改用解析後預設；daemon 在 config 模式檢查 socket 長度。測試 `cmd/asura/config_precedence_test.go` 與 `cmd/asura/main_test.go`（TestMain 指向空的 XDG_CONFIG_HOME，避免讀到開發者 config）。
+  - 外迴圈紅燈：以只含型別的骨架執行 `go test -count=1 -run 'TestConfig' -v ./cmd/asura` → 9 個測試 FAIL：daemon 啟動行仍為 `~/.asura/asura.sock (workers: 2, queue: 10)`、status 未使用 config db、config priority 被忽略（得到 opencode）、utility policy 空值、bad config 下 daemon／web 等持續執行至 20 秒逾時。
+  - 單元層：`TestConfigMemoryUtilityPolicy` 直接驗解析方法（ENV > config > observe），其餘解析規則由 3.1 單元測試承擔；外迴圈與單元失敗面不同，保留雙迴圈。
+  - 綠燈：`go test -count=1 -race -v ./cmd/asura` ok。daemon 子行程字面驗證：config 值（`cfg.sock`、workers 5、queue 7、cfg.db、只允許 config root）勝過內建且未觸及 cwd `asura.db` 與 `~/.asura`；`ASURA_SOCKET` 勝過 config；`--socket`／`--db`／`--workers 2`（等於內建預設）／`--allowed-roots ""`（顯式空值回到 cwd root）勝過 ENV 與 config；config 未列路徑時使用 `$XDG_RUNTIME_DIR/asura/asura.sock` 與 `$XDG_DATA_HOME/asura/asura.db`。status／cancel／audit 在 socket 連不上時回落 config db、`--db` 優先；`run --backend auto` 依 config priority 選 codex，ENV 改為 opencode 優先後選 opencode；config `[context]` reject 生效，`ASURA_CONTEXT_POLICY=observe` 覆寫。bad config（未知欄位含 sentinel、schema 7、0666 權限、超長 XDG socket）下 daemon／run／ask／status／cancel／audit／inventory／web／cron／memory 皆 exit 1、stderr 含 config 且不含 sentinel、未建立 socket，`version` 不受影響。
+  - 回歸：0.1 `TestNoConfig*` 全綠（首輪因 `activeConfig` 跨測試殘留使 `TestNoConfigDefaultSocketPath` FAIL，改為每次 RunCLI 結束清除後通過）。`go vet ./...` exit 0、`go build ./cmd/asura` exit 0、`go test -count=1 -race ./...` 23 個 package ok；SKIP 與 0.2 記錄相同（runtime live／contract 前置條件缺少），未觸及 `internal/backend`（2026-10-09，go1.27.1 linux/amd64）。
+  - 精煉：合併測試 helper（`newXDGEnv` 只建目錄，`writeConfig` 寫檔），重跑 `go test -count=1 -race -run 'TestConfig' ./cmd/asura` ok。
 
 ## Phase 4 — Doctor
 

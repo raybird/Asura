@@ -168,8 +168,8 @@ func handleCancel(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("cancel", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
-	dbPath := fs.String("db", "asura.db", "path to SQLite database")
-	sockPath := fs.String("socket", os.Getenv("ASURA_SOCKET"), "path to daemon unix socket")
+	dbPath := fs.String("db", activeConfig.dbPath(), "path to SQLite database")
+	sockPath := fs.String("socket", localSocketDefault(), "path to daemon unix socket")
 
 	if err := fs.Parse(args); err != nil {
 		return 1

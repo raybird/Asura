@@ -11,7 +11,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
 )
 
 func printInventory(w io.Writer, s *backend.InventorySnapshot) {
@@ -31,7 +30,7 @@ func handleRuntime(args []string, stdout, stderr io.Writer) int {
 	}
 	fs := flag.NewFlagSet("runtime inventory", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	socket := fs.String("socket", os.Getenv("ASURA_SOCKET"), "daemon unix socket")
+	socket := fs.String("socket", localSocketDefault(), "daemon unix socket")
 	if err := fs.Parse(args[1:]); err != nil || fs.NArg() != 0 {
 		return 1
 	}
