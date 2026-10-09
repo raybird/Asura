@@ -95,13 +95,19 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
   - 常青文件：CLI 參考與 README 指令一覽依計畫由 6.1 統一更新。
 
 ### Task 1.2 — Release workflow 注入 metadata、移除 `--clobber`
-- 產出與範圍：`.github/workflows/release.yml` build 時注入 tag／commit；新增步驟對兩架構 archive 解出 binary 核對 `version --json` 與 tag／arch（arm64 以 qemu-user 執行或明列只做 ELF 架構檢查）；移除 `--clobber`；asset 命名與 archive root 不變。
+- 產出與範圍：`.github/workflows/release.yml` build 時注入 tag／commit；建置抽為 `scripts/release/build-archives.sh` 供 workflow 與測試共用；測試對兩架構 archive 解出 binary 核對（原生架構執行 `version --json`，非原生架構核對 ELF machine 與注入字面值）；移除 `--clobber`；asset 命名與 archive root 不變。
 - 相依：1.1
 - 驗收編號：支援 DIST-002／016
 - 完成判準：本機以 workflow 相同命令建出的 archive 名稱、root、checksum 與注入值一致；`gh release upload` 不含 `--clobber`；`actionlint`（若可用）或 YAML 解析通過。
 - 驗證：本機重放 build 段 shell 的腳本測試；真實 tag 發佈屬 6.2 的發佈後驗證。
-- 狀態：📝 待實作
+- 狀態：✅ 已完成（2026-10-09）
 - 證據：
+  - 產出：`scripts/release/build-archives.sh`（命名、archive root、內容與 manifest 格式沿用 v1.0.0，ldflags 加入 `-X main.version`／`-X main.commit`）、`.github/workflows/release.yml`（Build 步驟改呼叫腳本並以 `git rev-parse HEAD` 傳 commit；upload 移除 `--clobber`）、`scripts/release/build_test.go`。
+  - 紅燈（外迴圈與單元同層合併：腳本即被測單元，無其他整合面）：`go test -count=1 -v ./scripts/release` → `TestBuildArchivesContract` FAIL（`build-archives: exit status 2`，腳本不存在）、`TestReleaseWorkflowUsesContract` FAIL（`release.yml does not build via scripts/release/build-archives.sh`）。
+  - 綠燈：`go test -count=1 -race -v ./scripts/release` → 2 PASS：asset 恰為兩個 archive 與 `asura_v9.9.9-test_checksums.txt`、`sha256sum -c` 兩項 OK、archive 項目恰為 root 目錄與 `asura`／`LICENSE`／`README.md`／`CHANGELOG.md`、ELF machine 分別為 x86-64／AArch64、binary 含注入字面值、amd64 `version --json` 回 `v9.9.9-test`／`deadbeefcafe`／`linux`／`amd64`；workflow 使用腳本且無 `--clobber`。
+  - 判準反向自檢：本地移除腳本中的 `-X` 注入（事後還原，未提交）→ `TestBuildArchivesContract` FAIL（`amd64 binary lacks injected version metadata`）。
+  - 精煉：首版以 `go version -m` 讀 ldflags，實測 `-trimpath -s -w` 建置不含該資訊而改為字面值比對；manifest 命令還原為與 v1.0.0 相同的 `sha256sum *.tar.gz`。最終 `go vet ./...` exit 0、`go test -count=1 -race ./cmd/asura ./scripts/...` ok；`release.yml` 以 PyYAML 解析成功；本機無 actionlint，未執行（2026-10-09，go1.27.1 linux/amd64）。
+  - 限制：真實 tag 觸發的 workflow 與 GitHub 上傳行為（含同名 asset 存在時失敗）未在本機執行，屬 6.2 發佈後驗證。
 
 ## Phase 2 — 安裝器
 
