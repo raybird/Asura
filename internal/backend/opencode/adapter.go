@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -186,6 +187,8 @@ type AdapterConfig struct {
 // Adapter 負責調度固定版本 OpenCode CLI 執行 AI 任務並解析事件串流
 type Adapter struct {
 	cfg AdapterConfig
+	// probedExecutable 記錄最近一次 Probe 實際執行的 binary，供 doctor 顯示。
+	probedExecutable atomic.Pointer[string]
 }
 
 // ValidateOpenCodeVersion 檢查二進位檔版本是否符合預期

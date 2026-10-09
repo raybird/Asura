@@ -193,8 +193,15 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
 - 驗收編號：支援 DIST-006／007
 - 完成判準：各 adapter 回報的路徑等於其 probe 實際執行的 binary（以 PATH 與 cache 同時存在的 fixture 區分）；無法提供時回 unknown；既有 inventory／contract 序列化 golden 不變。
 - 驗證：adapter 單元測試；backend live／contract SKIP 名稱與原因記錄。
-- 狀態：📝 待實作
+- 狀態：✅ 已完成（2026-10-09）
 - 證據：
+  - 產出：`internal/backend/inventory.go` 新增 `ExecutableReporter` 介面；OpenCode 在 Probe 中記錄實際執行的 binary（cache fallback、PATH 或明確 BinaryPath；`atomic.Pointer` 避免與逾時中的 probe goroutine 競態），`RoleRoutingBackend` 回報 striker；codex 的 Probe 改用同一個 `ProbeExecutable` 解析，確保顯示與執行一致；OMP／Antigravity 回報建構時解析的絕對路徑。`RuntimeInventoryEntry`、ExecutionContract 結構與 `runtime-inventory-v1` 未修改（`git diff` 無結構變更）。
+  - 紅燈：以回傳空字串的方法骨架執行 `go test -count=1 -run 'TestProbeExecutable' ./internal/backend/...` → opencode（cache fallback 應回報 cache 路徑卻得到空字串）、codex（PATH 上的 codex 回報空字串）、omp、antigravity 4 個 FAIL。
+  - 綠燈：同命令加 `-race` 全數 PASS：OpenCode 同時存在 cache 與 PATH binary 時回報 cache、移除 cache 後回報 PATH、兩者皆無時為空、版本不符的明確 binary 仍回報、RoleRouting 回報 striker；codex 回報 PATH／明確路徑；OMP／Antigravity 回報明確路徑。
+  - 過程記錄：首輪 OMP／Antigravity 在找不到 binary 時回報 `"."`——既有 `NewAdapter` 對空字串執行 `EvalSymlinks` 得到 `.`；未改動該既有行為，`ProbeExecutable` 改為只回報絕對路徑。
+  - 回歸：`go vet ./...` exit 0；`go test -count=1 -race ./cmd/asura ./internal/...` 全部 ok；`go test -count=1 -race -v ./internal/backend/...` 全部 ok（2026-10-09，go1.27.1 linux/amd64）。
+  - backend SKIP（不計為通過）：`TestLiveAdapter`（omp、antigravity：live OAuth model call opt-in）；`TestCodexProbe_BinaryVersion`、`TestCodexProbe_NonInteractive_JSONL`、`TestCodexProbe_ReadOnlySandbox`、`TestCodexProbe_WorkspaceWriteSandbox`、`TestCodexProbe_ContextCancellation`、`TestAdapter_Run_Live`、`TestCodexProbe_Live`：本機 codex 為 `codex-cli 0.160.1`，與固定版本 0.155.0 不符。
+  - 精煉：no-op——每個 adapter 只新增一個方法，codex 已讓 Probe 與回報共用同一解析；沿用上列綠燈。
 
 ### Task 4.2 — `asura doctor` readiness
 - 產出與範圍：`asura doctor`：system（Linux、arch、`/proc`、bwrap 需求、path 權限評估標明未實際寫入）、config（解析、權限、socket 長度、allowed roots）、runtime（本機 registry＋CaptureInventory＋4.1 executable）、user service 狀態、daemon 連線（2 秒）；`READY`／`DEGRADED` exit 0、`NOT_READY` exit 1、用法錯誤 exit 2；optional runtime／service 缺項只警告。
