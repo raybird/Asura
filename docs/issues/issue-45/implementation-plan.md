@@ -132,10 +132,12 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
 - 驗收編號：DIST-002
 - 完成判準：下載 URL 為 arm64 asset 且 checksum 相符；arm64 執行證據標明原生或模擬環境；缺可執行環境時記未驗證，不以 amd64 結果代替。
 - 驗證：沿用 2.1 harness 的外迴圈。
-- 狀態：⏳ 進行中（2026-10-09：asset 選擇已驗證；arm64 binary 執行未驗證）
+- 狀態：✅ 已完成（2026-10-09；arm64 執行為 qemu 模擬環境證據）
 - 證據：
   - asset 選擇：`TestInstallArm64Asset`（`scripts/installer/install_test.go`）以 `uname -m` 為 `aarch64`／`arm64` 安裝，內容等於 arm64 fixture、只請求 arm64 asset；`go test -count=1 -run TestInstallArm64Asset -v ./scripts/installer` → 2 PASS。對應程式已由 2.1 的架構對應實作，無法另取紅燈；改以變異實驗確認判準：把 arm64 對應改成 amd64（事後還原、未提交）→ 兩個子測試 FAIL。
-  - 未驗證：本機（x86_64）無 qemu-user 與 aarch64 binfmt，無法執行真實 arm64 binary 的 `version --json`。可行途徑為原生 arm64 主機，或經使用者同意以特權容器註冊 binfmt；不以 amd64 結果代替。真實 arm64 archive 的 ELF 架構與版本注入已由 1.2 核對。
+  - 授權：2026-10-09 使用者選擇「註冊 binfmt 後用容器跑（建議）」。執行 `docker run --privileged --rm tonistiigi/binfmt:qemu-v9.2.2 --install arm64`，主機 emulators 新增 `qemu-aarch64`（重開機後失效）。
+  - arm64 執行：`sh scripts/release/onboarding-e2e.sh alpine:3.20.3 linux/arm64` → 容器 `uname -m` 為 `aarch64`；installer 只請求 `asura_v1.1.0_linux_arm64.tar.gz`，暫存 binary 在 qemu 下回報 `{"arch":"arm64","commit":"929bda4…","os":"linux","version":"v1.1.0"}`，與 tag／arch 一致後才替換；doctor DEGRADED exit 0、setup 完成、standalone daemon 啟動並以 SIGTERM exit 0、`== ONBOARDING OK`。腳本新增 `arch mismatch` 檢查：預設平台未固定時曾因本機 alpine tag 指向 arm64 而在 amd64 預期下正確失敗，之後固定預設 `linux/amd64`，兩種平台各重跑一次皆通過。
+  - 證據分類：qemu-user 模擬＋HTTP fixture＋stub runtime，非原生 arm64 主機；真實 arm64 archive 的 ELF 架構與版本注入另由 1.2 核對。
 
 ### Task 2.3 — 安裝失敗保留、重裝與升降版
 - 產出與範圍：installer 防護與版本行為：SHA-256 比對（含 shasum fallback）、唯一精確 manifest 項目、archive 路徑／型別檢查、staged `version --json` 核對 tag／arch；checksum 不符、缺 asset／manifest 項目、重複項目、下載中斷、危險 archive、rename 失敗、既有目標為 symlink／目錄／非一般檔案、`--version v1.0.0` 拒絕並提示手動下載；同版重跑重新下載驗證、升級、顯式降版；不動 config／DB、不重啟 daemon。
@@ -300,6 +302,7 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
   - 產出：`scripts/release/onboarding-e2e.sh`——以 `build-archives.sh` 建出 `v1.1.0` fixture Release（commit 為當下 HEAD），由本機 `python3 -m http.server` 提供；`alpine:3.20.3` 容器（busybox，無 Go、無 repo、無 curl、無 systemd）以 uid 1000 執行，GitHub URL 經容器內 wget wrapper 改寫到 fixture，runtime 為 codex stub。
   - 執行：`sh scripts/release/onboarding-e2e.sh`（2026-10-09，主機 x86_64，docker 28.1.1）→ 結尾 `== ONBOARDING OK`。觀察：`wget … install.sh | sh` 以 busybox wget／tar／sha256sum 完成安裝（請求依序為 install.sh、releases/latest、checksums、amd64 archive，未請求 arm64）；`version --json` 為 `{"arch":"amd64","commit":"abed0dfa21cb30926060fa64791357cc3762a5d0","os":"linux","version":"v1.1.0"}`，與 tag／commit／arch 一致；doctor 為 DEGRADED exit 0（無 bwrap、無 systemctl、只有 stub codex）；`setup --allowed-roots ~/project` 建立 config 並顯示 doctor 結果與 `Setup complete.`；standalone daemon 啟動於 `~/.local/state/asura/asura.sock (workers: 2, queue: 10)`，`runtime inventory` 經 config socket 取得結果，SIGTERM 後 exit 0。
   - 過程記錄：首輪容器 HOME 使用 Docker 預設 `noexec` 的 tmpfs，installer 以 `staged binary cannot report its version` 拒絕替換（防護如預期生效）；改為 `exec` tmpfs 後通過。
+  - 2026-10-09 腳本新增平台參數與 `arch` 比對後重跑：amd64 預設平台通過（commit `929bda4…`），arm64 結果見 2.2。
   - 證據分類：HTTP fixture＋stub runtime；asset 名稱、archive 路徑與 checksum 由 1.2 測試與本流程的 installer 校驗共同核對。尚未以正式 GitHub Release 與真實 runtime 驗證。
   - 待辦（等待外部驗收窗）：v1.1.0 tag 發佈後，以 `curl -fsSL https://raw.githubusercontent.com/raybird/Asura/main/install.sh | sh` 在 clean Linux 安裝，核對 `version --json` 的 tag／commit 與 Release asset、checksum 一致，並確認同 tag 重跑 workflow 不覆寫 asset。窗口為 v1.1.0 實際發佈日（尚未排定）。
 

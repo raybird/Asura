@@ -3,10 +3,16 @@
 # 以 build-archives.sh 建出 fixture Release，透過本機 HTTP server 提供；容器內沒有 Go 與 repo，
 # 以非 root 使用者執行 install → version → doctor → setup → standalone daemon。
 # GitHub URL 由容器內的 wget wrapper 改寫到 fixture，runtime 為 stub；不代表正式 Release 或真實 runtime。
-# 需求：docker、python3。用法（repo 根目錄）：sh scripts/release/onboarding-e2e.sh [image]
+# 需求：docker、python3。用法（repo 根目錄）：sh scripts/release/onboarding-e2e.sh [image] [platform]
+# platform 預設 linux/amd64；linux/arm64 需主機已註冊對應 binfmt，結果屬模擬環境證據。
 set -eu
 
 image=${1:-alpine:3.20.3}
+platform=${2:-linux/amd64}
+case "$platform" in
+*arm64) arch=arm64 ;;
+*) arch=amd64 ;;
+esac
 tag=v1.1.0
 port=18745
 work=$(mktemp -d)
@@ -50,13 +56,14 @@ chmod 0755 "$work/codex"
 cat >"$work/steps.sh" <<EOF
 set -eu
 cd "\$HOME"
-echo "== whoami: \$(id -u) / no go: \$(command -v go || echo absent)"
+echo "== whoami: \$(id -u) / machine: \$(uname -m) / no go: \$(command -v go || echo absent)"
 wget -qO- https://raw.githubusercontent.com/raybird/Asura/main/install.sh | sh
 asura=\$HOME/.local/bin/asura
 json=\$("\$asura" version --json)
 echo "== version: \$json"
 case "\$json" in *'"version":"$tag"'*'"arch":'*) ;; *'"arch":'*'"version":"$tag"'*) ;; *) echo "version mismatch"; exit 1 ;; esac
 case "\$json" in *'"commit":"$commit"'*) ;; *) echo "commit mismatch"; exit 1 ;; esac
+case "\$json" in *'"arch":"$arch"'*) ;; *) echo "arch mismatch"; exit 1 ;; esac
 mkdir -p "\$HOME/stubbin" "\$HOME/project"
 cp /fixture/codex "\$HOME/stubbin/codex"
 export PATH="\$HOME/stubbin:\$PATH"
@@ -83,7 +90,7 @@ python3 -m http.server "$port" --bind 127.0.0.1 --directory "$work/www" >"$work/
 server=$!
 sleep 1
 
-docker run --rm --network host --user "$(id -u):$(id -g)" \
+docker run --rm --platform="$platform" --network host --user "$(id -u):$(id -g)" \
 	--tmpfs /home/tester:rw,exec,mode=1777 -e HOME=/home/tester \
 	-v "$work/wget:/usr/local/bin/wget:ro" -v "$work/codex:/fixture/codex:ro" -v "$work/steps.sh:/fixture/steps.sh:ro" \
 	"$image" sh /fixture/steps.sh

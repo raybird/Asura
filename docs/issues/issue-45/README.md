@@ -277,6 +277,12 @@ Feature: Linux Distribution & Bootstrap
 | DIST-TBD-14 | Release asset naming 與舊 release metadata | 已解決 | 2026-10-09 第 10 題一併確認：沿用現有 asset 命名與 archive root，不改 release 命名；舊 release metadata 依第 9 題不支援 v1.0.0。影響 DIST-001／002／016 |
 | DIST-TBD-15 | Secret／唯讀／filesystem／service 安全邊界 | 已解決 | 2026-10-09 第 8 題：doctor 可寫性只做權限評估、不實際寫入；第 15 題：不安全 config 權限拒絕載入；第 16 題：release asset 不可覆寫；總結確認：相對 XDG 視為未設、socket 長度上限失敗、doctor deadline／輸出上限與不回顯值、config／unit 無 secret、unit 路徑跳脫與 XDG_CONFIG_HOME 固定、installer 工具前置檢查。影響 DIST-003／004／006／008／010／011／012／013／015／016 |
 
+## Gate 豁免紀錄
+
+| 日期 | 豁免項目 | 使用者原話 | 殘餘風險 |
+|---|---|---|---|
+| 2026-10-09 | Task 6.2 的正式 v1.1.0 Release 驗證不阻擋 PR 與 review；列為發佈後的外部驗收窗，合併並發佈後補證據再結案 | 對「PR 要怎麼處理這一項？」選擇「PR 揭露並列為發佈後驗收（建議）」 | 合併前只有 HTTP fixture 與 stub runtime 證據；正式 Release 的 asset、checksum、tag 對應與 workflow 不覆寫行為在發佈前未經真實驗證 |
+
 ## Timeline
 
 | 日期 | 異動 | 負責人 |
@@ -337,4 +343,4 @@ PY
 **建立日期**: 2026-10-07  
 **分級**: Large — 跨 CLI、operator config、installer、release 與 user service  
 **風險**: High — binary／資料保留與供應鏈安全  
-**狀態**: 進行中；2026-10-09 Task 0.1／0.2／1.1／1.2／2.1／2.3／3.1／3.2／4.1／4.2／4.3／5.1／5.2／6.1 完成；6.2 fixture 部分完成、正式 Release 驗證待發佈；2.2 待 arm64 執行環境、5.3 待真實 user bus 授權
+**狀態**: 進行中；2026-10-09 Task 0.1／0.2／1.1／1.2／2.1／2.3／3.1／3.2／4.1／4.2／4.3／5.1／5.2／6.1／2.2 完成；6.2 fixture 部分完成、正式 Release 驗證待發佈；2.2 已以 qemu 驗證；下一步 Task 5.3
