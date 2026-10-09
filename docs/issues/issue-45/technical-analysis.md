@@ -90,6 +90,13 @@
 - 第 18 題（DIST-TBD-17）使用者回答「1」：setup 新建 config 時寫入解析後的絕對 `db`／`socket`；方案 2「unit 固定更多 XDG 變數」與方案 3「維持現狀」未採用。
 - 缺陷修正（不需決策）：unit 目錄依 `systemctl --user show-environment` 的 `XDG_CONFIG_HOME`（未設時為 `$HOME/.config`）；CLI 端 config 目錄與 manager 不同時才寫入 `Environment=XDG_CONFIG_HOME=`。
 
+### 外部審查後決策（2026-10-09）
+
+- 第 19 題（DIST-TBD-18）使用者回答「1」：doctor 為 NOT_READY 時 setup 仍 exit 0，輸出改為明示未就緒；方案 2「exit 1」會中斷先 setup 後安裝 runtime 的部署腳本，方案 3「維持現狀」會在未就緒時宣稱完成，皆未採用。
+- 缺陷修正：service 的 start／stop／restart 與 install／uninstall 一樣先檢查受管理標記。
+- 措辭：doctor 只做 socket 連線，字樣改為 socket 是否接受連線，不宣稱 daemon 身分或健康狀態。
+- 信任邊界：checksum manifest 與 archive 同屬一個 Release，SHA-256 防下載損壞與不一致，不證明發布者身分；簽章或 artifact attestation 列為後續工作。
+
 ## 其餘建議契約
 
 | 決策 | 內容（2026-10-09 全部已確認） | 理由與決策來源 |

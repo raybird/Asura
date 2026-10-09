@@ -158,6 +158,7 @@ Feature: Linux Distribution & Bootstrap
     And 設定檔名為 config.toml 且 schema_version 為 1，並寫入建立當下解析的絕對 db 與 socket 路徑
     And config 使用 XDG_CONFIG_HOME、DB 使用 XDG_DATA_HOME；socket 優先 XDG_RUNTIME_DIR，否則使用 XDG_STATE_HOME
     And 顯示 doctor runtime 結果與下一步
+    And doctor 為 NOT_READY 時 setup 仍以 exit 0 結束，但明示環境未就緒，不宣稱已可使用
     And 只有互動明確同意或顯式 --service 才安裝、啟用並啟動 user service
     And 非互動模式缺少建立設定所需的 allowed roots 時明確失敗，不等待輸入
     And 未經選擇不啟用 service、安裝或登入 runtime、修改 shell rc 或啟動 Web
@@ -219,7 +220,7 @@ Feature: Linux Distribution & Bootstrap
 
 ## Gherkin 核准紀錄
 
-- **核准 commit**: 871bbf4（2026-10-09 規格修訂；原核准 384a0d1）
+- **核准 commit**: 待提交（2026-10-09 第 19 題規格修訂；前次 871bbf4，原核准 384a0d1）
 - **核准來源**: 2026-10-07 使用者對第 1 題回答「1」，接受「沒有設定檔時沿用原本 DB／socket 路徑；執行 setup 後使用 XDG。舊資料不自動搬移」。已確認 DIST-TBD-8 與 DIST-009／011／012／014／015／017 的路徑相容部分；其他行為尚待確認，未將整個 Scenario 記為已核准。
 - **第 2 題來源**: 2026-10-07 使用者回答「1」，接受 TOML（config.toml）與 schema_version = 1，拒絕未知欄位／無效設定，缺檔沿用舊行為、壞檔明確失敗。確認 DIST-TBD-6；影響 DIST-009／010／011／012／017 的設定格式與解析部分，其餘必要決策未完成前不把完整 Scenario 記為已核准。
 - **第 3 題來源**: 2026-10-07 使用者回答「1」，接受新增 asura service install／start／stop／restart／status／uninstall，由 systemd 管理，移除 service 保留設定與資料。確認 DIST-TBD-11；影響 DIST-013／014／015 的管理介面，不推定核准 setup 自動啟用或 unit restart／shutdown 政策。
@@ -237,6 +238,7 @@ Feature: Linux Distribution & Bootstrap
 - **第 15 題來源**: 2026-10-09 使用者回答「1」，接受 setup 以 0700 建立 config／data／socket 目錄、0600 建立 config；載入既有 config 時，檔案非目前使用者擁有，或檔案／所在目錄可被 group／others 寫入，即拒絕載入並非零退出，錯誤指出路徑、問題與修正指令且不回顯內容；doctor 判 NOT_READY。確認 DIST-TBD-15 的 config 權限部分；DIST-010 新增對應 Example；影響 DIST-006／010／011。
 - **第 16 題來源**: 2026-10-09 使用者回答「1」，接受移除 release.yml 的 `--clobber`，同名 asset 已存在時 workflow 失敗，重新發佈須維護者先手動刪除舊 asset；確保同一版本號恆對應同一 binary 與 checksum。確認 DIST-TBD-15 的 release asset 覆寫部分；DIST-016 新增對應 Then；第 9 題的 v1.0.0 拒絕同步增列為 DIST-004 Example。影響 DIST-004／016。
 - **規格修訂來源（review 需決策）**: 2026-10-09 獨立 review（PR #46）提出需決策項。使用者對第 17 題回答「1」：setup 與 service install 都要求 config 含 `allowed_roots`，既有 config 缺少時明確失敗、不改寫、不宣稱完成，避免 service 以 HOME 為 allowed root；standalone daemon 維持 v1.0 預設。使用者對第 18 題回答「1」：setup 新建 config 時寫入當下解析的絕對 `db` 與 `socket`，讓 shell、service 與 doctor 使用相同路徑。DIST-011／012／013 據此修訂並於同日重新核准；M2（unit 目錄依 user manager）為核准行為的缺陷修正。
+- **規格修訂來源（外部審查）**: 2026-10-09 使用者提供 PR #46 的外部審查並要求分析。使用者對第 19 題回答「1」：doctor 為 NOT_READY 時，setup 維持 exit 0（setup 的成功契約為設定已建立，允許「setup → 安裝 runtime」的部署順序），但輸出改為明示環境未就緒，不宣稱 ready。DIST-011 據此修訂並於同日重新核准。審查中「start／stop／restart 未檢查受管理標記」屬已核准行為（只管理 Asura 標記的 unit）的缺陷修正；daemon 連線字樣與 installer 信任邊界屬措辭與文件。
 - **總結確認來源**: 2026-10-09 使用者回答「確認」，接受 DIST-TBD-15 其餘假設——相對路徑 XDG 變數依規範視為未設；socket 路徑超過 sun_path 上限（108 bytes）明確失敗並提示改用 `--socket`／config，doctor 判 NOT_READY；doctor 沿用 inventory 單 probe 3 秒／整體 5 秒、daemon 連線 2 秒、整體 10 秒且輸出有界，只輸出固定 reason，ENV／config 只顯示是否設定與路徑；config schema 無 secret 欄位，setup／service 不把 `ASURA_WEB_KEY` 或 API key 寫入 config／unit；unit `ExecStart` 用 binary 絕對路徑並依 systemd 規則跳脫、不經 shell，僅 setup 當下 `XDG_CONFIG_HOME` 非預設時加入 `Environment=XDG_CONFIG_HOME=...`；installer 需 `curl` 或 `wget`、`tar`、`sha256sum` 或 `shasum -a 256`、`uname`，缺任一項在變更 filesystem 前非零退出。同時核准 DIST-001～017 全部 Scenario。
 
 | Scenario | 核准日期 | 狀態 |
@@ -281,6 +283,7 @@ Feature: Linux Distribution & Bootstrap
 | DIST-TBD-14 | Release asset naming 與舊 release metadata | 已解決 | 2026-10-09 第 10 題一併確認：沿用現有 asset 命名與 archive root，不改 release 命名；舊 release metadata 依第 9 題不支援 v1.0.0。影響 DIST-001／002／016 |
 | DIST-TBD-16 | config 缺 allowed roots 時 setup／service install 的行為 | 已解決 | 2026-10-09 使用者第 17 題回答「1」：兩者都要求 `allowed_roots`，缺少時明確失敗、不改寫 config；避免 service 以 HOME 為 allowed root。影響 DIST-011／012／013 |
 | DIST-TBD-17 | setup 是否固定 db／socket 路徑 | 已解決 | 2026-10-09 使用者第 18 題回答「1」：新建 config 寫入解析後的絕對 `db`／`socket`，shell、service、doctor 一致；既有 config 不改寫。影響 DIST-011／012／013 |
+| DIST-TBD-18 | doctor 為 NOT_READY 時 setup 的回報 | 已解決 | 2026-10-09 使用者第 19 題回答「1」：exit 0，但輸出明示 NOT_READY 與缺項，不宣稱 ready；保留先 setup 後安裝 runtime 的部署順序。影響 DIST-011 |
 | DIST-TBD-15 | Secret／唯讀／filesystem／service 安全邊界 | 已解決 | 2026-10-09 第 8 題：doctor 可寫性只做權限評估、不實際寫入；第 15 題：不安全 config 權限拒絕載入；第 16 題：release asset 不可覆寫；總結確認：相對 XDG 視為未設、socket 長度上限失敗、doctor deadline／輸出上限與不回顯值、config／unit 無 secret、unit 路徑跳脫與 XDG_CONFIG_HOME 固定、installer 工具前置檢查。影響 DIST-003／004／006／008／010／011／012／013／015／016 |
 
 ## Gate 豁免紀錄
@@ -312,10 +315,11 @@ Feature: Linux Distribution & Bootstrap
 | 2026-10-09 | 使用者第 16 題回答「1」，確認 release asset 不可覆寫；DIST-016 增列對應 Then，DIST-004 增列 v1.0.0 拒絕 Example | 使用者 |
 | 2026-10-09 | 使用者回答「確認」，接受 DIST-TBD-15 其餘假設並核准 DIST-001～017 | 使用者 |
 | 2026-10-09 | 獨立 review（PR #46）判定 RETURN TO execute-task；使用者第 17、18 題回答「1」，修訂並重新核准 DIST-011／012／013 | 使用者 |
+| 2026-10-09 | 外部審查分析；使用者第 19 題回答「1」，修訂並重新核准 DIST-011 | 使用者 |
 
 ## 建檔檢查證據
 
-2026-10-07 建檔時從 repo 根目錄執行靜態檢查，exit 0。2026-10-09 核准後改為檢查核准表與 15 個已解決事項，從 repo 根目錄執行下列腳本 exit 0：4 份文件、17 個唯一 Scenario 與已核准表完全一致、待決事項皆已解決（2026-10-09 review 後新增 DIST-TBD-16／17，共 17 項）、4 個本機文件連結存在。另執行 `git diff --check`，exit 0；新文件尚未追蹤，該命令不涵蓋新文件，以下腳本另檢查其尾端空白。純規格文件不適用程式紅綠測試；尚未執行產品測試。
+2026-10-07 建檔時從 repo 根目錄執行靜態檢查，exit 0。2026-10-09 核准後改為檢查核准表與 15 個已解決事項，從 repo 根目錄執行下列腳本 exit 0：4 份文件、17 個唯一 Scenario 與已核准表完全一致、待決事項皆已解決（2026-10-09 review 後新增 DIST-TBD-16／17、外部審查後新增 DIST-TBD-18，共 18 項）、4 個本機文件連結存在。另執行 `git diff --check`，exit 0；新文件尚未追蹤，該命令不涵蓋新文件，以下腳本另檢查其尾端空白。純規格文件不適用程式紅綠測試；尚未執行產品測試。
 
 ```bash
 python3 - <<'PY'
@@ -329,7 +333,7 @@ ids = re.findall(r'^  @(DIST-\d{3})$', body, re.M)
 table = re.findall(r'^\| (DIST-\d{3}) \| 2026-10-09 \| 已核准 \|$', body, re.M)
 assert len(ids) == len(set(ids)) == len(table) == 17
 assert set(ids) == set(table)
-assert len(re.findall(r'^\| DIST-TBD-\d+ \|', body, re.M)) == len(re.findall(r'^\| DIST-TBD-\d+ \| [^|]+ \| 已解決 \|', body, re.M)) == 17
+assert len(re.findall(r'^\| DIST-TBD-\d+ \|', body, re.M)) == len(re.findall(r'^\| DIST-TBD-\d+ \| [^|]+ \| 已解決 \|', body, re.M)) == 18
 links = 0
 for file in files:
     text = file.read_text()
@@ -350,4 +354,4 @@ PY
 **建立日期**: 2026-10-07  
 **分級**: Large — 跨 CLI、operator config、installer、release 與 user service  
 **風險**: High — binary／資料保留與供應鏈安全  
-**狀態**: 進行中；2026-10-09 review 發現已修正（HEAD 5f57e82），待重新 review；Task 6.2 正式 Release 驗證依 Gate 豁免於發佈後補
+**狀態**: 進行中；2026-10-09 依外部審查修訂 DIST-011，修正 service 受管理檢查、setup NOT_READY 回報與 doctor 字樣
