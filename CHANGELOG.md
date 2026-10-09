@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [v1.1.0] - 2026-10-10
+
+**Distribution & Bootstrap**：在 Linux 上從安裝到可用（Install → Verify → Doctor → Config → Setup → User Service → Ready），全程不需 root。執行核心、admission、stage 綁定與稽核的權威不變；沒有 config 時所有指令維持 v1.0 行為。
+
 ### 🚀 新增功能 (Features)
 - **[installer]**：`install.sh` 安裝正式 Release：核對唯一 checksum 項目、archive 內容與暫存 binary 回報的版本後才替換；任何失敗都保留原 binary；支援 `--version`／`--install-dir`，不需 root (#45)
 - **[cli]**：`asura version`（`--json`）、唯讀 `asura doctor`、`asura setup`、`asura service install|start|stop|restart|status|uninstall` (#45)
@@ -15,6 +19,12 @@
 
 ### 🔄 相容性
 - 沒有 config 檔時，所有指令維持 v1.0 的 DB／socket 預設與本機 fallback；建立 config 後不自動搬移既有 DB (#45)
+
+### 📌 已知限制
+- installer 的 SHA-256 checksum 與 archive 來自同一個 GitHub Release，可偵測下載損壞與檔案不一致，但不證明發布者身分；簽章或 artifact attestation 另行追蹤 (#47)。
+- installer 只支援含版本資訊的 Release（v1.1.0 起），v1.0.0 請手動下載。
+- `asura doctor` 只檢查 runtime 是否存在與版本，不驗證登入、額度或模型回應；daemon socket 可連線不代表 daemon 身分與健康已驗證。
+- user service 只支援 systemd user manager；不設定 linger，登出後是否持續執行依主機設定。
 
 ## [v1.0.0] - 2026-10-06
 

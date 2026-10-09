@@ -4,7 +4,7 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.26+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v1.0.0-success)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v1.1.0-success)](CHANGELOG.md)
 
 Asura 是一個以 Go 撰寫的單一執行檔，在一台 Linux 主機上統一管理 AI coding agent（OpenCode、Codex、OMP、Antigravity）的**執行**：誰可以提交、在哪個 workspace、用哪個 runtime、能力是否相符、何時取消，以及事後如何稽核。skills、MCP、workflow 與 domain logic 由各 runtime 自行處理。
 
@@ -89,11 +89,11 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web --listen 127.0.0.1:8080 --socket
 | `setup` | 建立 config 與資料目錄，可選擇啟用 user service | [安裝與設定](docs/guides/setup.md#初始設定asura-setup) |
 | `service` | 管理 systemd user service | [安裝與設定](docs/guides/setup.md#user-serviceasura-service) |
 
-## v1.0 範圍
+## 版本範圍
 
-2026-10-06：`v1.0.0` 將 main（Issue #1～#41）定為第一版基準。
+2026-10-06：`v1.0.0` 將 main（Issue #1～#41）定為第一版基準。2026-10-10：`v1.1.0` 新增安裝與初始設定（Issue #45）。
 
-| 範圍 | v1.0 內容 |
+| 範圍 | 內容 |
 |---|---|
 | 執行中樞 | CLI 與 Daemon 共用任務、容量與取消契約；PGID 進程樹回收；SQLite 單一狀態引擎 |
 | 入口 | 本機 CLI、單人 Web Console、Cron 排程 |
@@ -101,8 +101,9 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web --listen 127.0.0.1:8080 --socket
 | 管線 | `direct`（單一 Striker）與 `three-face`（Oracle → Striker → Critic） |
 | 記憶 | 專案級記憶、有界詞彙召回、Git 候選審核、效用回饋、版本取代 |
 | 稽核 | 接受時封存契約，`status`／`audit`／Web 唯讀查詢執行來源 |
+| 安裝與設定（v1.1） | checksum 與版本核對的 installer、`version`、唯讀 `doctor`、`setup`、`config.toml` operator defaults、systemd user service |
 
-**v1.0 不包含**：Telegram 等其他遠端入口、自動 failover 或 retry、模型內部 Context 編輯／壓縮、語意（向量）召回、多使用者或跨主機部署，以及系統層級的效能與長期穩定性量測門檻（架構決策 D-09 未定義）。`--allowed-roots` 是入口授權政策，不是作業系統沙箱。完整異動見 [CHANGELOG](CHANGELOG.md)。
+**目前不包含**：Telegram 等其他遠端入口、自動 failover 或 retry、模型內部 Context 編輯／壓縮、語意（向量）召回、多使用者或跨主機部署，以及系統層級的效能與長期穩定性量測門檻（架構決策 D-09 未定義）。`--allowed-roots` 是入口授權政策，不是作業系統沙箱。完整異動見 [CHANGELOG](CHANGELOG.md)。
 
 ## 文件
 
@@ -114,4 +115,4 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web --listen 127.0.0.1:8080 --socket
 
 [MIT](LICENSE)
 
-*最新更新日期：2026-10-09（Issue #45 安裝與設定）*
+*最新更新日期：2026-10-10（v1.1.0 發佈）*
