@@ -295,8 +295,13 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
 - 驗收編號：DIST-016
 - 完成判準：fixture 流程全通且證據標明 HTTP fixture／stub runtime；發佈後真實 Release 驗證另記，未發佈前狀態標為等待外部驗收窗（窗口為 v1.1.0 tag 發佈日），不以 fixture 代替。
 - 驗證：容器端到端腳本；記錄映像、命令與輸出。
-- 狀態：📝 待實作
+- 狀態：⏳ 進行中（2026-10-09：HTTP fixture 端到端已通過；正式 v1.1.0 Release 驗證待發佈後執行）
 - 證據：
+  - 產出：`scripts/release/onboarding-e2e.sh`——以 `build-archives.sh` 建出 `v1.1.0` fixture Release（commit 為當下 HEAD），由本機 `python3 -m http.server` 提供；`alpine:3.20.3` 容器（busybox，無 Go、無 repo、無 curl、無 systemd）以 uid 1000 執行，GitHub URL 經容器內 wget wrapper 改寫到 fixture，runtime 為 codex stub。
+  - 執行：`sh scripts/release/onboarding-e2e.sh`（2026-10-09，主機 x86_64，docker 28.1.1）→ 結尾 `== ONBOARDING OK`。觀察：`wget … install.sh | sh` 以 busybox wget／tar／sha256sum 完成安裝（請求依序為 install.sh、releases/latest、checksums、amd64 archive，未請求 arm64）；`version --json` 為 `{"arch":"amd64","commit":"abed0dfa21cb30926060fa64791357cc3762a5d0","os":"linux","version":"v1.1.0"}`，與 tag／commit／arch 一致；doctor 為 DEGRADED exit 0（無 bwrap、無 systemctl、只有 stub codex）；`setup --allowed-roots ~/project` 建立 config 並顯示 doctor 結果與 `Setup complete.`；standalone daemon 啟動於 `~/.local/state/asura/asura.sock (workers: 2, queue: 10)`，`runtime inventory` 經 config socket 取得結果，SIGTERM 後 exit 0。
+  - 過程記錄：首輪容器 HOME 使用 Docker 預設 `noexec` 的 tmpfs，installer 以 `staged binary cannot report its version` 拒絕替換（防護如預期生效）；改為 `exec` tmpfs 後通過。
+  - 證據分類：HTTP fixture＋stub runtime；asset 名稱、archive 路徑與 checksum 由 1.2 測試與本流程的 installer 校驗共同核對。尚未以正式 GitHub Release 與真實 runtime 驗證。
+  - 待辦（等待外部驗收窗）：v1.1.0 tag 發佈後，以 `curl -fsSL https://raw.githubusercontent.com/raybird/Asura/main/install.sh | sh` 在 clean Linux 安裝，核對 `version --json` 的 tag／commit 與 Release asset、checksum 一致，並確認同 tag 重跑 workflow 不覆寫 asset。窗口為 v1.1.0 實際發佈日（尚未排定）。
 
 ### Task 6.3 — 完整回歸與相容矩陣
 - 產出與範圍：無 config、有 config、CLI override 三種狀態下 daemon／ask／run／status／cancel／audit／inventory／Cron／memory／Web 的相容矩陣；Phase 4 authority（StageBindingPlan、ExecutionContract、ExecutionAudit）不變；`go vet ./...`、`go test -count=1 -race -v ./...`、`go build ./cmd/asura`；SKIP 逐項記名稱與原因。
