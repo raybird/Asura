@@ -337,4 +337,4 @@ PY
 **建立日期**: 2026-10-07  
 **分級**: Large — 跨 CLI、operator config、installer、release 與 user service  
 **風險**: High — binary／資料保留與供應鏈安全  
-**狀態**: 進行中；2026-10-09 Task 0.1／0.2 完成，下一步 Task 1.1
+**狀態**: 進行中；2026-10-09 Task 0.1／0.2／1.1 完成，下一步 Task 1.2

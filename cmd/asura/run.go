@@ -74,6 +74,8 @@ func RunCLI(args []string, stdout, stderr io.Writer) int {
 		return handleCron(subargs, stdout, stderr)
 	case "memory":
 		return handleMemory(subargs, stdout, stderr)
+	case "version":
+		return handleVersion(subargs, stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "error: unknown command %q\n\n", subcmd)
 		printUsage(stderr)
@@ -95,6 +97,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  cron    Manage periodic scheduled tasks")
 	fmt.Fprintln(w, "  memory  Manage project-level long-term memories")
 	fmt.Fprintln(w, "  runtime Query runtime inventory and admission availability")
+	fmt.Fprintln(w, "  version Print build version, commit and platform")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Run 'asura <command> -h' for details on each command.")
 }

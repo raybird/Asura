@@ -84,8 +84,15 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
 - 驗收編號：支援 DIST-001／002／004／016
 - 完成判準：未注入 build 輸出 `dev`／`unknown`；以 `-ldflags -X` 注入字面 tag／commit 的 build 輸出相同字面值；`--json` 可被 `encoding/json` 解析且欄位固定；os／arch 與 `GOOS`／`GOARCH` 一致。
 - 驗證：CLI 測試以 `go build -ldflags` 產出 binary 執行（外迴圈）＋ handler 單元測試；兩層失敗面不同（注入接線 vs 輸出格式），保留雙迴圈。
-- 狀態：📝 待實作
+- 狀態：✅ 已完成（2026-10-09）
 - 證據：
+  - 產出：`cmd/asura/version.go`（`version`／`commit` package 變數，預設 `dev`／`unknown`；`--json` 固定四欄；多餘參數 exit 2）、`run.go` dispatch 與 usage 一行、`cmd/asura/version_test.go`。
+  - 外迴圈紅燈：`go test -count=1 -run 'TestVersion' -v ./cmd/asura` → `TestVersionStampedBuild` FAIL（以 `-ldflags "-X main.version=v9.8.7 -X main.commit=0123abcd"` 建出的 binary 執行 `version --json` exit status 1），原因為命令不存在。
+  - 單元紅燈：同一命令 `TestVersionUnstampedBuild` FAIL：`code=1 error: unknown command "version"`。
+  - 最小實作後綠燈：`go test -count=1 -race -run 'TestVersion|TestNoConfig' -v ./cmd/asura` → 8 PASS（含 0.1 基線）；期望值為字面 `asura dev (commit unknown, linux/amd64)`、`v9.8.7`／`0123abcd`，os／arch 對照 `runtime.GOOS`／`GOARCH`。
+  - 精煉後綠燈：code-simplify 移除測試中只建置不斷言的 arm64 交叉編譯段並統一變數名；重跑 `go vet ./...` exit 0、`go test -count=1 -race ./cmd/asura ./scripts/...` ok、`go build ./cmd/asura` exit 0（2026-10-09，go1.27.1 linux/amd64）。
+  - 雙迴圈理由：外迴圈驗 ldflags 注入接線（只有真實 build 才會失敗的面），單元層驗輸出格式與用法錯誤。
+  - 常青文件：CLI 參考與 README 指令一覽依計畫由 6.1 統一更新。
 
 ### Task 1.2 — Release workflow 注入 metadata、移除 `--clobber`
 - 產出與範圍：`.github/workflows/release.yml` build 時注入 tag／commit；新增步驟對兩架構 archive 解出 binary 核對 `version --json` 與 tag／arch（arm64 以 qemu-user 執行或明列只做 ELF 架構檢查）；移除 `--clobber`；asset 命名與 archive root 不變。
