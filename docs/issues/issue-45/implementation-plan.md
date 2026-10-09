@@ -38,13 +38,27 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
 ## Phase 0 — 首要驗證：既有行為基線與故障判準
 
 ### Task 0.1 — 刻畫 v1.0 無 config 的路徑與 fallback 行為
-- 產出與範圍：`cmd/asura` characterization 測試，固定無 config 時 daemon／run／status／cancel／audit／inventory／ask／cron／memory／web 的 DB 預設（cwd `asura.db`）、socket 預設（`ASURA_SOCKET` → `~/.asura/asura.sock`）、status／cancel／audit／inventory 未設 socket 走本機 DB、socket 連線失敗回落本機 DB、allowed roots 預設 cwd、workers／queue 預設，以及 `ASURA_RUNTIME_PRIORITY`／`ASURA_CONTEXT_*`／`ASURA_MEMORY_UTILITY_POLICY` 的空值與錯誤值語意。不改 production code。
+- 產出與範圍：`cmd/asura` characterization 測試，固定無 config 時 daemon／run／status／cancel／audit／inventory／ask／cron／memory／web 的 DB 預設（cwd `asura.db`）、socket 預設（`ASURA_SOCKET` → `~/.asura/asura.sock`）、status／cancel／audit／inventory 未設 socket 走本機 DB、socket 連線失敗回落本機 DB、allowed roots 預設（daemon 為啟動目錄、run 為 workspace）、workers／queue 預設，以及 `ASURA_RUNTIME_PRIORITY`／`ASURA_CONTEXT_*`／`ASURA_MEMORY_UTILITY_POLICY` 的空值與錯誤值語意。不改 production code。
 - 相依：無
 - 驗收編號：風險證據（支援 DIST-009／017）
 - 完成判準：基線測試在未修改的 `main`（`1be939b`）全綠；每項以字面值期望（非重算實作）斷言；涵蓋清單逐項對應上列行為。
 - 驗證：不改變可觀察行為；以 characterization test 綠燈為等價證據，並以刻意改錯一項預設的本地實驗確認測試會轉紅（實驗不提交）。
-- 狀態：📝 待實作
+- 狀態：✅ 已完成（2026-10-09）
 - 證據：
+  - 測試：`cmd/asura/no_config_baseline_test.go`（`TestNoConfigDefaultSocketPath`、`TestNoConfigFlagDefaults`、`TestNoConfigLocalFallbackUsesCwdDB`、`TestNoConfigRunDefaults`、`TestNoConfigEnvValidation`、`TestNoConfigDaemonDefaults`）。daemon 以 `go build` 產出的真實 binary 在暫存 HOME／cwd 啟動，斷言啟動行字面值 `Daemon started on socket <HOME>/.asura/asura.sock (workers: 2, queue: 10)`、`./asura.db` 建立、cwd 外 workspace 回 `not in allowed roots`、cwd 內 workspace 通過 root 檢查（fixture 無 runtime，停在 `runtime admission rejected`），並以 SIGTERM 正常結束；ENV 以空值傳入驗證空值等同未設。
+  - 被測版本：production code 與基線 `1be939b` 相同（`git diff 1be939b --stat -- . ':!docs'` 無輸出），僅新增測試檔；go1.27.1 linux/amd64。
+  - 綠燈：`go test -count=1 -run 'TestNoConfig' -v ./cmd/asura` → 6 個 PASS，exit 0；`go vet ./...` exit 0；`go test -count=1 -race -v ./cmd/asura` → ok，無 FAIL／SKIP；`gofmt -l cmd/asura` 無輸出。
+  - 判準反向自檢（本地變異實驗，每次以 `git checkout` 還原，未提交；以 `go test -count=1 -race -run 'TestNoConfig' ./cmd/asura` 執行）：
+    - daemon `--db` 預設改 `other.db` → `TestNoConfigFlagDefaults`、`TestNoConfigDaemonDefaults` FAIL
+    - `DefaultSocketPath` 目錄改 `.asura2` → `TestNoConfigDefaultSocketPath`、`TestNoConfigFlagDefaults`、`TestNoConfigDaemonDefaults` FAIL
+    - status `--socket` 預設改為 `$HOME/.asura/asura.sock` → `TestNoConfigFlagDefaults` FAIL
+    - daemon root 預設加入 `filepath.Dir(cwd)` → `TestNoConfigDaemonDefaults` FAIL（`outside workspace accepted`）
+    - daemon `--workers` 預設改 3 → `TestNoConfigFlagDefaults`、`TestNoConfigDaemonDefaults` FAIL
+    - run root 預設改為不存在的路徑 → `TestNoConfigRunDefaults` FAIL
+    - cancel 在 socket 已設但連線失敗時直接 return 1（移除本機 fallback）→ `TestNoConfigLocalFallbackUsesCwdDB` FAIL
+    - 首次以 `{"/"}` 取代 daemon root 時測試仍綠：`auth.Policy` 以 `root+"/"` 前綴比對，`/` 作為 root 不會涵蓋子目錄，屬既有行為，非本 Task 範圍，未修改；改用父目錄變異後確認測試轉紅。
+  - 精煉：code-simplify 檢查本次測試檔一次，no-op——每個測試對應一類基線行為，字面期望不可再合併而不失可讀性；沿用上列綠燈。
+  - 不改變可觀察行為：diff 僅新增 `_test.go`，依 verification.md 以 characterization 綠燈與變異紅燈為等價證據。
 
 ### Task 0.2 — Installer 故障 fixture 與 sentinel 判準自檢
 - 產出與範圍：Go test 驅動真實 `sh` 的 installer harness；以 PATH 前置的 `curl`／`wget`／`uname` stub 將 GitHub URL 映射到本地 fixture，不在 installer 加測試專用參數。Fixture 含正常 archive、竄改 archive、缺 asset、manifest 缺項／重複項、中斷下載、含 `..`／絕對路徑／symlink 的 archive、sentinel binary（固定內容與 0755）。判準函式比對 sentinel 內容 hash、權限與 install-dir 殘留檔。
