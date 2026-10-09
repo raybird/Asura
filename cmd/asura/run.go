@@ -54,7 +54,7 @@ func RunCLI(args []string, stdout, stderr io.Writer) int {
 
 	// 需要 socket／DB 的指令先載入 operator config；壞檔明確失敗，不退回內建預設。
 	switch subcmd {
-	case "daemon", "run", "ask", "runtime", "audit", "status", "cancel", "web", "cron", "memory", "service":
+	case "daemon", "run", "ask", "runtime", "audit", "status", "cancel", "web", "cron", "memory", "service", "setup":
 		cc, err := loadCLIConfig()
 		if err != nil {
 			fmt.Fprintf(stderr, "error: %v\n", err)
@@ -87,6 +87,8 @@ func RunCLI(args []string, stdout, stderr io.Writer) int {
 		return handleMemory(subargs, stdout, stderr)
 	case "service":
 		return handleService(subargs, stdout, stderr)
+	case "setup":
+		return handleSetup(subargs, stdout, stderr)
 	case "version":
 		return handleVersion(subargs, stdout, stderr)
 	case "doctor":

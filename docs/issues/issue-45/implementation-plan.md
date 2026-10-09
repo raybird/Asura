@@ -257,8 +257,14 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
 - 驗收編號：DIST-011、DIST-012
 - 完成判準：fresh 非互動建立的 config 為 `schema_version = 1` 且只含指定 root；互動以 pty 驅動；非 TTY 缺 root 立即失敗不等待 stdin；重跑前後 config／DB／credential／unit hash 不變且無重複 unit；衝突參數非零；注入寫入失敗後重跑可完成。
 - 驗證：CLI 外迴圈（含 pty）+ 合併／衝突判定單元測試。
-- 狀態：📝 待實作
+- 狀態：✅ 已完成（2026-10-09）
 - 證據：
+  - 產出：`cmd/asura/setup.go`（終端機判定用 `TCGETS`；新建 config 以 toml encoder 產生 `schema_version`／`allowed_roots`，0700 目錄、0600 檔案，經 link 發佈不覆寫既有檔；既有 config 僅比對 allowed roots，不同即拒絕並指出檔案；以 `prepareDirs` 建 data 目錄但不初始化 SQLite；偵測 cwd `asura.db` 只提示設定 `db`；`--service` 或互動同意才呼叫 service install＋start；最後顯示 doctor 結果）；`run.go` 將 `setup` 納入 config 載入與 dispatch。測試 `cmd/asura/setup_test.go`。
+  - 紅燈：以回傳 -1 的骨架執行 `go test -count=1 -run 'TestSetup' -v ./cmd/asura` → 6 個測試 FAIL。
+  - 綠燈：`go test -count=1 -race -run 'TestSetup' -v ./cmd/asura` 6 PASS。fresh 非互動：config 只含指定 root、未設 db／socket，config 0600、目錄 0700、data 目錄 0700；輸出含 doctor 結果、`codex: available` 與未啟用 service 的下一步；除 config 與 data 目錄外 HOME／XDG 無其他變更（credential 未動、無 DB、無 unit、無 shell rc），未呼叫 enable／start。非 TTY 缺 root 立即失敗且未建 config；root 不存在被拒。`--service`：呼叫 enable 與 start；重跑（含使用者追加 `workers = 4` 與既有 DB）後 config、DB、unit 雜湊皆不變，unit 只有一個；不同 root 的重跑 exit 1，指出 config 路徑且不改寫。enable 失敗時輸出 `Setup incomplete`、未宣稱完成，修正後重跑完成且 unit 不重複。cwd 舊 `asura.db` 只提示、內容不變。互動模式以 util-linux `script` 提供 pty，提示 allowed roots 與 `[y/N]`，回答 root 與 `n` 後建立 config 且未安裝 service。
+  - 過程記錄：首輪 fresh 測試把 systemctl stub 的呼叫紀錄檔（setup 結尾執行 doctor 時查詢 service 狀態所寫）當成使用者狀態變更；該檔為測試設施，比對時排除後通過，其餘比對範圍不變。
+  - 回歸：`go vet ./...` exit 0；`go test -count=1 -race ./...` 全部 ok（2026-10-09，go1.27.1 linux/amd64）。
+  - 精煉：no-op——流程依序一次執行、失敗統一經 `incomplete` 回報；沿用上列綠燈。
 
 ### Task 5.3 — 真實 systemd user bus lifecycle
 - 產出與範圍：在可用 user bus 的主機以隔離 unit 名與暫存 XDG 執行 install／start／stop／restart／status／uninstall；驗證 60 秒停止期限、異常退出 5 秒重啟與 60 秒內 3 次上限、手動 stop 不重啟、中斷任務下次啟動標記 failed。
