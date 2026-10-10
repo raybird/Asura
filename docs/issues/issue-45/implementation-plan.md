@@ -319,15 +319,26 @@ Installer 下載 → manifest 校驗 → archive 安全檢查 → 同目錄 stag
 - 驗收編號：DIST-016
 - 完成判準：fixture 流程全通且證據標明 HTTP fixture／stub runtime；發佈後真實 Release 驗證另記，未發佈前狀態標為等待外部驗收窗（窗口為 v1.1.0 tag 發佈日），不以 fixture 代替。
 - 驗證：容器端到端腳本；記錄映像、命令與輸出。
-- 狀態：⏳ 進行中（2026-10-09：HTTP fixture 端到端已通過；正式 v1.1.0 Release 驗證待發佈後執行）
+- 狀態：✅ 已完成（2026-10-10：HTTP fixture 端到端於 2026-10-09 通過；正式 v1.1.0 Release 驗證於 2026-10-10 通過）
 - 證據：
   - 產出：`scripts/release/onboarding-e2e.sh`——以 `build-archives.sh` 建出 `v1.1.0` fixture Release（commit 為當下 HEAD），由本機 `python3 -m http.server` 提供；`alpine:3.20.3` 容器（busybox，無 Go、無 repo、無 curl、無 systemd）以 uid 1000 執行，GitHub URL 經容器內 wget wrapper 改寫到 fixture，runtime 為 codex stub。
   - 執行：`sh scripts/release/onboarding-e2e.sh`（2026-10-09，主機 x86_64，docker 28.1.1）→ 結尾 `== ONBOARDING OK`。觀察：`wget … install.sh | sh` 以 busybox wget／tar／sha256sum 完成安裝（請求依序為 install.sh、releases/latest、checksums、amd64 archive，未請求 arm64）；`version --json` 為 `{"arch":"amd64","commit":"abed0dfa21cb30926060fa64791357cc3762a5d0","os":"linux","version":"v1.1.0"}`，與 tag／commit／arch 一致；doctor 為 DEGRADED exit 0（無 bwrap、無 systemctl、只有 stub codex）；`setup --allowed-roots ~/project` 建立 config 並顯示 doctor 結果與 `Setup complete.`；standalone daemon 啟動於 `~/.local/state/asura/asura.sock (workers: 2, queue: 10)`，`runtime inventory` 經 config socket 取得結果，SIGTERM 後 exit 0。
   - 過程記錄：首輪容器 HOME 使用 Docker 預設 `noexec` 的 tmpfs，installer 以 `staged binary cannot report its version` 拒絕替換（防護如預期生效）；改為 `exec` tmpfs 後通過。
   - 2026-10-09 腳本新增平台參數與 `arch` 比對後重跑：amd64 預設平台通過（commit `929bda4…`），arm64 結果見 2.2。
   - 證據分類：HTTP fixture＋stub runtime；asset 名稱、archive 路徑與 checksum 由 1.2 測試與本流程的 installer 校驗共同核對。尚未以正式 GitHub Release 與真實 runtime 驗證。
-  - 待辦（等待外部驗收窗）：v1.1.0 tag 發佈後，以 `curl -fsSL https://raw.githubusercontent.com/raybird/Asura/main/install.sh | sh` 在 clean Linux 安裝，核對 `version --json` 的 tag／commit 與 Release asset、checksum 一致，並確認同 tag 重跑 workflow 不覆寫 asset。窗口為 v1.1.0 實際發佈日（尚未排定）。
+  - 原待辦（等待外部驗收窗，2026-10-10 已完成，見下方「正式 Release 驗證」）：v1.1.0 tag 發佈後，以 `curl -fsSL https://raw.githubusercontent.com/raybird/Asura/main/install.sh | sh` 在 clean Linux 安裝，核對 `version --json` 的 tag／commit 與 Release asset、checksum 一致，並確認同 tag 重跑 workflow 不覆寫 asset。窗口為 v1.1.0 實際發佈日（尚未排定）。
   - Review 後重跑（HEAD 5f57e82）：`sh scripts/release/onboarding-e2e.sh alpine:3.20.3 linux/amd64` 與 `… linux/arm64` 皆 `== ONBOARDING OK`，`version --json` 的 commit 為 `5f57e8242a82…`；busybox 下以 `tar -xOzf` 串流取出正常，setup 寫入的 socket 為 `~/.local/state/asura/asura.sock`（容器無 XDG_RUNTIME_DIR）且 daemon 依此啟動。
+  - **正式 Release 驗證（2026-10-10，證據分類：真實 GitHub Release；runtime 見各項）**：
+    - 發佈：PR #46 squash 合併為 `1adaf93`，發佈文件 PR #49 合併為 `cc68482`；annotated tag `v1.1.0` 指向 `cc68482529417d37351559a70ba326533dbd7900`。Release workflow run 38006727663 成功，建立 https://github.com/raybird/Asura/releases/tag/v1.1.0（非 draft、非 prerelease），Release notes 取自 CHANGELOG `[v1.1.0]` 節。
+    - asset 與 checksum：`gh release download v1.1.0` 取得 `asura_v1.1.0_checksums.txt`（196 bytes）、`asura_v1.1.0_linux_amd64.tar.gz`（5170663）、`asura_v1.1.0_linux_arm64.tar.gz`（4782391）。`sha256sum -c` 兩個 archive 都 OK；manifest 內容 `9bee57eb…c2ece8`／`cdc44c14…94a6` 與 GitHub API 回報的 asset digest 一致。`tar -tvzf` 兩架構都只有 `asura_v1.1.0_linux_<arch>/` 下的 `asura`（0755）、`README.md`、`LICENSE`、`CHANGELOG.md`。
+    - version metadata：解出的 amd64 binary 執行 `version --json` → `{"arch":"amd64","commit":"cc68482529417d37351559a70ba326533dbd7900","os":"linux","version":"v1.1.0"}`；arm64 binary 在 `alpine:3.20.3`（`--platform linux/arm64`，QEMU）→ `arch=arm64`，commit 與 version 相同。commit 等於 `git rev-parse 'v1.1.0^{commit}'`。
+    - 真實網址安裝（clean Linux）：repo 原為 private，匿名下載 install.sh、asset 與 `releases/latest` 都回 404；2026-10-10 使用者將 repo 改為 public 後，`raw.githubusercontent.com/raybird/Asura/main/install.sh` 的 sha256（`39e423b1…`）與 main 上的 install.sh 相同。在 `alpine:3.20.3` 容器（無 Go、無 repo，uid 1000，docker 28.1.1，2026-10-10T09:35+08:00）執行：
+      - amd64：`apk add curl` 後 `curl -fsSL https://raw.githubusercontent.com/raybird/Asura/main/install.sh | sh` → `Installed asura v1.1.0 to /home/u/.local/bin/asura`；`version --json` 同上（amd64、commit `cc68482…`）；安裝後 binary sha256 `b634bc6d…0540`，與 archive 內 amd64 `asura` 相同。
+      - arm64：busybox `wget -qO- …/install.sh | sh` → 安裝成功；`version --json` 為 arm64、commit `cc68482…`；binary sha256 `da9ee8a6…9d46`，與 archive 內 arm64 `asura` 相同。
+      - 兩個容器的 doctor 都是 NOT_READY exit 1（容器內沒有任何 runtime，`[fail] runtimes: no runtime available`），符合 DIST-007。
+    - 真實 runtime：在開發主機以 `curl … | sh -s -- --version v1.1.0 --install-dir <scratchpad>` 安裝，`asura doctor` 為 DEGRADED exit 0：opencode（1.18.31）與 omp（18.4.4）available，codex、antigravity 為 `version_failed`，Modes `direct, three-face`。只做唯讀 doctor，沒有呼叫模型。
+    - 同 tag 重跑不覆寫：`gh workflow run release.yml -f tag=v1.1.0` → run 38006851926 在 `Upload to release` 失敗，訊息 `asset under the same name already exists: [asura_v1.1.0_linux_amd64.tar.gz asura_v1.1.0_linux_arm64.tar.gz asura_v1.1.0_checksums.txt]`；重跑前後 asset 的 id、size、updated_at（`2026-10-09T23:55:40Z`）與 digest 完全相同。
+    - 反向自檢：判準「安裝後 binary 與 Release asset 相同」若安裝了別的 binary，sha256 與 version commit 都會不同；判準「重跑不覆寫」以 workflow 失敗訊息加上 asset 前後比對兩者確認，不只看 workflow 結論。
 
 ### Task 6.3 — 完整回歸與相容矩陣
 - 產出與範圍：無 config、有 config、CLI override 三種狀態下 daemon／ask／run／status／cancel／audit／inventory／Cron／memory／Web 的相容矩陣；Phase 4 authority（StageBindingPlan、ExecutionContract、ExecutionAudit）不變；`go vet ./...`、`go test -count=1 -race -v ./...`、`go build ./cmd/asura`；SKIP 逐項記名稱與原因。
