@@ -290,7 +290,7 @@ Feature: Linux Distribution & Bootstrap
 
 | 日期 | 豁免項目 | 使用者原話 | 殘餘風險 |
 |---|---|---|---|
-| 2026-10-09 | Task 6.2 的正式 v1.1.0 Release 驗證不阻擋 PR 與 review；列為發佈後的外部驗收窗，合併並發佈後補證據再結案 | 對「PR 要怎麼處理這一項？」選擇「PR 揭露並列為發佈後驗收（建議）」 | 合併前只有 HTTP fixture 與 stub runtime 證據；正式 Release 的 asset、checksum、tag 對應與 workflow 不覆寫行為在發佈前未經真實驗證 |
+| 2026-10-09 | Task 6.2 的正式 v1.1.0 Release 驗證不阻擋 PR 與 review；列為發佈後的外部驗收窗，合併並發佈後補證據再結案 | 對「PR 要怎麼處理這一項？」選擇「PR 揭露並列為發佈後驗收（建議）」 | 合併前只有 HTTP fixture 與 stub runtime 證據；正式 Release 的 asset、checksum、tag 對應與 workflow 不覆寫行為在發佈前未經真實驗證。2026-10-10 已以正式 Release 補齊驗證，見 implementation-plan Task 6.2，殘餘風險已解除 |
 
 ## Timeline
 
@@ -316,6 +316,8 @@ Feature: Linux Distribution & Bootstrap
 | 2026-10-09 | 使用者回答「確認」，接受 DIST-TBD-15 其餘假設並核准 DIST-001～017 | 使用者 |
 | 2026-10-09 | 獨立 review（PR #46）判定 RETURN TO execute-task；使用者第 17、18 題回答「1」，修訂並重新核准 DIST-011／012／013 | 使用者 |
 | 2026-10-09 | 外部審查分析；使用者第 19 題回答「1」，修訂並重新核准 DIST-011 | 使用者 |
+| 2026-10-10 | PR #46 合併至 main（merge commit `1adaf93`）；發佈文件 PR #49 合併（`cc68482`），推送 tag `v1.1.0` 發佈 Release | Raybird |
+| 2026-10-10 | 正式 v1.1.0 Release 驗收：使用者將 repo 改為 public 後，真實網址安裝、version、asset／checksum 與同 tag 重跑不覆寫皆通過，Gate 豁免項目結清，issue 結案 | Raybird |
 
 ## 建檔檢查證據
 
@@ -354,4 +356,4 @@ PY
 **建立日期**: 2026-10-07  
 **分級**: Large — 跨 CLI、operator config、installer、release 與 user service  
 **風險**: High — binary／資料保留與供應鏈安全  
-**狀態**: 進行中；2026-10-09 外部審查發現已修正（HEAD d12c1d3），待重新 review；Task 6.2 正式 Release 驗證依 Gate 豁免於發佈後補
+**狀態**: 已完成 — PR #46 於 2026-10-10 合併（merge commit `1adaf93`）；v1.1.0 於 2026-10-10 發佈，Task 6.2 正式 Release 驗證同日通過
