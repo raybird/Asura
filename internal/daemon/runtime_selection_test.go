@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // 2026-10-03：RTSEL-002/005/006/009/010，真 IPC、matcher、SQLite 與執行次數。
@@ -212,7 +213,14 @@ func TestRuntimeSelectionThreeFaceAndQueueGuard(t *testing.T) {
 			t.Fatalf("mixed runtime: %+v", stage)
 		}
 	}
-	d.wsQueue.TryAcquire(root, "blocker")
+	// 2026-10-13：issue-54，completed 寫入早於 done callback 釋放 workspace；等實際釋放後再佔用。
+	deadline := time.Now().Add(3 * time.Second)
+	for d.wsQueue.IsLocked(root) && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if acquired, _ := d.wsQueue.TryAcquire(root, "blocker"); !acquired {
+		t.Fatal("workspace still held after previous task completed")
+	}
 	queued, err := c.Submit(context.Background(), engine.SubmitRequest{ID: "queued-auto", Workspace: root, Prompt: "probe", Backend: "auto", Mode: "three-face"})
 	if err != nil || queued.Status != storage.StatusQueued {
 		t.Fatalf("queue=%+v %v", queued, err)

@@ -8,7 +8,7 @@
 |---|---|---|---|
 | 2026-10-13 | [38370089073](https://github.com/raybird/Asura/actions/runs/38370089073) attempt 1（PR #53，只改 README；attempt 2 通過） | `runtime_selection_test.go:218` | `queued-auto` 預期 `queued`，實際 `pending` |
 
-### 現況分析（2026-10-13，由程式碼推得，尚未以紅燈證實）
+### 現況分析（2026-10-13，已由步驟 1 的紅燈證實）
 
 測試先等 three-face 任務 `three` 變成 `completed`，再在第 215 行以 `d.wsQueue.TryAcquire(root, "blocker")` 佔住 workspace（**不檢查回傳值**），接著送出 `queued-auto`，斷言回傳 `queued`。
 
@@ -36,7 +36,7 @@ daemon 的實際順序（`internal/daemon/daemon.go` 的 `dispatchTaskWithMode`�
 
 - **核准日期**: 2026-10-13
 - **核准來源**: 2026-10-13 Q1（TBD-1）回答「核准，只修測試 (Recommended)」，接受建議：AC-1～AC-3 照草稿核准，只修測試、不改 daemon 的 `completed` 與釋放順序；重現結果推翻分析時依 AC-1 失敗路徑停止回報。GitHub #54 由使用者於 2026-10-13 要求開立（「好，開一個 issue 追蹤」），完成判準沿用 #48；同日以 `/dev-cycle issue:54` 要求推進
-- **核准 commit**: 待提交
+- **核准 commit**: 0fbc00b
 
 ## 風險與首要驗證
 
@@ -54,18 +54,30 @@ daemon 的實際順序（`internal/daemon/daemon.go` 的 `dispatchTaskWithMode`�
 
 ## 實作與驗證步驟
 
-1. 📝 **AC-1：重現與證實原因**— 驗證方式：暫時記錄 `TryAcquire` 回傳值，以 CI 等效負載跑 `-race -count=N` 重現，紀錄修正前的失敗次數與回傳值
+1. ✅ **AC-1：重現與證實原因**— 驗證方式：暫時記錄 `TryAcquire` 回傳值，以 CI 等效負載跑 `-race -count=N` 重現，紀錄修正前的失敗次數與回傳值
    - 產出：重現命令與結果（寫回本節）
    - 相依：無
    - 完成判準：紅燈與 CI 症狀一致，失敗輪次的 `TryAcquire` 皆為 `false`；不符時依 AC-1 失敗路徑停止並回報
-2. 📝 **AC-2：修正測試**— 驗證方式：重跑步驟 1 的重現命令轉綠，並跑本機最小回歸
+   - 完成證據（2026-10-13，go1.27.1 linux/amd64，12 核）：測試暫時改為記錄 `TryAcquire` 回傳值（診斷碼已移除，未進入交付），在步驟 3 的壓力條件下跑 `-count=100`：FAIL 30/100，30 次全為 `runtime_selection_test.go:218: DIAG54 tryAcquire=false pos=1 status=pending`，與 CI 症狀相同，且證實推論鏈第一環
+2. ✅ **AC-2：修正測試**— 驗證方式：重跑步驟 1 的重現命令轉綠，並跑本機最小回歸
    - 產出：測試的最小修正
    - 相依：步驟 1
    - 完成判準：同條件綠燈；diff 只在測試，沒有固定等待或重試
-3. 📝 **AC-3：壓力對照**— 驗證方式：同一 CPU 限制與 `-race` 條件下跑 `-count=200`，修正前後各一次；PR CI 一次全綠
+   - 完成證據（2026-10-13）：
+     - 修正：佔用前輪詢 `d.wsQueue.IsLocked(root)` 直到 workspace 釋放（3 秒上限只是防卡死，沿用同檔案 `waitExpandedTask` 的寫法），再斷言 `TryAcquire` 取得成功；daemon 程式未修改
+     - `go test -count=1 -race -run 'TestRuntimeSelection' -v ./internal/daemon` 5 項全部 PASS
+     - `go vet ./...` 通過；`go test -count=1 -race -v ./...` 23 個 package 全部 `ok`；`go build ./cmd/asura` 成功
+     - 被 SKIP 的 14 項不計為通過，都是需要固定版本 runtime 或登入憑證的 live／contract 測試，與本次修改無關：TestLiveAdapter（2 處）、TestCodexProbe_BinaryVersion、TestCodexProbe_NonInteractive_JSONL、TestCodexProbe_ReadOnlySandbox、TestCodexProbe_WorkspaceWriteSandbox、TestCodexProbe_ContextCancellation、TestAdapter_Run_Live、TestCodexProbe_Live、TestDaemon_ThreeFace_HostileWorkspaceConfig_CannotEscapeReadOnly、TestUtilityLiveProbe、TestUtilityCapacityProbe、TestINT001、TestINT007
+     - 重構 no-op：修正只有等待條件與一個斷言，沿用既有輪詢寫法，沒有可精煉的內容；沿用上述綠燈
+3. ⏳ **AC-3：壓力對照**— 驗證方式：同一 CPU 限制與 `-race` 條件下跑 `-count=200`，修正前後各一次；PR CI 一次全綠
    - 產出：壓力命令原文、條件與修正前後的失敗次數（寫回本節）
    - 相依：步驟 2
    - 完成判準：修正前至少失敗 1 次，修正後 0 失敗
+   - 完成證據（2026-10-13）：
+     - 執行檔：修正前（原始測試）、修正後各以 `go test -race -c ./internal/daemon` 建立
+     - 條件：背景 6 個 `taskset -c 0,1 yes > /dev/null`，測試以 `taskset -c 0,1 ./daemon.test -test.run '^TestRuntimeSelectionThreeFaceAndQueueGuard$' -test.count=200 -test.v` 執行
+     - 結果：修正前 PASS 138／FAIL 62（全為 `queued-auto` 狀態 `pending`），修正後 PASS 200／FAIL 0
+     - PR CI 一次全綠：待建立 PR 後回填
 
 ## Timeline
 
@@ -76,5 +88,5 @@ daemon 的實際順序（`internal/daemon/daemon.go` 的 `dispatchTaskWithMode`�
 ---
 **建立日期**: 2026-10-13  
 **分級**: Small — 只修改單一測試檔  
-**風險**: Medium — 根因由程式碼推得，尚未以紅燈證實\
-**狀態**: 待實作
+**風險**: Medium — 建立時根因由程式碼推得，尚未以紅燈證實（2026-10-13 步驟 1 已證實）\
+**狀態**: 實作中
