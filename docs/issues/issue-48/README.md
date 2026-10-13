@@ -80,7 +80,7 @@
      - 症狀 2 ✅：壓力條件下（見步驟 3 的命令）修正前分別失敗 7/100、12/100、14/100、16/200，訊息全部是 `runtime_selection_test.go:131: cancel: error: failed to cancel task: task is not running: task status is failed`；runner 端為 `status=failed err="backend codex failed (empty_result): codex produced empty result"`，與 CI 一致。原因見「症狀 2 原因」
      - 症狀 2 不依賴時序的紅燈：`go test -count=1 -race -run 'TestRuntimeSelectionStartSeesCancelIntent$' -v ./cmd/asura` 修正前為 `runtime_selection_test.go:279: status=running, want cancelling`（行程確實被回收，只差狀態）
      - 症狀 1：未重現，依失敗路徑不修正；`TestRuntimeSelectionLocalCancel` 失敗時會印出 runner 端任務狀態與輸出（`1a8ef0f`），另開 [#51](https://github.com/raybird/Asura/issues/51) 追蹤
-2. 📝 **AC-2：最小修正** — 驗證方式：重跑步驟 1 的重現命令轉綠，並跑本機最小回歸
+2. ✅ **AC-2：最小修正** — 驗證方式：重跑步驟 1 的重現命令轉綠，並跑本機最小回歸
    - 產出：測試或程式的最小修正；若改到 production 路徑，在「涉及檔案」補列並重新評估分級
    - 相依：步驟 1
    - 完成判準：同條件綠燈；diff 不含單純加長等待或重試
@@ -89,15 +89,15 @@
      - `go vet ./...` 通過；`go test -count=1 -race -v ./...` 23 個 package 全部 `ok`；`go build ./cmd/asura` 成功
      - 被 SKIP 的 14 項不計為通過，都是需要固定版本 runtime 或登入憑證的 live／contract 測試，本次沒有改到 `internal/backend`：TestLiveAdapter（2 處）、TestCodexProbe_BinaryVersion、TestCodexProbe_NonInteractive_JSONL、TestCodexProbe_ReadOnlySandbox、TestCodexProbe_WorkspaceWriteSandbox、TestCodexProbe_ContextCancellation、TestAdapter_Run_Live、TestCodexProbe_Live、TestDaemon_ThreeFace_HostileWorkspaceConfig_CannotEscapeReadOnly、TestUtilityLiveProbe、TestUtilityCapacityProbe、TestINT001、TestINT007
      - 修正是補上缺少的狀態轉移，沒有加長等待或重試
-3. 📝 **AC-3：壓力對照** — 驗證方式：同一 CPU 限制與 `-race` 條件下跑 `-count=200`，修正前的數據可在步驟 1 取得；修正後 0 失敗，PR CI 一次全綠
+3. ✅ **AC-3：壓力對照** — 驗證方式：同一 CPU 限制與 `-race` 條件下跑 `-count=200`，修正前的數據可在步驟 1 取得；修正後 0 失敗，PR CI 一次全綠
    - 產出：壓力命令原文、條件與修正前後的失敗次數（寫回本節）
    - 相依：步驟 2
    - 完成判準：修正前至少失敗 1 次，修正後 0 失敗
-   - 完成證據（2026-10-13）⏳ 本機對照已完成，待 PR CI：
+   - 完成證據（2026-10-13）：
      - 執行檔：修正前、後各以 `go test -race -c ./cmd/asura` 建立（修正前版本只還原 `runtime_process.go`）
      - 條件：背景 6 個 `taskset -c 0,1 yes > /dev/null`，測試以 `taskset -c 0,1 ./asura.test -test.run '^TestRuntimeSelectionLocalCancel$' -test.count=200 -test.v` 執行
      - 結果：修正前 PASS 184／FAIL 16（全為症狀 2），修正後 PASS 200／FAIL 0
-     - PR CI 一次全綠：待建立 PR 後回填
+     - PR CI 一次全綠：PR #52 在 `01aaf4e` 的 [run 38366193444](https://github.com/raybird/Asura/actions/runs/38366193444) 為 success，`TestRuntimeSelectionLocalCancel`（0.84s）與 `TestRuntimeSelectionStartSeesCancelIntent` 均 PASS。同一 HEAD 的 push run 38366164679 被 workflow `concurrency.cancel-in-progress` 取消（conclusion=cancelled），不是測試失敗
 
 ## Timeline
 
@@ -110,4 +110,4 @@
 **建立日期**: 2026-10-13  
 **分級**: Small — 預期修正集中在單一測試或單一啟動／取消路徑；根因若跨多個 production 檔案，改評為 Medium  
 **風險**: Medium — 根因未知，可能是產品缺陷而非測試時序問題\
-**狀態**: 實作中
+**狀態**: 審查中
