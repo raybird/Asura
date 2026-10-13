@@ -41,6 +41,10 @@ func recordRuntimeProcessStart(c context.Context, store *storage.SQLiteStore, db
 	_ = store.UpdateTaskPGID(context.Background(), taskID, pgid)
 	task, _ := store.GetTask(context.Background(), taskID)
 	_, intentErr := os.Stat(taskCancelIntentPath(dbPath, taskID))
+	// 2026-10-13：issue-48，外部取消意圖先於狀態寫入；比照 shell runner 先標記 cancelling，避免回收後被記為 failed。
+	if intentErr == nil && task != nil && task.Status == storage.StatusRunning {
+		_, _ = store.UpdateTaskStatusIfRunning(context.Background(), taskID, storage.StatusCancelling, task.Result, "task cancellation requested")
+	}
 	if c.Err() != nil || intentErr == nil || task != nil && (task.Status == storage.StatusCancelled || task.Status == storage.StatusCancelling) {
 		_ = opencode.KillProcessGroup(pgid)
 	}

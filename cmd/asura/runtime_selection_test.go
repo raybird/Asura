@@ -89,9 +89,22 @@ func TestRuntimeSelectionLocalCancel(t *testing.T) {
 	t.Setenv("ASURA_RUNTIME_PRIORITY", "codex")
 	db := filepath.Join(root, "tasks.db")
 	finished := make(chan int, 1)
+	var runOut, runErr safeBuffer
 	go func() {
-		var out, stderr bytes.Buffer
-		finished <- handleRun([]string{"--db", db, "--workspace", root, "--id", "cancel-auto", "--backend", "auto", "probe"}, &out, &stderr)
+		finished <- handleRun([]string{"--db", db, "--workspace", root, "--id", "cancel-auto", "--backend", "auto", "probe"}, &runOut, &runErr)
+	}()
+	// 2026-10-13：issue-48，失敗時保存 runner 端任務終態與輸出，供 CI 偶發失敗定位。
+	defer func() {
+		if !t.Failed() {
+			return
+		}
+		if s, err := storage.NewSQLiteStore(db); err == nil {
+			if tk, err := s.GetTask(context.Background(), "cancel-auto"); err == nil {
+				t.Logf("runner task status=%s pgid=%d err=%q result=%q", tk.Status, tk.PGID, tk.ErrorMessage, tk.Result)
+			}
+			s.Close()
+		}
+		t.Logf("runner stdout=%q stderr=%q", runOut.String(), runErr.String())
 	}()
 	var store *storage.SQLiteStore
 	var task *storage.Task
@@ -232,5 +245,37 @@ func TestRuntimeSelectionHeldStartLock(t *testing.T) {
 	metadata := readTaskLockMetadata(taskLockPath(db, "held"))
 	if metadata.PGID != child.Process.Pid || metadata.StartTime == "" || metadata.RunnerStartTime == "" {
 		t.Fatalf("metadata=%+v", metadata)
+	}
+}
+
+// 2026-10-13：issue-48，PGID 登記後才看到外部取消意圖時，runner 先標記 cancelling 再回收，任務不得被記為 failed。
+func TestRuntimeSelectionStartSeesCancelIntent(t *testing.T) {
+	root := t.TempDir()
+	db := filepath.Join(root, "tasks.db")
+	store, err := storage.NewSQLiteStore(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	store.CreateTask(context.Background(), &storage.Task{ID: "intent", Status: storage.StatusRunning})
+	child := exec.Command("/bin/sleep", "10")
+	child.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err = child.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer opencode.KillProcessGroup(child.Process.Pid)
+	if err = os.WriteFile(taskCancelIntentPath(db, "intent"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	recordRuntimeProcessStart(context.Background(), store, db, "intent", child.Process.Pid, nil)
+	if err = child.Wait(); err == nil || !strings.Contains(err.Error(), "killed") {
+		t.Fatalf("runtime not reclaimed: %v", err)
+	}
+	task, err := store.GetTask(context.Background(), "intent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if task.Status != storage.StatusCancelling {
+		t.Fatalf("status=%s, want %s", task.Status, storage.StatusCancelling)
 	}
 }
