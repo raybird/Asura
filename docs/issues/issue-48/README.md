@@ -105,9 +105,11 @@
 |------|------|--------|
 | 2026-10-13 | 建立；AC-1、AC-2 依 GitHub #48 完成判準核准；Q1 回答後核准 AC-3 | Raybird |
 | 2026-10-13 | 規格修訂：症狀 1 本機未重現，依 Q2 回答將 AC-1 收斂為症狀 2，症狀 1 移至 #51 追蹤 | Raybird |
+| 2026-10-13 | PR #52 獨立審查 PASS（審查 `f830ee6..35d334d`，[報告](https://github.com/raybird/Asura/pull/52#issuecomment-6141269578)），無 MUST FIX | Raybird |
+| 2026-10-13 | PR #52 squash 合併至 main（merge commit `69900e9`，合併內容即審查的 HEAD `35d334d`）；GitHub #48 由 `Closes #48` 自動關閉，issue 結案 | Raybird |
 
 ---
 **建立日期**: 2026-10-13  
 **分級**: Small — 預期修正集中在單一測試或單一啟動／取消路徑；根因若跨多個 production 檔案，改評為 Medium  
 **風險**: Medium — 根因未知，可能是產品缺陷而非測試時序問題\
-**狀態**: 審查中
+**狀態**: 已完成 — PR #52 於 2026-10-13 合併（merge commit `69900e9`）；症狀 1 由 #51 追蹤
