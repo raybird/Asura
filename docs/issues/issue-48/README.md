@@ -12,12 +12,35 @@
 | 2026-10-09 | [37950457101](https://github.com/raybird/Asura/actions/runs/37950457101) attempt 1 | `runtime_selection_test.go:118` | `cancel: ... task is not running: task status is failed` | 0.67s |
 | 2026-10-10 | [38005313683](https://github.com/raybird/Asura/actions/runs/38005313683) attempt 1 | `runtime_selection_test.go:118` | 同上 | 0.78s |
 
-症狀 2 的 0.7 秒代表 runtime 已啟動並登記 PGID（測試迴圈才會離開），之後在取消前就轉為 `failed`；症狀 1 則是 5 秒內 task 都沒有登記 PGID。兩者是否同源尚未確認。這個測試走 `handleRun --backend auto` 的 local 路徑：admission 探測 codex 版本 → codex adapter 再驗一次版本 → `BeforeStart` 取 flock → `cmd.Start` → `recordRuntimeProcessStart` 寫鎖檔與 PGID。
+症狀 2 的 0.7 秒代表 runtime 已啟動並登記 PGID（測試迴圈才會離開），之後在取消前就轉為 `failed`；症狀 1 則是 5 秒內 task 都沒有登記 PGID。這個測試走 `handleRun --backend auto` 的 local 路徑：admission 探測 codex 版本 → codex adapter 再驗一次版本 → `BeforeStart` 取 flock → `cmd.Start` → `recordRuntimeProcessStart` 寫鎖檔與 PGID。
+
+### 症狀 2 原因（2026-10-13 查明）
+
+這是 production 的取消競態，不只是測試時序問題。`recordRuntimeProcessStart` 先寫入 PGID，再檢查取消意圖檔；外部 `asura cancel` 則是先寫意圖檔，再把狀態改成 `cancelling`。當取消剛好落在兩者之間：
+
+1. runner 寫入 PGID，測試（或使用者）看到 PGID 後執行 cancel，寫入意圖檔
+2. runner 看到意圖檔，直接殺掉行程組，但沒有把狀態改成 `cancelling`
+3. codex adapter 回報 `empty_result`，engine 以 `UpdateTaskStatusIfRunning` 把仍在 `running` 的任務記為 `failed`
+4. cancel 端讀到 `failed`，回報 `task is not running: task status is failed`
+
+證據：在 adapter 暫時記錄行程結束狀態，失敗的每一輪都是 `signal: killed` 且 `ctx.Err()=nil`；在 `recordRuntimeProcessStart` 各 kill 分支記錄觸發點，14 次失敗全部來自意圖檔檢查分支（診斷碼已移除，未進入交付）。shell runner 在 `run.go` 遇到同樣情況會先 `UpdateTaskStatusIfRunning(..., StatusCancelling, ...)`，auto 路徑缺了這一步。
+
+### 症狀 1 調查（2026-10-13，未重現）
+
+本機在 2 顆或 1 顆 CPU 加 6～12 個背景負載的條件下累計跑了 340 次，只出現症狀 2，症狀 1 一次都沒有出現。已排除的假設：
+
+- 測試與 `handleRun` 同時初始化同一個全新 DB，造成 migration 失敗：兩個 goroutine 並行 `NewSQLiteStore` 300 輪，0 錯誤
+- `GetProcessStartTime` 讀 `/proc/<pid>/stat` 失敗，導致登記 PGID 前就被殺：行程在被回收前都讀得到，這個 kill 分支在所有壓力輪次中都沒有觸發
+- 2026-10-04（`30cc401`）之後相關程式只有 config 接線與 `ProbeExecutable` 重構，沒有語意變化
+
+尚未排除：CI 整體負載下 admission 版本探測超過 `RuntimeProbeTimeout`（3 秒），任務在登記 PGID 前就失敗。測試現在失敗時會印出 runner 端的任務狀態、錯誤訊息與輸出，CI 再發生時可以直接判斷。
 
 ## 涉及檔案
 
-- `cmd/asura/runtime_selection_test.go` — 待修正的測試；最終修正位置依 AC-1 查出的原因決定
-- 若原因在 production 路徑，可能涉及 `cmd/asura/run.go`、`cmd/asura/runtime_process.go` 或 `internal/backend/codex/adapter.go`；屆時在此補列實際檔案，並重新評估分級
+- `cmd/asura/runtime_process.go` — 登記 PGID 後看到外部取消意圖時，先把 `running` 改成 `cancelling` 再回收行程
+- `cmd/asura/runtime_selection_test.go` — 新增 `TestRuntimeSelectionStartSeesCancelIntent`（不依賴時序的紅燈）；`TestRuntimeSelectionLocalCancel` 失敗時印出 runner 端任務狀態與輸出
+
+修正只動一個 production 檔案，維持 Small。
 
 ## 驗收條件
 
@@ -30,7 +53,7 @@
 
 - **核准日期**: 2026-10-13
 - **核准來源**: AC-1、AC-2 出自使用者於 2026-10-09 撰寫的 GitHub #48「完成判準」：「找出失敗原因，並以能重現的方式（例如注入延遲，或在 CI 等效條件下）先取得紅燈」、「修正測試或程式後，在 CI 連續穩定通過；或明確記錄這個時序假設，並調整為不依賴時序的判準」、「不以加長等待時間或重試掩蓋真正的失敗」；2026-10-13 使用者以 `/dev-cycle issue:48` 要求推進。AC-3 出自 2026-10-13 Q1（TBD-1）回答「壓力對照為主 (Recommended)」，接受建議：CI 等效條件跑 `-count=200`，修正前有失敗、修正後 0 失敗，另加 PR CI 一次全綠
-- **核准 commit**: 待提交
+- **核准 commit**: 1ed06e3
 
 ## 風險與首要驗證
 
@@ -45,6 +68,7 @@
 | 編號 | 事項 | 狀態 | 影響 |
 |------|------|------|------|
 | TBD-1 | issue 寫「在 CI 連續穩定通過」，需決定可判定的穩定性判準：CI 執行次數，或以修正前、後同條件的壓力對照為主 | 已解決 | 2026-10-13 使用者選擇壓力對照為主：失敗率只有幾個百分點，CI 連跑數次沒修好也可能全綠，只有修正前的紅燈基線能證明判準有效；寫入 AC-3 |
+| TBD-2 | 症狀 1（`runtime did not start`）本機 340 次壓力測試未重現，依 AC-1 失敗路徑不做修正；需決定 #48 是否以症狀 2 的修正交付，症狀 1 另行追蹤 | 待確認 | AC-1（症狀 1 部分）；PR 前須有結論 |
 
 ## 實作與驗證步驟
 
@@ -52,14 +76,28 @@
    - 產出：可重複的重現命令或測試、原因說明（寫回本節）
    - 相依：無
    - 完成判準：修正前的紅燈與 CI 症狀一致；查不出原因時依 AC-1 失敗路徑停止並回報
+   - 完成證據（2026-10-13，go1.27.1 linux/amd64，12 核）：
+     - 症狀 2 ✅：壓力條件下（見步驟 3 的命令）修正前分別失敗 7/100、12/100、14/100、16/200，訊息全部是 `runtime_selection_test.go:131: cancel: error: failed to cancel task: task is not running: task status is failed`；runner 端為 `status=failed err="backend codex failed (empty_result): codex produced empty result"`，與 CI 一致。原因見「症狀 2 原因」
+     - 症狀 2 不依賴時序的紅燈：`go test -count=1 -race -run 'TestRuntimeSelectionStartSeesCancelIntent$' -v ./cmd/asura` 修正前為 `runtime_selection_test.go:279: status=running, want cancelling`（行程確實被回收，只差狀態）
+     - 症狀 1 ⏸：未重現，已依失敗路徑停止，等 TBD-2
 2. 📝 **AC-2：最小修正** — 驗證方式：重跑步驟 1 的重現命令轉綠，並跑本機最小回歸
    - 產出：測試或程式的最小修正；若改到 production 路徑，在「涉及檔案」補列並重新評估分級
    - 相依：步驟 1
    - 完成判準：同條件綠燈；diff 不含單純加長等待或重試
+   - 完成證據（2026-10-13）✅ 症狀 2：
+     - `TestRuntimeSelectionStartSeesCancelIntent` 修正後 PASS；`go test -count=1 -race -run 'TestRuntimeSelection' -v ./cmd/asura` 6 項全部 PASS
+     - `go vet ./...` 通過；`go test -count=1 -race -v ./...` 23 個 package 全部 `ok`；`go build ./cmd/asura` 成功
+     - 被 SKIP 的 14 項不計為通過，都是需要固定版本 runtime 或登入憑證的 live／contract 測試，本次沒有改到 `internal/backend`：TestLiveAdapter（2 處）、TestCodexProbe_BinaryVersion、TestCodexProbe_NonInteractive_JSONL、TestCodexProbe_ReadOnlySandbox、TestCodexProbe_WorkspaceWriteSandbox、TestCodexProbe_ContextCancellation、TestAdapter_Run_Live、TestCodexProbe_Live、TestDaemon_ThreeFace_HostileWorkspaceConfig_CannotEscapeReadOnly、TestUtilityLiveProbe、TestUtilityCapacityProbe、TestINT001、TestINT007
+     - 修正是補上缺少的狀態轉移，沒有加長等待或重試
 3. 📝 **AC-3：壓力對照** — 驗證方式：同一 CPU 限制與 `-race` 條件下跑 `-count=200`，修正前的數據可在步驟 1 取得；修正後 0 失敗，PR CI 一次全綠
    - 產出：壓力命令原文、條件與修正前後的失敗次數（寫回本節）
    - 相依：步驟 2
    - 完成判準：修正前至少失敗 1 次，修正後 0 失敗
+   - 完成證據（2026-10-13）⏳ 本機對照已完成，待 PR CI：
+     - 執行檔：修正前、後各以 `go test -race -c ./cmd/asura` 建立（修正前版本只還原 `runtime_process.go`）
+     - 條件：背景 6 個 `taskset -c 0,1 yes > /dev/null`，測試以 `taskset -c 0,1 ./asura.test -test.run '^TestRuntimeSelectionLocalCancel$' -test.count=200 -test.v` 執行
+     - 結果：修正前 PASS 184／FAIL 16（全為症狀 2），修正後 PASS 200／FAIL 0
+     - PR CI 一次全綠：待建立 PR 後回填
 
 ## Timeline
 
@@ -71,4 +109,4 @@
 **建立日期**: 2026-10-13  
 **分級**: Small — 預期修正集中在單一測試或單一啟動／取消路徑；根因若跨多個 production 檔案，改評為 Medium  
 **風險**: Medium — 根因未知，可能是產品缺陷而非測試時序問題\
-**狀態**: 待實作
+**狀態**: 實作中
