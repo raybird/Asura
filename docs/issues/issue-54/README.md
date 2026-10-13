@@ -69,7 +69,7 @@ daemon 的實際順序（`internal/daemon/daemon.go` 的 `dispatchTaskWithMode`�
      - `go vet ./...` 通過；`go test -count=1 -race -v ./...` 23 個 package 全部 `ok`；`go build ./cmd/asura` 成功
      - 被 SKIP 的 14 項不計為通過，都是需要固定版本 runtime 或登入憑證的 live／contract 測試，與本次修改無關：TestLiveAdapter（2 處）、TestCodexProbe_BinaryVersion、TestCodexProbe_NonInteractive_JSONL、TestCodexProbe_ReadOnlySandbox、TestCodexProbe_WorkspaceWriteSandbox、TestCodexProbe_ContextCancellation、TestAdapter_Run_Live、TestCodexProbe_Live、TestDaemon_ThreeFace_HostileWorkspaceConfig_CannotEscapeReadOnly、TestUtilityLiveProbe、TestUtilityCapacityProbe、TestINT001、TestINT007
      - 重構 no-op：修正只有等待條件與一個斷言，沿用既有輪詢寫法，沒有可精煉的內容；沿用上述綠燈
-3. ⏳ **AC-3：壓力對照**— 驗證方式：同一 CPU 限制與 `-race` 條件下跑 `-count=200`，修正前後各一次；PR CI 一次全綠
+3. ✅ **AC-3：壓力對照**— 驗證方式：同一 CPU 限制與 `-race` 條件下跑 `-count=200`，修正前後各一次；PR CI 一次全綠
    - 產出：壓力命令原文、條件與修正前後的失敗次數（寫回本節）
    - 相依：步驟 2
    - 完成判準：修正前至少失敗 1 次，修正後 0 失敗
@@ -77,7 +77,7 @@ daemon 的實際順序（`internal/daemon/daemon.go` 的 `dispatchTaskWithMode`�
      - 執行檔：修正前（原始測試）、修正後各以 `go test -race -c ./internal/daemon` 建立
      - 條件：背景 6 個 `taskset -c 0,1 yes > /dev/null`，測試以 `taskset -c 0,1 ./daemon.test -test.run '^TestRuntimeSelectionThreeFaceAndQueueGuard$' -test.count=200 -test.v` 執行
      - 結果：修正前 PASS 138／FAIL 62（全為 `queued-auto` 狀態 `pending`），修正後 PASS 200／FAIL 0
-     - PR CI 一次全綠：待建立 PR 後回填
+     - PR CI 一次全綠：PR #55 在 `e923898` 的 [run 38380272760](https://github.com/raybird/Asura/actions/runs/38380272760) 為 success，`TestRuntimeSelectionThreeFaceAndQueueGuard`（0.52s）PASS。同一 HEAD 的 push run 38380243311 被 workflow `concurrency.cancel-in-progress` 取消（conclusion=cancelled），不是測試失敗
 
 ## Timeline
 
@@ -89,4 +89,4 @@ daemon 的實際順序（`internal/daemon/daemon.go` 的 `dispatchTaskWithMode`�
 **建立日期**: 2026-10-13  
 **分級**: Small — 只修改單一測試檔  
 **風險**: Medium — 建立時根因由程式碼推得，尚未以紅燈證實（2026-10-13 步驟 1 已證實）\
-**狀態**: 實作中
+**狀態**: 審查中
