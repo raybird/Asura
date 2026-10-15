@@ -1,10 +1,10 @@
 #!/bin/sh
 # Asura installer：下載正式 Release 並安裝 asura binary（Linux amd64／arm64，不需 root）。
-# 用法：curl -fsSL https://raw.githubusercontent.com/raybird/Asura/main/install.sh | sh -s -- [--version vX.Y.Z] [--install-dir PATH]
+# 用法：curl -fsSL https://raw.githubusercontent.com/raybird/Asura/main/install.sh | sh -s -- [--version vX.Y.Z] [--install-dir PATH] [--require-attestation]
 set -eu
 
 repo=raybird/Asura
-usage='Usage: install.sh [--version vX.Y.Z] [--install-dir PATH]'
+usage='Usage: install.sh [--version vX.Y.Z] [--install-dir PATH] [--require-attestation]'
 
 err() {
 	printf 'asura-install: error: %s\n' "$*" >&2
@@ -20,6 +20,7 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 tag=
 dir="$HOME/.local/bin"
+require=
 while [ $# -gt 0 ]; do
 	case "$1" in
 	--version)
@@ -31,6 +32,10 @@ while [ $# -gt 0 ]; do
 		[ $# -ge 2 ] || usage_error
 		dir=$2
 		shift 2
+		;;
+	--require-attestation)
+		require=1
+		shift
 		;;
 	-h | --help)
 		printf '%s\n' "$usage"
@@ -57,6 +62,21 @@ else
 	err "missing required tool: sha256sum or shasum"
 fi
 have uname || err "missing required tool: uname"
+# 2026-10-15：issue-47，發布者驗證需要 gh 支援 attestation verify 的 --bundle／--signer-workflow／--source-ref。
+# attest_skip 非空表示不驗證發布者，內容為原因。
+attest_skip=
+if ! have gh; then
+	attest_skip="gh not found"
+else
+	gh_help=$(gh attestation verify --help 2>&1) || gh_help=
+	for flag in --bundle --signer-workflow --source-ref; do
+		case "$gh_help" in
+		*"$flag"*) ;;
+		*) attest_skip="gh does not support attestation verification (gh 2.68.0+ required)" ;;
+		esac
+	done
+fi
+if [ -n "$require" ] && [ -n "$attest_skip" ]; then err "--require-attestation: $attest_skip"; fi
 
 os=$(uname -s)
 machine=$(uname -m)
@@ -104,11 +124,19 @@ if [ -z "$tag" ]; then
 	[ -n "$tag" ] || err "cannot determine latest release"
 	check_version "$tag"
 fi
+# v1.1.0 是最後一個沒有 attestation 的 Release；其餘支援的版本（含 v1.1.0 的 prerelease）都要驗證。
+if [ "$tag" = v1.1.0 ]; then
+	attest_skip="$tag has no publisher attestation"
+	if [ -n "$require" ]; then err "--require-attestation: $attest_skip"; fi
+fi
 
 asset="asura_${tag}_linux_${arch}.tar.gz"
 base="https://github.com/$repo/releases/download/$tag"
 fetch "$base/asura_${tag}_checksums.txt" "$tmp/checksums.txt" || err "cannot download checksum manifest for $tag"
 fetch "$base/$asset" "$tmp/$asset" || err "cannot download $asset"
+if [ -z "$attest_skip" ]; then
+	fetch "$base/asura_${tag}_attestation.sigstore.json" "$tmp/attestation.json" || err "cannot download publisher attestation for $tag"
+fi
 
 entries=$(awk -v f="$asset" '$2 == f' "$tmp/checksums.txt" | wc -l | tr -d ' ')
 [ "$entries" -eq 1 ] || err "checksum manifest has $entries entries for $asset"
@@ -134,6 +162,15 @@ if awk 'substr($0, 1, 1) != "-" && substr($0, 1, 1) != "d" || / -> | link to /' 
 	err "unsafe archive entry type in $asset"
 fi
 grep -qx "$root/asura" "$tmp/names" || err "archive $asset does not contain $root/asura"
+# 簽章身分鎖定本 repo 的 release.yml 與該 tag；驗證失敗不退回只核對 checksum。
+# 指定 --hostname，避免使用者的 GH_HOST 或 GHE 登入讓 gh 改用其他 host 的身分比對。
+if [ -z "$attest_skip" ]; then
+	gh attestation verify "$tmp/$asset" --bundle "$tmp/attestation.json" --hostname github.com --repo "$repo" \
+		--signer-workflow "$repo/.github/workflows/release.yml" --source-ref "refs/tags/$tag" \
+		--deny-self-hosted-runners >"$tmp/attest.log" 2>&1 ||
+		err "publisher attestation verification failed for $asset: $(awk 'NF { l = $0 } END { print l }' "$tmp/attest.log")"
+	printf 'Verified publisher attestation for %s\n' "$asset"
+fi
 # 以串流取出內容，不在檔案系統建立 archive 描述的任何 link。
 tar -xOzf "$tmp/$asset" "$root/asura" >"$tmp/asura.bin" || err "cannot extract $root/asura"
 
@@ -152,6 +189,9 @@ mv -f "$stage" "$target" || err "cannot replace $target"
 stage=
 
 printf 'Installed asura %s to %s\n' "$tag" "$target"
+if [ -n "$attest_skip" ]; then
+	printf 'asura-install: warning: publisher not verified (%s); only the SHA-256 checksum was checked\n' "$attest_skip" >&2
+fi
 case ":$PATH:" in
 *":$dir:"*) ;;
 *) printf 'Note: %s is not in PATH; add it to PATH to run asura.\n' "$dir" ;;

@@ -62,6 +62,58 @@ printf '%s %s\n' "$(basename "$0")" "$*" >> "$STUB_LOG"
 exit 1
 `
 
+// 2026-10-15：issue-47，gh stub。STUB_GH 決定行為：ok／fail 為驗證結果，old 沒有 attestation 指令，
+// no-source-ref 模擬缺 --source-ref 的舊版。驗證呼叫的參數逐行寫入 STUB_GH_ARGS，
+// 受驗 archive 與 --bundle 檔內容複製到 STUB_GH_SUBJECT／STUB_GH_BUNDLE。
+const ghStub = `#!/bin/sh
+if [ "$*" = "attestation verify --help" ]; then
+  echo gh-help >> "$STUB_LOG"
+  case "$STUB_GH" in
+    old) echo 'unknown command "attestation" for "gh"' >&2; exit 1 ;;
+    no-source-ref) printf '  -b, --bundle string\n      --signer-workflow string\n'; exit 0 ;;
+    *) printf '  -b, --bundle string\n      --signer-workflow string\n      --source-ref string\n'; exit 0 ;;
+  esac
+fi
+echo gh-verify >> "$STUB_LOG"
+printf '%s\n' "$@" > "$STUB_GH_ARGS"
+cp "$3" "$STUB_GH_SUBJECT"
+while [ $# -gt 0 ]; do
+  if [ "$1" = --bundle ]; then cp "$2" "$STUB_GH_BUNDLE"; fi
+  shift
+done
+case "$STUB_GH" in
+  ok) exit 0 ;;
+  *) echo 'Error: verifying with issuer "sigstore.dev"' >&2; exit 1 ;;
+esac
+`
+
+// ghCall 是 gh stub 最後一次驗證呼叫的紀錄。
+type ghCall struct {
+	args, subject, bundle string
+}
+
+// useGh 在 PATH 放入 gh stub；mode 見 ghStub。
+func (h *harness) useGh(mode string) {
+	h.t.Helper()
+	if err := os.WriteFile(filepath.Join(h.stubs, "gh"), []byte(ghStub), 0755); err != nil {
+		h.t.Fatal(err)
+	}
+	h.ExtraEnv = append(h.ExtraEnv, "STUB_GH="+mode, "STUB_GH_ARGS="+filepath.Join(h.root, "gh-args"),
+		"STUB_GH_SUBJECT="+filepath.Join(h.root, "gh-subject"), "STUB_GH_BUNDLE="+filepath.Join(h.root, "gh-bundle"))
+}
+
+func (h *harness) ghVerifyCall() ghCall {
+	h.t.Helper()
+	read := func(name string) string {
+		b, err := os.ReadFile(filepath.Join(h.root, name))
+		if err != nil {
+			h.t.Fatalf("gh verify not called: %v", err)
+		}
+		return string(b)
+	}
+	return ghCall{args: read("gh-args"), subject: read("gh-subject"), bundle: read("gh-bundle")}
+}
+
 // drop 讓 stub 或系統工具在 PATH 中消失，用於缺工具情境。
 func (h *harness) drop(tools ...string) {
 	for _, tool := range tools {
@@ -85,6 +137,9 @@ type entry struct {
 
 func assetName(tag, arch string) string { return fmt.Sprintf("asura_%s_linux_%s.tar.gz", tag, arch) }
 func manifestName(tag string) string    { return fmt.Sprintf("asura_%s_checksums.txt", tag) }
+func attestationName(tag string) string {
+	return fmt.Sprintf("asura_%s_attestation.sigstore.json", tag)
+}
 
 // standardEntries 與 release.yml 的 archive root 及內容一致。
 func standardEntries(tag, arch string) []entry {
@@ -132,12 +187,17 @@ type release struct {
 	missing  map[string]bool   // 回 404 的 asset
 	partial  map[string]bool   // 下載中斷的 asset
 	isLatest bool
+	// 2026-10-15：issue-47，驗證檔內容；nil 表示 Release 沒有驗證檔（v1.1.0 即如此）。
+	attestation []byte
 }
 
 func newRelease(t *testing.T, tag string) *release {
 	r := &release{tag: tag, assets: map[string][]byte{}, missing: map[string]bool{}, partial: map[string]bool{}}
 	for _, arch := range []string{"amd64", "arm64"} {
 		r.assets[assetName(tag, arch)] = buildArchive(t, standardEntries(tag, arch))
+	}
+	if tag != "v1.1.0" {
+		r.attestation = []byte(`{"fixture":"attestation ` + tag + `"}`)
 	}
 	return r
 }
@@ -228,6 +288,9 @@ func (h *harness) publish(r *release) {
 		h.route(downloadURL+r.tag+"/"+name, kind, body)
 	}
 	h.route(downloadURL+r.tag+"/"+manifestName(r.tag), "ok", []byte(strings.Join(r.manifestLines(), "\n")+"\n"))
+	if r.attestation != nil {
+		h.route(downloadURL+r.tag+"/"+attestationName(r.tag), "ok", r.attestation)
+	}
 }
 
 type result struct {

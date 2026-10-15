@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### 🚀 新增功能 (Features)
+- **[installer]**：驗證 Release 發布者身分：有 `gh` 2.68.0 以上時以 GitHub artifact attestation 驗證 archive（鎖定 `release.yml` 與該 tag），失敗或缺驗證檔即拒絕安裝；沒有 `gh` 時警告後只核對 checksum；新增 `--require-attestation`。v1.1.0 沒有驗證檔，安裝時警告 (#47)
+
+### ⚙️ 建置與發佈
+- **[ci]**：Release workflow 為 archive 產生 build provenance attestation 並上傳驗證檔；觸發 ref 不是該 tag 時在建置前失敗；含 `-` 的 tag 發佈為 prerelease (#47)
+
 ## [v1.1.0] - 2026-10-10
 
 **Distribution & Bootstrap**：在 Linux 上從安裝到可用（Install → Verify → Doctor → Config → Setup → User Service → Ready），全程不需 root。執行核心、admission、stage 綁定與稽核的權威不變；沒有 config 時所有指令維持 v1.0 行為。
