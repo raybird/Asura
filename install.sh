@@ -163,8 +163,9 @@ if awk 'substr($0, 1, 1) != "-" && substr($0, 1, 1) != "d" || / -> | link to /' 
 fi
 grep -qx "$root/asura" "$tmp/names" || err "archive $asset does not contain $root/asura"
 # 簽章身分鎖定本 repo 的 release.yml 與該 tag；驗證失敗不退回只核對 checksum。
+# 指定 --hostname，避免使用者的 GH_HOST 或 GHE 登入讓 gh 改用其他 host 的身分比對。
 if [ -z "$attest_skip" ]; then
-	gh attestation verify "$tmp/$asset" --bundle "$tmp/attestation.json" --repo "$repo" \
+	gh attestation verify "$tmp/$asset" --bundle "$tmp/attestation.json" --hostname github.com --repo "$repo" \
 		--signer-workflow "$repo/.github/workflows/release.yml" --source-ref "refs/tags/$tag" \
 		--deny-self-hosted-runners >"$tmp/attest.log" 2>&1 ||
 		err "publisher attestation verification failed for $asset: $(awk 'NF { l = $0 } END { print l }' "$tmp/attest.log")"

@@ -24,15 +24,6 @@ func attestedRelease(t *testing.T, ghMode string) (*harness, *release) {
 	return h, r
 }
 
-func logged(res result, token string) bool {
-	for _, r := range res.Requests {
-		if r == token {
-			return true
-		}
-	}
-	return false
-}
-
 func TestAttestationVerifiedInstall(t *testing.T) {
 	h, r := attestedRelease(t, "ok")
 	res := h.run(installScript(t))
@@ -42,10 +33,10 @@ func TestAttestationVerifiedInstall(t *testing.T) {
 	assertInstalled(t, filepath.Join(h.InstallDir, "asura"), attTag, "amd64")
 	call := h.ghVerifyCall()
 	args := strings.Split(strings.TrimSuffix(call.args, "\n"), "\n")
-	if len(args) != 12 || args[0] != "attestation" || args[1] != "verify" || filepath.Base(args[2]) != "asura_v1.2.0_linux_amd64.tar.gz" || args[3] != "--bundle" {
+	if len(args) != 14 || args[0] != "attestation" || args[1] != "verify" || filepath.Base(args[2]) != "asura_v1.2.0_linux_amd64.tar.gz" || args[3] != "--bundle" {
 		t.Fatalf("gh args=%q", args)
 	}
-	if got := strings.Join(args[5:], " "); got != "--repo raybird/Asura --signer-workflow raybird/Asura/.github/workflows/release.yml --source-ref refs/tags/v1.2.0 --deny-self-hosted-runners" {
+	if got := strings.Join(args[5:], " "); got != "--hostname github.com --repo raybird/Asura --signer-workflow raybird/Asura/.github/workflows/release.yml --source-ref refs/tags/v1.2.0 --deny-self-hosted-runners" {
 		t.Fatalf("gh identity pins=%q", got)
 	}
 	if call.subject != string(r.assets["asura_v1.2.0_linux_amd64.tar.gz"]) || call.bundle != string(r.attestation) {
@@ -59,6 +50,16 @@ func TestAttestationVerifiedInstall(t *testing.T) {
 	}
 }
 
+// --require-attestation 在 gh 可用且驗證通過時照常安裝。
+func TestAttestationRequiredWithGhInstalls(t *testing.T) {
+	h, _ := attestedRelease(t, "ok")
+	res := h.run(installScript(t), "--require-attestation")
+	if res.Code != 0 || !requested(res, "gh-verify") {
+		t.Fatalf("code=%d stderr=%s requests=%v", res.Code, res.Stderr, res.Requests)
+	}
+	assertInstalled(t, filepath.Join(h.InstallDir, "asura"), attTag, "amd64")
+}
+
 // 驗證在 checksum 之後：checksum 不符時不呼叫 gh。
 func TestAttestationAfterChecksum(t *testing.T) {
 	h := newHarness(t)
@@ -68,7 +69,7 @@ func TestAttestationAfterChecksum(t *testing.T) {
 	r.manifest = []string{strings.Repeat("0", 64) + "  asura_v1.2.0_linux_amd64.tar.gz"}
 	h.publish(r)
 	res := h.run(installScript(t))
-	if res.Code == 0 || !strings.Contains(res.Stderr, "checksum mismatch") || logged(res, "gh-verify") {
+	if res.Code == 0 || !strings.Contains(res.Stderr, "checksum mismatch") || requested(res, "gh-verify") {
 		t.Fatalf("code=%d stderr=%s requests=%v", res.Code, res.Stderr, res.Requests)
 	}
 }
@@ -99,7 +100,7 @@ func TestAttestationFailureKeepsExistingBinary(t *testing.T) {
 			if v := h.violations(s); len(v) > 0 {
 				t.Fatalf("violations: %v", v)
 			}
-			if c.missing && logged(res, "gh-verify") {
+			if c.missing && requested(res, "gh-verify") {
 				t.Fatal("gh verify called without an attestation")
 			}
 		})
@@ -122,7 +123,7 @@ func TestAttestationUnavailableGhWarns(t *testing.T) {
 			if !strings.Contains(res.Stderr, "asura-install: warning: publisher not verified ("+c.reason+"); only the SHA-256 checksum was checked\n") {
 				t.Fatalf("stderr=%s", res.Stderr)
 			}
-			if logged(res, "gh-verify") || requested(res, downloadURL+"v1.2.0/asura_v1.2.0_attestation.sigstore.json") {
+			if requested(res, "gh-verify") || requested(res, downloadURL+"v1.2.0/asura_v1.2.0_attestation.sigstore.json") {
 				t.Fatalf("requests=%v", res.Requests)
 			}
 		})
@@ -162,7 +163,7 @@ func TestAttestationV110(t *testing.T) {
 				t.Fatalf("code=%d stderr=%s", res.Code, res.Stderr)
 			}
 			assertInstalled(t, filepath.Join(h.InstallDir, "asura"), stableTag, "amd64")
-			if !strings.Contains(res.Stderr, notice) || logged(res, "gh-verify") || requested(res, downloadURL+"v1.1.0/asura_v1.1.0_attestation.sigstore.json") {
+			if !strings.Contains(res.Stderr, notice) || requested(res, "gh-verify") || requested(res, downloadURL+"v1.1.0/asura_v1.1.0_attestation.sigstore.json") {
 				t.Fatalf("stderr=%s requests=%v", res.Stderr, res.Requests)
 			}
 		})

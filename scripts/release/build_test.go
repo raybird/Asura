@@ -87,11 +87,20 @@ func TestReleaseWorkflowUsesContract(t *testing.T) {
 	if strings.Contains(wf, "--clobber") {
 		t.Fatal("release.yml still overwrites published assets")
 	}
-	// 2026-10-15：issue-47，install.sh 依賴驗證檔名稱，且簽章身分鎖定 refs/tags/<tag>。
-	for _, want := range []string{"uses: actions/attest@v4", `"dist/asura_${TAG}_attestation.sigstore.json"`, `"${GITHUB_REF}" != "refs/tags/${TAG}"`} {
+	// 2026-10-15：issue-47，install.sh 依賴驗證檔隨 Release 上傳，且簽章身分鎖定 refs/tags/<tag>。
+	for _, want := range []string{"id-token: write", "attestations: write", "uses: actions/attest@v4", `"${GITHUB_REF}" != "refs/tags/${TAG}"`, "*-*) pre=--prerelease", "--notes-file notes.md ${pre}"} {
 		if !strings.Contains(wf, want) {
 			t.Fatalf("release.yml missing %s", want)
 		}
+	}
+	uploaded := false
+	for _, line := range strings.Split(wf, "\n") {
+		if strings.Contains(line, "gh release upload") && strings.Contains(line, `"dist/asura_${TAG}_attestation.sigstore.json"`) {
+			uploaded = true
+		}
+	}
+	if !uploaded {
+		t.Fatal("release.yml does not upload the attestation bundle")
 	}
 }
 
