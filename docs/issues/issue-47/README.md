@@ -24,6 +24,7 @@
 .github/workflows/release.yml     ← 修改：權限、tag ref 檢查、attestation、prerelease、上傳驗證檔
 install.sh                        ← 修改：gh 偵測、--require-attestation、驗證流程
 scripts/installer/                ← 修改：harness 加 gh stub 與驗證檔路由；新增驗證情境測試
+scripts/release/build_test.go     ← 修改：workflow 契約斷言加入驗證檔名稱與 tag ref 檢查
 docs/guides/setup.md              ← 修改：信任邊界、旗標、限制
 CHANGELOG.md                      ← 修改：Unreleased
 scripts/release/build-archives.sh ← 不動（archive 與 checksum 契約不變）
@@ -134,4 +135,4 @@ Feature: installer 驗證 Release 發布者身分
 **建立日期**: 2026-10-15  
 **分級**: Medium — 修改 installer、release workflow、installer 測試與安裝文件，範圍有界、不涉及 runtime 程式  
 **風險**: High — 安全邊界，且依賴尚未在本專案驗證的外部簽章契約\
-**狀態**: 待實作
+**狀態**: 審查中
