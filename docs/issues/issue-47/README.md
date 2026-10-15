@@ -137,9 +137,11 @@ Feature: installer 驗證 Release 發布者身分
 |------|------|--------|
 | 2026-10-15 | 建立；Q1～Q5 與總結確認回答後核准 SCN-001～SCN-007 | Raybird |
 | 2026-10-15 | PR #57 獨立審查（審查 `d3c76d3..0025307`，[報告](https://github.com/raybird/Asura/pull/57#issuecomment-6187077098)）判定 RETURN TO execute-task：MUST FIX gh 預設 host 非 github.com 時驗證失敗；SHOULD FIX 1 依 Q6 決定補文件並開 #58 追蹤 | Raybird |
+| 2026-10-15 | PR #57 第二次獨立審查 PASS（審查 `d3c76d3..98bd866`，[報告](https://github.com/raybird/Asura/pull/57#issuecomment-6187563043)），無 MUST FIX、SHOULD FIX | Raybird |
+| 2026-10-15 | PR #57 squash 合併至 main（merge commit `402a407`，合併內容即審查的 HEAD `98bd866`，該 HEAD 的 PR CI [run 38701415915](https://github.com/raybird/Asura/actions/runs/38701415915) attempt 2 為 success）；GitHub #47 由 `Closes #47` 自動關閉，issue 結案 | Raybird |
 
 ---
 **建立日期**: 2026-10-15  
 **分級**: Medium — 修改 installer、release workflow、installer 測試與安裝文件，範圍有界、不涉及 runtime 程式  
 **風險**: High — 安全邊界，且依賴尚未在本專案驗證的外部簽章契約\
-**狀態**: 審查中
+**狀態**: 已完成 — PR #57 於 2026-10-15 合併（merge commit `402a407`）；v1.1.0 免驗的後續由 #58 追蹤
