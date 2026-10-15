@@ -7,11 +7,14 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "要補上執行檔的既有 tag（v1.1.0 起；tag 須含 scripts/release/build-archives.sh）"
+        description: "要補上執行檔的既有 tag（v1.1.0 起；tag 須含 scripts/release/build-archives.sh；須以該 tag 為 ref 觸發：gh workflow run release.yml --ref <tag> -f tag=<tag>）"
         required: true
 
 permissions:
   contents: write
+  # 2026-10-15：issue-47，產生 build provenance attestation。
+  id-token: write
+  attestations: write
 
 jobs:
   binaries:
@@ -21,6 +24,14 @@ jobs:
       TAG: ${{ github.event.inputs.tag || github.ref_name }}
       GH_TOKEN: ${{ github.token }}
     steps:
+      # 2026-10-15：issue-47，attestation 的 source ref 是觸發 ref；不是該 tag 時 installer 會拒絕驗證，故在建置前失敗。
+      - name: Require tag ref
+        run: |
+          if [ "${GITHUB_REF}" != "refs/tags/${TAG}" ]; then
+            echo "::error::release must be triggered from refs/tags/${TAG} (got ${GITHUB_REF}); use: gh workflow run release.yml --ref ${TAG} -f tag=${TAG}"
+            exit 1
+          fi
+
       - name: Checkout tag
         uses: actions/checkout@v4
         with:
@@ -36,11 +47,23 @@ jobs:
       - name: Build archives
         run: sh scripts/release/build-archives.sh "${TAG}" "$(git rev-parse HEAD)" dist
 
+      # 2026-10-15：issue-47，驗證檔隨 Release 上傳，installer 不需登入即可以 gh 驗證發布者。
+      - name: Attest archives
+        id: attest
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/*.tar.gz
+
       - name: Upload to release
+        env:
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
         run: |
+          cp "${BUNDLE}" "dist/asura_${TAG}_attestation.sigstore.json"
           if ! gh release view "${TAG}" > /dev/null 2>&1; then
             awk -v tag="${TAG}" '$0 ~ "^## \\[" tag "\\]" {f=1; next} /^## \[/ {if (f) exit} f' CHANGELOG.md > notes.md
-            gh release create "${TAG}" --verify-tag --title "${TAG}" --notes-file notes.md
+            # 2026-10-15：issue-47，含 - 的 tag 發佈為 prerelease，不影響 releases/latest。
+            case "${TAG}" in *-*) pre=--prerelease ;; *) pre= ;; esac
+            gh release create "${TAG}" --verify-tag --title "${TAG}" --notes-file notes.md ${pre}
           fi
           # 2026-10-09：issue-45，已發佈 asset 不可覆寫；重新發佈需先手動刪除舊 asset。
-          gh release upload "${TAG}" dist/*.tar.gz "dist/asura_${TAG}_checksums.txt"
+          gh release upload "${TAG}" dist/*.tar.gz "dist/asura_${TAG}_checksums.txt" "dist/asura_${TAG}_attestation.sigstore.json"

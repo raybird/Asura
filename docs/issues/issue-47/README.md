@@ -105,7 +105,7 @@ Feature: installer 驗證 Release 發布者身分
 ```
 
 ## Gherkin 核准紀錄
-- **核准 commit**: 待提交
+- **核准 commit**: 8f4b56f
 - **核准來源**: 2026-10-15 使用者以 `/dev-cycle issue:47` 要求推進，逐題確認答案：
   - Q1「GitHub attestation (Recommended)」：release.yml 產生 attestation、驗證檔上傳到 Release，installer 以 `gh attestation verify --bundle` 驗證並鎖定 `release.yml` 與對應 tag（SCN-001、SCN-006）
   - Q2「有 gh 就必驗，沒有則警告 (Recommended)」：有 gh 時驗證失敗或缺驗證檔即拒絕、不退回；沒 gh 時警告後安裝；`--require-attestation` 強制（SCN-001～SCN-004）

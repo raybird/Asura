@@ -41,7 +41,7 @@
 
 - `permissions` 加 `id-token: write`、`attestations: write`
 - 建置前檢查 `github.ref == refs/tags/$TAG`，不符時以錯誤訊息說明需以該 tag 為觸發 ref（`gh workflow run release.yml --ref <tag> -f tag=<tag>`）並失敗（SCN-007）
-- 建置後以 `actions/attest-build-provenance` 對 `dist/*.tar.gz` 產生 attestation（版本於步驟 1 確認並固定到 major），將輸出的 bundle 複製為 `dist/asura_<tag>_attestation.sigstore.json` 一併上傳
+- 建置後以 `actions/attest@v4` 對 `dist/*.tar.gz` 產生 SLSA build provenance attestation，將輸出的 bundle 複製為 `dist/asura_<tag>_attestation.sigstore.json` 一併上傳。2026-10-15 查證：`actions/attest-build-provenance` 自 v4 起只是 `actions/attest` 的包裝，官方建議新實作直接使用後者（最新 v4.2.2）；`artifact-metadata: write` 只用於 registry storage record，本專案不需要
 - `TAG` 含 `-` 時 `gh release create` 加 `--prerelease`
 - workflow_dispatch 的 input 說明補上需以該 tag 為 ref 觸發
 
