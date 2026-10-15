@@ -10,7 +10,7 @@
 curl -fsSL https://raw.githubusercontent.com/raybird/Asura/main/install.sh | sh
 # 指定版本或安裝目錄
 curl -fsSL https://raw.githubusercontent.com/raybird/Asura/main/install.sh | sh -s -- --version v1.1.0 --install-dir ~/bin
-# 無法驗證發布者時拒絕安裝，而不是只核對 checksum
+# 無法驗證發布者時拒絕安裝，而不是只核對 checksum（latest 仍是 v1.1.0 時會拒絕，見「發布者驗證」）
 curl -fsSL https://raw.githubusercontent.com/raybird/Asura/main/install.sh | sh -s -- --require-attestation
 ```
 
@@ -34,13 +34,15 @@ checksum manifest 與 archive 來自同一個 Release，SHA-256 只能偵測下�
 限制：
 
 - `gh` 驗證時要連到 Sigstore（`tuf-repo-cdn.sigstore.dev`）取得信任根；連不到視為驗證失敗、拒絕安裝。installer 不提供略過驗證的選項。
-- 這個驗證防的是 Release 檔案被替換或竄改。`install.sh` 本身由 `main` 分支提供，能改寫 repo 的人可以直接修改 installer，不在防護範圍內。
+- 這個驗證防的是 v1.1.0 之後的 Release 檔案被替換或竄改。v1.1.0 只核對 checksum：能改寫 Release 檔案的人可以同時替換 v1.1.0 的檔案、再把 latest 指回 v1.1.0，預設安裝只會留下一行警告。需要防護時請加 `--require-attestation`；在第一個帶驗證檔的正式版發佈前，latest 就是 v1.1.0，這時加上這個旗標會拒絕安裝。取消 v1.1.0 免驗由 [#58](https://github.com/raybird/Asura/issues/58) 追蹤。
+- `install.sh` 本身由 `main` 分支提供，能改寫 repo 的人可以直接修改 installer，不在防護範圍內。
 
 手動驗證已下載的 archive（未登入 `gh` 時必須加 `--bundle`）：
 
 ```bash
 gh attestation verify asura_<tag>_linux_amd64.tar.gz --bundle asura_<tag>_attestation.sigstore.json \
-  --repo raybird/Asura --signer-workflow raybird/Asura/.github/workflows/release.yml --source-ref refs/tags/<tag>
+  --hostname github.com --repo raybird/Asura --signer-workflow raybird/Asura/.github/workflows/release.yml \
+  --source-ref refs/tags/<tag> --deny-self-hosted-runners
 ```
 
 ### 替換前的檢查

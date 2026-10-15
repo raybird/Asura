@@ -125,11 +125,18 @@ Feature: installer 驗證 Release 發布者身分
 - **選擇理由**：這是唯一能取得「本專案 workflow 簽出的真實驗證檔」的途徑。2026-10-15 已用 cli/cli 的公開 attestation 確認 gh 未登入時以 `--bundle` 可驗證、竄改與錯誤 ref 會失敗，但那不是本專案的 workflow 與身分
 - **完成證據**：真實 workflow 成功；Release 為 prerelease 且 latest 仍是 v1.1.0；兩個 archive 以身分鎖定驗證 exit 0；三個對照組全部非零並顯示對應的失敗原因
 
+## 待確認事項
+
+| 編號 | 事項 | 狀態 | 影響 |
+|------|------|------|------|
+| TBD-1 | PR #57 審查 SHOULD FIX 1（`需決策`）：v1.1.0 免驗可被拿來降版繞過（替換 v1.1.0 檔案並把 latest 指回 v1.1.0） | 不影響本次交付 | 2026-10-15 Q6 回答「補文件，另開 issue 追蹤 (Recommended)」：SCN-005 行為不變，本 PR 在 setup.md「限制」揭露並說明 `--require-attestation`；取消 latest 解析到 v1.1.0 的免驗由 [#58](https://github.com/raybird/Asura/issues/58) 追蹤，屆時修訂 SCN-005 並重新核准 |
+
 ## Timeline
 
 | 日期 | 異動 | 負責人 |
 |------|------|--------|
 | 2026-10-15 | 建立；Q1～Q5 與總結確認回答後核准 SCN-001～SCN-007 | Raybird |
+| 2026-10-15 | PR #57 獨立審查（審查 `d3c76d3..0025307`，[報告](https://github.com/raybird/Asura/pull/57#issuecomment-6187077098)）判定 RETURN TO execute-task：MUST FIX gh 預設 host 非 github.com 時驗證失敗；SHOULD FIX 1 依 Q6 決定補文件並開 #58 追蹤 | Raybird |
 
 ---
 **建立日期**: 2026-10-15  

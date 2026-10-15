@@ -54,12 +54,12 @@
 - checksum 與 archive 內容檢查後、取出 binary 前執行：
 
   ```sh
-  gh attestation verify "$tmp/$asset" --bundle "$tmp/attestation.json" --repo raybird/Asura \
+  gh attestation verify "$tmp/$asset" --bundle "$tmp/attestation.json" --hostname github.com --repo raybird/Asura \
     --signer-workflow raybird/Asura/.github/workflows/release.yml \
     --source-ref "refs/tags/$tag" --deny-self-hosted-runners
   ```
 
-  非零即拒絕，不退回只核對 checksum（SCN-002）
+  非零即拒絕，不退回只核對 checksum（SCN-002）。`--hostname github.com` 為 2026-10-15 審查後加入：未指定時 gh 依使用者的 `GH_HOST` 或 GHE 登入決定 host，身分比對必然失敗
 - 訊息：驗證通過時 stdout 註明已驗證發布者；未驗證的警告寫 stderr，前綴 `asura-install: warning:`，說明原因（SCN-003、SCN-005）
 
 ## 使用方式對照
@@ -103,6 +103,12 @@
      - 綠燈：`install.sh` 修改後同一命令 6 項全部 PASS；`go test -count=1 -v ./scripts/...` 的 installer 與 release 兩個 package 皆 ok，既有 16 項 installer／release 測試全部 PASS，未調整任何既有斷言（usage 斷言為前綴比對，新增旗標後仍成立）
      - gh 參數以字面字串斷言；受驗 archive 與 `--bundle` 的內容由 stub 複製後與發佈的 fixture 比對，不由測試重組 installer 的指令
      - 精煉 no-op：新增的是一段工具偵測、一個版本判定與一個驗證呼叫，沿用既有 `have`／`err`／`fetch` 寫法，沒有重複或可再簡化的結構
+   - 審查後修正（2026-10-15，[審查報告](https://github.com/raybird/Asura/pull/57#issuecomment-6187077098)）：
+     - MUST FIX（gh 預設 host 非 github.com）：驗證命令加 `--hostname github.com`。紅燈為步驟 3 的真實 e2e（見該步驟「審查後」）；單元層 `TestAttestationVerifiedInstall` 的字面參數改為 14 個，以 `0025307` 的 `install.sh` 執行為 FAIL（gh 參數沒有 `--hostname`），修正後 PASS
+     - SHOULD FIX 2：新增 `TestAttestationRequiredWithGhInstalls`（gh 可用、v1.2.0、`--require-attestation` 應完成安裝並呼叫 gh 驗證）。reviewer 的 mutation（驗證通過後 `if [ -n "$require" ]; then err mutant; fi`）下 FAIL（`stderr=asura-install: error: mutant`），還原後 PASS
+     - NICE 1：`TestReleaseWorkflowUsesContract` 改為斷言 `gh release upload` 那一行含驗證檔，另加 `id-token: write`、`attestations: write`、prerelease 判定與 `${pre}` 傳入。三個 mutation（只從 upload 行拿掉驗證檔、拿掉 `${pre}`、刪除 `id-token: write`）各自 FAIL 並顯示對應訊息，還原後 PASS
+     - NICE 4：移除與 `requested()` 重複的 `logged()`
+     - 回歸：`go vet ./...` 通過；`go test -count=1 -race -v ./scripts/...` 兩個 package 皆 ok，23 項全部 PASS；`go build ./cmd/asura` 成功。Go 產品程式碼未變，其餘 package 沿用步驟 5 的結果
 3. ✅ **步驟 3：以真實 prerelease 端對端驗證新 installer**（SCN-001、SCN-002、SCN-003、SCN-005）
    - 產出：命令、exit code 與輸出摘要寫回本步驟
    - 相依：步驟 1、2
@@ -117,6 +123,7 @@
      - PATH 沒有 gh：安裝 rc exit 0，stderr `asura-install: warning: publisher not verified (gh not found); only the SHA-256 checksum was checked`；同條件加 `--require-attestation` exit 1（`--require-attestation: gh not found`），安裝目錄未建立
      - 預設 latest（有 gh）：安裝 v1.1.0 exit 0，stderr `publisher not verified (v1.1.0 has no publisher attestation)`
      - 重現腳本：本機 scratchpad 的 `e2e.sh`（不入版控），命令即上列各項
+     - 審查後（gh host）：紅燈為 `0025307` 的 `install.sh` 對真實 rc，`GH_HOST=example.ghe.com`、或 `GH_CONFIG_DIR` 只有一個 GHE host 的 hosts.yml，兩者皆 exit 1（`… check your internet connection or https://githubstatus.com`），空設定則 exit 0。加 `--hostname github.com` 後三種環境皆 exit 0 並輸出 `Verified publisher attestation`；攻擊模擬在空設定與 `GH_HOST=example.ghe.com` 下皆 exit 1，舊 binary 的 sha256 不變
 4. ✅ **步驟 4：常青文件**（SCN-001～SCN-007 的使用者與維護者說明）
    - 產出：`docs/guides/setup.md` 改寫信任邊界與驗證行為，補 `--require-attestation`、gh 版本需求、需連線 Sigstore、防護範圍不含 repo 被改寫，更新最後驗證日期；`CHANGELOG.md` Unreleased 新增條目
    - 相依：步驟 2、3
@@ -125,6 +132,7 @@
      - `docs/guides/setup.md` 新增「發布者驗證」一節：表格四列對應 SCN-001（有 gh 時驗證與身分鎖定）、SCN-002（失敗或缺驗證檔即拒絕、不退回）、SCN-003（沒有或太舊的 gh 警告後安裝）、SCN-004（`--require-attestation`）、SCN-005（v1.1.0 免驗與 prerelease 不免驗）；限制列出 Sigstore 連線（SCN-002 第四列）與防護範圍；「替換前的檢查」加入 attestation 一步；最後驗證日期改為 2026-10-15 並連到本 issue
      - SCN-006、SCN-007 屬維護者流程：驗證檔名稱寫在 setup.md，prerelease 與 tag ref 檢查寫在 `CHANGELOG.md` Unreleased 與 release.yml 的 workflow_dispatch input 說明
      - README「版本範圍」表未改
+     - 審查後：setup.md「限制」依 Q6 揭露 v1.1.0 免驗的降版風險與 `--require-attestation` 的用法，連到 #58；`--require-attestation` 範例註明 latest 仍是 v1.1.0 時會拒絕；手動驗證命令補上 `--hostname github.com` 與 `--deny-self-hosted-runners`，與 installer 一致
 5. 📝 **步驟 5：回歸與交付驗證**
    - 產出：本機最小回歸結果與 SKIP 清單；PR CI 一次全綠
    - 相依：步驟 1～4
@@ -132,7 +140,7 @@
    - 完成證據（2026-10-15，本機，含步驟 2～4 的工作區內容）：
      - `go vet ./...` 通過；`go test -count=1 -race -v ./...` exit 0，23 個 package 全部 `ok`、0 FAIL；`go build ./cmd/asura` 成功
      - 被 SKIP 的 14 項不計為通過，都是需要固定版本 runtime 或登入憑證的 live／contract 測試，與本次修改無關：TestLiveAdapter（2 處）、TestCodexProbe_BinaryVersion、TestCodexProbe_NonInteractive_JSONL、TestCodexProbe_ReadOnlySandbox、TestCodexProbe_WorkspaceWriteSandbox、TestCodexProbe_ContextCancellation、TestAdapter_Run_Live、TestCodexProbe_Live、TestDaemon_ThreeFace_HostileWorkspaceConfig_CannotEscapeReadOnly、TestUtilityLiveProbe、TestUtilityCapacityProbe、TestINT001、TestINT007
-     - PR CI：待 PR 建立後回填
+     - PR CI（`0025307`）：[run 38698781930](https://github.com/raybird/Asura/actions/runs/38698781930) attempt 1 失敗於 `internal/storage` 的 `TestExecutionAuditConcurrentWriter`（`observation failed under concurrent metadata writer: audit_persistence_failed`），本 PR 未修改該 package；重跑失敗 job 的 attempt 2 為 success。同一 HEAD 的 push run 38698749411 被 concurrency 取消。審查後的新 HEAD 以 PR 上的 CI 為準
 
 ## 測試策略與驗收對應
 
@@ -148,8 +156,8 @@
 
 ## 檢查清單
 
-- [ ] 步驟 1 的真實 workflow、對照組與 SCN-007 失敗皆有紀錄
-- [ ] SCN-001～SCN-007 都有對應證據
-- [ ] `build-archives.sh`、archive 結構、checksum 與版本核對流程未改變
-- [ ] setup.md 與 CHANGELOG 已更新
-- [ ] 本機最小回歸與 PR CI 通過
+- [x] 步驟 1 的真實 workflow、對照組與 SCN-007 失敗皆有紀錄
+- [x] SCN-001～SCN-007 都有對應證據
+- [x] `build-archives.sh`、archive 結構、checksum 與版本核對流程未改變
+- [x] setup.md 與 CHANGELOG 已更新
+- [x] 本機最小回歸與 PR CI 通過（`0025307`；審查後的新 HEAD 見 PR）
