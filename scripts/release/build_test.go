@@ -87,6 +87,12 @@ func TestReleaseWorkflowUsesContract(t *testing.T) {
 	if strings.Contains(wf, "--clobber") {
 		t.Fatal("release.yml still overwrites published assets")
 	}
+	// 2026-10-15：issue-47，install.sh 依賴驗證檔名稱，且簽章身分鎖定 refs/tags/<tag>。
+	for _, want := range []string{"uses: actions/attest@v4", `"dist/asura_${TAG}_attestation.sigstore.json"`, `"${GITHUB_REF}" != "refs/tags/${TAG}"`} {
+		if !strings.Contains(wf, want) {
+			t.Fatalf("release.yml missing %s", want)
+		}
+	}
 }
 
 func extract(t *testing.T, archive, dir string) ([]string, string) {

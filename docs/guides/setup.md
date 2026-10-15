@@ -2,7 +2,7 @@
 
 從安裝到可用的流程：`install.sh` → `asura doctor` → `asura setup` → user service 或 standalone daemon。只支援 Linux amd64／arm64，全程不需要 root。
 
-最後驗證日期：2026-10-09；證據見 [Issue 45](../issues/issue-45/implementation-plan.md)。
+最後驗證日期：安裝與發布者驗證為 2026-10-15，證據見 [Issue 47](../issues/issue-47/implementation-plan.md)；其餘為 2026-10-09，證據見 [Issue 45](../issues/issue-45/implementation-plan.md)。
 
 ## 安裝
 
@@ -10,16 +10,42 @@
 curl -fsSL https://raw.githubusercontent.com/raybird/Asura/main/install.sh | sh
 # 指定版本或安裝目錄
 curl -fsSL https://raw.githubusercontent.com/raybird/Asura/main/install.sh | sh -s -- --version v1.1.0 --install-dir ~/bin
+# 無法驗證發布者時拒絕安裝，而不是只核對 checksum
+curl -fsSL https://raw.githubusercontent.com/raybird/Asura/main/install.sh | sh -s -- --require-attestation
 ```
 
 - 未指定 `--version` 時安裝 GitHub `releases/latest` 的正式版（不含 prerelease）；`--version` 可指定較舊的正式版或 prerelease。
 - 只支援含版本資訊的 Release（v1.1.0 起）；v1.0.0 請從 [Releases](https://github.com/raybird/Asura/releases/tag/v1.0.0) 手動下載。
 - 預設安裝到 `~/.local/bin/asura`；不修改 shell rc，安裝目錄不在 `PATH` 時只提示。
 - 需要 `curl` 或 `wget`、`tar`、`sha256sum` 或 `shasum`、`uname`；缺少任一項會在下載與變更檔案前失敗。
+- 建議另裝 `gh` 2.68.0 以上（不需登入），installer 才能驗證發布者，見下節。
 
-信任邊界：checksum manifest 與 archive 來自同一個 GitHub Release，SHA-256 能偵測下載損壞與檔案不一致，但不能獨立證明發布者身分；目前沒有簽章或 artifact attestation 驗證。
+### 發布者驗證
 
-替換前依序檢查：checksum manifest 只能有一筆對應 asset、SHA-256 相符、archive 只含預期目錄下的一般檔案、暫存的新 binary 執行 `version --json` 回報的版本與架構正確。任一步失敗都會保留原本的 binary 並清除暫存檔。`<install-dir>/asura` 若是 symlink 或目錄會直接拒絕，請自行移除或改用 `--install-dir`。重新安裝與升降版都會重新下載驗證；installer 不修改設定或資料，也不重啟執行中的 daemon。
+checksum manifest 與 archive 來自同一個 Release，SHA-256 只能偵測下載損壞與檔案不一致；能改寫 Release 檔案的人可以兩者一起換掉。因此 Release workflow 會為每個 archive 產生 GitHub artifact attestation，並把驗證檔 `asura_<tag>_attestation.sigstore.json` 一併放進 Release。
+
+| 情況 | installer 的行為 |
+|---|---|
+| 有 `gh` 2.68.0 以上 | 以 `gh attestation verify` 驗證 archive：簽章必須來自本 repo 的 `.github/workflows/release.yml`、來源 ref 為 `refs/tags/<tag>`，且不接受 self-hosted runner。驗證失敗或缺驗證檔就拒絕安裝，不會退回只核對 checksum |
+| 沒有 `gh`，或 `gh` 太舊 | 照常安裝，stderr 警告只核對了 SHA-256 checksum 並說明原因 |
+| 加 `--require-attestation` | 沒有可用的 `gh` 時，在下載前就失敗 |
+| 安裝 v1.1.0 | v1.1.0 是最後一個沒有驗證檔的版本：照常安裝並警告；加 `--require-attestation` 則拒絕。之後的版本（含 prerelease）一律要求驗證 |
+
+限制：
+
+- `gh` 驗證時要連到 Sigstore（`tuf-repo-cdn.sigstore.dev`）取得信任根；連不到視為驗證失敗、拒絕安裝。installer 不提供略過驗證的選項。
+- 這個驗證防的是 Release 檔案被替換或竄改。`install.sh` 本身由 `main` 分支提供，能改寫 repo 的人可以直接修改 installer，不在防護範圍內。
+
+手動驗證已下載的 archive（未登入 `gh` 時必須加 `--bundle`）：
+
+```bash
+gh attestation verify asura_<tag>_linux_amd64.tar.gz --bundle asura_<tag>_attestation.sigstore.json \
+  --repo raybird/Asura --signer-workflow raybird/Asura/.github/workflows/release.yml --source-ref refs/tags/<tag>
+```
+
+### 替換前的檢查
+
+替換前依序檢查：checksum manifest 只能有一筆對應 asset、SHA-256 相符、archive 只含預期目錄下的一般檔案、需要驗證時發布者 attestation 通過、暫存的新 binary 執行 `version --json` 回報的版本與架構正確。任一步失敗都會保留原本的 binary 並清除暫存檔。`<install-dir>/asura` 若是 symlink 或目錄會直接拒絕，請自行移除或改用 `--install-dir`。重新安裝與升降版都會重新下載驗證；installer 不修改設定或資料，也不重啟執行中的 daemon。
 
 ```bash
 asura version          # asura v1.1.0 (commit abc1234, linux/amd64)
