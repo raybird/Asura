@@ -2,7 +2,7 @@
 
 從安裝到可用的流程：`install.sh` → `asura doctor` → `asura setup` → user service 或 standalone daemon。只支援 Linux amd64／arm64，全程不需要 root。
 
-最後驗證日期：安裝與發布者驗證為 2026-10-16，證據見 [Issue 58](../issues/issue-58/README.md)；其餘為 2026-10-09，證據見 [Issue 45](../issues/issue-45/implementation-plan.md)。
+最後驗證日期：預設安裝與 latest 降版拒絕為 2026-10-16，證據見 [Issue 58](../issues/issue-58/README.md)；其餘發布者驗證為 2026-10-15，證據見 [Issue 47](../issues/issue-47/implementation-plan.md)；其餘為 2026-10-09，證據見 [Issue 45](../issues/issue-45/implementation-plan.md)。
 
 ## 安裝
 

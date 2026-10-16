@@ -20,6 +20,7 @@
 
 - `install.sh` — latest 解析到 v1.1.0 時拒絕
 - `scripts/installer/install_attestation_test.go` — 修改 `TestAttestationV110` 的 latest 情境
+- `scripts/installer/install_test.go`、`scripts/installer/install_safety_test.go` — 只把 latest fixture 的版本號從 v1.1.0 換成 v1.2.0（見步驟 2）；依 Q3 加強 hardlink 測試的失敗原因斷言
 - `docs/guides/setup.md` — 「發布者驗證」表格與限制
 - `CHANGELOG.md` — Unreleased
 
@@ -50,6 +51,7 @@
 |------|------|------|------|
 | TBD-1 | latest 解析到 v1.1.0 時的行為（#58 待決定第二題） | 已解決 | 2026-10-16 Q1：一律拒絕，不論有沒有 gh |
 | TBD-2 | 明確指定 `--version v1.1.0` 是否也取消免驗（#58 待決定第一題） | 已解決 | 2026-10-16 Q2：維持免驗並警告，加 `--require-attestation` 才拒絕 |
+| TBD-3 | PR #64 審查 NICE TO HAVE 1（`需決策`）：hardlink 測試不檢查失敗原因，拿掉 installer 的 hardlink 防線或 fixture 沒換版號時都會假綠；補斷言是否違反 AC-2「不得修改其他情境的既有斷言」 | 已解決 | 2026-10-16 Q3 回答「在本 PR 補上斷言 (Recommended)」：加強既有斷言（不放寬）不屬 AC-2 失敗路徑禁止的修改，在本 PR 要求 stderr 含 `unsafe archive entry type in <asset>` |
 
 ## 實作與驗證步驟
 
@@ -73,6 +75,7 @@
      - `go test -count=1 -v ./scripts/installer` ok
      - 本機最小回歸（交付版本）：`go vet ./...` 通過；`go test -count=1 -race -v ./...` 23 個 package 全部 `ok`；`go build ./cmd/asura` 成功。被 SKIP 的 14 項不計為通過，都是需要固定版本 runtime 或登入憑證的 live／contract 測試，與本次修改無關：TestLiveAdapter（2 處）、TestCodexProbe_BinaryVersion、TestCodexProbe_NonInteractive_JSONL、TestCodexProbe_ReadOnlySandbox、TestCodexProbe_WorkspaceWriteSandbox、TestCodexProbe_ContextCancellation、TestAdapter_Run_Live、TestCodexProbe_Live、TestDaemon_ThreeFace_HostileWorkspaceConfig_CannotEscapeReadOnly、TestUtilityLiveProbe、TestUtilityCapacityProbe、TestINT001、TestINT007
      - 重構 no-op：installer 只新增一個判定，測試沿用既有寫法，沒有可精煉的內容
+     - 審查後加強（Q3，2026-10-16）：`TestInstallRejectsHardlinkAndMultilineVersion` 的 hardlink 子測試加上斷言，要求 stderr 含 `asura-install: error: unsafe archive entry type in asura_v1.2.0_linux_amd64.tar.gz`。對照：暫時把 `install.sh` 的 hardlink 判定改成 `if false`（之後以 `git checkout` 還原），`hardlink-gnu`／`hardlink-busybox` 都 FAIL，stderr 為 `staged binary reports , expected v1.2.0 linux/amd64`（加強前兩者都 PASS）；以 `go test -overlay` 把 fixture 改回 v1.1.0，兩者也 FAIL，stderr 為 latest 拒絕訊息。還原後同一測試 PASS，`go vet ./scripts/installer` 與 `go test -count=1 -v ./scripts/installer` ok；其餘套件未修改，沿用上方的全 repo 回歸
 3. ✅ **AC-3：真實安裝與文件**— 驗證方式：本分支 `install.sh` 對真實 GitHub 安裝；文件人工核對
    - 產出：安裝紀錄、`setup.md` 與 `CHANGELOG.md` 修改
    - 相依：步驟 1
@@ -89,6 +92,7 @@
 | 日期 | 異動 | 負責人 |
 |------|------|--------|
 | 2026-10-16 | 建立；Q1、Q2 回答後核准 AC-1～AC-3 | Raybird |
+| 2026-10-16 | PR #64 獨立審查 PASS（審查 `29fa058..4d4e767`，[報告](https://github.com/raybird/Asura/pull/64#issuecomment-6209995425)），無 MUST FIX；修正 SHOULD FIX 兩項（setup.md 驗證日期的證據來源、涉及檔案清單）；NICE TO HAVE 1 依 Q3 在本 PR 補上 hardlink 失敗原因斷言 | Raybird |
 
 ---
 **建立日期**: 2026-10-16  

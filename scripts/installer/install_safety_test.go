@@ -225,6 +225,9 @@ func TestInstallRejectsHardlinkAndMultilineVersion(t *testing.T) {
 			if res.Code == 0 {
 				t.Fatalf("hardlink archive installed: %s", res.Stdout)
 			}
+			if !strings.Contains(res.Stderr, "asura-install: error: unsafe archive entry type in "+assetName(stableTag, "amd64")) {
+				t.Fatalf("not rejected as hardlink: %s", res.Stderr)
+			}
 			if v := h.violations(s); len(v) > 0 {
 				t.Fatalf("existing install damaged: %v", v)
 			}
