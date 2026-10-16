@@ -41,7 +41,7 @@
 
 - **核准日期**: 2026-10-16
 - **核准來源**: 2026-10-16 Q1（TBD-1）回答「核准，只修測試 (Recommended)」，接受建議：AC-1～AC-3 照草稿核准，只修改 `sqlite_execution_audit_test.go` 的 writer fixture，production 程式與 busy_timeout 不變；重現結果推翻分析時依 AC-1 失敗路徑停止回報。GitHub #60 由使用者於 2026-10-16 要求開立（「先開這個 issue」），同日以 `/dev-cycle issue:60` 要求推進
-- **核准 commit**: 待提交
+- **核准 commit**: 2f01b3b
 
 ## 風險與首要驗證
 
@@ -59,18 +59,35 @@
 
 ## 實作與驗證步驟
 
-1. **AC-1：證實原因**— 驗證方式：暫時在 `AppendTaskAudit` 記錄底層錯誤與等鎖時間（不進交付），在負載下重跑；本機等不到 10 秒時改用較短的診斷用 busy_timeout
+1. ✅ **AC-1：證實原因**— 驗證方式：暫時在 `AppendTaskAudit` 記錄底層錯誤與等鎖時間（不進交付），在負載下重跑；本機等不到 10 秒時改用較短的診斷用 busy_timeout
    - 產出：診斷方式、條件、失敗次數與底層錯誤（寫回本節）
    - 相依：無
    - 完成判準：失敗為 begin 階段 `SQLITE_BUSY` 且等滿 busy_timeout；舊程式對照為 append 階段快速失敗；不符時依 AC-1 失敗路徑停止並回報
-2. **AC-2：修正測試**— 驗證方式：舊程式對照與本機最小回歸
+   - 完成證據（2026-10-16，main `96c302e`，go1.27.1 linux/amd64，12 核；診斷碼只在 scratch worktree，未進入交付）：
+     - 診斷：`AppendTaskAudit` 暫時記錄 `beginAuditWrite` 的底層錯誤與等待時間，各條件以 `go test -race -c` 建立的執行檔加 `-test.run '^TestExecutionAuditConcurrentWriter$' -test.v` 執行
+     - 正式 10 秒 busy_timeout：無負載 `-count=10`、`taskset -c 0,1` 加 6 個 `yes` 的 `-count=10`、`taskset -c 0` 加 8 個 `yes` 的 `-count=20`、`taskset -c 0-3` 無負載與加 8 個 `yes` 各 `-count=30`，共 100 次全部 PASS，**本機重現不了 10 秒以上的等鎖**。單次等鎖中位數約 0.3 ms，但有長尾：各條件最大值為 2.73 秒、5.51 秒、3.04 秒、3.43 秒、3.14 秒；在 1 CPU 加負載下測試耗時 10.6～16.9 秒，與 CI 通過 run 的 9.5～20 秒相近
+     - 等價重現：診斷版再把 busy_timeout 暫時縮成 1 秒，`taskset -c 4,5` 加 6 個 `yes`、`-count=30`：FAIL 9/30，9 次全為 begin 階段 `database is locked (5) (SQLITE_BUSY)`，等待 1.020～1.042 秒，也就是等滿 busy_timeout 才失敗；append、commit 階段 0 次錯誤
+     - #41 競態對照：同一診斷版拿掉 `beginAuditWrite` 的 `UPDATE ... WHERE 0`，無負載 `-count=5`：FAIL 5/5，全在 append 階段，0.79～0.89 秒失敗，begin 階段 0 次錯誤
+     - 結論：CI 的失敗是等 writer lock 逾時，與 #41 的 snapshot 競態是不同機制，符合「現況分析」
+2. ✅ **AC-2：修正測試**— 驗證方式：舊程式對照與本機最小回歸
    - 產出：測試 fixture 的最小修正
    - 相依：步驟 1
    - 完成判準：diff 只在測試，assertion 未放寬；舊程式上失敗、現行程式上通過
+   - 完成證據（2026-10-16）：
+     - 修正：拿掉整段期間不停更新、間隔 1 ms 的 writer goroutine，改為每次 observation 前啟動 writer，並行做 3 次 `updated_at` 更新後結束，`AppendTaskAudit` 回傳後等 writer 結束再判斷結果；40 次 observation 全部成功的 assertion 未改，production 程式未修改
+     - 舊程式對照：以 `go test -overlay` 只替換 `sqlite_execution_audit.go` 為拿掉 `UPDATE ... WHERE 0` 的版本，測試用交付版本，`taskset -c 4-11` 無負載 `-count=20`：FAIL 20/20，全為 `observation failed under concurrent metadata writer: audit_persistence_failed`，1.07～1.35 秒失敗。新 fixture 仍抓得到 #41 的競態
+     - 本機最小回歸（交付版本）：`go vet ./...` 通過；`go test -count=1 -race -v ./...` 23 個 package 全部 `ok`，本測試 PASS（4.83s）；`go build ./cmd/asura` 成功
+     - 被 SKIP 的 14 項不計為通過，都是需要固定版本 runtime 或登入憑證的 live／contract 測試，與本次修改無關：TestLiveAdapter（2 處）、TestCodexProbe_BinaryVersion、TestCodexProbe_NonInteractive_JSONL、TestCodexProbe_ReadOnlySandbox、TestCodexProbe_WorkspaceWriteSandbox、TestCodexProbe_ContextCancellation、TestAdapter_Run_Live、TestCodexProbe_Live、TestDaemon_ThreeFace_HostileWorkspaceConfig_CannotEscapeReadOnly、TestUtilityLiveProbe、TestUtilityCapacityProbe、TestINT001、TestINT007
+     - 重構 no-op：修正只把無上限的 writer 改為每次 observation 固定次數，沒有可精煉的內容；沿用上述綠燈
 3. **AC-3：壓力對照**— 驗證方式：同條件 `-count=30` 修正前後各一次；正式 busy_timeout 下記錄等鎖最大值；PR CI 一次全綠
    - 產出：壓力命令原文、條件與修正前後的失敗次數（寫回本節）
    - 相依：步驟 2
    - 完成判準：修正前至少失敗 1 次，修正後 0 失敗
+   - 完成證據（2026-10-16）：
+     - 條件：`go test -race -overlay` 把 `sqlite.go` 的 busy_timeout 暫時換成 1 秒（只用於壓力對照），修正前的測試檔取自 main `96c302e`，修正後為交付版本；各自 `go test -race -c` 建立執行檔，背景 6 個 `taskset -c 4,5 yes > /dev/null`，以 `taskset -c 4,5 ./<bin> -test.run '^TestExecutionAuditConcurrentWriter$' -test.count=30 -test.v` 執行
+     - 結果：修正前 PASS 15／FAIL 15，修正後 PASS 30／FAIL 0
+     - 正式 10 秒 busy_timeout、背景 8 個 `taskset -c 0-3 yes`、`taskset -c 0-3`、`-count=30`（加上步驟 1 的等待時間記錄，只用於量測）：修正後 PASS 30／FAIL 0，單次等鎖 1200 筆，中位數 0.44 ms、p99 0.186 秒、最大 0.244 秒。修正前同條件（步驟 1）最大 3.14 秒
+     - PR CI 一次全綠：待回填
 
 ## Timeline
 
