@@ -2,7 +2,7 @@
 
 從安裝到可用的流程：`install.sh` → `asura doctor` → `asura setup` → user service 或 standalone daemon。只支援 Linux amd64／arm64，全程不需要 root。
 
-最後驗證日期：安裝與發布者驗證為 2026-10-15，證據見 [Issue 47](../issues/issue-47/implementation-plan.md)；其餘為 2026-10-09，證據見 [Issue 45](../issues/issue-45/implementation-plan.md)。
+最後驗證日期：預設安裝與 latest 降版拒絕為 2026-10-16，證據見 [Issue 58](../issues/issue-58/README.md)；其餘發布者驗證為 2026-10-15，證據見 [Issue 47](../issues/issue-47/implementation-plan.md)；其餘為 2026-10-09，證據見 [Issue 45](../issues/issue-45/implementation-plan.md)。
 
 ## 安裝
 
@@ -29,12 +29,13 @@ checksum manifest 與 archive 來自同一個 Release，SHA-256 只能偵測下�
 | 有 `gh` 2.68.0 以上 | 以 `gh attestation verify` 驗證 archive：簽章必須來自本 repo 的 `.github/workflows/release.yml`、來源 ref 為 `refs/tags/<tag>`，且不接受 self-hosted runner。驗證失敗或缺驗證檔就拒絕安裝，不會退回只核對 checksum |
 | 沒有 `gh`，或 `gh` 太舊 | 照常安裝，stderr 警告只核對了 SHA-256 checksum 並說明原因 |
 | 加 `--require-attestation` | 沒有可用的 `gh` 時，在下載前就失敗 |
-| 安裝 v1.1.0 | v1.1.0 是最後一個沒有驗證檔的版本：照常安裝並警告；加 `--require-attestation` 則拒絕。之後的版本（含 prerelease）一律要求驗證 |
+| `releases/latest` 解析到 v1.1.0 | 不論有沒有 `gh`，在下載 archive 前拒絕安裝。v1.2.0 起的正式版都有驗證檔，latest 回到 v1.1.0 可能代表 Release 遭改動；確實要安裝 v1.1.0 請明確指定 `--version v1.1.0` |
+| 以 `--version v1.1.0` 安裝 | v1.1.0 是最後一個沒有驗證檔的版本：照常安裝並警告；加 `--require-attestation` 則拒絕。之後的版本（含 prerelease）一律要求驗證 |
 
 限制：
 
 - `gh` 驗證時要連到 Sigstore（`tuf-repo-cdn.sigstore.dev`）取得信任根；連不到視為驗證失敗、拒絕安裝。installer 不提供略過驗證的選項。
-- 這個驗證防的是 v1.1.0 之後的 Release 檔案被替換或竄改。v1.1.0 只核對 checksum：能改寫 Release 檔案的人可以同時替換 v1.1.0 的檔案、再把 latest 指回 v1.1.0，預設安裝只會留下一行警告。需要防護時請加 `--require-attestation`。取消 v1.1.0 免驗由 [#58](https://github.com/raybird/Asura/issues/58) 追蹤。
+- 這個驗證防的是 v1.1.0 之後的 Release 檔案被替換或竄改。明確指定 `--version v1.1.0` 時只核對 checksum：能改寫 Release 檔案的人可以替換 v1.1.0 的檔案，這時安裝只會留下一行警告；需要防護時請加 `--require-attestation`。把 latest 指回 v1.1.0 的降版則會被拒絕（[#58](https://github.com/raybird/Asura/issues/58)）。
 - `install.sh` 本身由 `main` 分支提供，能改寫 repo 的人可以直接修改 installer，不在防護範圍內。
 
 手動驗證已下載的 archive（未登入 `gh` 時必須加 `--bundle`）：

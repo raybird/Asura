@@ -146,55 +146,61 @@ func TestAttestationRequiredWithoutGh(t *testing.T) {
 	}
 }
 
-// v1.1.0 是唯一免驗的版本；v1.1.0 的 prerelease 不免驗。
+// v1.1.0 是唯一免驗的版本，且只限明確指定；v1.1.0 的 prerelease 不免驗。
 func TestAttestationV110(t *testing.T) {
 	const notice = "asura-install: warning: publisher not verified (v1.1.0 has no publisher attestation); only the SHA-256 checksum was checked\n"
 	for _, c := range []struct{ name, ghMode string }{{"with-gh", "ok"}, {"without-gh", ""}} {
-		t.Run(c.name, func(t *testing.T) {
+		t.Run("explicit-"+c.name, func(t *testing.T) {
 			h := newHarness(t)
 			if c.ghMode != "" {
 				h.useGh(c.ghMode)
 			}
-			r := newRelease(t, stableTag)
-			r.isLatest = true
-			h.publish(r)
-			res := h.run(installScript(t))
+			h.publish(newRelease(t, "v1.1.0"))
+			res := h.run(installScript(t), "--version", "v1.1.0")
 			if res.Code != 0 {
 				t.Fatalf("code=%d stderr=%s", res.Code, res.Stderr)
 			}
-			assertInstalled(t, filepath.Join(h.InstallDir, "asura"), stableTag, "amd64")
+			assertInstalled(t, filepath.Join(h.InstallDir, "asura"), "v1.1.0", "amd64")
 			if !strings.Contains(res.Stderr, notice) || requested(res, "gh-verify") || requested(res, downloadURL+"v1.1.0/asura_v1.1.0_attestation.sigstore.json") {
 				t.Fatalf("stderr=%s requests=%v", res.Stderr, res.Requests)
 			}
 		})
 	}
-	t.Run("require-latest", func(t *testing.T) {
-		h := newHarness(t)
-		h.useGh("ok")
-		r := newRelease(t, stableTag)
-		r.isLatest = true
-		h.publish(r)
-		res := h.run(installScript(t), "--require-attestation")
-		if res.Code == 0 || !strings.Contains(res.Stderr, "asura-install: error: --require-attestation: v1.1.0 has no publisher attestation\n") {
-			t.Fatalf("code=%d stderr=%s", res.Code, res.Stderr)
-		}
-		var http []string
-		for _, req := range res.Requests {
-			if strings.HasPrefix(req, "http") {
-				http = append(http, req)
+	// 2026-10-16：issue-58，latest 回到沒有驗證檔的 v1.1.0 可能是降版攻擊，不論 gh 狀態都拒絕。
+	for _, c := range []struct {
+		name, ghMode string
+		args         []string
+	}{{"with-gh", "ok", nil}, {"without-gh", "", nil}, {"gh-too-old", "old", nil}, {"require", "ok", []string{"--require-attestation"}}} {
+		t.Run("latest-"+c.name, func(t *testing.T) {
+			h := newHarness(t)
+			if c.ghMode != "" {
+				h.useGh(c.ghMode)
 			}
-		}
-		if strings.Join(http, " ") != latestURL {
-			t.Fatalf("requests beyond latest API: %v", http)
-		}
-		if _, err := os.Lstat(h.InstallDir); !os.IsNotExist(err) {
-			t.Fatalf("install-dir touched: %v", err)
-		}
-	})
+			r := newRelease(t, "v1.1.0")
+			r.isLatest = true
+			h.publish(r)
+			res := h.run(installScript(t), c.args...)
+			if res.Code == 0 || !strings.Contains(res.Stderr, "asura-install: error: latest release resolved to v1.1.0, which has no publisher attestation; to install it anyway, use --version v1.1.0\n") {
+				t.Fatalf("code=%d stderr=%s", res.Code, res.Stderr)
+			}
+			var http []string
+			for _, req := range res.Requests {
+				if strings.HasPrefix(req, "http") {
+					http = append(http, req)
+				}
+			}
+			if strings.Join(http, " ") != latestURL || requested(res, "gh-verify") {
+				t.Fatalf("requests beyond latest API: %v", res.Requests)
+			}
+			if _, err := os.Lstat(h.InstallDir); !os.IsNotExist(err) {
+				t.Fatalf("install-dir touched: %v", err)
+			}
+		})
+	}
 	t.Run("require-explicit", func(t *testing.T) {
 		h := newHarness(t)
 		h.useGh("ok")
-		h.publish(newRelease(t, stableTag))
+		h.publish(newRelease(t, "v1.1.0"))
 		res := h.run(installScript(t), "--version", "v1.1.0", "--require-attestation")
 		assertNothingInstalled(t, h, res)
 		if !strings.Contains(res.Stderr, "asura-install: error: --require-attestation: v1.1.0 has no publisher attestation\n") {

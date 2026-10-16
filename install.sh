@@ -123,6 +123,10 @@ if [ -z "$tag" ]; then
 	tag=$(sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$tmp/latest.json" | head -n 1)
 	[ -n "$tag" ] || err "cannot determine latest release"
 	check_version "$tag"
+	# 2026-10-16：issue-58，v1.2.0 起的正式版都有 attestation；latest 回到 v1.1.0 可能是降版攻擊，一律拒絕。
+	if [ "$tag" = v1.1.0 ]; then
+		err "latest release resolved to v1.1.0, which has no publisher attestation; to install it anyway, use --version v1.1.0"
+	fi
 fi
 # v1.1.0 是最後一個沒有 attestation 的 Release；其餘支援的版本（含 v1.1.0 的 prerelease）都要驗證。
 if [ "$tag" = v1.1.0 ]; then

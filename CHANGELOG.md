@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### 🔒 安全性 (Security)
+- **[installer]**：未指定 `--version` 而 `releases/latest` 解析到沒有發布者驗證的 v1.1.0 時，不論有沒有 `gh` 都在下載前拒絕安裝，避免把 latest 指回 v1.1.0 來繞過驗證；`--version v1.1.0` 仍照常安裝並警告 (#58)
+
 ## [v1.2.0] - 2026-10-16
 
 **Publisher Verification**：installer 除了 SHA-256 checksum，也驗證 Release 檔案確實由本 repo 的 Release workflow 從該 tag 建置（GitHub artifact attestation）。v1.2.0 是第一個帶驗證檔的正式版。另修正取消任務時的狀態競態。執行核心、admission、stage 綁定、稽核與 config 的行為不變。
