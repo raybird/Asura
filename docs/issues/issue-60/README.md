@@ -79,7 +79,7 @@
      - 本機最小回歸（交付版本）：`go vet ./...` 通過；`go test -count=1 -race -v ./...` 23 個 package 全部 `ok`，本測試 PASS（4.83s）；`go build ./cmd/asura` 成功
      - 被 SKIP 的 14 項不計為通過，都是需要固定版本 runtime 或登入憑證的 live／contract 測試，與本次修改無關：TestLiveAdapter（2 處）、TestCodexProbe_BinaryVersion、TestCodexProbe_NonInteractive_JSONL、TestCodexProbe_ReadOnlySandbox、TestCodexProbe_WorkspaceWriteSandbox、TestCodexProbe_ContextCancellation、TestAdapter_Run_Live、TestCodexProbe_Live、TestDaemon_ThreeFace_HostileWorkspaceConfig_CannotEscapeReadOnly、TestUtilityLiveProbe、TestUtilityCapacityProbe、TestINT001、TestINT007
      - 重構 no-op：修正只把無上限的 writer 改為每次 observation 固定次數，沒有可精煉的內容；沿用上述綠燈
-3. **AC-3：壓力對照**— 驗證方式：同條件 `-count=30` 修正前後各一次；正式 busy_timeout 下記錄等鎖最大值；PR CI 一次全綠
+3. ✅ **AC-3：壓力對照**— 驗證方式：同條件 `-count=30` 修正前後各一次；正式 busy_timeout 下記錄等鎖最大值；PR CI 一次全綠
    - 產出：壓力命令原文、條件與修正前後的失敗次數（寫回本節）
    - 相依：步驟 2
    - 完成判準：修正前至少失敗 1 次，修正後 0 失敗
@@ -87,7 +87,8 @@
      - 條件：`go test -race -overlay` 把 `sqlite.go` 的 busy_timeout 暫時換成 1 秒（只用於壓力對照），修正前的測試檔取自 main `96c302e`，修正後為交付版本；各自 `go test -race -c` 建立執行檔，背景 6 個 `taskset -c 4,5 yes > /dev/null`，以 `taskset -c 4,5 ./<bin> -test.run '^TestExecutionAuditConcurrentWriter$' -test.count=30 -test.v` 執行
      - 結果：修正前 PASS 15／FAIL 15，修正後 PASS 30／FAIL 0
      - 正式 10 秒 busy_timeout、背景 8 個 `taskset -c 0-3 yes`、`taskset -c 0-3`、`-count=30`（加上步驟 1 的等待時間記錄，只用於量測）：修正後 PASS 30／FAIL 0，單次等鎖 1200 筆，中位數 0.44 ms、p99 0.186 秒、最大 0.244 秒。修正前同條件（步驟 1）最大 3.14 秒
-     - PR CI 一次全綠：待回填
+     - PR CI 一次全綠：PR #61 在 `a5f723a` 的 [run 38841328343](https://github.com/raybird/Asura/actions/runs/38841328343) attempt 1 為 success，本測試 PASS（13.41s），storage 套件 138.3 秒
+     - CI 耗時說明：13.41 秒是準備資料加上 40 次 observation 依序執行的總和，不是單次等鎖。本機以 `go test -overlay` 在交付版本測試上加分段計時（只用於量測）：無負載時準備 0.72～0.75 秒、40 次 append 合計 2.35～2.38 秒、單次最長 65 ms；`taskset -c 0-3` 加 8 個 `yes` 時準備 1.47～1.70 秒、append 合計 4.48～4.79 秒、單次最長 144 ms。writer 每次 observation 只做 3 次更新就停，單次等鎖不會隨壓力時間無限拉長；CI 的單次等鎖值沒有直接量測
 
 ## Timeline
 
