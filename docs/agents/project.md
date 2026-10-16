@@ -34,3 +34,16 @@ CI 另跑記憶 lifecycle 效能探測（`-tags lifecycleperf`）與 Web UI／�
 ## 本地 gate 與案例
 
 - **綠燈不等於有跑到**：runtime contract／live 測試在前置條件缺少時以 `t.Skip` 跳過，`go test` 仍回報 ok。前置條件為固定版本 runtime binary（OpenCode `1.18.23`；其他版本見 README）、模型登入憑證，以及可建立 user namespace 的 `bwrap`（Ubuntu 需 AppArmor 放行，作法見 ci.yml）。以 `-v` 執行並檢查 `SKIP` 行；改動觸及 `internal/backend` 時，把被跳過的測試名稱與原因寫進驗證證據，不計為通過。
+
+## 懸置掃描登記
+
+dev-cycle 懸置掃描依本節取得平台事實；本節未列的輸入沿用該技能預設（issue 目錄 `docs/issues/`、全部展開、agent 掃描）。
+
+- **平台 issue 查詢命令**（含已關閉，2026-10-16 確認可用）：
+
+```bash
+gh issue list --state all --limit 200 --json number,title,state
+```
+
+- **合併判定方式**：以 GitHub PR 的 merged 狀態為準。issue README 的狀態欄已記 merge commit，可用 `git merge-base --is-ancestor <merge-commit> HEAD` 覆核該提交確實在 main 上。
+- `docs/issues/issue-1` 沒有對應的平台 issue（GitHub 的 #1 是 PR），只存在於本機；掃描時視為正常，不列為缺漏。
