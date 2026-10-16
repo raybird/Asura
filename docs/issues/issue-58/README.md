@@ -93,9 +93,11 @@
 |------|------|--------|
 | 2026-10-16 | 建立；Q1、Q2 回答後核准 AC-1～AC-3 | Raybird |
 | 2026-10-16 | PR #64 獨立審查 PASS（審查 `29fa058..4d4e767`，[報告](https://github.com/raybird/Asura/pull/64#issuecomment-6209995425)），無 MUST FIX；修正 SHOULD FIX 兩項（setup.md 驗證日期的證據來源、涉及檔案清單）；NICE TO HAVE 1 依 Q3 在本 PR 補上 hardlink 失敗原因斷言 | Raybird |
+| 2026-10-16 | PR #64 第二次獨立審查 PASS（審查 `29fa058..55c7c33`，[報告](https://github.com/raybird/Asura/pull/64#issuecomment-6210196706)），無 MUST FIX、SHOULD FIX；NICE TO HAVE 兩項（測試字面版號改用 `stableTag`、步驟 2 判準補註 Q3）未處理 | Raybird |
+| 2026-10-16 | PR #64 squash 合併至 main（merge commit `b4d647f`，合併內容即審查的 HEAD `55c7c33`）；GitHub #58 由 `Closes #58` 自動關閉。合併後 main push CI [run 38866299475](https://github.com/raybird/Asura/actions/runs/38866299475) 為 success；`raw.githubusercontent.com/raybird/Asura/main/install.sh` 與合併版本相同，新行為已對外生效；issue 結案 | Raybird |
 
 ---
 **建立日期**: 2026-10-16  
 **分級**: Small — installer 單一判定加測試與文件  
 **風險**: High — 安全邊界，誤判會擋住預設安裝或留下降版繞過\
-**狀態**: 進行中
+**狀態**: 已完成 — PR #64 於 2026-10-16 合併（merge commit `b4d647f`）
