@@ -48,7 +48,7 @@ func assertNoServiceCalls(t *testing.T, res result) {
 func TestInstallFailuresPreserveExistingBinary(t *testing.T) {
 	tag := stableTag
 	amd := assetName(tag, "amd64")
-	root := "asura_v1.1.0_linux_amd64/"
+	root := "asura_v1.2.0_linux_amd64/"
 	withEntries := func(entries ...entry) func(t *testing.T, h *harness, r *release) {
 		return func(t *testing.T, h *harness, r *release) {
 			r.assets[amd] = buildArchive(t, entries)
@@ -219,7 +219,7 @@ func TestInstallRejectsHardlinkAndMultilineVersion(t *testing.T) {
 			os.WriteFile(outside, fixtureBinary(stableTag, "amd64"), 0700)
 			r := newRelease(t, stableTag)
 			r.isLatest = true
-			r.assets[assetName(stableTag, "amd64")] = buildArchive(t, []entry{{name: "asura_v1.1.0_linux_amd64/asura", typeflag: tar.TypeLink, link: outside}})
+			r.assets[assetName(stableTag, "amd64")] = buildArchive(t, []entry{{name: "asura_v1.2.0_linux_amd64/asura", typeflag: tar.TypeLink, link: outside}})
 			h.publish(r)
 			res := h.run(installScript(t))
 			if res.Code == 0 {

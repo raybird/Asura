@@ -34,7 +34,7 @@
 
 - **核准日期**: 2026-10-16
 - **核准來源**: GitHub #58「目標」（使用者於 2026-10-15 依 #47 Q6 決定開立）；2026-10-16 使用者以 `/dev-cycle issue:58` 要求推進，並回答 #58「待決定」兩題：Q1「一律拒絕 (Recommended)」，接受建議：latest 解析到 v1.1.0 時不論有沒有 gh 都在下載前拒絕，提示改用 `--version v1.1.0`（AC-1）；Q2「維持免驗並警告 (Recommended)」，接受建議：明確指定 `--version v1.1.0` 的行為不變（AC-2）
-- **核准 commit**: 待提交
+- **核准 commit**: 30dcacb
 
 ## 風險與首要驗證
 
@@ -53,18 +53,36 @@
 
 ## 實作與驗證步驟
 
-1. **AC-1：latest 解析到 v1.1.0 時拒絕**— 驗證方式：先改 `TestAttestationV110` 的 latest 情境為預期拒絕並取得紅燈，再修改 `install.sh`
+1. ✅ **AC-1：latest 解析到 v1.1.0 時拒絕**— 驗證方式：先改 `TestAttestationV110` 的 latest 情境為預期拒絕並取得紅燈，再修改 `install.sh`
    - 產出：測試與 installer 的修改
    - 相依：無
    - 完成判準：修正前紅燈（會安裝並只警告），修正後四種情境都拒絕，且只請求 latest API、安裝目錄未建立
-2. **AC-2：其他路徑不變與回歸**— 驗證方式：installer／release 既有測試、本機最小回歸
+   - 完成證據（2026-10-16，go1.27.1 linux/amd64）：
+     - 測試：`TestAttestationV110` 原本的 latest 情境（有 gh／沒有 gh 都安裝並警告）拆成兩組。`explicit-with-gh`／`explicit-without-gh` 改用 `--version v1.1.0`，斷言與原本相同（安裝並警告、不下載驗證檔、不呼叫 gh）。`latest-with-gh`／`latest-without-gh`／`latest-gh-too-old`／`latest-require` 預期拒絕：stderr 為 `asura-install: error: latest release resolved to v1.1.0, which has no publisher attestation; to install it anyway, use --version v1.1.0`，HTTP 請求只有 latest API，沒有呼叫 gh，也沒有建立安裝目錄
+     - 修正前紅燈：`go test -count=1 -run 'TestAttestationV110' -v ./scripts/installer` FAIL。`latest-with-gh`／`latest-without-gh`／`latest-gh-too-old` 都是 `code=0`，只留下 `publisher not verified (v1.1.0 has no publisher attestation)` 警告，也就是降版路徑會安裝成功；`latest-require` 為 `--require-attestation: v1.1.0 has no publisher attestation`，訊息與新判定不同。其他 4 個子測試 PASS
+     - 修正：`install.sh` 在解析 latest 並通過 `check_version` 後，tag 為 v1.1.0 就以上述訊息結束；位置在下載 checksum 與 archive 之前。原本 v1.1.0 免驗的判定不變，現在只會在 `--version v1.1.0` 時走到
+     - 修正後：同一命令 8 個子測試全部 PASS
+2. ✅ **AC-2：其他路徑不變與回歸**— 驗證方式：installer／release 既有測試、本機最小回歸
    - 產出：測試與回歸結果（寫回本節）
    - 相依：步驟 1
    - 完成判準：既有斷言未改且全數通過
-3. **AC-3：真實安裝與文件**— 驗證方式：本分支 `install.sh` 對真實 GitHub 安裝；文件人工核對
+   - 完成證據（2026-10-16）：
+     - fixture 調整：#45 的 installer 測試以 `stableTag`（v1.1.0）當「目前的正式版 latest」fixture，用來測 checksum、archive 安全檢查、架構選擇與工具 fallback 等與版本無關的行為。依 Q1，latest 解析到 v1.1.0 會被拒絕，所以 `TestInstallFailuresPreserveExistingBinary`（14 個子測試）、`TestInstallFreshAmd64`、`TestInstallExplicitDirWithSpace`、`TestInstallToolFallbacks`、`TestInstallArm64Asset` 在修改後都會失敗。處理方式是把 fixture 換成目前真正的 latest：`stableTag` 改為 v1.2.0，並把 `install_test.go` 3 行請求 URL、`install_safety_test.go` 的 `root` 與 hardlink entry 名稱中的版本號一起改成 v1.2.0。各測試的檢查項目與預期結果（錯誤類型、訊息、安裝結果、請求的有無）都沒有改變。`TestAttestationV110` 原本借用 `stableTag` 代表 v1.1.0，改成直接寫 `"v1.1.0"`
+     - 假綠檢查：`TestInstallRejectsHardlinkAndMultilineVersion` 只斷言「安裝失敗、既有安裝未受損」，不檢查 stderr，fixture 若沒有跟著改，就可能因為 latest 被拒絕而假綠。以 `go test -overlay` 暫時印出 stderr（只用於確認，未進入交付），GNU tar 與 busybox 兩種情況都是 `unsafe archive entry type in asura_v1.2.0_linux_amd64.tar.gz`，確實是因為 hardlink 而拒絕
+     - 未調整的 v1.1.0：`harness_selfcheck_test.go` 測的是 harness 自己的 `fetch.sh`，不經過 installer 判定；`install_safety_test.go` 的明確降版（`--version v1.1.0`）與兩個版本格式錯誤測試不經過 latest，維持原樣
+     - `go test -count=1 -v ./scripts/installer` ok
+     - 本機最小回歸（交付版本）：`go vet ./...` 通過；`go test -count=1 -race -v ./...` 23 個 package 全部 `ok`；`go build ./cmd/asura` 成功。被 SKIP 的 14 項不計為通過，都是需要固定版本 runtime 或登入憑證的 live／contract 測試，與本次修改無關：TestLiveAdapter（2 處）、TestCodexProbe_BinaryVersion、TestCodexProbe_NonInteractive_JSONL、TestCodexProbe_ReadOnlySandbox、TestCodexProbe_WorkspaceWriteSandbox、TestCodexProbe_ContextCancellation、TestAdapter_Run_Live、TestCodexProbe_Live、TestDaemon_ThreeFace_HostileWorkspaceConfig_CannotEscapeReadOnly、TestUtilityLiveProbe、TestUtilityCapacityProbe、TestINT001、TestINT007
+     - 重構 no-op：installer 只新增一個判定，測試沿用既有寫法，沒有可精煉的內容
+3. ✅ **AC-3：真實安裝與文件**— 驗證方式：本分支 `install.sh` 對真實 GitHub 安裝；文件人工核對
    - 產出：安裝紀錄、`setup.md` 與 `CHANGELOG.md` 修改
    - 相依：步驟 1
    - 完成判準：預設安裝顯示 Verified 並裝上 v1.2.0；`--version v1.1.0` 照常警告；文件描述與新行為一致
+   - 完成證據（2026-10-16，gh 2.74.2，以空的 `GH_CONFIG_DIR` 並移除 token，模擬未登入；安裝到 scratch 目錄）：
+     - `releases/latest` 為 v1.2.0。以本分支的 `sh install.sh --install-dir <dir>` 預設安裝：exit 0，印出 `Verified publisher attestation for asura_v1.2.0_linux_amd64.tar.gz` 與 `Installed asura v1.2.0`，`asura version` 為 `v1.2.0 (commit 29fa058…)`
+     - `--version v1.1.0`：exit 0，安裝 v1.1.0（commit `cc68482…`），stderr 警告 `publisher not verified (v1.1.0 has no publisher attestation)`
+     - `--version v1.1.0 --require-attestation`：exit 1，`--require-attestation: v1.1.0 has no publisher attestation`，沒有建立安裝目錄
+     - latest 實際解析到 v1.1.0 的情況無法在真實 GitHub 上製造（必須真的移動 latest），這部分由步驟 1 的 harness 測試涵蓋
+     - 文件：`docs/guides/setup.md`「發布者驗證」表格把「安裝 v1.1.0」拆成「latest 解析到 v1.1.0」（拒絕）與「以 `--version v1.1.0` 安裝」（行為不變）兩列；「限制」改寫降版風險，只剩明確指定 v1.1.0 的情況；最後驗證日期更新。`CHANGELOG.md` Unreleased 新增安全性條目
 
 ## Timeline
 

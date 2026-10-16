@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-const stableTag = "v1.1.0"
+const stableTag = "v1.2.0"
 
 func installScript(t *testing.T) string {
 	t.Helper()
@@ -78,12 +78,12 @@ func TestInstallFreshAmd64(t *testing.T) {
 		t.Fatalf("code=%d stderr=%s", res.Code, res.Stderr)
 	}
 	assertInstalled(t, filepath.Join(h.InstallDir, "asura"), stableTag, "amd64")
-	for _, url := range []string{latestURL, downloadURL + "v1.1.0/asura_v1.1.0_linux_amd64.tar.gz", downloadURL + "v1.1.0/asura_v1.1.0_checksums.txt"} {
+	for _, url := range []string{latestURL, downloadURL + "v1.2.0/asura_v1.2.0_linux_amd64.tar.gz", downloadURL + "v1.2.0/asura_v1.2.0_checksums.txt"} {
 		if !requested(res, url) {
 			t.Fatalf("missing request %s: %v", url, res.Requests)
 		}
 	}
-	if requested(res, downloadURL+"v1.1.0/asura_v1.1.0_linux_arm64.tar.gz") {
+	if requested(res, downloadURL+"v1.2.0/asura_v1.2.0_linux_arm64.tar.gz") {
 		t.Fatal("downloaded arm64 asset on amd64")
 	}
 	for _, r := range res.Requests {
@@ -193,7 +193,7 @@ func TestInstallArm64Asset(t *testing.T) {
 				t.Fatalf("code=%d stderr=%s", res.Code, res.Stderr)
 			}
 			assertInstalled(t, filepath.Join(h.InstallDir, "asura"), stableTag, "arm64")
-			if !requested(res, downloadURL+"v1.1.0/asura_v1.1.0_linux_arm64.tar.gz") || requested(res, downloadURL+"v1.1.0/asura_v1.1.0_linux_amd64.tar.gz") {
+			if !requested(res, downloadURL+"v1.2.0/asura_v1.2.0_linux_arm64.tar.gz") || requested(res, downloadURL+"v1.2.0/asura_v1.2.0_linux_amd64.tar.gz") {
 				t.Fatalf("requests=%v", res.Requests)
 			}
 		})
