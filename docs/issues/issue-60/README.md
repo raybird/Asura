@@ -95,9 +95,11 @@
 | 日期 | 異動 | 負責人 |
 |------|------|--------|
 | 2026-10-16 | 建立；Q1 回答後核准 AC-1～AC-3（只修測試） | Raybird |
+| 2026-10-16 | PR #61 獨立審查 PASS（審查 `96c302e..18f78fa`，[報告](https://github.com/raybird/Asura/pull/61#issuecomment-6207030303)），無 MUST FIX、SHOULD FIX；NICE TO HAVE 兩項（writer 成功次數斷言、診斷片段存檔）未處理 | Raybird |
+| 2026-10-16 | PR #61 squash 合併至 main（merge commit `e07327a`，合併內容即審查的 HEAD `18f78fa`）；GitHub #60 由 `Closes #60` 自動關閉。合併後 main push CI [run 38843697285](https://github.com/raybird/Asura/actions/runs/38843697285) attempt 1 為 success，本測試 PASS（15.14s），main 恢復綠燈；issue 結案 | Raybird |
 
 ---
 **建立日期**: 2026-10-16  
 **分級**: Small — 只修改單一測試檔  
 **風險**: Medium — CI 的 10 秒以上等鎖本機重現不了，根因由等價重現與 CI 耗時推得\
-**狀態**: 進行中
+**狀態**: 已完成 — PR #61 於 2026-10-16 合併（merge commit `e07327a`）
