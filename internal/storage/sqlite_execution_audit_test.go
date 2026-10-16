@@ -481,22 +481,19 @@ func TestExecutionAuditConcurrentWriter(t *testing.T) {
 	if _, err = other.Exec(`PRAGMA busy_timeout=100`); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	ready := make(chan struct{})
-	go func() {
-		defer close(done)
-		close(ready)
-		for ctx.Err() == nil {
-			_, _ = other.ExecContext(ctx, `UPDATE tasks SET updated_at=CASE WHEN updated_at='2026-10-04T00:00:00Z' THEN '2026-10-04T00:00:01Z' ELSE '2026-10-04T00:00:00Z' END`)
-			time.Sleep(time.Millisecond)
-		}
-	}()
-	<-ready
-	defer func() { cancel(); <-done }()
+	// 每次 observation 期間並行做有限次數的 metadata 更新，仍會撞上 snapshot 升級競態；
+	// writer 寫完即停，等鎖有上限，不要求在無上限的搶鎖下突破 busy_timeout（#60）。
 	for i := 0; i < 40; i++ {
 		id := fmt.Sprintf("writer-%d", i)
+		writerDone := make(chan struct{})
+		go func() {
+			defer close(writerDone)
+			for j := 0; j < 3; j++ {
+				_, _ = other.Exec(`UPDATE tasks SET updated_at=CASE WHEN updated_at='2026-10-04T00:00:00Z' THEN '2026-10-04T00:00:01Z' ELSE '2026-10-04T00:00:00Z' END`)
+			}
+		}()
 		err = s.AppendTaskAudit(context.Background(), id, audit.Event{Kind: "guard_started", Stage: backend.RoleOracle, Scope: "stage_execution", State: "running", Reason: "none", Layer: "guard"})
+		<-writerDone
 		if err != nil {
 			t.Fatalf("observation failed under concurrent metadata writer: %v", err)
 		}
