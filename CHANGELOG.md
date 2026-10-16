@@ -4,11 +4,24 @@
 
 ## [Unreleased]
 
+## [v1.2.0] - 2026-10-16
+
+**Publisher Verification**：installer 除了 SHA-256 checksum，也驗證 Release 檔案確實由本 repo 的 Release workflow 從該 tag 建置（GitHub artifact attestation）。v1.2.0 是第一個帶驗證檔的正式版。另修正取消任務時的狀態競態。執行核心、admission、stage 綁定、稽核與 config 的行為不變。
+
 ### 🚀 新增功能 (Features)
 - **[installer]**：驗證 Release 發布者身分：有 `gh` 2.68.0 以上時以 GitHub artifact attestation 驗證 archive（鎖定 `release.yml` 與該 tag），失敗或缺驗證檔即拒絕安裝；沒有 `gh` 時警告後只核對 checksum；新增 `--require-attestation`。v1.1.0 沒有驗證檔，安裝時警告 (#47)
 
+### 🐛 錯誤修正 (Bug Fixes)
+- **[runtime]**：local auto 執行路徑中，取消請求剛好落在 runtime 登記 PGID 與檢查取消意圖之間時，任務會被誤記為 failed、`cancel` 回報「task is not running」；改為先標記 cancelling，再由取消協調器收斂為 cancelled (#48)
+
 ### ⚙️ 建置與發佈
 - **[ci]**：Release workflow 為 archive 產生 build provenance attestation 並上傳驗證檔；觸發 ref 不是該 tag 時在建置前失敗；含 `-` 的 tag 發佈為 prerelease (#47)
+- **[test]**：修正 CI 負載下的偶發失敗：queue guard 測試等 workspace 實際釋放後再佔用 (#54)；execution audit 的並行 writer 測試改為每次 observation 有限次數的寫入 (#60)
+
+### 📌 已知限制
+- 發布者驗證需要 `gh` 2.68.0 以上，且要能連到 Sigstore（`tuf-repo-cdn.sigstore.dev`）；連不到視為驗證失敗、拒絕安裝。沒有 `gh` 時只核對 checksum 並警告。
+- v1.1.0 沒有驗證檔，安裝 v1.1.0 時只核對 checksum 並警告；取消 v1.1.0 免驗由 #58 追蹤。
+- `install.sh` 本身由 `main` 分支提供，不在發布者驗證的防護範圍內。
 
 ## [v1.1.0] - 2026-10-10
 

@@ -89,8 +89,15 @@ v1.0 涵蓋的全部 issue（議題追蹤與驗收劇本）：
 - [Issue 39 Runtime Inventory / Availability (Phase 4D)](issues/issue-39/README.md) 與 [實作計畫](issues/issue-39/implementation-plan.md)
 - [Issue 41 Control Plane Execution Audit (Phase 4E)](issues/issue-41/README.md) 與 [實作計畫](issues/issue-41/implementation-plan.md)
 
-v1.1 進行中：
+v1.1：
 
 - [Issue 45 Distribution & Bootstrap](issues/issue-45/README.md) 與 [實作計畫](issues/issue-45/implementation-plan.md)
+
+v1.2：
+
+- [Issue 47 Release 發布者身分驗證（artifact attestation）](issues/issue-47/README.md) 與 [實作計畫](issues/issue-47/implementation-plan.md)
+- [Issue 48 TestRuntimeSelectionLocalCancel 偶發失敗與取消競態修正](issues/issue-48/README.md)
+- [Issue 54 TestRuntimeSelectionThreeFaceAndQueueGuard 偶發失敗](issues/issue-54/README.md)
+- [Issue 60 TestExecutionAuditConcurrentWriter 偶發失敗](issues/issue-60/README.md)
 
 階段規劃歷史：[本機核心合併後的階段規劃](plans/post-core-roadmap.md)（已由 v1.0 完成）
