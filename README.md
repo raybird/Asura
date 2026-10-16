@@ -4,7 +4,7 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.26+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v1.1.0-success)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v1.2.0-success)](CHANGELOG.md)
 
 Asura 是一個以 Go 撰寫的單一執行檔，在一台 Linux 主機上統一管理 AI coding agent（OpenCode、Codex、OMP、Antigravity）的**執行**：誰可以提交、在哪個 workspace、用哪個 runtime、能力是否相符、何時取消，以及事後如何稽核。skills、MCP、workflow 與 domain logic 由各 runtime 自行處理。
 
@@ -18,7 +18,7 @@ Asura 是一個以 Go 撰寫的單一執行檔，在一台 Linux 主機上統一
 
 ## 安裝
 
-只支援 Linux（進程組回收、`/proc` 身分驗證與 `bwrap` 隔離皆依賴 Linux）。v1.1.0 起可用 installer 安裝 amd64／arm64 正式版，下載後先核對 SHA-256 與版本才替換，不需 root：
+只支援 Linux（進程組回收、`/proc` 身分驗證與 `bwrap` 隔離皆依賴 Linux）。v1.1.0 起可用 installer 安裝 amd64／arm64 正式版，下載後先核對 SHA-256 與版本才替換，不需 root；v1.2.0 起有 `gh` 2.68.0 以上時另驗證發布者（GitHub artifact attestation）：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/raybird/Asura/main/install.sh | sh
@@ -91,7 +91,7 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web --listen 127.0.0.1:8080 --socket
 
 ## 版本範圍
 
-2026-10-06：`v1.0.0` 將 main（Issue #1～#41）定為第一版基準。2026-10-10：`v1.1.0` 新增安裝與初始設定（Issue #45）。
+2026-10-06：`v1.0.0` 將 main（Issue #1～#41）定為第一版基準。2026-10-10：`v1.1.0` 新增安裝與初始設定（Issue #45）。2026-10-16：`v1.2.0` 新增 installer 發布者驗證（Issue #47），並修正取消競態（Issue #48）。
 
 | 範圍 | 內容 |
 |---|---|
@@ -102,6 +102,7 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web --listen 127.0.0.1:8080 --socket
 | 記憶 | 專案級記憶、有界詞彙召回、Git 候選審核、效用回饋、版本取代 |
 | 稽核 | 接受時封存契約，`status`／`audit`／Web 唯讀查詢執行來源 |
 | 安裝與設定（v1.1） | checksum 與版本核對的 installer、`version`、唯讀 `doctor`、`setup`、`config.toml` operator defaults、systemd user service |
+| 發布者驗證（v1.2） | Release archive 附 GitHub artifact attestation，installer 有 `gh` 時驗證簽章來自本 repo 的 Release workflow 與該 tag |
 
 **目前不包含**：Telegram 等其他遠端入口、自動 failover 或 retry、模型內部 Context 編輯／壓縮、語意（向量）召回、多使用者或跨主機部署，以及系統層級的效能與長期穩定性量測門檻（架構決策 D-09 未定義）。`--allowed-roots` 是入口授權政策，不是作業系統沙箱。完整異動見 [CHANGELOG](CHANGELOG.md)。
 
@@ -115,4 +116,4 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web --listen 127.0.0.1:8080 --socket
 
 [MIT](LICENSE)
 
-*最新更新日期：2026-10-10（v1.1.0 發佈）*
+*最新更新日期：2026-10-16（v1.2.0 發佈）*
