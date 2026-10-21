@@ -34,6 +34,11 @@ CI 另跑記憶 lifecycle 效能探測（`-tags lifecycleperf`）與 Web UI／�
 ## 本地 gate 與案例
 
 - **綠燈不等於有跑到**：runtime contract／live 測試在前置條件缺少時以 `t.Skip` 跳過，`go test` 仍回報 ok。前置條件為固定版本 runtime binary（OpenCode `1.18.23`；其他版本見 README）、模型登入憑證，以及可建立 user namespace 的 `bwrap`（Ubuntu 需 AppArmor 放行，作法見 ci.yml）。以 `-v` 執行並檢查 `SKIP` 行；改動觸及 `internal/backend` 時，把被跳過的測試名稱與原因寫進驗證證據，不計為通過。
+- **地雷 L-1：把 PR 中間提交當成 main 基準**（2026-10-21 登記）
+  - 症狀：調查歷史 CI 失敗時，以失敗 run 的被測提交當基準，判定「之後相關程式沒有語意變化」，於是把 PR 合併前就修好的 regression 當成未知原因，在 main 上怎麼壓測都重現不了。
+  - 觸發情境：失敗的 CI run 來自 `pull_request` 事件或功能分支。PR 以 squash 合併時，中間提交和修正提交都不會進到 main，`git log main` 看不到之後的修正。
+  - 怎麼查：`git merge-base --is-ancestor <被測提交> origin/main`；不在 main 上時，用 `gh api repos/raybird/Asura/commits/<被測提交>/pulls` 找出所屬 PR，再看該 PR 在這個提交之後的提交與 issue 證據。
+  - 證據：[issue-48「症狀 1 調查」](../issues/issue-48/README.md)以 `30cc401` 為基準；[issue-51「原因」](../issues/issue-51/README.md)查出 `30cc401` 是 PR #42 的中間提交，原因已在 #41 [驗證紀錄「CI WAL 並行 writer 修正」](../issues/issue-41/evidence/verification.md)修正。
 
 ## 懸置掃描登記
 
