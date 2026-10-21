@@ -82,7 +82,7 @@
 | 2026-10-21 | 建立；查出 `30cc401` 是 #41 的中間提交，原因已由 `2769542` 修正；Q1、Q2 回答後核准 AC-1～AC-3 | Raybird |
 | 2026-10-21 | PR #68 首輪獨立審查 PASS（審查 `2c3dde0..d5ad671`，[報告](https://github.com/raybird/Asura/pull/68#issuecomment-6306939209)），無 MUST FIX；依 Q3 修訂 AC-3 增列 project.md 地雷，並修正 squash 合併的措辭 | Raybird |
 | 2026-10-21 | PR #68 第二輪獨立審查 PASS（審查完整範圍 `2c3dde0..e9980aa`，[報告](https://github.com/raybird/Asura/pull/68#issuecomment-6307018990)），無 MUST FIX、SHOULD FIX；NICE TO HAVE 四項中，步驟 3 完成判準與分級說明兩項於結案時補上，地雷證據行號與 log 檔頭兩項未處理 | Raybird |
-| 2026-10-21 | PR #68 squash 合併至 main（merge commit `c82e8e4`，合併內容即審查的 HEAD `e9980aa`）；GitHub #51 由 `Closes #51` 自動關閉，issue 結案 | Raybird |
+| 2026-10-21 | PR #68 squash 合併至 main（merge commit `c82e8e4`，合併內容即審查的 HEAD `e9980aa`）；GitHub #51 由 `Closes #51` 自動關閉，issue 結案。合併後 main push CI [run 39537742081](https://github.com/raybird/Asura/actions/runs/39537742081) attempt 1 為 failure，失敗的是與本 issue 無關的 `TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake`（`cli_test.go:962` side-effect marker）；本測試 `TestRuntimeSelectionLocalCancel` PASS（0.66s） | Raybird |
 
 ---
 **建立日期**: 2026-10-21  
