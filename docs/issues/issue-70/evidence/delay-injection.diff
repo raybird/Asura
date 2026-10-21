@@ -1,0 +1,14 @@
+diff --git a/tests/integration/cli_test.go b/tests/integration/cli_test.go
+index 7dc0560..bc86924 100644
+--- a/tests/integration/cli_test.go
++++ b/tests/integration/cli_test.go
+@@ -927,6 +927,9 @@ func TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake(t *testing.T) {
+ 
+ 	// 4. 並發啟動 asura cancel 子進程
+ 	cancelCmd := exec.Command(asuraBin, "cancel", "--db", dbPath, taskID)
++	if d := os.Getenv("ASURA_I70_CANCEL_DELAY"); d != "" {
++		cancelCmd = exec.Command("sh", "-c", "sleep \"$1\"; exec \"$2\" cancel --db \"$3\" \"$4\"", "sh", d, asuraBin, dbPath, taskID)
++	}
+ 	cancelDone := make(chan error, 1)
+ 	var cancelOut, cancelErr bytes.Buffer
+ 	cancelCmd.Stdout = &cancelOut

@@ -1,0 +1,13 @@
+diff --git a/cmd/asura/run.go b/cmd/asura/run.go
+index 210cc58..35a3289 100644
+--- a/cmd/asura/run.go
++++ b/cmd/asura/run.go
+@@ -254,7 +254,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
+ 
+ 		// 在啟動排他鎖保護下檢查是否已被取消，徹底防禦啟動已取消之任務與外部副作用 (修復 F-02, G-01)
+ 		if currentTaskID != "" {
+-			cancelIntentPath := taskCancelIntentPath(*dbPath, currentTaskID)
++			cancelIntentPath := taskCancelIntentPath(*dbPath, currentTaskID) + ".i70-disabled"
+ 			if _, statErr := os.Stat(cancelIntentPath); statErr == nil {
+ 				current, _ := store.GetTask(context.Background(), currentTaskID)
+ 				currentResult := ""

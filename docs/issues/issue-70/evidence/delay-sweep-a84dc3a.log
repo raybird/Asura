@@ -1,0 +1,341 @@
+# issue-70 cancel 延遲掃描：a84dc3a（2026-10-21，go1.27.2 linux/amd64，12 核，未加 CPU 限制）
+# 每行前綴 d=<ASURA_I70_CANCEL_DELAY 秒數>；套用 delay-injection.diff 後於 tests/integration 執行
+d=0.3 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.3     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.3 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.35s)
+d=0.3 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.3     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.3 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.12s)
+d=0.3 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.3     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.3 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.16s)
+d=0.3 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.3     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.3 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.13s)
+d=0.3 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.3     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.3 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.15s)
+d=0.3 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.3     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.3 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.13s)
+d=0.3 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.3     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.3 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.28s)
+d=0.3 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.3     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.3 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.46s)
+d=0.3 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.3     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.3 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.13s)
+d=0.3 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.3     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.3 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.10s)
+d=0.3 FAIL
+d=0.036 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.036 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.036 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.036 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.88s)
+d=0.036 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.036 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.036 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.036 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.036 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.036 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.88s)
+d=0.036 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.036 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.036 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.036 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.036 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.036 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.93s)
+d=0.036 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.036 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.036 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.036 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.88s)
+d=0.036 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.036 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.036 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.036 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.88s)
+d=0.036 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.036 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.036 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.036 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.036 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.036 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.036 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.036 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.036 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.036 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.036 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.036 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.036 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.036 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.036 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.036 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.036 PASS
+d=0.037 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.037 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.037 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.037 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.037 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.037 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.037 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.037 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.037 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.037 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.037 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.037 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.037 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.037 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.037 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.037 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.037 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.037 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.89s)
+d=0.037 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.037 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.037 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.037 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.93s)
+d=0.037 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.037 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.037 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.037 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.037 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.037 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.037 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.037 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.037 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.037 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.037 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.037 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.037 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.037 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.037 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.037 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.037 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.037 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.037 PASS
+d=0.038 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.038 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.038 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.038 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.038 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.038 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.038 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.038 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.038 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.038 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.038 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.038 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.038 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.038 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.038 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.038 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.038 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.038 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.038 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.038 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.90s)
+d=0.038 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.038 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.038 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.038 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.89s)
+d=0.038 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.038 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.038 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.038 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.038 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.038 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.038 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.038 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.038 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.038 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.038 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.038 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.038 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.038 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.038 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.038 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.038 PASS
+d=0.039 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.039 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.039 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.039 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.039 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.039 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.039 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.039 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.039 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.039 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.039 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.039 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.039 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.039 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.039 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.039 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.88s)
+d=0.039 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.039 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.039 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.039 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.039 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.039 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.039 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.039 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.88s)
+d=0.039 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.039 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.91s)
+d=0.039 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.039 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.89s)
+d=0.039 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.039 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.92s)
+d=0.039 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.039 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.039 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.039 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.039 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.039 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.039 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.039 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.039 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.039 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.039 PASS
+d=0.040 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.040 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.040 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.040 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.040 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.040 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.91s)
+d=0.040 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.040 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.040 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.040 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.040 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.040 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.040 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.040 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.040 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.040 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.040 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.040 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.040 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.040 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.040 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.040 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.040 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.040 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.040 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.040 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.040 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.040 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.92s)
+d=0.040 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.040 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.040 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.040 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.040 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.040 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.040 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.040 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.040 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.040 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.040 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.040 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.040 PASS
+d=0.041 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.041 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.041 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.041 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.041 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.041 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.041 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.041 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.041 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.041 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.041 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.041 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.041 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.041 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.041 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.041 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.041 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.041 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.041 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.041 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.041 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.041 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.041 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.041 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.041 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.041 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.041 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.041     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.041 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.88s)
+d=0.041 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.041 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.88s)
+d=0.041 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.041 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.041 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.041 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.041 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.041 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.041 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.041 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.041 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.041 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.88s)
+d=0.041 FAIL
+d=0.042 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.042     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.042 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.88s)
+d=0.042 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.042     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.042 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.042 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.042     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.042 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.88s)
+d=0.042 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.042     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.042 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.89s)
+d=0.042 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.042     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.042 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.042 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.042     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.042 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.92s)
+d=0.042 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.042     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.042 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.042 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.042     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.042 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.042 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.042     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.042 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.89s)
+d=0.042 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.042     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.042 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.042 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.042     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.042 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.042 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.042     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.042 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.042 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.042     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.042 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.042 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.042     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.042 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.042 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.042     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.042 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.042 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.042     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.042 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.90s)
+d=0.042 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.042     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.042 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.02s)
+d=0.042 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.042     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.042 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.042 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.042     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.042 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.042 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.042     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.042 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.90s)
+d=0.042 FAIL
