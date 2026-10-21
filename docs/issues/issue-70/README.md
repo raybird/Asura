@@ -96,7 +96,7 @@ main `23af953` 無負載 `-count=20` 與 `taskset -c 0,1` 加 6 個背景 `yes` 
      - 本機最小回歸（`d38a632`，預設 TMPDIR）：`go vet ./...` exit 0；`go test -count=1 -race -v ./...` exit 0，23 個 package 全部 `ok`，本測試 PASS（2.17s）；`go build ./cmd/asura` exit 0
      - 被 SKIP 的 14 項不計為通過，都是需要固定版本 runtime 或登入憑證的 live／contract 測試，本次沒有改到 `internal/backend`：TestAdapter_Run_Live、TestCodexProbe_BinaryVersion、TestCodexProbe_ContextCancellation、TestCodexProbe_Live、TestCodexProbe_NonInteractive_JSONL、TestCodexProbe_ReadOnlySandbox、TestCodexProbe_WorkspaceWriteSandbox、TestDaemon_ThreeFace_HostileWorkspaceConfig_CannotEscapeReadOnly、TestINT001、TestINT007、TestLiveAdapter（2 處）、TestUtilityCapacityProbe、TestUtilityLiveProbe
      - 環境紀錄：當天 /tmp（tmpfs）一度配額已滿，`go build` 回報 `disk quota exceeded`，所以延遲掃描與壓測都把 TMPDIR 指到家目錄。用同一設定跑完整回歸時，Unix socket 路徑超過 107 bytes，`bind: invalid argument` 造成 7 個 package 失敗；改用 /tmp 底下指回家目錄的 symlink，又因 realpath 不符造成 13 個 package 失敗。這兩輪都是環境問題，不計入。/tmp 空間恢復後，以預設 TMPDIR 重跑才是上列結果
-3. ⏳ **AC-3：延遲注入對照與負載壓測** — 驗證方式：AC-3 的檢查方式
+3. ✅ **AC-3：延遲注入對照與負載壓測** — 驗證方式：AC-3 的檢查方式
    - 產出：命令原文、條件與修正前後的 PASS／FAIL 次數（寫回本節，紀錄存 `evidence/`）
    - 相依：步驟 2
    - 完成判準：修正前三個延遲都至少失敗 1 次，修正後全部 0 失敗；負載壓測 0 失敗；PR CI 一次全綠
@@ -112,7 +112,7 @@ main `23af953` 無負載 `-count=20` 與 `taskset -c 0,1` 加 6 個背景 `yes` 
 
        修正前的失敗全部是 `side-effect file exists!`（[ac3-delay-23af953.log](evidence/ac3-delay-23af953.log)、[ac3-delay-d38a632.log](evidence/ac3-delay-d38a632.log)）
      - 負載壓測：`d38a632` 不啟用注入，背景 6 個 `taskset -c 0,1 yes > /dev/null`，`taskset -c 0,1 <test binary> -test.run '^TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake$' -test.count=100 -test.v`：exit 0，PASS 100／FAIL 0（[ac3-load-d38a632.log](evidence/ac3-load-d38a632.log)）
-     - PR CI 一次全綠：待 PR 建立後補上
+     - PR CI 一次全綠：PR #71 在 `b2de3f6` 的 [run 39550898789](https://github.com/raybird/Asura/actions/runs/39550898789)（pull_request）為 success，`TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake` PASS（5.00s）。同一 HEAD 的 push run 39550865186 被 workflow `concurrency.cancel-in-progress` 取消（conclusion=cancelled），不是測試失敗
 
 ## Timeline
 
