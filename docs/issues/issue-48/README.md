@@ -107,6 +107,7 @@
 | 2026-10-13 | 規格修訂：症狀 1 本機未重現，依 Q2 回答將 AC-1 收斂為症狀 2，症狀 1 移至 #51 追蹤 | Raybird |
 | 2026-10-13 | PR #52 獨立審查 PASS（審查 `f830ee6..35d334d`，[報告](https://github.com/raybird/Asura/pull/52#issuecomment-6141269578)），無 MUST FIX | Raybird |
 | 2026-10-13 | PR #52 squash 合併至 main（merge commit `69900e9`，合併內容即審查的 HEAD `35d334d`）；GitHub #48 由 `Closes #48` 自動關閉，issue 結案 | Raybird |
+| 2026-10-21 | 更正「症狀 1 調查」：`30cc401` 是 PR #42 的中間提交，不在 main 上；症狀 1 是 #41 在合併前以 `2769542` 修好的 WAL 競態，「之後相關程式沒有語意變化」的前提不成立。詳見 [issue-51](../issue-51/README.md) | Raybird |
 
 ---
 **建立日期**: 2026-10-13  
