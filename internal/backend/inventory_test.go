@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 )
@@ -37,5 +38,21 @@ func TestInventoryContractSnapshot(t *testing.T) {
 	}
 	if strings.Contains(string(raw), "secret-sentinel") {
 		t.Fatal("probe error leaked")
+	}
+}
+
+// 2026-10-21：issue-73 Task 2.5（SCN-009，Q13）。testdata 是升級前（main 1826d5f）在本機抓的清冊快照，
+// 代表升級前就已封存的排隊任務與 cron；加入 version_unverified 後仍必須通過驗證。
+func TestInventorySnapshotBeforeVersionVerificationStillValid(t *testing.T) {
+	raw, err := os.ReadFile("testdata/inventory-v1-pre-issue-73.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var snapshot InventorySnapshot
+	if err := json.Unmarshal(raw, &snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if err := snapshot.Validate(); err != nil {
+		t.Fatalf("archived snapshot rejected after upgrade: %v", err)
 	}
 }

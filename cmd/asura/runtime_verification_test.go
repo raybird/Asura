@@ -128,3 +128,65 @@ func TestRuntimeVerificationAcrossPaths(t *testing.T) {
 	}
 	expectUnverified("after the record was removed")
 }
+
+// 2026-10-21：issue-73 Task 2.5，SCN-009。以已驗證身分接受的任務，驗證紀錄在後續 stage 執行前被移除：
+// 該 stage 的執行前檢查必須拒絕，不再呼叫模型，也不改選其他可用的 runtime。
+func TestRuntimeVerificationRemovedBeforeStage(t *testing.T) {
+	bin := buildCLI(t)
+	e := newXDGEnv(t)
+	ws := filepath.Join(e.root, "ws")
+	sock := filepath.Join(e.root, "asura.sock")
+	if err := os.Mkdir(ws, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	e.writeConfig(t, "schema_version = 1\nsocket = \""+sock+"\"\nallowed_roots = [\""+ws+"\"]\nruntime_priority = [\"codex\", \"opencode\"]\n")
+	records := filepath.Join(e.dataHome, "asura", "runtime-verification.json")
+	runtimes := t.TempDir()
+	calls := filepath.Join(e.root, "calls.log")
+	// 假 codex 第一次被呼叫執行任務時就刪掉驗證紀錄，模擬使用者在 oracle 與 striker 之間執行 --remove。
+	codex := filepath.Join(runtimes, "codex")
+	if err := os.WriteFile(codex, []byte("#!/bin/sh\necho \"codex $*\" >> "+calls+"\n"+
+		"if [ \"$1\" = --version ]; then echo 'codex-cli 0.163.0'; exit 0; fi\n"+
+		"rm -f "+records+"\n"+
+		`printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"{\"goal\":\"g\",\"steps\":[\"s\"]}"}}'`+"\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runtimes, "opencode"), []byte("#!/bin/sh\necho \"opencode $*\" >> "+calls+"\n"+
+		"if [ \"$1\" = --version ]; then echo 1.18.23; exit 0; fi\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	digest, err := verification.FileDigest(codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := verification.Add(records, verification.Record{Identity: verification.Identity{Runtime: "codex", Version: "0.163.0", Digest: digest}, VerifiedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	env := append(e.vars(), "PATH="+runtimes+":/usr/bin:/bin")
+	startDaemon(t, bin, t.TempDir(), env)
+
+	c := exec.Command(bin, "ask", "--backend", "auto", "--mode", "three-face", "--workspace", ws, "--wait", "probe")
+	c.Env, c.Dir = env, ws
+	out, _ := c.CombinedOutput()
+	t.Logf("ask:\n%s", out)
+
+	data, _ := os.ReadFile(calls)
+	var codexRuns, opencodeRuns int
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		switch {
+		case strings.HasPrefix(line, "codex exec "):
+			codexRuns++
+		case strings.HasPrefix(line, "opencode ") && !strings.HasSuffix(line, " --version"):
+			opencodeRuns++
+		}
+	}
+	if codexRuns != 1 {
+		t.Errorf("codex ran %d times, want 1 (oracle only)", codexRuns)
+	}
+	if opencodeRuns != 0 {
+		t.Errorf("opencode ran %d times after codex was rejected; the stage must not switch runtime", opencodeRuns)
+	}
+	if !strings.Contains(string(out), "codex:version_unverified") {
+		t.Errorf("task did not fail on the unverified codex:\n%s", out)
+	}
+}

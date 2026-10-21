@@ -141,8 +141,8 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 - 驗收編號：SCN-009
 - 完成判準：daemon 接受任務後移除紀錄，該 stage 被拒絕、沒有模型呼叫、沒有改選；以舊格式封存的 fixture 通過驗證
 - 驗證：整合測試
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成
+- 證據：[evidence/task-2.5.md](./evidence/task-2.5.md)：`TestRuntimeVerificationRemovedBeforeStage`（三組反向對照皆失敗）與 `TestInventorySnapshotBeforeVersionVerificationStillValid`（main 上抓取的升級前快照；調升 policy 的對照失敗）；專案 gate 24 個套件 ok
 
 ## Phase 3 — `asura runtime verify` 命令
 
