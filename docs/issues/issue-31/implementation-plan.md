@@ -60,7 +60,7 @@
 - 驗收責任：MLIFE-012；L-TBD-10。
 - 完成判準：核准門檻、完整 regression 與常青文件檢查通過。
 - 驗證：依下方測試策略取得對應紅綠證據；P1 純刻畫、P5 文件使用等價靜態證據。
-- 狀態：⏳ 修正與本地驗證完成；正式 CI／第二輪審查依 PR 最新結果判定
+- 狀態：✅ 已完成；第二輪審查 [review-5d3ee46.md](review-5d3ee46.md) PASS，PR #32 於 2026-10-01 合併（merge commit `41b5220`），PR 最終 HEAD 的 CI [run 36830210722](https://github.com/raybird/Asura/actions/runs/36830210722) success，同 HEAD 的 push run 被 concurrency 取消（2026-10-21 回填）
 - 證據：[verification.md](evidence/verification.md)；2026-10-01 正式 CI 紅燈，最新修正與證據見 [ci-fix](evidence/ci-fix/README.md)。
 
 ## 使用方式對照

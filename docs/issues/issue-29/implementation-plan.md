@@ -15,7 +15,7 @@
 | P2 assessment 與 aggregate | ✅ 已完成 | 004、005、006、008、009、011 | optional Critic usage、驗證、交易聚合、重建 | P1 | missing/invalid unknown；Direct 0 extra calls；重建 count 與 ledger 相符 |
 | P3 audit 與容量 | ✅ 已完成 | 003、010、011 | CLI/IPC/status、10k/100k fixture 與 query plan | P2 | scope fail-closed、limit/cursor/field/response bounds、bounded recovery 證據 |
 | P4 opt-in apply | ✅ 已完成 | 001、002、007、008、011 | utility-v1 multiplier 與 sealed score | P0 可信度成立、P3 | neutral/threshold/floor/tie golden fixture，observe 完全相容，deadline 未放寬 |
-| P5 交付 | 📝 待實作 | 012 與全部 | 常青文件、固定 BASE/HEAD、PR、獨立 review | P1～P4 | 完整回歸、正式 CI 與持久化 review evidence |
+| P5 交付 | ✅ 已完成（2026-10-21 回填：[review-d01816f.md](review-d01816f.md) PASS，PR #30 於 2026-10-01 合併，merge commit `1b21d58`） | 012 與全部 | 常青文件、固定 BASE/HEAD、PR、獨立 review | P1～P4 | 完整回歸、正式 CI 與持久化 review evidence |
 
 ## 使用方式對照
 

@@ -112,13 +112,13 @@ Feature: 可控且可追蹤的本機任務執行
 | 編號 | 事項 | 狀態 | 影響 |
 |---|---|---|---|
 | TBD-1 | 實際 issue 編號已確認為 issue-1；首版 CLI／Daemon／單一後端範圍待逐項核准 | 已確認 (issue-1) | 正式 issue 已建檔，待確認 SCN-001 與權限矩陣 |
-| TBD-2 | D-01 的呼叫者、專案與權限矩陣 | 進行中 | SCN-002、Phase 0；SCN-002 已核准，啟動契約探測 |
+| TBD-2 | D-01 的呼叫者、專案與權限矩陣 | 已解決 | 2026-10-21 回填：P0-2 以允許／拒絕成對案例驗證權限模式，P1-3 以 `tests/integration/cli_test.go` 驗證 SCN-002 未授權呼叫 0 子進程、0 DB 寫入（[implementation-plan.md](implementation-plan.md)） |
 | TBD-3 | D-02、D-03 的回退政策、接受請求語意與全域上限 | 已確認 (採 Socket 互斥與 Worker Pool) | SCN-003 已核准，Task 1.4 已完成 |
 | TBD-4 | D-05 的資源歸屬及取消期限 | 已確認 (取消期限 2s，Context + PGID SIGKILL 回收) | SCN-004 已核准，Task 1.5 已完成 |
 | TBD-5 | D-04、D-07 的部分失敗與重啟接續政策 | 已確認 (不自動重試，重啟恢復標記中斷) | SCN-005、SCN-006 已完成 (Task 1.6, Task 1.7) |
 | TBD-6 | D-06 的共同收尾、補總結上限與錯誤呈現 | 已確認 (空輸出防禦為 failed，不重做副作用) | SCN-007 已核准，啟動 Task 1.8 |
-| TBD-7 | 遠端入口選擇、滿載等待、排程重送與時區政策 | 待確認 | Phase 2 的範圍及新增 Scenario |
-| TBD-8 | D-08、D-09 的能力結果、預算與效能門檻 | 待確認 | Phase 0 能力結論、Phase 3 範圍及新增 Scenario |
+| TBD-7 | 遠端入口選擇、滿載等待、排程重送與時區政策 | 不影響本次交付 | 2026-10-21 回填：追蹤：遠端入口由 [#4](https://github.com/raybird/Asura/issues/4)（Phase 2A）交付；滿載等待、排程與時區政策由 [#6](https://github.com/raybird/Asura/issues/6)（Phase 2B）交付。本 issue 只交付文件 |
+| TBD-8 | D-08、D-09 的能力結果、預算與效能門檻 | 不影響本次交付 | 2026-10-21 回填：追蹤：D-08 的能力探測與預算由 [#17](https://github.com/raybird/Asura/issues/17)（Phase 3E）交付；D-09 不在 v1.0 範圍，系統層級判準與數值尚未定義，現況記於[架構設計](../../superpowers/specs/2026-09-11-asura-architecture-design.md) D-09 列。本 issue 只交付文件 |
 
 ## 實作步驟來源
 
@@ -147,6 +147,7 @@ Feature: 可控且可追蹤的本機任務執行
 | 2026-09-12 | 依使用者核准修復 review-6683a0f.md 提出的 L-01 進程組孤兒生命週期身分校驗與安全回收防禦，通過 go test -race 驗證 | Antigravity |
 | 2026-09-12 | 依使用者核准修復 review-6c8895b.md 提出的 M-01 孤兒進程組身分未知保留與假成功防禦，通過 go test -race 驗證 | Antigravity |
 | 2026-09-12 | PR #1 合併至 main（merge commit `1cd0301`），issue 結案 | Raybird |
+| 2026-10-21 | 結案後回填待確認事項：TBD-2 改已解決，TBD-7、TBD-8 改不影響本次交付並寫明去向 | Raybird |
 
 ---
 
