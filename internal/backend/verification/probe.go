@@ -4,10 +4,8 @@ package verification
 
 import (
 	"context"
-	"crypto/sha256"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -257,17 +255,11 @@ func waitFor(ctx context.Context, limit time.Duration, cond func() bool) bool {
 func digests(paths []string) (map[string]string, error) {
 	out := make(map[string]string, len(paths))
 	for _, path := range paths {
-		f, err := os.Open(path)
+		sum, err := FileDigest(path)
 		if err != nil {
 			return nil, err
 		}
-		h := sha256.New()
-		_, err = io.Copy(h, f)
-		f.Close()
-		if err != nil {
-			return nil, err
-		}
-		out[path] = fmt.Sprintf("%x", h.Sum(nil))
+		out[path] = sum
 	}
 	return out, nil
 }

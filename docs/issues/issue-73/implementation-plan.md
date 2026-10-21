@@ -101,12 +101,12 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 
 ### Task 2.1 — 驗證紀錄與身分計算
 - 產出與範圍：`internal/backend/verification`：身分（版本 + SHA-256）計算、紀錄讀取、原子寫入（暫存檔再 rename，`0600`）、移除、權限不安全時拒絕讀取；`internal/config` 提供 `$XDG_DATA_HOME/asura/` 下的固定路徑
-- 相依：Task 1.4
+- 相依：Task 1.1、1.2（2026-10-21 由 Task 1.4 收窄：紀錄與身分計算不依賴 probe 結果；OMP／Antigravity probe 的可信度只影響 Task 3.1，Task 1.3 因登入過期阻塞）
 - 驗收編號：支援 SCN-003、SCN-006、SCN-007
 - 完成判準：hermetic 單元測試覆蓋新增、重複新增、移除、內建身分不能移除、檔案損毀與權限不安全；路徑不受 `--db` 與 config 有無影響
 - 驗證：單元測試先紅後綠，期望值為字面值
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成
+- 證據：[evidence/task-2.1.md](./evidence/task-2.1.md)：6 個單元測試先紅後綠；專案 gate 24 個套件 ok
 
 ### Task 2.2 — OpenCode／Codex 改為身分比對
 - 產出與範圍：兩個 adapter 的清冊 probe 與 `ValidateVersion` 改為「內建或已驗證」判定，計算已解析執行檔的 SHA-256；清冊新增 reason `version_unverified` 並加入白名單，policy 維持 `inventory-v1`

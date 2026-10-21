@@ -177,6 +177,7 @@ Feature: runtime 版本通過驗證才可使用
 |------|------|--------|
 | 2026-10-21 | 建立；Q1～Q13 回答後核准 SCN-001～SCN-010 | Raybird |
 | 2026-10-21 | Phase 1 live probe：唯讀 probe 與失效對照組可信；發現取消回收（#74）與 OpenCode 沙箱（#75）兩個內建版本也有的問題，Q14、Q15 決定另開 issue、probe 維持必要；OMP／Antigravity 登入過期，Task 1.3 待重新登入 | Raybird |
+| 2026-10-21 | Task 2.1 相依收窄為 Task 1.1、1.2 並完成：驗證紀錄讀寫與身分計算，路徑固定為 `$XDG_DATA_HOME/asura/runtime-verification.json` | Raybird |
 
 ---
 **建立日期**: 2026-10-21  
