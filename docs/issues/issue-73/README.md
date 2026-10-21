@@ -180,6 +180,7 @@ Feature: runtime 版本通過驗證才可使用
 | 2026-10-21 | Task 2.1 相依收窄為 Task 1.1、1.2 並完成：驗證紀錄讀寫與身分計算，路徑固定為 `$XDG_DATA_HOME/asura/runtime-verification.json` | Raybird |
 | 2026-10-21 | Task 2.2 完成：OpenCode／Codex 改為身分比對，新增 `version_unverified`；OpenCode 內建版本改為精確的 1.18.23；Codex 身分涵蓋 npm 平台套件（原生檔與附帶的 bwrap） | Raybird |
 | 2026-10-21 | Task 2.3 完成：OMP／Antigravity 改為內建或已驗證的身分；OMP 的 node_modules 樹雜湊記在驗證紀錄（`tree_sha256`），執行時固定 | Raybird |
+| 2026-10-21 | Task 2.4 完成：daemon、runtime inventory、doctor、本機 run 都讀同一份驗證紀錄；拒絕訊息與 doctor 提示 `asura runtime verify <runtime>` | Raybird |
 
 ---
 **建立日期**: 2026-10-21  

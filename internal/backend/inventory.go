@@ -321,13 +321,21 @@ type InventoryAdmissionError struct {
 }
 
 func (e *InventoryAdmissionError) Error() string {
-	reasons := []string{}
+	reasons, hints := []string{}, ""
 	for _, entry := range e.Snapshot.Entries {
 		if entry.AvailabilityState != Available {
 			reasons = append(reasons, entry.RuntimeID+":"+string(entry.ReasonCode))
+			if entry.ReasonCode == VersionUnverified {
+				hints += "; " + VerifyHint(entry.RuntimeID)
+			}
 		}
 	}
-	return fmt.Sprintf("runtime admission rejected: %v; availability=%v", e.Cause, reasons)
+	return fmt.Sprintf("runtime admission rejected: %v; availability=%v%s", e.Cause, reasons, hints)
+}
+
+// VerifyHint 2026-10-21：issue-73，未驗證的 runtime 版本一律提示同一個命令。
+func VerifyHint(runtimeID string) string {
+	return "to use this " + runtimeID + " version, run: asura runtime verify " + runtimeID
 }
 func (e *InventoryAdmissionError) Unwrap() error { return e.Cause }
 func (c *ExecutionContract) validateInventory(mode, id string) error {

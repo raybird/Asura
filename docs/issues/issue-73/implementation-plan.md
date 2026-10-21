@@ -132,8 +132,8 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 - 驗收編號：SCN-001、SCN-002、SCN-006、SCN-008
 - 完成判準：四種身分在 runtime inventory、doctor、本機 run（含 `--backend auto`）、daemon admission 的結果一致；未驗證時 explicit 不建立 Task、auto 排除該 runtime；`rg` 找不到殘留的寫死版本
 - 驗證：整合測試（假執行檔 + 真 CLI／daemon），先紅後綠
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成
+- 證據：[evidence/task-2.4.md](./evidence/task-2.4.md)：`TestRuntimeVerificationAcrossPaths` 先紅後綠，四條路徑在五個階段結果一致；專案 gate 24 個套件 ok
 
 ### Task 2.5 — 紀錄移除後的 stage 執行前檢查與舊封存相容
 - 產出與範圍：確認 stage guard 在紀錄移除後拒絕執行且不改選；升級前封存（policy `inventory-v1`、不含新 reason）的 cron 與排隊任務仍通過 `InventorySnapshot.Validate`

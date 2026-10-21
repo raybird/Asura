@@ -68,6 +68,8 @@ type Config struct {
 	OpenCodeConfig  OpenCodeRuntimeConfig
 	ContextConfig   contextwin.Config
 	RuntimePriority []string
+	// VerificationPath 是 runtime 驗證紀錄；空字串代表只認內建版本（issue-73）。
+	VerificationPath string
 }
 
 // Daemon 實作單一守護進程中樞
@@ -152,7 +154,7 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 		cfg.MaxQueue = 10
 	}
 	if cfg.OpenCodeConfig.ExpectedVersion == "" {
-		cfg.OpenCodeConfig.ExpectedVersion = "1.18.23"
+		cfg.OpenCodeConfig.ExpectedVersion = opencode.BuiltinVersion
 	}
 	if cfg.OpenCodeConfig.Permission == "" {
 		cfg.OpenCodeConfig.Permission = DefaultApprovedPermissionPolicy
@@ -187,6 +189,7 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 		readOnlyAdapter := opencode.NewAdapter(opencode.AdapterConfig{
 			BinaryPath:           d.cfg.OpenCodeConfig.BinaryPath,
 			ExpectedVersion:      d.cfg.OpenCodeConfig.ExpectedVersion,
+			VerificationPath:     d.cfg.VerificationPath,
 			ConfigDir:            d.readOnlyConfigDir,
 			Permission:           DefaultReadOnlyPermissionPolicy,
 			DisableAuto:          true,                // 嚴禁自動修改、建置或測試
@@ -207,12 +210,13 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 			},
 		})
 		strikerAdapter := opencode.NewAdapter(opencode.AdapterConfig{
-			BinaryPath:      d.cfg.OpenCodeConfig.BinaryPath,
-			ExpectedVersion: d.cfg.OpenCodeConfig.ExpectedVersion,
-			ConfigDir:       d.cfg.OpenCodeConfig.ConfigDir,
-			Permission:      d.cfg.OpenCodeConfig.Permission,
-			DisableAuto:     d.cfg.OpenCodeConfig.DisableAuto,
-			Role:            opencode.RoleStriker,
+			BinaryPath:       d.cfg.OpenCodeConfig.BinaryPath,
+			ExpectedVersion:  d.cfg.OpenCodeConfig.ExpectedVersion,
+			VerificationPath: d.cfg.VerificationPath,
+			ConfigDir:        d.cfg.OpenCodeConfig.ConfigDir,
+			Permission:       d.cfg.OpenCodeConfig.Permission,
+			DisableAuto:      d.cfg.OpenCodeConfig.DisableAuto,
+			Role:             opencode.RoleStriker,
 			OnProcessStarted: func(ctx context.Context, pgid int) {
 				if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
 					_ = store.UpdateTaskPGID(context.Background(), taskID, pgid)
@@ -228,7 +232,7 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 		reg := backend.NewRegistry()
 		_ = reg.Register(opencodeLogicalBackend)
 		_ = reg.Register(codex.NewAdapter(codex.AdapterConfig{
-			ExpectedVersion: "0.155.0",
+			VerificationPath: d.cfg.VerificationPath,
 			OnProcessStarted: func(ctx context.Context, pgid int) {
 				if taskID := engine.TaskIDFromContext(ctx); taskID != "" {
 					_ = store.UpdateTaskPGID(context.Background(), taskID, pgid)
@@ -251,8 +255,8 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 				_ = store.UpdateTaskPGID(context.Background(), id, 0)
 			}
 		}
-		_ = reg.Register(omp.NewAdapter(omp.AdapterConfig{OnProcessStarted: onStarted, OnProcessExited: onExited}))
-		_ = reg.Register(antigravity.NewAdapter(antigravity.AdapterConfig{OnProcessStarted: onStarted, OnProcessExited: onExited}))
+		_ = reg.Register(omp.NewAdapter(omp.AdapterConfig{VerificationPath: d.cfg.VerificationPath, OnProcessStarted: onStarted, OnProcessExited: onExited}))
+		_ = reg.Register(antigravity.NewAdapter(antigravity.AdapterConfig{VerificationPath: d.cfg.VerificationPath, OnProcessStarted: onStarted, OnProcessExited: onExited}))
 
 		oracleStage := pipeline.NewOracleStageWithBackend(readOnlyAdapter)
 		strikerStage := pipeline.NewStrikerStageWithBackend(strikerAdapter)

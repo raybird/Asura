@@ -62,6 +62,16 @@ func (c *cliConfig) socketPath() string {
 }
 
 // localSocketDefault 是 status／cancel／audit／inventory 的 socket 預設；無 config 時只認 ASURA_SOCKET，未設定即走本機 DB。
+// verificationPath 2026-10-21：runtime 驗證紀錄固定在 XDG data 目錄，不受 --db 與 config 影響（issue-73）；
+// HOME 無法解析時回傳空字串，只認內建版本。
+func verificationPath() string {
+	paths, err := config.DefaultPaths(os.Getenv)
+	if err != nil {
+		return ""
+	}
+	return paths.Verification
+}
+
 func localSocketDefault() string {
 	if activeConfig == nil {
 		return os.Getenv("ASURA_SOCKET")

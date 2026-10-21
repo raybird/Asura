@@ -31,12 +31,13 @@ func newLocalRegistry() (*backend.InMemoryRegistry, func(), error) {
 		return nil, nil, err
 	}
 	reg := backend.NewRegistry()
-	read := opencode.NewAdapter(opencode.AdapterConfig{ConfigDir: config, Isolated: true, Pure: true, DisableAuto: true, DisableProjectConfig: true, Role: opencode.RoleOracle, Agent: opencode.AsuraReadOnlyAgentName, Permission: daemon.DefaultReadOnlyPermissionPolicy})
-	write := opencode.NewAdapter(opencode.AdapterConfig{Role: opencode.RoleStriker, Permission: daemon.DefaultApprovedPermissionPolicy})
+	records := verificationPath()
+	read := opencode.NewAdapter(opencode.AdapterConfig{VerificationPath: records, ConfigDir: config, Isolated: true, Pure: true, DisableAuto: true, DisableProjectConfig: true, Role: opencode.RoleOracle, Agent: opencode.AsuraReadOnlyAgentName, Permission: daemon.DefaultReadOnlyPermissionPolicy})
+	write := opencode.NewAdapter(opencode.AdapterConfig{VerificationPath: records, Role: opencode.RoleStriker, Permission: daemon.DefaultApprovedPermissionPolicy})
 	reg.Register(opencode.NewRoleRoutingBackend(read, write))
-	reg.Register(codex.NewAdapter(codex.AdapterConfig{}))
-	reg.Register(omp.NewAdapter(omp.AdapterConfig{}))
-	reg.Register(antigravity.NewAdapter(antigravity.AdapterConfig{}))
+	reg.Register(codex.NewAdapter(codex.AdapterConfig{VerificationPath: records}))
+	reg.Register(omp.NewAdapter(omp.AdapterConfig{VerificationPath: records}))
+	reg.Register(antigravity.NewAdapter(antigravity.AdapterConfig{VerificationPath: records}))
 	return reg, cleanup, nil
 }
 

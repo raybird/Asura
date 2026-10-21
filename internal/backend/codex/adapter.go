@@ -23,6 +23,9 @@ var (
 	ErrExecutionFailed = errors.New("codex execution failed")
 )
 
+// BuiltinVersion 是開發時實測過、免驗證即可使用的 Codex 版本（issue-73）
+const BuiltinVersion = "0.155.0"
+
 // AdapterConfig 代表 Codex 適配器配置
 type AdapterConfig struct {
 	BeforeStart      func(context.Context) (func(), error)
@@ -44,7 +47,7 @@ var _ backend.Backend = (*Adapter)(nil)
 // NewAdapter 建立新的 Codex Adapter 實例
 func NewAdapter(cfg AdapterConfig) *Adapter {
 	if cfg.ExpectedVersion == "" {
-		cfg.ExpectedVersion = "0.155.0"
+		cfg.ExpectedVersion = BuiltinVersion
 	}
 	if cfg.BinaryPath == "" {
 		if path, err := exec.LookPath("codex"); err == nil {

@@ -256,7 +256,11 @@ func doctorRuntimes(ctx context.Context, add func(string, checkLevel, string, st
 			}
 			add("Runtimes", levelOK, e.RuntimeID, "available version=%s executable=%s capabilities=%s", e.Descriptor.Version, executable, strings.Join(caps, ","))
 		} else {
-			add("Runtimes", levelWarn, e.RuntimeID, "%s reason=%s executable=%s", e.AvailabilityState, e.ReasonCode, executable)
+			hint := ""
+			if e.ReasonCode == backend.VersionUnverified {
+				hint = "; " + backend.VerifyHint(e.RuntimeID)
+			}
+			add("Runtimes", levelWarn, e.RuntimeID, "%s reason=%s executable=%s%s", e.AvailabilityState, e.ReasonCode, executable, hint)
 		}
 	}
 	if available == 0 {
