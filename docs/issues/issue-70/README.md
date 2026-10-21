@@ -120,9 +120,11 @@ main `23af953` 無負載 `-count=20` 與 `taskset -c 0,1` 加 6 個背景 `yes` 
 |------|------|--------|
 | 2026-10-21 | 建立；以延遲注入判定症狀 1 為測試時序假設、症狀 2 為 `caaa09c` 已由 `a84dc3a` 修正的競態；Q1～Q4 回答後核准 AC-1～AC-3 | Raybird |
 | 2026-10-21 | PR #71 獨立審查 PASS（審查 `23af953..ab3021f`，[報告](https://github.com/raybird/Asura/pull/71#issuecomment-6309265775)），無 MUST FIX；依 SHOULD FIX 更正 TBD-1 的時間描述：41ms 是注入延遲的門檻，不是 cancel 寫出 sidecar 實際所需的時間 | Raybird |
+| 2026-10-21 | PR #71 第二輪獨立審查 PASS（審查完整範圍 `23af953..1638f5c`，[報告](https://github.com/raybird/Asura/pull/71#issuecomment-6309295790)），無 MUST FIX、SHOULD FIX；NICE TO HAVE 四項中，清除調查用 worktree 一項已在結案前完成，其餘三項（測試註解點名 `taskCancelIntentPath`、失敗路徑先殺子行程、症狀 2 的措辭以程式機制為主）未處理 | Raybird |
+| 2026-10-21 | PR #71 squash 合併至 main（merge commit `6f4d4e9`，合併內容即審查的 HEAD `1638f5c`）；GitHub #70 由 `Closes #70` 自動關閉，issue 結案。合併後 main push CI [run 39555053821](https://github.com/raybird/Asura/actions/runs/39555053821) 為 success，本測試 PASS（3.76s） | Raybird |
 
 ---
 **建立日期**: 2026-10-21  
 **分級**: Small — 只改一個測試函式，不改產品程式  
 **風險**: Medium — 開始時根因未知，可能是產品缺陷而非測試時序問題\
-**狀態**: 進行中
+**狀態**: 已完成 — PR #71 於 2026-10-21 合併（merge commit `6f4d4e9`）
