@@ -73,7 +73,7 @@ main `23af953` 無負載 `-count=20` 與 `taskset -c 0,1` 加 6 個背景 `yes` 
 
 | 編號 | 事項 | 狀態 | 影響 |
 |------|------|------|------|
-| TBD-1 | 同檔 `TestCLI_LatestReview_G01_HandshakeCancelBeforeStart`（`cli_test.go` 約 797 行）放鎖前輪詢 1 秒等 `cancelled`，持鎖期間狀態不會變成 `cancelled`，實際上就是固定等 1 秒，屬同類時序假設 | 不影響本次交付 | 2026-10-21 Q4 回答「不改，記入待確認事項」：餘裕 1 秒遠大於 main 上 cancel 寫出 sidecar 所需的約 41ms，也沒有失敗紀錄；在 PR 揭露，由 reviewer 評估。追蹤：無，該測試失敗時另開 issue，比照本 issue 的延遲注入判定 |
+| TBD-1 | 同檔 `TestCLI_LatestReview_G01_HandshakeCancelBeforeStart`（`cli_test.go` 約 797 行）放鎖前輪詢 1 秒等 `cancelled`，持鎖期間狀態不會變成 `cancelled`，實際上就是固定等 1 秒，屬同類時序假設 | 不影響本次交付 | 2026-10-21 Q4 回答「不改，記入待確認事項」：未注入延遲時 cancel 約 9ms 內就寫出 sidecar（main 上要額外注入約 41ms 才吃光 50ms 的餘裕），1 秒的餘裕大上百倍，也沒有失敗紀錄；在 PR 揭露，由 reviewer 評估。追蹤：無，該測試失敗時另開 issue，比照本 issue 的延遲注入判定 |
 
 ## 實作與驗證步驟
 
@@ -119,6 +119,7 @@ main `23af953` 無負載 `-count=20` 與 `taskset -c 0,1` 加 6 個背景 `yes` 
 | 日期 | 異動 | 負責人 |
 |------|------|--------|
 | 2026-10-21 | 建立；以延遲注入判定症狀 1 為測試時序假設、症狀 2 為 `caaa09c` 已由 `a84dc3a` 修正的競態；Q1～Q4 回答後核准 AC-1～AC-3 | Raybird |
+| 2026-10-21 | PR #71 獨立審查 PASS（審查 `23af953..ab3021f`，[報告](https://github.com/raybird/Asura/pull/71#issuecomment-6309265775)），無 MUST FIX；依 SHOULD FIX 更正 TBD-1 的時間描述：41ms 是注入延遲的門檻，不是 cancel 寫出 sidecar 實際所需的時間 | Raybird |
 
 ---
 **建立日期**: 2026-10-21  
