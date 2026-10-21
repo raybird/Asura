@@ -135,6 +135,9 @@ Feature: runtime 版本通過驗證才可使用
   - Q11「stage 執行前拒絕 (Recommended)」：紀錄被移除時，已接受但尚未執行的任務沿用 stage 執行前重新判定、不改選的語意（SCN-009，TBD-2）
   - Q12「可以，不綁模型 (Recommended)」：OpenCode／Codex 的 probe 用 runtime 的預設模型，紀錄不綁模型（SCN-003，TBD-4）
   - Q13「不調升，只擴充 reason (Recommended)」：清冊 policy 版本維持 `inventory-v1`，只在 reason 白名單加入 `version_unverified`，升級前封存的排隊任務與 cron 不受影響（SCN-009，TBD-3）
+- **Phase 1 決策**（2026-10-21，live probe 發現內建版本也有的既有問題後逐題確認，見 [evidence/phase1-probes.md](./evidence/phase1-probes.md)）：
+  - Q14「另開 issue 修，probe 維持必要 (Recommended)」：取消後 Codex／OpenCode 由模型啟動的命令不會被回收，另開 [#74](https://github.com/raybird/Asura/issues/74)；取消 probe 仍是通過驗證的必要條件（SCN-004、SCN-005 不變）
+  - Q15「另開 issue 加沙箱，probe 維持必要 (Recommended)」：OpenCode 寫入角色沒有 OS 沙箱，另開 [#75](https://github.com/raybird/Asura/issues/75)；workspace 邊界 probe 仍是必要條件。Q2 的「workspace-write 只能寫 workspace」對 OpenCode 現況不成立，由 #75 補齊
 
 | Scenario | 核准日期 | 狀態 |
 |----------|---------|------|
@@ -165,12 +168,15 @@ Feature: runtime 版本通過驗證才可使用
 | TBD-2 | 驗證紀錄被移除時，已接受但尚未執行的任務在 stage 執行前被拒絕（SCN-009），會讓排隊中的任務失敗 | 已解決 | 2026-10-21 Q11 回答「stage 執行前拒絕」：移除紀錄通常是發現該版有問題，照跑等於收不回來；沿用既有 fail-closed 語意（SCN-009） |
 | TBD-3 | 新增 reason 是否要調升 inventory policy 版本：`InventorySnapshot.Validate` 要求 policy 版本完全相等 | 已解決 | 2026-10-21 Q13 回答「不調升，只擴充 reason」：舊的封存內容不會含新 reason，照樣通過驗證，升級前的 cron 與排隊任務不受影響；policy 維持 `inventory-v1`（SCN-009） |
 | TBD-4 | OpenCode／Codex 的 probe 使用 runtime 的預設模型，驗證紀錄不綁模型 | 已解決 | 2026-10-21 Q12 回答「可以，不綁模型」：沙箱與輸出格式屬於 runtime CLI 本身，一個版本驗證一次即可（SCN-003） |
+| TBD-5 | OMP 與 Antigravity 的登入在 2026-10-21 已過期，Task 1.3 的 probe 無法執行 | 待確認 | Task 1.3、1.4；需使用者在原 CLI 重新登入後重跑 |
+| TBD-6 | Codex／OpenCode 新版本要等 #74、#75 合併後才可能通過驗證 | 待確認 | Task 3.5 的端到端驗證相依 #74、#75；Phase 2、Task 3.1～3.4 不受影響 |
 
 ## Timeline
 
 | 日期 | 異動 | 負責人 |
 |------|------|--------|
 | 2026-10-21 | 建立；Q1～Q13 回答後核准 SCN-001～SCN-010 | Raybird |
+| 2026-10-21 | Phase 1 live probe：唯讀 probe 與失效對照組可信；發現取消回收（#74）與 OpenCode 沙箱（#75）兩個內建版本也有的問題，Q14、Q15 決定另開 issue、probe 維持必要；OMP／Antigravity 登入過期，Task 1.3 待重新登入 | Raybird |
 
 ---
 **建立日期**: 2026-10-21  

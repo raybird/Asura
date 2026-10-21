@@ -67,8 +67,8 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 - 驗收編號：SCN-005（風險證據）
 - 完成判準：四個 probe 在 0.163.0 各有明確結果；唯讀 probe 的正向對照（workspace-write 下同一 prompt 寫出檔案）成立；沙箱失效對照組（adapter 以可寫模式執行唯讀角色）讓唯讀 probe 失敗；記錄模型呼叫次數、耗時與登入條件
 - 驗證：live 實跑加對照組；被跳過或無法得出結果的 probe 照實記錄，不計為通過
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成（probe 可信；cancellation 抓到既有問題 #74）
+- 證據：[evidence/phase1-probes.md](./evidence/phase1-probes.md)：0.163.0 與內建 0.155.0 的 output／workspace-boundary／read-only 皆 PASS、cancellation 皆 FAIL；兩組失效對照組都讓對應 probe 失敗
 
 ### Task 1.2 — OpenCode probe 在 1.18.31 上的可信度
 - 產出與範圍：新寫 OpenCode 唯讀與寫入角色的 probe（目前只有輸出解析的 live 測試），透過 opencode adapter 的唯讀隔離設定與寫入設定執行；另含輸出解析、取消；紀錄存 `evidence/phase1-opencode.md`
@@ -76,8 +76,8 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 - 驗收編號：SCN-005（風險證據）
 - 完成判準：同 Task 1.1；沙箱失效對照組為「唯讀角色改用寫入設定」
 - 驗證：同 Task 1.1
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成（probe 可信；抓到既有問題 #74、#75）
+- 證據：[evidence/phase1-probes.md](./evidence/phase1-probes.md)：1.18.31 與內建 1.18.23 的 output／read-only 皆 PASS、workspace-boundary 與 cancellation 皆 FAIL；唯讀失效對照組讓 read-only 失敗
 
 ### Task 1.3 — OMP／Antigravity probe 的可信度
 - 產出與範圍：在 Asura 的 bwrap 內執行輸出解析、取消、登入憑證邊界 probe；Antigravity 目前因 hash 不符而 unavailable，在 worktree 暫時以本機安裝的 hash 放行；紀錄存 `evidence/phase1-clisandbox.md`
@@ -85,8 +85,8 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 - 驗收編號：SCN-005（風險證據）
 - 完成判準：每個 probe 有明確結果；憑證邊界 probe 有失效對照組（例如憑證以可寫方式掛入時 probe 失敗）；記錄模型呼叫次數與耗時
 - 驗證：live 實跑加對照組
-- 狀態：📝 待實作
-- 證據：
+- 狀態：⏸️ 阻塞：OMP、Antigravity 登入過期（TBD-5）
+- 證據：[evidence/phase1-probes.md](./evidence/phase1-probes.md)：兩者 probe 皆回 authentication_failed，判為無法執行；憑證不變 PASS
 
 ### Task 1.4 — Phase 1 判定
 - 產出與範圍：彙整 Task 1.1～1.3，寫回 README「風險與首要驗證」的完成證據；列出每個 runtime 驗證一次的模型呼叫次數與所需條件
@@ -184,7 +184,7 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 
 ### Task 3.5 — 本機真實 runtime 端到端
 - 產出與範圍：在維護者主機上以 `asura runtime verify` 驗證 Codex 0.163.0 與 OpenCode 1.18.31，之後以 daemon `ask` 各跑一個任務；紀錄存 `evidence/e2e.md`
-- 相依：Task 2.4、Task 3.3
+- 相依：Task 2.4、Task 3.3、[#74](https://github.com/raybird/Asura/issues/74)、[#75](https://github.com/raybird/Asura/issues/75)（2026-10-21 Q14、Q15）
 - 驗收編號：支援 SCN-003、SCN-008
 - 完成判準：驗證前兩者在四條判定路徑皆為 `version_unverified`；驗證後皆為 available，daemon 任務成功；移除紀錄後回到 `version_unverified`
 - 驗證：live 端到端，記錄命令與輸出
