@@ -1,0 +1,103 @@
+2026-10-21T10:53:14+08:00
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.30s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.30s)
+=== RUN   TestRuntimeSelectionLocalCancel
+    runtime_selection_test.go:124: runtime did not start
+    runtime_selection_test.go:102: runner task status=failed pgid=0 err="audit_persistence_failed\naudit_persistence_failed" result=""
+    runtime_selection_test.go:106: runner stdout="Task ID: cancel-auto\n" stderr="error: audit_persistence_failed\naudit_persistence_failed\n"
+--- FAIL: TestRuntimeSelectionLocalCancel (5.03s)
+=== RUN   TestRuntimeSelectionLocalCancel
+    runtime_selection_test.go:124: runtime did not start
+    runtime_selection_test.go:102: runner task status=failed pgid=0 err="audit_persistence_failed\naudit_persistence_failed" result=""
+    runtime_selection_test.go:106: runner stdout="Task ID: cancel-auto\n" stderr="error: audit_persistence_failed\naudit_persistence_failed\n"
+--- FAIL: TestRuntimeSelectionLocalCancel (5.04s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.27s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.29s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.29s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.28s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.30s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.30s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.31s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.29s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.32s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.33s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.30s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.28s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.31s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.27s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.26s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.27s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.29s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.28s)
+=== RUN   TestRuntimeSelectionLocalCancel
+    runtime_selection_test.go:130: cancel: error: failed to cancel task: task is not running: task status is failed
+    runtime_selection_test.go:102: runner task status=failed pgid=0 err="backend codex failed (empty_result): codex produced empty result" result=""
+    runtime_selection_test.go:106: runner stdout="Task ID: cancel-auto\n" stderr="error: backend codex failed (empty_result): codex produced empty result\n"
+--- FAIL: TestRuntimeSelectionLocalCancel (0.27s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.30s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.30s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.33s)
+=== RUN   TestRuntimeSelectionLocalCancel
+    runtime_selection_test.go:124: runtime did not start
+    runtime_selection_test.go:102: runner task status=failed pgid=0 err="audit_persistence_failed\naudit_persistence_failed" result=""
+    runtime_selection_test.go:106: runner stdout="Task ID: cancel-auto\n" stderr="error: audit_persistence_failed\naudit_persistence_failed\n"
+--- FAIL: TestRuntimeSelectionLocalCancel (5.04s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.29s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.35s)
+=== RUN   TestRuntimeSelectionLocalCancel
+    runtime_selection_test.go:124: runtime did not start
+    runtime_selection_test.go:102: runner task status=failed pgid=0 err="audit_persistence_failed\naudit_persistence_failed" result=""
+    runtime_selection_test.go:106: runner stdout="Task ID: cancel-auto\n" stderr="error: audit_persistence_failed\naudit_persistence_failed\n"
+--- FAIL: TestRuntimeSelectionLocalCancel (5.03s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.28s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.29s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.31s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.30s)
+=== RUN   TestRuntimeSelectionLocalCancel
+    runtime_selection_test.go:130: cancel: error: failed to cancel task: task is not running: task status is failed
+    runtime_selection_test.go:102: runner task status=failed pgid=0 err="backend codex failed (empty_result): codex produced empty result" result=""
+    runtime_selection_test.go:106: runner stdout="Task ID: cancel-auto\n" stderr="error: backend codex failed (empty_result): codex produced empty result\n"
+--- FAIL: TestRuntimeSelectionLocalCancel (0.28s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.30s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.30s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.30s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.28s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.30s)
+FAIL
+FAIL	asura/cmd/asura	30.741s
+FAIL
+exit=1

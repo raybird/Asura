@@ -1,0 +1,28 @@
+diff --git a/cmd/asura/runtime_selection_test.go b/cmd/asura/runtime_selection_test.go
+index 2841bbd..2fcf1e9 100644
+--- a/cmd/asura/runtime_selection_test.go
++++ b/cmd/asura/runtime_selection_test.go
+@@ -89,9 +89,21 @@ func TestRuntimeSelectionLocalCancel(t *testing.T) {
+ 	t.Setenv("ASURA_RUNTIME_PRIORITY", "codex")
+ 	db := filepath.Join(root, "tasks.db")
+ 	finished := make(chan int, 1)
++	var runOut, runErr safeBuffer
+ 	go func() {
+-		var out, stderr bytes.Buffer
+-		finished <- handleRun([]string{"--db", db, "--workspace", root, "--id", "cancel-auto", "--backend", "auto", "probe"}, &out, &stderr)
++		finished <- handleRun([]string{"--db", db, "--workspace", root, "--id", "cancel-auto", "--backend", "auto", "probe"}, &runOut, &runErr)
++	}()
++	defer func() {
++		if !t.Failed() {
++			return
++		}
++		if s, err := storage.NewSQLiteStore(db); err == nil {
++			if tk, err := s.GetTask(context.Background(), "cancel-auto"); err == nil {
++				t.Logf("runner task status=%s pgid=%d err=%q result=%q", tk.Status, tk.PGID, tk.ErrorMessage, tk.Result)
++			}
++			s.Close()
++		}
++		t.Logf("runner stdout=%q stderr=%q", runOut.String(), runErr.String())
+ 	}()
+ 	var store *storage.SQLiteStore
+ 	var task *storage.Task

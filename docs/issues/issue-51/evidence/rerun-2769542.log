@@ -1,0 +1,84 @@
+2026-10-21T10:53:48+08:00
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.27s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.31s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.28s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.29s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.29s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.32s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.31s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.29s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.31s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.34s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.30s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.30s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.31s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.29s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.30s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.32s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.35s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.31s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.29s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.31s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.29s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.35s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.30s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.32s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.38s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.32s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.27s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.33s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.34s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.30s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.26s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.29s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.28s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.26s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.27s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.30s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.30s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.30s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.31s)
+=== RUN   TestRuntimeSelectionLocalCancel
+--- PASS: TestRuntimeSelectionLocalCancel (0.34s)
+PASS
+ok  	asura/cmd/asura	13.197s
+exit=0
