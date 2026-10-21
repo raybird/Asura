@@ -12,7 +12,7 @@ import (
 func TestInventoryOpenCodeProbe(t *testing.T) {
 	root := t.TempDir()
 	binary := filepath.Join(root, "opencode")
-	os.WriteFile(binary, []byte("#!/bin/sh\n[ \"$1\" = --version ] || exit 9\necho 1.18.31\n"), 0700)
+	os.WriteFile(binary, []byte("#!/bin/sh\n[ \"$1\" = --version ] || exit 9\necho 1.18.23\n"), 0700)
 	config := filepath.Join(root, "config")
 	os.MkdirAll(filepath.Join(config, "opencode"), 0700)
 	os.WriteFile(filepath.Join(config, "opencode", "opencode.json"), []byte("{}"), 0600)

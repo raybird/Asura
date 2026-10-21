@@ -114,8 +114,8 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 - 驗收編號：支援 SCN-001、SCN-002、SCN-006
 - 完成判準：以假執行檔產生內建、未驗證、已驗證、版本相同但內容不同四種身分，清冊與 Run 前檢查結果正確；`version_failed` 只用在版本取不到或格式錯
 - 驗證：hermetic 單元測試
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成
+- 證據：[evidence/task-2.2.md](./evidence/task-2.2.md)：3 個身分測試先紅後綠；本機 Codex 0.163.0、OpenCode 1.18.31 為 `version_unverified`，內建 1.18.23 為 available；專案 gate 24 個套件 ok
 
 ### Task 2.3 — OMP／Antigravity 改為內建或已驗證的 hash 集合
 - 產出與範圍：`clisandbox` 的 pinned file probe 與 Run 前的安裝樹 hash 檢查，改為接受內建 hash 集合或已驗證的 hash 集合；不符時回 `version_unverified`

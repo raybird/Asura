@@ -33,6 +33,9 @@ func TestINT001Unit(t *testing.T) {
 	if !HasLiveCredentials() {
 		t.Skip("skipping live adapter.Run test: no model credentials configured in this environment")
 	}
+	if _, err := ResolveOpenCodeBinary("", BuiltinVersion); err != nil {
+		t.Skipf("skipping live adapter.Run test: built-in opencode %s not available: %v", BuiltinVersion, err)
+	}
 	ctx := context.Background()
 	out, err := adapter.RunPrompt(ctx, "/tmp", "test prompt")
 	if err != nil {

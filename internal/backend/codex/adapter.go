@@ -28,6 +28,7 @@ type AdapterConfig struct {
 	BeforeStart      func(context.Context) (func(), error)
 	BinaryPath       string
 	ExpectedVersion  string
+	VerificationPath string
 	OnProcessStarted func(ctx context.Context, pgid int)
 	OnProcessExited  func(ctx context.Context, pgid int)
 }
@@ -83,16 +84,14 @@ func NormalizeCodexVersion(raw string) string {
 	return strings.TrimSpace(raw)
 }
 
-// ValidateVersion 嚴格校驗目前 Codex binary 版本是否符合 ExpectedVersion 契約 (Exact Match)
+// ValidateVersion 校驗目前 Codex binary：內建 ExpectedVersion 精確比對，其他版本需本機驗證紀錄（issue-73）
 func (a *Adapter) ValidateVersion(ctx context.Context) error {
 	raw, err := a.Version(ctx)
 	if err != nil {
 		return err
 	}
-	actual := NormalizeCodexVersion(raw)
-	expected := NormalizeCodexVersion(a.cfg.ExpectedVersion)
-	if expected != "" && actual != expected {
-		return fmt.Errorf("%w: expected %s, got %s", ErrVersionMismatch, expected, actual)
+	if err := a.admit(raw, a.ProbeExecutable()); err != nil {
+		return fmt.Errorf("%w: %v", ErrVersionMismatch, err)
 	}
 	return nil
 }

@@ -37,6 +37,9 @@ const (
 	RoleCritic  RuntimeRole = "critic"
 )
 
+// BuiltinVersion 是開發時實測過、免驗證即可使用的 OpenCode 版本（2026-10-21 issue-73 起精確比對）
+const BuiltinVersion = "1.18.23"
+
 // AsuraReadOnlyAgentName 定義專屬於 Asura 唯讀角色（Oracle, Critic）的 Agent 名稱
 const AsuraReadOnlyAgentName = "asura-readonly"
 
@@ -172,6 +175,7 @@ type AdapterConfig struct {
 	BeforeStart          func(context.Context) (func(), error)
 	BinaryPath           string
 	ExpectedVersion      string
+	VerificationPath     string
 	ConfigDir            string
 	Permission           string // JSON string for OPENCODE_PERMISSION
 	DisableAuto          bool
@@ -193,18 +197,19 @@ type Adapter struct {
 
 // ValidateOpenCodeVersion 檢查二進位檔版本是否符合預期
 func ValidateOpenCodeVersion(binPath string, expectedVersion string) error {
-	return validateOpenCodeVersion(context.Background(), binPath, expectedVersion)
+	return validateOpenCodeVersion(context.Background(), binPath, expectedVersion, "")
 }
 
 // 2026-10-03：接受前版本預檢沿用 caller deadline，保留既有公開 helper 契約。
-func validateOpenCodeVersion(ctx context.Context, binPath string, expectedVersion string) error {
+// 2026-10-21：issue-73，expectedVersion 為內建版本（精確比對），其他版本需 recordsPath 內的驗證紀錄。
+func validateOpenCodeVersion(ctx context.Context, binPath string, expectedVersion string, recordsPath string) error {
 	out, err := exec.CommandContext(ctx, binPath, "--version").Output()
 	if err != nil {
 		return fmt.Errorf("execute opencode --version: %w", err)
 	}
 	ver := strings.TrimSpace(string(out))
-	if expectedVersion != "" && !strings.HasPrefix(ver, expectedVersion) {
-		return fmt.Errorf("unsupported opencode version: expected %s, got %s", expectedVersion, ver)
+	if err := admitOpenCode(ver, binPath, expectedVersion, recordsPath); err != nil {
+		return fmt.Errorf("unsupported opencode version %s: %w", ver, err)
 	}
 	return nil
 }
@@ -231,12 +236,12 @@ func HasLiveCredentials() bool {
 
 // ResolveOpenCodeBinary 解析並驗證 OpenCode 二進位檔路徑與版本
 func ResolveOpenCodeBinary(preferredPath string, expectedVersion string) (string, error) {
-	return resolveOpenCodeBinary(context.Background(), preferredPath, expectedVersion)
+	return resolveOpenCodeBinary(context.Background(), preferredPath, expectedVersion, "")
 }
 
-func resolveOpenCodeBinary(ctx context.Context, preferredPath string, expectedVersion string) (string, error) {
+func resolveOpenCodeBinary(ctx context.Context, preferredPath string, expectedVersion string, recordsPath string) (string, error) {
 	if preferredPath != "" {
-		if err := validateOpenCodeVersion(ctx, preferredPath, expectedVersion); err != nil {
+		if err := validateOpenCodeVersion(ctx, preferredPath, expectedVersion, recordsPath); err != nil {
 			return "", err
 		}
 		return preferredPath, nil
@@ -247,7 +252,7 @@ func resolveOpenCodeBinary(ctx context.Context, preferredPath string, expectedVe
 	if err == nil {
 		isolatedBin := filepath.Join(home, ".cache/asura-probe-issue-2/install/node_modules/.bin/opencode")
 		if _, err := os.Stat(isolatedBin); err == nil {
-			if vErr := validateOpenCodeVersion(ctx, isolatedBin, expectedVersion); vErr == nil {
+			if vErr := validateOpenCodeVersion(ctx, isolatedBin, expectedVersion, recordsPath); vErr == nil {
 				return isolatedBin, nil
 			}
 		}
@@ -256,7 +261,7 @@ func resolveOpenCodeBinary(ctx context.Context, preferredPath string, expectedVe
 	// 2. 檢查 PATH
 	pathBin, err := exec.LookPath("opencode")
 	if err == nil {
-		vErr := validateOpenCodeVersion(ctx, pathBin, expectedVersion)
+		vErr := validateOpenCodeVersion(ctx, pathBin, expectedVersion, recordsPath)
 		if vErr == nil {
 			return pathBin, nil
 		}
@@ -269,7 +274,7 @@ func resolveOpenCodeBinary(ctx context.Context, preferredPath string, expectedVe
 // NewAdapter 建立新的 OpenCode Adapter 實例
 func NewAdapter(cfg AdapterConfig) *Adapter {
 	if cfg.ExpectedVersion == "" {
-		cfg.ExpectedVersion = "1.18"
+		cfg.ExpectedVersion = BuiltinVersion
 	}
 	return &Adapter{cfg: cfg}
 }
@@ -348,9 +353,9 @@ func (a *Adapter) ID() string {
 func (a *Adapter) Version(ctx context.Context) (string, error) {
 	expectedVer := a.cfg.ExpectedVersion
 	if expectedVer == "" {
-		expectedVer = "1.18"
+		expectedVer = BuiltinVersion
 	}
-	binPath, err := resolveOpenCodeBinary(ctx, a.cfg.BinaryPath, expectedVer)
+	binPath, err := resolveOpenCodeBinary(ctx, a.cfg.BinaryPath, expectedVer, a.cfg.VerificationPath)
 	if err != nil {
 		return "", err
 	}
@@ -390,7 +395,7 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 	startedAt := time.Now()
 	cfg := a.cfg
 	if cfg.ExpectedVersion == "" {
-		cfg.ExpectedVersion = "1.18"
+		cfg.ExpectedVersion = BuiltinVersion
 	}
 
 	// 依角色配置安全邊界：Oracle 與 Critic 必須啟用唯讀隔離沙盒 (MBACK-008)
@@ -416,7 +421,7 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 		defer cleanupReadOnly()
 	}
 
-	binPath, err := ResolveOpenCodeBinary(cfg.BinaryPath, cfg.ExpectedVersion)
+	binPath, err := resolveOpenCodeBinary(ctx, cfg.BinaryPath, cfg.ExpectedVersion, cfg.VerificationPath)
 	if err != nil {
 		return &backend.ExecutionResult{
 			BackendID:    "opencode",

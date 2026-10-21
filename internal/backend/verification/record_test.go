@@ -111,6 +111,13 @@ func TestAllowed(t *testing.T) {
 		{"other runtime", Identity{Runtime: "opencode", Version: "0.163.0", Digest: "aaaa"}, false},
 		{"empty digest", Identity{Runtime: "codex", Version: "0.163.0"}, false},
 	}
+	versionOnly := []Identity{{Runtime: "opencode", Version: "1.18.23"}}
+	if !Allowed(Identity{Runtime: "opencode", Version: "1.18.23", Digest: "any"}, versionOnly, nil) {
+		t.Error("version-only builtin did not admit its version")
+	}
+	if Allowed(Identity{Runtime: "opencode", Version: "1.18.31", Digest: "any"}, versionOnly, nil) {
+		t.Error("version-only builtin admitted another version")
+	}
 	for _, c := range cases {
 		if got := Allowed(c.id, builtin, records); got != c.want {
 			t.Errorf("%s: Allowed=%v want %v", c.name, got, c.want)

@@ -35,8 +35,9 @@ type recordFile struct {
 }
 
 var (
-	ErrBuiltin  = errors.New("built-in verified identities cannot be removed")
-	ErrNotFound = errors.New("no verification record for this identity")
+	ErrBuiltin    = errors.New("built-in verified identities cannot be removed")
+	ErrNotFound   = errors.New("no verification record for this identity")
+	ErrUnverified = errors.New("runtime version is not verified")
 )
 
 // Load 每次判定都重新讀檔；檔案不存在代表沒有紀錄。可被他人寫入的檔案會被拒絕，
@@ -78,10 +79,8 @@ func Add(path string, r Record) error {
 }
 
 func Remove(path string, id Identity, builtin []Identity) error {
-	for _, b := range builtin {
-		if b == id {
-			return ErrBuiltin
-		}
+	if matchesBuiltin(id, builtin) {
+		return ErrBuiltin
 	}
 	return update(path, func(records []Record) ([]Record, error) {
 		for i := range records {
@@ -93,17 +92,48 @@ func Remove(path string, id Identity, builtin []Identity) error {
 	})
 }
 
+// Admit 判定已安裝的 runtime 是否可用。內建身分沒有 Digest 時只比版本（OpenCode、Codex 沿用變更前的行為），
+// 此時不計算雜湊；其餘身分需要版本與雜湊都相符的內建身分或本機驗證紀錄。
+func Admit(runtime, version string, digest func() (string, error), builtin []Identity, recordsPath string) error {
+	for _, b := range builtin {
+		if b.Digest == "" && b.Runtime == runtime && b.Version == version {
+			return nil
+		}
+	}
+	sum, err := digest()
+	if err != nil {
+		return err
+	}
+	var records []Record
+	if recordsPath != "" {
+		if records, err = Load(recordsPath); err != nil {
+			return fmt.Errorf("%w: %v", ErrUnverified, err)
+		}
+	}
+	if Allowed(Identity{Runtime: runtime, Version: version, Digest: sum}, builtin, records) {
+		return nil
+	}
+	return fmt.Errorf("%w: %s %s; run asura runtime verify %s", ErrUnverified, runtime, version, runtime)
+}
+
 func Allowed(id Identity, builtin []Identity, records []Record) bool {
 	if id.Runtime == "" || id.Version == "" || id.Digest == "" {
 		return false
 	}
-	for _, b := range builtin {
-		if b == id {
-			return true
-		}
+	if matchesBuiltin(id, builtin) {
+		return true
 	}
 	for _, r := range records {
 		if r.Identity == id {
+			return true
+		}
+	}
+	return false
+}
+
+func matchesBuiltin(id Identity, builtin []Identity) bool {
+	for _, b := range builtin {
+		if b.Runtime == id.Runtime && b.Version == id.Version && (b.Digest == "" || b.Digest == id.Digest) {
 			return true
 		}
 	}
@@ -121,6 +151,56 @@ func FileDigest(path string) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
+// TreeDigest 依路徑順序涵蓋目錄樹內每個項目的路徑、型別、執行權限與內容（symlink 取目標字串）。
+func TreeDigest(root string) (string, error) {
+	h := sha256.New()
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		switch {
+		case d.IsDir():
+			fmt.Fprintf(h, "d %q\n", rel)
+		case d.Type()&fs.ModeSymlink != 0:
+			target, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(h, "l %q %q\n", rel, target)
+		case d.Type().IsRegular():
+			info, err := d.Info()
+			if err != nil {
+				return err
+			}
+			sum, err := FileDigest(path)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(h, "f %q %o %s\n", rel, info.Mode().Perm()&0o111, sum)
+		default:
+			return fmt.Errorf("unsupported file type in %s", path)
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
+// CombineDigests 把多個雜湊合成一個身分雜湊。
+func CombineDigests(parts ...string) string {
+	h := sha256.New()
+	for _, p := range parts {
+		fmt.Fprintf(h, "%s\n", p)
+	}
+	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 // update 以檔案鎖串起讀改寫，兩個 verify 同時執行時不會互相蓋掉紀錄；

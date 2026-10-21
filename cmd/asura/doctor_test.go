@@ -83,7 +83,7 @@ func TestDoctorDegradedWithOneRuntime(t *testing.T) {
 	}
 	for _, want := range []string{
 		"[ok]   codex: available version=codex-cli 0.155.0 executable=" + filepath.Join(os.Getenv("PATH"), "codex"),
-		"[warn] opencode: unavailable reason=version_failed executable=" + filepath.Join(os.Getenv("PATH"), "opencode"),
+		"[warn] opencode: unavailable reason=version_unverified executable=" + filepath.Join(os.Getenv("PATH"), "opencode"),
 		"[warn] omp: unavailable reason=",
 		"[warn] user service: systemctl not found",
 		"[info] daemon socket: no listener at",
