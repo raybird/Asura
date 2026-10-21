@@ -942,7 +942,25 @@ func TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake(t *testing.T) {
 		cancelDone <- cancelCmd.Wait()
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	// cancel 寫出取消意圖 sidecar 後才放鎖：runner 拿到鎖時看得到意圖，才是「取消先於啟動」的情境
+	cancelIntentPath := filepath.Join(filepath.Dir(dbPath), fmt.Sprintf(".task-%s.cancel", hex.EncodeToString(h[:16])))
+	intentDeadline := time.After(10 * time.Second)
+	for {
+		if _, statErr := os.Stat(cancelIntentPath); statErr == nil {
+			break
+		}
+		select {
+		case cErr := <-cancelDone:
+			_ = syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
+			_ = lf.Close()
+			t.Fatalf("cancel exited before recording intent: %v, stderr: %s, stdout: %s", cErr, cancelErr.String(), cancelOut.String())
+		case <-intentDeadline:
+			_ = syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
+			_ = lf.Close()
+			t.Fatalf("cancel did not record intent %s within 10s", cancelIntentPath)
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
 
 	// 5. 釋放排他鎖，放行握手
 	_ = syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
