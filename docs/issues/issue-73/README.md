@@ -120,7 +120,7 @@ Feature: runtime 版本通過驗證才可使用
 ```
 
 ## Gherkin 核准紀錄
-- **核准 commit**: 待提交
+- **核准 commit**: 64d7b0e
 - **核准來源**: 2026-10-21 使用者要求「依照你的建議，有個驗證的方式有通過就算可以使用」（方向：新版本通過驗證才可使用，未驗證者 fail-closed）；同日逐題確認：
   - Q1「四個 runtime 一起做」：OpenCode、Codex、OMP、Antigravity 都納入（Background、SCN-001～SCN-006）
   - Q2「寫入模型的 live probe (Recommended)」：OpenCode／Codex 驗唯讀沙箱寫不進去、workspace-write 只能寫 workspace、輸出可解析、取消回收行程樹；OMP／Antigravity 驗在 Asura 的 bwrap 內可執行且輸出可解析、取消、登入憑證邊界；全部通過才記下身分（SCN-003、SCN-005）
