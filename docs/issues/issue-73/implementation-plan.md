@@ -123,8 +123,8 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 - 驗收編號：支援 SCN-001、SCN-002、SCN-006
 - 完成判準：同 Task 2.2 的四種身分；既有的 `TestRuntimePinnedAcrossSourceUpdate` 等測試維持通過
 - 驗證：hermetic 單元測試
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成
+- 證據：[evidence/task-2.3.md](./evidence/task-2.3.md)：2 個身分測試先紅後綠；本機 OMP 18.4.4 維持 available、Antigravity 1.4.4 為 `version_unverified`；專案 gate 24 個套件 ok
 
 ### Task 2.4 — 所有判定路徑一致
 - 產出與範圍：移除 `internal/daemon/daemon.go:154-155,231`、`cmd/asura/inventory.go:34-35`、`cmd/asura/run.go:422-423` 寫死的版本與前綴；doctor 對 `version_unverified` 顯示 `asura runtime verify <runtime>` 提示

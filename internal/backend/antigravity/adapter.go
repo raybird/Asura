@@ -20,6 +20,7 @@ const Model = "gemini-3.8-flash-low"
 
 type AdapterConfig struct {
 	BinaryPath, Home                  string
+	VerificationPath                  string
 	OnProcessStarted, OnProcessExited func(context.Context, int)
 	BeforeStart                       func(context.Context) (func(), error)
 }
@@ -41,10 +42,8 @@ func NewAdapter(cfg AdapterConfig) *Adapter {
 }
 func (a *Adapter) ID() string { return "antigravity" }
 func (a *Adapter) Version(ctx context.Context) (string, error) {
-	if err := clisandbox.VerifyFile(a.cfg.BinaryPath, cliHash); err != nil {
-		return "", err
-	}
-	return Version, nil
+	version, _, err := a.admit(ctx)
+	return version, err
 }
 func (a *Adapter) Capabilities() []backend.Capability {
 	return []backend.Capability{backend.CapWorkspaceWrite, backend.CapStructuredEvents, backend.CapProcessCancellation}
@@ -110,7 +109,7 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 	if req != nil && req.Role != backend.RoleStriker {
 		return clisandbox.Run(ctx, req, clisandbox.Config{ID: a.ID()})
 	}
-	version, err := a.Version(ctx)
+	version, digest, err := a.admit(ctx)
 	if err != nil {
 		r := &backend.ExecutionResult{BackendID: a.ID(), FailureClass: backend.FailureUnavailable, StartedAt: time.Now(), CompletedAt: time.Now()}
 		return r, backend.NewExecutionError(a.ID(), r.FailureClass, err, "")
@@ -122,7 +121,7 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 		return &backend.ExecutionResult{BackendID: a.ID(), FailureClass: backend.FailureUnsupported}, backend.NewExecutionError(a.ID(), backend.FailureUnsupported, errors.New("model differs from fixed contract"), "")
 	}
 	return clisandbox.Run(ctx, req, clisandbox.Config{ID: a.ID(), Version: version, Home: a.cfg.Home, AuthTarget: filepath.Join(a.cfg.Home, ".gemini/antigravity-cli/antigravity-oauth-token"), Auth: a.snapshot, AuthReadOnly: true,
-		Program: []string{a.cfg.BinaryPath}, PinnedFiles: []clisandbox.PinnedFile{{Path: a.cfg.BinaryPath, SHA256: cliHash}}, ReadOnlyPaths: []string{a.cfg.BinaryPath},
+		Program: []string{a.cfg.BinaryPath}, PinnedFiles: []clisandbox.PinnedFile{{Path: a.cfg.BinaryPath, SHA256: digest}}, ReadOnlyPaths: []string{a.cfg.BinaryPath},
 		Args: func(string) []string {
 			return []string{"--mode", "accept-edits", "--model", Model, "--disable-slash-commands", "--dangerously-skip-permissions", "--output-format", "stream-json", "--print-timeout", "0", "--print=" + req.Prompt}
 		},

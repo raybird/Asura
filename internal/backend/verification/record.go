@@ -26,6 +26,8 @@ type Identity struct {
 // Record 是 asura runtime verify 全部 probe 通過後寫入的驗證紀錄。
 type Record struct {
 	Identity
+	// Tree 是驗證當時固定的相依樹雜湊（OMP 的 node_modules），執行時以它固定快照內容。
+	Tree         string    `json:"tree_sha256,omitempty"`
 	VerifiedAt   time.Time `json:"verified_at"`
 	AsuraVersion string    `json:"asura_version"`
 }
@@ -94,41 +96,33 @@ func Remove(path string, id Identity, builtin []Identity) error {
 
 // Admit 判定已安裝的 runtime 是否可用。內建身分沒有 Digest 時只比版本（OpenCode、Codex 沿用變更前的行為），
 // 此時不計算雜湊；其餘身分需要版本與雜湊都相符的內建身分或本機驗證紀錄。
-func Admit(runtime, version string, digest func() (string, error), builtin []Identity, recordsPath string) error {
+// 放行時回傳相符的紀錄；內建身分回傳只含 Identity 的紀錄。
+func Admit(runtime, version string, digest func() (string, error), builtin []Identity, recordsPath string) (Record, error) {
 	for _, b := range builtin {
 		if b.Digest == "" && b.Runtime == runtime && b.Version == version {
-			return nil
+			return Record{Identity: b}, nil
 		}
 	}
 	sum, err := digest()
 	if err != nil {
-		return err
+		return Record{}, err
 	}
-	var records []Record
-	if recordsPath != "" {
-		if records, err = Load(recordsPath); err != nil {
-			return fmt.Errorf("%w: %v", ErrUnverified, err)
-		}
-	}
-	if Allowed(Identity{Runtime: runtime, Version: version, Digest: sum}, builtin, records) {
-		return nil
-	}
-	return fmt.Errorf("%w: %s %s; run asura runtime verify %s", ErrUnverified, runtime, version, runtime)
-}
-
-func Allowed(id Identity, builtin []Identity, records []Record) bool {
-	if id.Runtime == "" || id.Version == "" || id.Digest == "" {
-		return false
-	}
+	id := Identity{Runtime: runtime, Version: version, Digest: sum}
 	if matchesBuiltin(id, builtin) {
-		return true
+		return Record{Identity: id}, nil
 	}
-	for _, r := range records {
-		if r.Identity == id {
-			return true
+	if recordsPath != "" {
+		records, err := Load(recordsPath)
+		if err != nil {
+			return Record{}, fmt.Errorf("%w: %v", ErrUnverified, err)
+		}
+		for _, r := range records {
+			if r.Identity == id {
+				return r, nil
+			}
 		}
 	}
-	return false
+	return Record{}, fmt.Errorf("%w: %s %s; run asura runtime verify %s", ErrUnverified, runtime, version, runtime)
 }
 
 func matchesBuiltin(id Identity, builtin []Identity) bool {

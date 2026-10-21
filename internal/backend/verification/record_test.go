@@ -97,8 +97,15 @@ func TestLoadRejectsCorruptedOrUnsafeFile(t *testing.T) {
 	}
 }
 
-func TestAllowed(t *testing.T) {
-	records := []Record{{Identity: codexNew}}
+func TestAdmit(t *testing.T) {
+	path := recordPath(t)
+	verified := Record{Identity: codexNew, Tree: "tree", AsuraVersion: "v1.2.0"}
+	if err := Add(path, verified); err != nil {
+		t.Fatal(err)
+	}
+	admit := func(id Identity, builtin []Identity) (Record, error) {
+		return Admit(id.Runtime, id.Version, func() (string, error) { return id.Digest, nil }, builtin, path)
+	}
 	cases := []struct {
 		name string
 		id   Identity
@@ -109,19 +116,34 @@ func TestAllowed(t *testing.T) {
 		{"same version, different binary", Identity{Runtime: "codex", Version: "0.163.0", Digest: "dddd"}, false},
 		{"same binary, different version", Identity{Runtime: "codex", Version: "0.164.0", Digest: "aaaa"}, false},
 		{"other runtime", Identity{Runtime: "opencode", Version: "0.163.0", Digest: "aaaa"}, false},
-		{"empty digest", Identity{Runtime: "codex", Version: "0.163.0"}, false},
-	}
-	versionOnly := []Identity{{Runtime: "opencode", Version: "1.18.23"}}
-	if !Allowed(Identity{Runtime: "opencode", Version: "1.18.23", Digest: "any"}, versionOnly, nil) {
-		t.Error("version-only builtin did not admit its version")
-	}
-	if Allowed(Identity{Runtime: "opencode", Version: "1.18.31", Digest: "any"}, versionOnly, nil) {
-		t.Error("version-only builtin admitted another version")
 	}
 	for _, c := range cases {
-		if got := Allowed(c.id, builtin, records); got != c.want {
-			t.Errorf("%s: Allowed=%v want %v", c.name, got, c.want)
+		_, err := admit(c.id, builtin)
+		if got := err == nil; got != c.want {
+			t.Errorf("%s: admitted=%v want %v (err=%v)", c.name, got, c.want, err)
 		}
+		if !c.want && !errors.Is(err, ErrUnverified) {
+			t.Errorf("%s: err=%v, want ErrUnverified", c.name, err)
+		}
+	}
+	if rec, err := admit(codexNew, builtin); err != nil || rec != verified {
+		t.Errorf("verified record not returned: %+v %v", rec, err)
+	}
+
+	versionOnly := []Identity{{Runtime: "opencode", Version: "1.18.23"}}
+	digestCalled := false
+	noDigest := func() (string, error) { digestCalled = true; return "any", nil }
+	if _, err := Admit("opencode", "1.18.23", noDigest, versionOnly, ""); err != nil || digestCalled {
+		t.Errorf("version-only builtin: err=%v digestCalled=%v", err, digestCalled)
+	}
+	if _, err := Admit("opencode", "1.18.31", noDigest, versionOnly, ""); !errors.Is(err, ErrUnverified) {
+		t.Errorf("version-only builtin admitted another version: %v", err)
+	}
+	if err := os.Chmod(path, 0o666); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := admit(codexNew, builtin); !errors.Is(err, ErrUnverified) {
+		t.Errorf("unsafe record file still admitted: %v", err)
 	}
 }
 

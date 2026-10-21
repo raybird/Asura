@@ -19,6 +19,7 @@ const settings = `{"retry":{"enabled":false,"modelFallback":false,"usageAwareFal
 
 type AdapterConfig struct {
 	BinaryPath, BunPath, Home         string
+	VerificationPath                  string
 	OnProcessStarted, OnProcessExited func(context.Context, int)
 	BeforeStart                       func(context.Context) (func(), error)
 }
@@ -46,17 +47,11 @@ func NewAdapter(cfg AdapterConfig) *Adapter {
 }
 func (a *Adapter) ID() string { return "omp" }
 func (a *Adapter) Version(ctx context.Context) (string, error) {
-	modules := filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(a.cfg.BinaryPath))))
-	if filepath.Base(modules) != "node_modules" || filepath.Join(modules, "@oh-my-pi", "pi-coding-agent", "dist", "cli.js") != a.cfg.BinaryPath {
-		return "", errors.New("unsupported OMP package layout")
-	}
-	if err := clisandbox.VerifyFile(a.cfg.BinaryPath, cliHash); err != nil {
+	p, err := a.admit(ctx)
+	if err != nil {
 		return "", err
 	}
-	if err := clisandbox.VerifyFile(a.cfg.BunPath, bunHash); err != nil {
-		return "", err
-	}
-	return "omp/" + Version, nil
+	return "omp/" + p.version, nil
 }
 func (a *Adapter) Capabilities() []backend.Capability {
 	return []backend.Capability{backend.CapWorkspaceWrite, backend.CapStructuredEvents, backend.CapProcessCancellation}
@@ -73,7 +68,7 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 	if req != nil && req.Role != backend.RoleStriker {
 		return clisandbox.Run(ctx, req, clisandbox.Config{ID: a.ID()})
 	}
-	version, err := a.Version(ctx)
+	version, files, trees, err := a.pins(ctx)
 	if err != nil {
 		r := &backend.ExecutionResult{BackendID: a.ID(), FailureClass: backend.FailureUnavailable, StartedAt: time.Now(), CompletedAt: time.Now()}
 		return r, backend.NewExecutionError(a.ID(), r.FailureClass, err, "")
@@ -84,13 +79,12 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 	if req.Model != "" && req.Model != Model {
 		return &backend.ExecutionResult{BackendID: a.ID(), FailureClass: backend.FailureUnsupported}, backend.NewExecutionError(a.ID(), backend.FailureUnsupported, errors.New("model differs from fixed contract"), "")
 	}
-	modules := filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(a.cfg.BinaryPath))))
 	return clisandbox.Run(ctx, req, clisandbox.Config{
 		ID: a.ID(), Version: version, Home: a.cfg.Home, AuthTarget: filepath.Join(a.cfg.Home, ".omp/agent/agent.db"),
 		Auth: func(c context.Context) (clisandbox.Authentication, error) {
 			return snapshot(c, filepath.Join(a.cfg.Home, ".omp/agent/agent.db"))
 		},
-		Program: []string{a.cfg.BunPath, a.cfg.BinaryPath}, PinnedFiles: []clisandbox.PinnedFile{{Path: a.cfg.BunPath, SHA256: bunHash}, {Path: a.cfg.BinaryPath, SHA256: cliHash}}, PinnedTrees: []clisandbox.PinnedFile{{Path: modules, SHA256: "e8b948577c8d65212f00068a6dc55d293724786d698d8d18438f67d6545f5b4b"}}, ReadOnlyPaths: []string{a.cfg.BunPath, modules}, Settings: []byte(settings),
+		Program: []string{a.cfg.BunPath, a.cfg.BinaryPath}, PinnedFiles: files, PinnedTrees: trees, ReadOnlyPaths: []string{a.cfg.BunPath, a.modules()}, Settings: []byte(settings),
 		Args: func(config string) []string {
 			return []string{"--model", Model, "--thinking", "low", "--config", config, "--no-session", "--no-lsp", "--no-title", "--no-extensions", "--no-skills", "--no-rules", "--no-prewalk", "--approval-mode", "yolo", "--mode", "json", "--print", "--", req.Prompt}
 		},

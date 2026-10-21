@@ -14,8 +14,9 @@ import (
 // admit 2026-10-21：issue-73，內建 ExpectedVersion 只比版本；其他版本需要本機驗證紀錄。
 func (a *Adapter) admit(rawVersion, bin string) error {
 	builtin := []verification.Identity{{Runtime: "codex", Version: NormalizeCodexVersion(a.cfg.ExpectedVersion)}}
-	return verification.Admit("codex", NormalizeCodexVersion(rawVersion), func() (string, error) { return codexDigest(bin) },
+	_, err := verification.Admit("codex", NormalizeCodexVersion(rawVersion), func() (string, error) { return codexDigest(bin) },
 		builtin, a.cfg.VerificationPath)
+	return err
 }
 
 // codexDigest 計算 Asura 實際會執行的 codex 身分。npm 安裝時 codex 是 Node 包裝腳本，
