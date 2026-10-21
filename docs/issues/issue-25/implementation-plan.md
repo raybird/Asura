@@ -137,7 +137,7 @@ I1 仍進行中。修正 OMP 平面設定無效反例，巢狀設定後受控 50
 - 驗收責任：BADAPT-006、011；支援 010、012。
 - 完成判準：Three-Face 不支援能力及 admission 拒絕均零模型呼叫，memory 不重新選取；完整回歸／交付版本證據及独立 review 持久化。
 - 驗證：既有 TFACE／CTXWIN／RECALL／WEBMEM／GITMEM／Cron／queue／cancel 全部保留；fixture 不替代被驗安全能力。
-- 狀態：⏳ Stage 0／Context／Memory 與完整回歸已通過；PR 及獨立 review 待交付。
+- 狀態：✅ 已完成；Stage 0／Context／Memory 與完整回歸已通過，獨立審查 [review-116590f.md](review-116590f.md) PASS，PR #26 於 2026-09-30 合併（merge commit `231d846`），PR CI [run 36682255187](https://github.com/raybird/Asura/actions/runs/36682255187) success（2026-10-21 回填）。
 
 ## 2026-09-30 產品驗證
 

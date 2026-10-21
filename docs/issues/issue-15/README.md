@@ -231,7 +231,7 @@ Feature: Multi-Backend Foundation (OpenCode + Codex CLI)
 | 編號 | 事項 | 狀態 | 影響 |
 |------|------|------|------|
 | TBD-1 | Gherkin MBACK-001 ～ MBACK-012 劇本確認與核准 | 已解決 | 使用者於 2026-09-18 明確核准全數劇本 |
-| TBD-2 | Codex CLI 執行時憑證環境變數傳遞與預設 model 政策 | 待確認 | 關聯 Phase 4 Codex Adapter 實作細節，不阻礙架構合約建立 |
+| TBD-2 | Codex CLI 執行時憑證環境變數傳遞與預設 model 政策 | 已解決 | 2026-10-21 使用者決定：憑證與預設 model 沿用 Codex CLI 本身的登入與設定，Asura 不另外管理；CLI 之後隨系統更新 |
 
 ## Timeline
 
@@ -243,6 +243,7 @@ Feature: Multi-Backend Foundation (OpenCode + Codex CLI)
 | 2026-09-18 | 針對審查提出的 4 MUST FIX + 2 SHOULD FIX 徹底完成架構修復與測試補齊，產出審查報告 review-af3a43e.md | - |
 | 2026-09-19 | 針對複審提出的 2 MUST FIX + 3 SHOULD FIX 完成 Codex 版本 Exact Match、Task PGID 生命週期接入與取消驗證，產出審查報告 review-1db1441.md（PASS） | - |
 | 2026-09-21 | PR #16 合併至 main（merge commit `b153c01`），issue 結案 | Raybird |
+| 2026-10-21 | 結案後回填 TBD-2：依使用者決定改已解決 | Raybird |
 
 ---
 **建立日期**: 2026-09-18  

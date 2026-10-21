@@ -52,7 +52,7 @@
 - 責任驗收：RTINV-015。
 - 完成判準：vet/race/build 全綠；全部驗收證據；固定 BASE/HEAD；獨立審查 PASS 或修正後再審。
 - 驗證：全 repo 回歸與範圍一致性；審查遵循 review-evidence。
-- 狀態：⏳ 進行中
+- 狀態：✅ 已完成；獨立審查 [review-5bf6351.md](review-5bf6351.md) PASS，PR #40 於 2026-10-04 合併（merge commit `2f583c7`），PR CI [run 37162742387](https://github.com/raybird/Asura/actions/runs/37162742387) success（2026-10-21 回填）
 - 證據：[驗證紀錄](./verification-evidence.md)；2026-10-04 vet／全套 race／build 全綠。最後的獨立審查以同次 `review-{HEAD7}.md` 的固定版本與 PASS 判定結案 Task 5；不自行 merge。
 
 ## 使用方式對照

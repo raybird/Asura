@@ -133,7 +133,7 @@
      - SCN-006、SCN-007 屬維護者流程：驗證檔名稱寫在 setup.md，prerelease 與 tag ref 檢查寫在 `CHANGELOG.md` Unreleased 與 release.yml 的 workflow_dispatch input 說明
      - README「版本範圍」表未改
      - 審查後：setup.md「限制」依 Q6 揭露 v1.1.0 免驗的降版風險與 `--require-attestation` 的用法，連到 #58；`--require-attestation` 範例註明 latest 仍是 v1.1.0 時會拒絕；手動驗證命令補上 `--hostname github.com` 與 `--deny-self-hosted-runners`，與 installer 一致
-5. 📝 **步驟 5：回歸與交付驗證**
+5. ✅ **步驟 5：回歸與交付驗證**
    - 產出：本機最小回歸結果與 SKIP 清單；PR CI 一次全綠
    - 相依：步驟 1～4
    - 完成判準：`go vet ./...`、`go test -count=1 -race -v ./...`、`go build ./cmd/asura` 全數通過；SKIP 項目逐一列出、不計為通過
@@ -141,6 +141,7 @@
      - `go vet ./...` 通過；`go test -count=1 -race -v ./...` exit 0，23 個 package 全部 `ok`、0 FAIL；`go build ./cmd/asura` 成功
      - 被 SKIP 的 14 項不計為通過，都是需要固定版本 runtime 或登入憑證的 live／contract 測試，與本次修改無關：TestLiveAdapter（2 處）、TestCodexProbe_BinaryVersion、TestCodexProbe_NonInteractive_JSONL、TestCodexProbe_ReadOnlySandbox、TestCodexProbe_WorkspaceWriteSandbox、TestCodexProbe_ContextCancellation、TestAdapter_Run_Live、TestCodexProbe_Live、TestDaemon_ThreeFace_HostileWorkspaceConfig_CannotEscapeReadOnly、TestUtilityLiveProbe、TestUtilityCapacityProbe、TestINT001、TestINT007
      - PR CI（`0025307`）：[run 38698781930](https://github.com/raybird/Asura/actions/runs/38698781930) attempt 1 失敗於 `internal/storage` 的 `TestExecutionAuditConcurrentWriter`（`observation failed under concurrent metadata writer: audit_persistence_failed`），本 PR 未修改該 package；重跑失敗 job 的 attempt 2 為 success。同一 HEAD 的 push run 38698749411 被 concurrency 取消。審查後的新 HEAD 以 PR 上的 CI 為準
+     - 合併（2026-10-21 回填）：PR #57 最終 HEAD `98bd866` 的 CI [run 38701415915](https://github.com/raybird/Asura/actions/runs/38701415915) success，同 HEAD 的 push run 被 concurrency 取消；2026-10-15 合併（merge commit `402a407`）
 
 ## 測試策略與驗收對應
 
