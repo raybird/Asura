@@ -1,0 +1,34 @@
+# issue-70 AC-2 反向檢查（2026-10-21）：d38a632 + delay-injection.diff + reverse-check-run.diff，未設 ASURA_I70_CANCEL_DELAY
+# 命令：(cd tests/integration && <d38a632 test binary> -test.run '^TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake$' -test.count=10 -test.v)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+    cli_test.go:983: side-effect file exists! cmd.Start() was executed despite external cancel
+--- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.54s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+    cli_test.go:983: side-effect file exists! cmd.Start() was executed despite external cancel
+--- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.98s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+    cli_test.go:983: side-effect file exists! cmd.Start() was executed despite external cancel
+--- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.97s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+    cli_test.go:983: side-effect file exists! cmd.Start() was executed despite external cancel
+--- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.96s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+    cli_test.go:983: side-effect file exists! cmd.Start() was executed despite external cancel
+--- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.98s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+    cli_test.go:983: side-effect file exists! cmd.Start() was executed despite external cancel
+--- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.02s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+    cli_test.go:983: side-effect file exists! cmd.Start() was executed despite external cancel
+--- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.97s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+    cli_test.go:983: side-effect file exists! cmd.Start() was executed despite external cancel
+--- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.99s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+    cli_test.go:983: side-effect file exists! cmd.Start() was executed despite external cancel
+--- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.03s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+    cli_test.go:983: side-effect file exists! cmd.Start() was executed despite external cancel
+--- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.09s)
+FAIL
+# exit=1

@@ -59,7 +59,7 @@ main `23af953` 無負載 `-count=20` 與 `taskset -c 0,1` 加 6 個背景 `yes` 
 
 - **核准日期**: 2026-10-21
 - **核准來源**: GitHub #70「完成判準」：「沿用 #48：先找出原因並取得可重現的紅燈，不以加長等待或重試掩蓋。兩種訊息分別判定，不混為同一原因」。2026-10-21 使用者以 `/dev-cycle issue:70` 要求推進；同日逐題確認：Q1「症狀 2 的處理」回答「判定已由 a84dc3a 修正 (Recommended)」，接受建議：比照 #51 記錄 `caaa09c` 與 main 的對照證據，本 issue 不為症狀 2 改程式（AC-1）；Q2「症狀 1 的修正」回答「等意圖 sidecar (Recommended)」，接受建議：測試等 sidecar 出現後才放鎖，最多 10 秒，逾時或 cancel 提前結束即失敗，不改產品程式（AC-2）；Q3「穩定性判準」回答「注入延遲對照 (Recommended)」，接受建議：41／45／300ms 修正前有失敗、修正後 0 失敗，加上修正後不注入延遲的負載壓測 `-count=100` 全過與 PR CI 一次全綠（AC-3）；Q4「同檔另一個握手測試要一起改嗎」回答「不改，記入待確認事項 (Recommended)」（TBD-1）
-- **核准 commit**: 待提交
+- **核准 commit**: d610587
 
 ## 風險與首要驗證
 
@@ -85,14 +85,34 @@ main `23af953` 無負載 `-count=20` 與 `taskset -c 0,1` 加 6 個背景 `yes` 
      - 條件：`git worktree add --detach <dir> <commit>`（`caaa09c`、`a84dc3a`、main `23af953`），套用 [delay-injection.diff](evidence/delay-injection.diff)，各以 `go test -race -c ./tests/integration` 建立執行檔，在該 worktree 的 `tests/integration` 執行 `ASURA_I70_CANCEL_DELAY=<秒> <test binary> -test.run '^TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake$' -test.count=<N> -test.v`。注入多 3 行，失敗行號 965／956 分別對應原本的 962／953
      - 症狀 1：main 延遲 0.3s 10/10 失敗；0.036～0.040s 各 20/20 通過，0.042～0.049s 各 20/20 失敗，訊息全部是 `side-effect file exists! cmd.Start() was executed despite external cancel`（[delay-sweep-main.log](evidence/delay-sweep-main.log)）
      - 症狀 2：`caaa09c` 4/430（延遲 0.023～0.025s），`a84dc3a` 0/150，main 0/410，見「症狀 2 原因」
-2. 📝 **AC-2：測試改等意圖 sidecar** — 驗證方式：AC-2 的檢查方式
+2. ✅ **AC-2：測試改等意圖 sidecar** — 驗證方式：AC-2 的檢查方式
    - 產出：`tests/integration/cli_test.go` 的修正；反向檢查與回歸結果（寫回本節）
    - 相依：步驟 1
    - 完成判準：diff 不含固定等待或重試；反向檢查失敗；本機最小回歸通過，被 SKIP 的測試列名不計為通過
-3. 📝 **AC-3：延遲注入對照與負載壓測** — 驗證方式：AC-3 的檢查方式
+   - 完成證據（2026-10-21，修正提交 `d38a632`）：
+     - diff：移除 `time.Sleep(50 * time.Millisecond)`，改成每 10ms 檢查一次 sidecar，出現就放鎖；10 秒內沒出現，或 cancel 在寫出前就結束，都以 `t.Fatalf` 失敗。沒有重試，也沒有加長固定等待。紅燈即 AC-1 的延遲注入失敗：這支測試本身就是整合層，沒有另一層單元保障可分開取得紅燈，因此合併為單迴圈
+     - 反向檢查：在 `d38a632` worktree 套用 [reverse-check-run.diff](evidence/reverse-check-run.diff)，讓 runner 的 `cmd.Start` 前檢查找不到 sidecar，不注入延遲 `-count=10`：exit 1，10/10 為 `side-effect file exists!`（[reverse-check.log](evidence/reverse-check.log)），證明修正後的測試仍抓得到產品端守門失效
+     - 精煉：code-simplify 檢查為 no-op，等待迴圈只用一次，沿用同檔的 flock 解鎖與 `t.Fatalf` 寫法
+     - 本機最小回歸（`d38a632`，預設 TMPDIR）：`go vet ./...` exit 0；`go test -count=1 -race -v ./...` exit 0，23 個 package 全部 `ok`，本測試 PASS（2.17s）；`go build ./cmd/asura` exit 0
+     - 被 SKIP 的 14 項不計為通過，都是需要固定版本 runtime 或登入憑證的 live／contract 測試，本次沒有改到 `internal/backend`：TestAdapter_Run_Live、TestCodexProbe_BinaryVersion、TestCodexProbe_ContextCancellation、TestCodexProbe_Live、TestCodexProbe_NonInteractive_JSONL、TestCodexProbe_ReadOnlySandbox、TestCodexProbe_WorkspaceWriteSandbox、TestDaemon_ThreeFace_HostileWorkspaceConfig_CannotEscapeReadOnly、TestINT001、TestINT007、TestLiveAdapter（2 處）、TestUtilityCapacityProbe、TestUtilityLiveProbe
+     - 環境紀錄：當天 /tmp（tmpfs）一度配額已滿，`go build` 回報 `disk quota exceeded`，所以延遲掃描與壓測都把 TMPDIR 指到家目錄。用同一設定跑完整回歸時，Unix socket 路徑超過 107 bytes，`bind: invalid argument` 造成 7 個 package 失敗；改用 /tmp 底下指回家目錄的 symlink，又因 realpath 不符造成 13 個 package 失敗。這兩輪都是環境問題，不計入。/tmp 空間恢復後，以預設 TMPDIR 重跑才是上列結果
+3. ⏳ **AC-3：延遲注入對照與負載壓測** — 驗證方式：AC-3 的檢查方式
    - 產出：命令原文、條件與修正前後的 PASS／FAIL 次數（寫回本節，紀錄存 `evidence/`）
    - 相依：步驟 2
    - 完成判準：修正前三個延遲都至少失敗 1 次，修正後全部 0 失敗；負載壓測 0 失敗；PR CI 一次全綠
+   - 完成證據（2026-10-21，go1.27.2 linux/amd64，12 核）：
+     - 執行檔：修正前 `23af953`、修正後 `d38a632` 各自建 worktree，套用同一份 [delay-injection.diff](evidence/delay-injection.diff)，以 `go test -race -c ./tests/integration` 建立
+     - 延遲對照：在 `tests/integration` 執行 `ASURA_I70_CANCEL_DELAY=<d> <test binary> -test.run '^TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake$' -test.count=20 -test.v`，未加 CPU 限制
+
+       | 延遲 | 修正前 `23af953` FAIL／20 | 修正後 `d38a632` FAIL／20 |
+       |---|---|---|
+       | 41ms | 7 | 0 |
+       | 45ms | 20 | 0 |
+       | 300ms | 20 | 0 |
+
+       修正前的失敗全部是 `side-effect file exists!`（[ac3-delay-23af953.log](evidence/ac3-delay-23af953.log)、[ac3-delay-d38a632.log](evidence/ac3-delay-d38a632.log)）
+     - 負載壓測：`d38a632` 不啟用注入，背景 6 個 `taskset -c 0,1 yes > /dev/null`，`taskset -c 0,1 <test binary> -test.run '^TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake$' -test.count=100 -test.v`：exit 0，PASS 100／FAIL 0（[ac3-load-d38a632.log](evidence/ac3-load-d38a632.log)）
+     - PR CI 一次全綠：待 PR 建立後補上
 
 ## Timeline
 
