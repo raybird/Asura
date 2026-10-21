@@ -1,0 +1,1094 @@
+# issue-70 cancel 延遲掃描：caaa09c（2026-10-21，go1.27.2 linux/amd64，12 核，未加 CPU 限制）
+# 每行前綴 d=<ASURA_I70_CANCEL_DELAY 秒數>；套用 delay-injection.diff 後於 tests/integration 執行
+d=0.3 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.3     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.3 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.34s)
+d=0.3 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.3     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.3 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.13s)
+d=0.3 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.3     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.3 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.13s)
+d=0.3 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.3     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.3 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.18s)
+d=0.3 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.3     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.3 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.15s)
+d=0.3 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.3     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.3 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.16s)
+d=0.3 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.3     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.3 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.23s)
+d=0.3 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.3     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.3 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.19s)
+d=0.3 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.3     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.3 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.34s)
+d=0.3 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.3     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.3 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.48s)
+d=0.3 FAIL
+d=0.02 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.02     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.02 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.30s)
+d=0.02 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.02     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.02 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.58s)
+d=0.02 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.02     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.02 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.74s)
+d=0.02 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.02 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.51s)
+d=0.02 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.02     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.02 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.99s)
+d=0.02 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.02     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.02 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.90s)
+d=0.02 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.02     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.02 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.51s)
+d=0.02 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.02     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.02 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.68s)
+d=0.02 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.02     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.02 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.58s)
+d=0.02 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.02     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.02 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.60s)
+d=0.02 FAIL
+d=0.03 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.03     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.03 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.89s)
+d=0.03 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.03     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.03 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.75s)
+d=0.03 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.03     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.03 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.47s)
+d=0.03 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.03     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.03 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.83s)
+d=0.03 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.03     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.03 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.61s)
+d=0.03 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.03     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.03 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.93s)
+d=0.03 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.03     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.03 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.65s)
+d=0.03 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.03     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.03 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.12s)
+d=0.03 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.03     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.03 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.62s)
+d=0.03 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.03     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.03 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.94s)
+d=0.03 FAIL
+d=0.04 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.04     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.04 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.76s)
+d=0.04 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.04     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.04 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.30s)
+d=0.04 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.04     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.04 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.73s)
+d=0.04 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.04     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.04 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.52s)
+d=0.04 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.04     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.04 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.25s)
+d=0.04 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.04     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.04 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.12s)
+d=0.04 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.04     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.04 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.42s)
+d=0.04 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.04     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.04 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.30s)
+d=0.04 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.04     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.04 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.38s)
+d=0.04 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.04     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.04 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.35s)
+d=0.04 FAIL
+d=0.05 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.05     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.05 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.48s)
+d=0.05 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.05     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.05 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.15s)
+d=0.05 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.05     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.05 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.00s)
+d=0.05 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.05     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.05 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.94s)
+d=0.05 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.05     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.05 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.99s)
+d=0.05 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.05     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.05 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.11s)
+d=0.05 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.05     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.05 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.02s)
+d=0.05 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.05     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.05 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.58s)
+d=0.05 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.05     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.05 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.90s)
+d=0.05 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.05     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.05 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.71s)
+d=0.05 FAIL
+d=0.06 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.06     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.06 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.88s)
+d=0.06 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.06     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.06 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.79s)
+d=0.06 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.06     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.06 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.90s)
+d=0.06 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.06     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.06 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.40s)
+d=0.06 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.06     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.06 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.92s)
+d=0.06 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.06     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.06 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.61s)
+d=0.06 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.06     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.06 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.73s)
+d=0.06 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.06     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.06 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.93s)
+d=0.06 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.06     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.06 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.58s)
+d=0.06 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.06     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.06 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.06s)
+d=0.06 FAIL
+d=0.07 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.07     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.07 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.96s)
+d=0.07 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.07     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.07 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.04s)
+d=0.07 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.07     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.07 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.16s)
+d=0.07 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.07     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.07 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.92s)
+d=0.07 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.07     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.07 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.05s)
+d=0.07 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.07     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.07 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.86s)
+d=0.07 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.07     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.07 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.80s)
+d=0.07 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.07     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.07 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.47s)
+d=0.07 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.07     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.07 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.75s)
+d=0.07 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.07     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.07 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.03s)
+d=0.07 FAIL
+d=0.08 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.08     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.08 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.91s)
+d=0.08 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.08     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.08 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.98s)
+d=0.08 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.08     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.08 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.64s)
+d=0.08 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.08     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.08 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.77s)
+d=0.08 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.08     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.08 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.00s)
+d=0.08 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.08     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.08 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.14s)
+d=0.08 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.08     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.08 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.99s)
+d=0.08 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.08     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.08 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.20s)
+d=0.08 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.08     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.08 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.06s)
+d=0.08 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.08     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.08 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.27s)
+d=0.08 FAIL
+d=0.10 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.10     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.10 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.13s)
+d=0.10 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.10     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.10 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.13s)
+d=0.10 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.10     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.10 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.05s)
+d=0.10 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.10     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.10 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.03s)
+d=0.10 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.10     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.10 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.07s)
+d=0.10 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.10     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.10 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.12s)
+d=0.10 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.10     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.10 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.92s)
+d=0.10 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.10     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.10 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.01s)
+d=0.10 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.10     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.10 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.99s)
+d=0.10 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.10     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.10 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.03s)
+d=0.10 FAIL
+d=0 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.88s)
+d=0 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.79s)
+d=0 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.88s)
+d=0 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.89s)
+d=0 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.92s)
+d=0 PASS
+d=0.005 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.005 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.005 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.005 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.005 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.005 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.005 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.005 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.88s)
+d=0.005 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.005 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.88s)
+d=0.005 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.005 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.005 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.005 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.005 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.005 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.95s)
+d=0.005 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.005 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.005 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.005 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.005 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.005 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.005 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.005 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.005 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.005 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.005 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.005 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.005 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.005 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.005 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.005 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.005 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.005 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.005 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.005 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.005 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.005 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.005 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.005 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.005 PASS
+d=0.01 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.01 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.01 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.01 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.01 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.01 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.01 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.01 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.01 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.01 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.90s)
+d=0.01 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.01 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.01 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.01 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.90s)
+d=0.01 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.01 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.01 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.01 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.05s)
+d=0.01 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.01 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.01 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.01 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.08s)
+d=0.01 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.01 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.95s)
+d=0.01 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.01 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.01 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.01 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.01 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.01 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.01 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.01 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.01 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.01 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.80s)
+d=0.01 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.01 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.89s)
+d=0.01 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.01 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.01 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.01 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.01 PASS
+d=0.015 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.015 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.07s)
+d=0.015 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.015 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.015 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.015 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.015 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.015 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.015 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.015 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.015 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.015 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.015 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.015 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.015 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.015 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.94s)
+d=0.015 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.015 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.89s)
+d=0.015 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.015 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.015 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.015 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.015 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.015 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.89s)
+d=0.015 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.015 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.015 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.015 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.015 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.015 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.015 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.015 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.015 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.015 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.015 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.015 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.015 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.015 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.79s)
+d=0.015 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.015 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.015 PASS
+d=0.016 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.016 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.00s)
+d=0.016 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.016 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.016 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.016 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.016 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.016 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.016 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.016 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.80s)
+d=0.016 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.016 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.016 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.016 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.80s)
+d=0.016 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.016 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.016 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.016 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.016 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.016 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.016 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.016 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.016 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.016 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.016 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.016 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.016 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.016 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.016 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.016 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.016 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.016 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.016 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.016 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.94s)
+d=0.016 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.016 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.016 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.016 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.016 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.016 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.016 PASS
+d=0.017 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.017 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.017 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.017 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.80s)
+d=0.017 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.017 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.017 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.017 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.017 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.017 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.017 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.017 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.017 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.017 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.017 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.017 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.017 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.017 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.80s)
+d=0.017 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.017 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.017 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.017     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.017 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.95s)
+d=0.017 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.017 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.91s)
+d=0.017 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.017 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.80s)
+d=0.017 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.017 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.017 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.017 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.017 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.017 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.017 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.017 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.017 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.017 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.93s)
+d=0.017 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.017     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.017 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.017 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.017     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.017 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.017 FAIL
+d=0.018 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.018 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.018 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.018 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.018 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.018 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.018 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.018 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.018 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.018 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.018 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.018 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.018 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.018 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.018 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.018 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.018 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.018 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.018 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.018 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.80s)
+d=0.018 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.018 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.018 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.018 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.018 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.018 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.80s)
+d=0.018 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.018 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.018 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.018 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.018 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.018 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.018 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.018 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.018 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.018 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.018 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.018     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.018 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.018 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.018 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.018 FAIL
+d=0.019 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.019 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.79s)
+d=0.019 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.019 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.80s)
+d=0.019 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.019 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.019 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.019 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.80s)
+d=0.019 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.019 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.019 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.019 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.80s)
+d=0.019 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.019 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.019 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.019 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.80s)
+d=0.019 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.019 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.80s)
+d=0.019 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.019 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.019 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.019 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.80s)
+d=0.019 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.019 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.79s)
+d=0.019 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.019 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.80s)
+d=0.019 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.019 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.019 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.019 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.019 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.019     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.019 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.019 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.019 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.79s)
+d=0.019 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.019 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.019 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.019 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.80s)
+d=0.019 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.019 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.80s)
+d=0.019 FAIL
+d=0.020 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.020 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.020 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.020 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.020 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.020 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.020 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.020 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.020 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.020 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.020 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.020 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.80s)
+d=0.020 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.020 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.04s)
+d=0.020 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.020 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.020 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.020 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.020 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.020 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.020 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.020 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.020 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.020     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.020 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.92s)
+d=0.020 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.020     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.020 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.020 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.020 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.04s)
+d=0.020 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.020 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.96s)
+d=0.020 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.020 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.88s)
+d=0.020 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.020 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.80s)
+d=0.020 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.020 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.020 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.020 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.020 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.020 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.020 FAIL
+d=0.021 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.021 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.90s)
+d=0.021 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.021 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.021 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.021 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.93s)
+d=0.021 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.021     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.021 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.021 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.021     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.021 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.96s)
+d=0.021 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.021 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.97s)
+d=0.021 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.021 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.89s)
+d=0.021 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.021 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.021 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.021 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.021 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.021 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.021 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.021 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.79s)
+d=0.021 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.021 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.021 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.021 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.021 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.021 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.021 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.021     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.021 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.021 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.021 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.93s)
+d=0.021 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.021 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.021 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.021     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.021 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.88s)
+d=0.021 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.021 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.021 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.021 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.021 FAIL
+d=0.022 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.022 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.022 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.022 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.022 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.022     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.022 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.022 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.022 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.94s)
+d=0.022 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.022 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.022 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.022 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.022 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.022     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.022 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.89s)
+d=0.022 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.022     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.022 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.94s)
+d=0.022 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.022 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.94s)
+d=0.022 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.022 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.93s)
+d=0.022 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.022 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.022 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.022     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.022 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.022 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.022 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.99s)
+d=0.022 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.022 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.022 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.022     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.022 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.022 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.022     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.022 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.97s)
+d=0.022 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.022 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.022 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.022 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.022 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.022 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.022 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.022     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.022 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.022 FAIL
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.91s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:956: cancel command failed: exit status 1, stderr: error: failed to cancel task: unable to verify process identity: process group 3683535 is alive with orphan members, but identity cannot be verified (leader exited, runner unavailable, no task identity in orphans)
+d=0.023         , stdout: 
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (0.84s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.02s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.89s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.92s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.95s)
+d=0.023 FAIL
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.88s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.88s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.99s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.95s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.95s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.89s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:956: cancel command failed: exit status 1, stderr: error: failed to cancel task: unable to verify process identity: process group 3690553 is alive with orphan members, but identity cannot be verified (leader exited, runner unavailable, no task identity in orphans)
+d=0.023         , stdout: 
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.01s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.90s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.91s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.95s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.88s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.36s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.36s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.37s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.41s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.40s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.43s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.32s)
+d=0.023 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.023     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.023 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.39s)
+d=0.023 FAIL
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.40s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.024 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.56s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.024 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.34s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.024 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.32s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.024 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.59s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.024 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.63s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.024 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.63s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.024 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.70s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.024 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.67s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.024 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.62s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.024 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.36s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.024 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.54s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.024 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.47s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.024 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.37s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.024 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.56s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.024 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.90s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.024 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.95s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.024 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.91s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.024 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.88s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.024 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.10s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.88s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024     cli_test.go:956: cancel command failed: exit status 1, stderr: error: failed to cancel task: unable to verify process identity: process group 3701356 is alive with orphan members, but identity cannot be verified (leader exited, runner unavailable, no task identity in orphans)
+d=0.024         , stdout: 
+d=0.024 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (0.91s)
+d=0.024 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.024     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.024 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.024 FAIL
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.025 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.025 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.025 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.025 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.90s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.025 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.96s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.025 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.03s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.025 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.025 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.025 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.025 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.025 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.82s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.025 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.025 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.025 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025     cli_test.go:956: cancel command failed: exit status 1, stderr: error: failed to cancel task: unable to verify process identity: read /proc/3705093/stat: no such process
+d=0.025         , stdout: 
+d=0.025 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (0.83s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.025 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.025 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.025 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.025 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.025 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025 --- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.025 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.025 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.025 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.025     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.025 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.025 FAIL
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.90s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.81s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.85s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.91s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.86s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.90s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.87s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.84s)
+d=0.026 === RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+d=0.026     cli_test.go:965: side-effect file exists! cmd.Start() was executed despite external cancel
+d=0.026 --- FAIL: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.83s)
+d=0.026 FAIL

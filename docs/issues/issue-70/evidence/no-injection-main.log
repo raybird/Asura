@@ -1,0 +1,125 @@
+# issue-70 未注入延遲的對照（2026-10-21，main 23af953）
+## 無負載 -count=20
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.44s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.00s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.42s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.10s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.00s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.02s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.99s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.97s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.06s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.53s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.12s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.28s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.36s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.41s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.62s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.03s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (1.99s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.36s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.06s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.11s)
+PASS
+## taskset -c 0,1 + 6 個 taskset -c 0,1 yes 背景負載，-count=40
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (4.31s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.68s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (4.01s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.44s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.89s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.31s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.94s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.53s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.61s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.24s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.15s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.76s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.53s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.90s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.04s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.98s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.00s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.84s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.93s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.78s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.76s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.81s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.86s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.91s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.78s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.85s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (5.94s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.15s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.51s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.77s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.73s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.79s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.76s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.72s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.84s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.80s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.31s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (3.02s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.76s)
+=== RUN   TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake
+--- PASS: TestCLI_LatestReview_H01_PathEscapedTaskIDHandshake (2.88s)
+PASS
