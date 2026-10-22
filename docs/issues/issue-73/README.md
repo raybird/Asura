@@ -185,6 +185,7 @@ Feature: runtime 版本通過驗證才可使用
 | 2026-10-22 | Task 1.3、1.4 完成：OMP 18.12.6、Antigravity 1.4.4 probe 全過，對照組皆失敗；新增憑證邊界 probe、取消 probe 改以啟動標記判定、新增 `clisandbox.TreeHash` 修正 OMP 樹雜湊不一致；Phase 1 判定 probe 可信 | Raybird |
 | 2026-10-22 | Task 3.1 完成：probe 產品化（`verification.Spec`／`Prepare`／`Verify`，四個 runtime 的 `VerificationSpec`），live 測試改走同一路徑；唯讀 probe 改以 nonce 為正向對照，並修訂 Task 3.1 完成判準（理由見 evidence/task-3.1.md） | Raybird |
 | 2026-10-22 | Task 3.2 完成：新增 `asura runtime verify <runtime>`，全部 probe 通過才寫入紀錄，任一失敗或無法執行時結束碼非 0、紀錄不變；內建身分不執行 probe | Raybird |
+| 2026-10-22 | Task 3.3 完成：`asura runtime verify --list` 列出內建身分與紀錄；`--remove <runtime> <version> [<sha256>]` 移除紀錄，內建身分不能移除 | Raybird |
 
 ---
 **建立日期**: 2026-10-21  

@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"asura/internal/backend/antigravity"
+	"asura/internal/backend/omp"
 	"asura/internal/backend/verification"
 )
 
@@ -205,5 +207,99 @@ func TestRuntimeVerifyCommand(t *testing.T) {
 	}
 	if out, code := run(fullPath, "runtime", "verify", "codex"); code == 0 || !strings.Contains(out, "error: verify codex") {
 		t.Errorf("not installed: exit %d:\n%s", code, out)
+	}
+}
+
+// 2026-10-22：issue-73 Task 3.3，SCN-007。--list 列出內建身分與每筆紀錄；--remove 移除一筆後該身分回到 version_unverified；
+// 內建身分不能移除，失敗時紀錄逐 byte 不變。
+func TestRuntimeVerifyListRemove(t *testing.T) {
+	e := newXDGEnv(t)
+	runtimes := t.TempDir()
+	for k, v := range map[string]string{"HOME": e.home, "XDG_CONFIG_HOME": e.configHome, "XDG_DATA_HOME": e.dataHome, "XDG_RUNTIME_DIR": e.runtimeDir, "PATH": runtimes + ":/usr/bin:/bin"} {
+		t.Setenv(k, v)
+	}
+	codex := filepath.Join(runtimes, "codex")
+	if err := os.WriteFile(codex, []byte("#!/bin/sh\necho 'codex-cli 0.163.0'\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	digest, err := verification.FileDigest(codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	records := filepath.Join(e.dataHome, "asura", "runtime-verification.json")
+	at := time.Date(2026, 10, 20, 1, 2, 3, 0, time.UTC)
+	for _, r := range []verification.Record{
+		{Identity: verification.Identity{Runtime: "codex", Version: "0.163.0", Digest: digest}, VerifiedAt: at, AsuraVersion: "v1.2.3"},
+		{Identity: verification.Identity{Runtime: "omp", Version: "19.0.0", Digest: "e1"}, VerifiedAt: at, AsuraVersion: "dev"},
+		{Identity: verification.Identity{Runtime: "omp", Version: "19.0.0", Digest: "f2"}, VerifiedAt: at, AsuraVersion: "dev"},
+	} {
+		if err := verification.Add(records, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cli := func(args ...string) (string, string, int) {
+		t.Helper()
+		var out, errOut bytes.Buffer
+		code := RunCLI(append([]string{"runtime"}, args...), &out, &errOut)
+		return out.String(), errOut.String(), code
+	}
+	codexLine := func() string {
+		out, _, _ := cli("inventory", "--socket", "")
+		for _, line := range strings.Split(out, "\n") {
+			if strings.HasPrefix(line, "codex ") {
+				return line
+			}
+		}
+		return out
+	}
+	builtins := "opencode version=\"1.18.23\" sha256=any built-in\n" +
+		"codex version=\"0.155.0\" sha256=any built-in\n" +
+		"omp version=\"18.4.4\" sha256=" + omp.Builtin.Digest + " built-in\n" +
+		"antigravity version=\"1.2.13\" sha256=" + antigravity.Builtin.Digest + " built-in\n"
+	ompRows := "omp version=\"19.0.0\" sha256=e1 verified_at=2026-10-20T01:02:03Z asura_version=dev\n" +
+		"omp version=\"19.0.0\" sha256=f2 verified_at=2026-10-20T01:02:03Z asura_version=dev\n"
+	if out, errOut, code := cli("verify", "--list"); code != 0 || errOut != "" ||
+		out != builtins+"codex version=\"0.163.0\" sha256="+digest+" verified_at=2026-10-20T01:02:03Z asura_version=v1.2.3\n"+ompRows {
+		t.Errorf("--list: exit %d, stderr %q:\n%s", code, errOut, out)
+	}
+	if line := codexLine(); !strings.Contains(line, "availability=available") {
+		t.Errorf("before remove: %s", line)
+	}
+
+	seeded, _ := os.ReadFile(records)
+	for _, c := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"codex", "0.155.0"}, "error: codex 0.155.0 is a built-in verified identity: built-in verified identities cannot be removed\n"},
+		{[]string{"omp", "18.4.4"}, "error: omp 18.4.4 is a built-in verified identity: built-in verified identities cannot be removed\n"},
+		{[]string{"omp", "18.4.4", omp.Builtin.Digest}, "error: omp 18.4.4 is a built-in verified identity: built-in verified identities cannot be removed\n"},
+		{[]string{"codex", "9.9.9"}, "error: codex 9.9.9: no verification record for this identity\n"},
+		{[]string{"omp", "19.0.0"}, "error: omp 19.0.0 has 2 verification records; specify the sha256\n"},
+	} {
+		if out, errOut, code := cli(append([]string{"verify", "--remove"}, c.args...)...); code == 0 || out != "" || errOut != c.want {
+			t.Errorf("--remove %v: exit %d, stdout %q, stderr %q, want %q", c.args, code, out, errOut, c.want)
+		}
+	}
+	if data, _ := os.ReadFile(records); !bytes.Equal(data, seeded) {
+		t.Errorf("failed removals changed the records:\n%s", data)
+	}
+
+	if out, errOut, code := cli("verify", "--remove", "codex", "0.163.0"); code != 0 || errOut != "" || out != "removed codex 0.163.0 (sha256 "+digest+")\n" {
+		t.Errorf("--remove codex: exit %d, stderr %q:\n%s", code, errOut, out)
+	}
+	if out, errOut, code := cli("verify", "--remove", "omp", "19.0.0", "f2"); code != 0 || errOut != "" || out != "removed omp 19.0.0 (sha256 f2)\n" {
+		t.Errorf("--remove omp f2: exit %d, stderr %q:\n%s", code, errOut, out)
+	}
+	if out, _, code := cli("verify", "--list"); code != 0 || out != builtins+strings.SplitAfter(ompRows, "\n")[0] {
+		t.Errorf("--list after remove:\n%s", out)
+	}
+	if line := codexLine(); !strings.Contains(line, "availability=unavailable") || !strings.HasSuffix(line, "reason=version_unverified") {
+		t.Errorf("after remove: %s", line)
+	}
+	for _, args := range [][]string{{"--list", "codex"}, {"--remove", "codex"}, {"--remove", "nope", "1.0"}, {"--list", "--remove", "codex", "1.0"}} {
+		if _, errOut, code := cli(append([]string{"verify"}, args...)...); code == 0 || !strings.Contains(errOut, "Usage: asura runtime verify") {
+			t.Errorf("%v: exit %d, stderr %q", args, code, errOut)
+		}
 	}
 }

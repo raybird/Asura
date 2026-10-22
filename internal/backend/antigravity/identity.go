@@ -11,6 +11,9 @@ import (
 	"asura/internal/backend/verification"
 )
 
+// Builtin 是免驗證即可使用的 Antigravity 身分（2026-10-22 issue-73）。
+var Builtin = verification.Identity{Runtime: "antigravity", Version: Version, Digest: cliHash}
+
 // admit 2026-10-21：issue-73，hash 為內建時不執行 agy；其他 hash 以 agy --version 取版本，需要本機驗證紀錄。
 func (a *Adapter) admit(ctx context.Context) (version, digest string, err error) {
 	digest, err = clisandbox.ProbeFileDigest(ctx, a.cfg.BinaryPath, backend.ExecutableNotFound)
@@ -24,7 +27,7 @@ func (a *Adapter) admit(ctx context.Context) (version, digest string, err error)
 		return "", "", err
 	}
 	_, err = verification.Admit("antigravity", version, func() (string, error) { return digest, nil },
-		[]verification.Identity{{Runtime: "antigravity", Version: Version, Digest: cliHash}}, a.cfg.VerificationPath)
+		[]verification.Identity{Builtin}, a.cfg.VerificationPath)
 	if errors.Is(err, verification.ErrUnverified) {
 		return "", "", &backend.ProbeError{Reason: backend.VersionUnverified}
 	}

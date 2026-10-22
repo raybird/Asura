@@ -6,18 +6,11 @@ import (
 	"asura/internal/backend/codex"
 	"asura/internal/backend/omp"
 	"asura/internal/backend/opencode"
-	"asura/internal/backend/verification"
 	"asura/internal/daemon"
 	"context"
 	"flag"
 	"fmt"
 	"io"
-	"os"
-	"os/signal"
-	"slices"
-	"strings"
-	"syscall"
-	"time"
 )
 
 func printInventory(w io.Writer, s *backend.InventorySnapshot) {
@@ -107,56 +100,5 @@ func handleRuntime(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	printInventory(stdout, snapshot)
-	return 0
-}
-
-// handleRuntimeVerify 2026-10-22：issue-73，對已安裝的 runtime 執行全部 probe，全部通過才寫入驗證紀錄；
-// 任一 probe 失敗或無法執行時結束碼非 0，紀錄不變。
-func handleRuntimeVerify(args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("runtime verify", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	if err := fs.Parse(args); err != nil || fs.NArg() != 1 || !slices.Contains(localRuntimes, fs.Arg(0)) {
-		fmt.Fprintf(stderr, "Usage: asura runtime verify <%s>\n", strings.Join(localRuntimes, "|"))
-		return 1
-	}
-	id := fs.Arg(0)
-	records := verificationPath()
-	if records == "" {
-		fmt.Fprintln(stderr, "error: cannot resolve the verification records path")
-		return 1
-	}
-	config, cleanup, err := opencode.CreateIsolatedReadOnlyConfigDir()
-	if err != nil {
-		fmt.Fprintln(stderr, "error: read-only runtime configuration unavailable")
-		return 1
-	}
-	defer cleanup()
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	fmt.Fprintf(stdout, "Verifying %s: each probe runs the model once\n", id)
-	spec, results, err := verification.Verify(ctx, func(path string, onStarted func(context.Context, int)) backend.Backend {
-		return localBackend(id, path, config, onStarted)
-	})
-	if err != nil {
-		fmt.Fprintf(stderr, "error: verify %s: %v\n", id, err)
-		return 1
-	}
-	rec := spec.Record
-	if spec.Builtin {
-		fmt.Fprintf(stdout, "%s %s is a built-in verified identity; nothing to verify\n", id, rec.Version)
-		return 0
-	}
-	summary, ok := verification.Summary(results)
-	fmt.Fprint(stdout, summary)
-	if !ok {
-		fmt.Fprintf(stderr, "error: %s %s (sha256 %s) failed verification; no record written\n", id, rec.Version, rec.Digest)
-		return 1
-	}
-	rec.VerifiedAt, rec.AsuraVersion = time.Now().UTC(), version
-	if err := verification.Add(records, rec); err != nil {
-		fmt.Fprintf(stderr, "error: write verification record: %v\n", err)
-		return 1
-	}
-	fmt.Fprintf(stdout, "verified %s %s (sha256 %s); recorded in %s\n", id, rec.Version, rec.Digest, records)
 	return 0
 }

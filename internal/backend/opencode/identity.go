@@ -6,9 +6,11 @@ import (
 	"path/filepath"
 
 	"asura/internal/backend"
-
 	"asura/internal/backend/verification"
 )
+
+// Builtin 是免驗證即可使用的 OpenCode 身分（只比版本，2026-10-22 issue-73）。
+var Builtin = verification.Identity{Runtime: "opencode", Version: BuiltinVersion}
 
 // admitOpenCode 2026-10-21：issue-73，內建 expected 版本精確比對；其他版本需要本機驗證紀錄。
 func admitOpenCode(version, bin, expected, recordsPath string) error {

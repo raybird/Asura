@@ -16,6 +16,9 @@ const treeHash = "e8b948577c8d65212f00068a6dc55d293724786d698d8d18438f67d6545f5b
 
 type pinned struct{ version, cli, bun, tree string }
 
+// Builtin 是免驗證即可使用的 OMP 身分（2026-10-22 issue-73）。
+var Builtin = verification.Identity{Runtime: "omp", Version: Version, Digest: verification.CombineDigests(cliHash, bunHash)}
+
 // admit 2026-10-21：issue-73，身分為套件版本加上 cli.js 與 Bun 的雜湊；內建身分沿用既有固定 hash。
 // node_modules 樹太大，不在清冊時計算：執行時以內建或驗證紀錄中的樹雜湊固定快照內容。
 func (a *Adapter) admit(ctx context.Context) (pinned, error) {
@@ -23,13 +26,12 @@ func (a *Adapter) admit(ctx context.Context) (pinned, error) {
 	if err != nil {
 		return pinned{}, err
 	}
-	builtin := verification.Identity{Runtime: "omp", Version: Version, Digest: verification.CombineDigests(cliHash, bunHash)}
 	if version == "" {
 		return pinned{Version, cli, bun, treeHash}, nil
 	}
 	digest := verification.CombineDigests(cli, bun)
 	rec, err := verification.Admit("omp", version, func() (string, error) { return digest, nil },
-		[]verification.Identity{builtin}, a.cfg.VerificationPath)
+		[]verification.Identity{Builtin}, a.cfg.VerificationPath)
 	if errors.Is(err, verification.ErrUnverified) {
 		return pinned{}, &backend.ProbeError{Reason: backend.VersionUnverified}
 	}

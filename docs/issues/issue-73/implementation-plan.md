@@ -170,8 +170,8 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 - 驗收編號：SCN-007
 - 完成判準：三種情況以字面輸出斷言；移除後該身分回到 `version_unverified`
 - 驗證：整合測試
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成（2026-10-22）
+- 證據：[evidence/task-3.3.md](./evidence/task-3.3.md)：`TestRuntimeVerifyListRemove` 先紅後綠，以 stdout／stderr 全文斷言列出、移除與拒絕移除內建身分；移除後回到 `version_unverified`；突變檢查被抓到；專案 gate 24 個套件 ok
 
 ### Task 3.4 — 驗證不自動觸發
 - 產出與範圍：以會記錄呼叫的 fake runtime 確認 daemon 啟動、doctor、runtime inventory、run、ask 都不執行 probe
