@@ -161,8 +161,8 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 - 驗收編號：SCN-003、SCN-004
 - 完成判準：fake runtime 覆蓋全部通過、單一 probe 失敗、無法執行（未登入、逾時、bwrap 不可用）；失敗時既有紀錄逐 byte 不變；通過後以不同 `--db`、有無 config 檢查皆為 available
 - 驗證：整合測試，先紅後綠
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成（2026-10-22）
+- 證據：[evidence/task-3.2.md](./evidence/task-3.2.md)：`TestRuntimeVerifyCommand` 先紅後綠，涵蓋全部通過、單一 probe 失敗、未登入、bwrap 不可用、未安裝、內建身分；逾時由 `TestVerify` 在 verification 層覆蓋（理由見證據）；兩項突變檢查都被抓到；專案 gate 24 個套件 ok
 
 ### Task 3.3 — `--list` 與 `--remove`
 - 產出與範圍：列出紀錄並標出內建身分；移除指定紀錄；移除內建身分時失敗且紀錄不變

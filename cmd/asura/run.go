@@ -113,7 +113,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  web     Start the local web remote entry console")
 	fmt.Fprintln(w, "  cron    Manage periodic scheduled tasks")
 	fmt.Fprintln(w, "  memory  Manage project-level long-term memories")
-	fmt.Fprintln(w, "  runtime Query runtime inventory and admission availability")
+	fmt.Fprintln(w, "  runtime Query runtime inventory and verify installed runtime versions")
 	fmt.Fprintln(w, "  version Print build version, commit and platform")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Run 'asura <command> -h' for details on each command.")

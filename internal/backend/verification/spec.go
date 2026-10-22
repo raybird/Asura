@@ -59,6 +59,7 @@ func TempRecords(dir string, rec Record) (string, error) {
 }
 
 // Verify 2026-10-22：issue-73，以 Prepare 建立 backend，依 spec 執行該 runtime 的 probe；不寫入正式紀錄。
+// 內建身分不需要驗證，不執行 probe、不呼叫模型。
 // newBackend 必須把 onStarted 接到 adapter 的 OnProcessStarted，取消 probe 依此確認行程樹已回收。
 // only 非空時只執行列出的 probe（開發用的失效對照組）。
 func Verify(ctx context.Context, newBackend func(records string, onStarted func(context.Context, int)) backend.Backend, only ...string) (Spec, []Result, error) {
@@ -75,8 +76,8 @@ func Verify(ctx context.Context, newBackend func(records string, onStarted func(
 		}
 	}
 	b, spec, err := Prepare(ctx, dir, func(records string) backend.Backend { return newBackend(records, onStarted) })
-	if err != nil {
-		return Spec{}, nil, err
+	if err != nil || spec.Builtin {
+		return spec, nil, err
 	}
 	opt := spec.Options
 	opt.Started = started

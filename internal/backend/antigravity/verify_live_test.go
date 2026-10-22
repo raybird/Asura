@@ -36,6 +36,9 @@ func runLive(t *testing.T, only ...string) []verification.Result {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if spec.Builtin {
+		t.Skipf("%s %s is a built-in verified identity; Verify runs no probes", spec.Record.Runtime, spec.Record.Version)
+	}
 	summary, _ := verification.Summary(results)
 	t.Logf("identity %+v builtin=%v\nresults:\n%s", spec.Record.Identity, spec.Builtin, summary)
 	return results

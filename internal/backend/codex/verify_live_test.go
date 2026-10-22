@@ -31,12 +31,15 @@ func liveCodex(t *testing.T, binary string, only ...string) []verification.Resul
 	if err != nil {
 		t.Fatal(err)
 	}
+	if spec.Builtin {
+		t.Skipf("%s %s is a built-in verified identity; Verify runs no probes", spec.Record.Runtime, spec.Record.Version)
+	}
 	summary, _ := verification.Summary(results)
 	t.Logf("identity %+v builtin=%v\nresults:\n%s", spec.Record.Identity, spec.Builtin, summary)
 	return results
 }
 
-// ASURA_VERIFY_CODEX_BIN 指定另一份安裝（例如內建版本 0.155.0）做對照。
+// ASURA_VERIFY_CODEX_BIN 指定另一份未驗證的安裝做對照（內建身分不執行 probe）。
 func codexBinary() (string, error) {
 	if p := os.Getenv("ASURA_VERIFY_CODEX_BIN"); p != "" {
 		return p, nil

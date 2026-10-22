@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"asura/internal/backend"
 )
@@ -45,5 +46,50 @@ func TestPrepare(t *testing.T) {
 
 	if _, _, err := Prepare(context.Background(), t.TempDir(), func(string) backend.Backend { return &shellBackend{} }); err == nil {
 		t.Error("runtime without VerificationSpec accepted")
+	}
+}
+
+// hangingBackend 的每次執行都卡到 context 結束，模擬沒有回應的 runtime。
+type hangingBackend struct {
+	subjectBackend
+	runs int
+}
+
+func (b *hangingBackend) Run(ctx context.Context, _ *backend.ExecutionRequest) (*backend.ExecutionResult, error) {
+	b.runs++
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+// 2026-10-22：issue-73 Task 3.2，內建身分不呼叫模型；runtime 沒有回應時每個 probe 都以逾時失敗，不會被當成通過。
+func TestVerify(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	id := Identity{Runtime: "rt", Version: "2.0", Digest: "abc"}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	builtin := &hangingBackend{subjectBackend: subjectBackend{spec: Spec{Builtin: true, Record: Record{Identity: id}}}}
+	spec, results, err := Verify(ctx, func(string, func(context.Context, int)) backend.Backend { return builtin })
+	if err != nil || !spec.Builtin || len(results) != 0 || builtin.runs != 0 {
+		t.Errorf("builtin: spec = %+v, results = %v, runs = %d, err = %v", spec, results, builtin.runs, err)
+	}
+
+	ctx, cancel = context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	hang := &hangingBackend{subjectBackend: subjectBackend{spec: Spec{Record: Record{Identity: id}, Options: Options{ReadOnlyRoles: true}}}}
+	_, results, err = Verify(ctx, func(records string, _ func(context.Context, int)) backend.Backend {
+		hang.records = records
+		return hang
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	summary, ok := Summary(results)
+	if ok || len(results) != 4 {
+		t.Fatalf("hanging runtime passed:\n%s", summary)
+	}
+	for _, r := range results {
+		if r.Err == nil {
+			t.Errorf("probe %s passed against a hanging runtime", r.Name)
+		}
 	}
 }
