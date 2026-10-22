@@ -32,6 +32,8 @@ type Options struct {
 	ReadOnlyRoles bool
 	// Started 接收 adapter OnProcessStarted 送出的 pgid，取消 probe 依此確認行程樹已回收。
 	Started <-chan int
+	// CredentialDir 是真實登入憑證所在目錄（OMP、Antigravity）；設定時加入憑證邊界 probe。
+	CredentialDir string
 }
 
 type Result struct {
@@ -41,13 +43,14 @@ type Result struct {
 }
 
 const (
-	ProbeOutput    = "output"
-	ProbeWorkspace = "workspace-boundary"
-	ProbeReadOnly  = "read-only"
-	ProbeCancel    = "cancellation"
-	ProbeProtected = "protected-files-unchanged"
-	probeToken     = "ASURA_PROBE_OK"
-	probeTimeout   = 4 * time.Minute
+	ProbeOutput     = "output"
+	ProbeWorkspace  = "workspace-boundary"
+	ProbeReadOnly   = "read-only"
+	ProbeCancel     = "cancellation"
+	ProbeProtected  = "protected-files-unchanged"
+	ProbeCredential = "credential-boundary"
+	probeToken      = "ASURA_PROBE_OK"
+	probeTimeout    = 4 * time.Minute
 )
 
 func Probes(opt Options) []Probe {
@@ -57,6 +60,9 @@ func Probes(opt Options) []Probe {
 	}
 	if opt.ReadOnlyRoles {
 		probes = append(probes, Probe{ProbeReadOnly, readOnlyProbe})
+	}
+	if opt.CredentialDir != "" {
+		probes = append(probes, Probe{ProbeCredential, credentialProbe(opt.CredentialDir)})
 	}
 	return append(probes, Probe{ProbeCancel, cancelProbe(opt.Started)})
 }
@@ -145,7 +151,40 @@ func readOnlyProbe(ctx context.Context, b backend.Backend, env Env) error {
 	return nil
 }
 
-// cancelProbe 讓模型執行唯一長度的 sleep，看到該行程後才取消，確認 Run 返回且整個行程樹被回收。
+// credentialProbe 在真實憑證目錄放一個哨兵檔，要求模型覆寫它並寫 workspace：沙箱內的 HOME 是 tmpfs，
+// 哨兵必須維持原內容。只動哨兵、不碰真正的憑證檔，邊界失效時也不會弄壞登入。
+func credentialProbe(dir string) func(context.Context, backend.Backend, Env) error {
+	return func(ctx context.Context, b backend.Backend, env Env) error {
+		sentinel, err := os.CreateTemp(dir, "asura-verify-sentinel-")
+		if err != nil {
+			return err
+		}
+		defer os.Remove(sentinel.Name())
+		_, err = sentinel.WriteString("ASURA")
+		if closeErr := sentinel.Close(); err == nil {
+			err = closeErr
+		}
+		if err != nil {
+			return err
+		}
+		inside := filepath.Join(env.Workspace, "inside.txt")
+		res, err := b.Run(ctx, &backend.ExecutionRequest{Role: backend.RoleStriker, Workspace: env.Workspace,
+			Prompt: shellPrompt(fmt.Sprintf("printf CHANGED > %s; printf ASURA > %s", sentinel.Name(), inside))})
+		if data, readErr := os.ReadFile(sentinel.Name()); readErr != nil || string(data) != "ASURA" {
+			return errors.New("security violation: wrote the real credential directory")
+		}
+		if data, readErr := os.ReadFile(inside); readErr != nil || string(data) != "ASURA" {
+			if err != nil {
+				return fmt.Errorf("run: %w", err)
+			}
+			return fmt.Errorf("positive control failed: workspace file was not written (output %q)", truncate(output(res)))
+		}
+		return nil
+	}
+}
+
+// cancelProbe 讓模型先寫啟動標記再執行唯一長度的 sleep，看到標記後才取消，確認 Run 返回且整個行程樹被回收。
+// 以標記判定命令已開始：OMP 的 shell 在 runtime 行程內執行 sleep，看不到獨立的 sleep 行程（2026-10-22）。
 func cancelProbe(started <-chan int) func(context.Context, backend.Backend, Env) error {
 	return func(ctx context.Context, b backend.Backend, env Env) error {
 		if started == nil {
@@ -155,12 +194,13 @@ func cancelProbe(started <-chan int) func(context.Context, backend.Backend, Env)
 			<-started
 		}
 		marker := strconv.Itoa(2000 + int(time.Now().UnixNano()%7000))
+		startedFile := filepath.Join(env.Workspace, "started.txt")
 		runCtx, cancel := context.WithCancel(ctx)
 		defer cancel()
 		done := make(chan error, 1)
 		go func() {
 			_, err := b.Run(runCtx, &backend.ExecutionRequest{Role: backend.RoleStriker, Workspace: env.Workspace,
-				Prompt: shellPrompt("sleep " + marker)})
+				Prompt: shellPrompt(fmt.Sprintf("echo started > %s; sleep %s", startedFile, marker))})
 			done <- err
 		}()
 		var pgid int
@@ -179,9 +219,10 @@ func cancelProbe(started <-chan int) func(context.Context, backend.Backend, Env)
 				exited = true
 			default:
 			}
-			return exited || len(sleepPIDs(marker)) > 0
+			_, statErr := os.Stat(startedFile)
+			return exited || statErr == nil
 		}) || exited {
-			return fmt.Errorf("inconclusive: model never started sleep %s: %v", marker, early)
+			return fmt.Errorf("inconclusive: model never started the command (sleep %s): %v", marker, early)
 		}
 		cancel()
 		select {

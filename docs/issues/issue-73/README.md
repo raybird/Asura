@@ -158,7 +158,7 @@ Feature: runtime 版本通過驗證才可使用
 - **風險等級與理由**：High — 屬安全邊界（唯讀角色的寫入隔離）；probe 對新版本（Codex 0.163.0、OpenCode 1.18.31）的外部行為尚未確認；錯誤放行時任務照常成功，不會有任何錯誤訊號
 - **首要驗證**：在寫任何產品程式前，先把現有 live probe 改成可對任意已安裝版本執行，拿本機的 Codex 0.163.0 與 OpenCode 1.18.31 實跑，再以對照組確認 probe 抓得到失效：故意拿掉唯讀旗標或改用可寫設定，唯讀 probe 必須失敗
 - **選擇理由**：只有實際執行新版本才能知道 probe 在新版本上能不能跑、結果是否可信；hermetic fixture 驗證不了外部 runtime 的沙箱語意
-- **完成證據**：每個 runtime 的 probe 在本機已安裝版本上有明確的通過或失敗結果，並記錄版本與命令；每個唯讀 probe 都有一組「沙箱失效」對照組實際失敗；probe 呼叫模型的次數與所需登入條件記入 implementation-plan
+- **完成證據**：每個 runtime 的 probe 在本機已安裝版本上有明確的通過或失敗結果，並記錄版本與命令；每個唯讀 probe 都有一組「沙箱失效」對照組實際失敗；probe 呼叫模型的次數與所需登入條件記入 implementation-plan。2026-10-22 已達成，見 [evidence/phase1-probes.md](./evidence/phase1-probes.md) 與 Task 1.4
 
 ## 待確認事項
 
@@ -168,7 +168,7 @@ Feature: runtime 版本通過驗證才可使用
 | TBD-2 | 驗證紀錄被移除時，已接受但尚未執行的任務在 stage 執行前被拒絕（SCN-009），會讓排隊中的任務失敗 | 已解決 | 2026-10-21 Q11 回答「stage 執行前拒絕」：移除紀錄通常是發現該版有問題，照跑等於收不回來；沿用既有 fail-closed 語意（SCN-009） |
 | TBD-3 | 新增 reason 是否要調升 inventory policy 版本：`InventorySnapshot.Validate` 要求 policy 版本完全相等 | 已解決 | 2026-10-21 Q13 回答「不調升，只擴充 reason」：舊的封存內容不會含新 reason，照樣通過驗證，升級前的 cron 與排隊任務不受影響；policy 維持 `inventory-v1`（SCN-009） |
 | TBD-4 | OpenCode／Codex 的 probe 使用 runtime 的預設模型，驗證紀錄不綁模型 | 已解決 | 2026-10-21 Q12 回答「可以，不綁模型」：沙箱與輸出格式屬於 runtime CLI 本身，一個版本驗證一次即可（SCN-003） |
-| TBD-5 | OMP 與 Antigravity 的登入在 2026-10-21 已過期，Task 1.3 的 probe 無法執行 | 待確認 | Task 1.3、1.4；需使用者在原 CLI 重新登入後重跑 |
+| TBD-5 | OMP 與 Antigravity 的登入在 2026-10-21 已過期，Task 1.3 的 probe 無法執行 | 已解決 | 2026-10-22 使用者重新登入後重跑，Task 1.3、1.4 完成。Antigravity 那次很可能並未過期：snap 版 go 讓測試行程帶著 `SNAP_NAME`，libsecret 查不到 keyring，adapter 才改讀舊的 token 檔（[evidence/phase1-probes.md](./evidence/phase1-probes.md)「2026-10-22 重跑」） |
 | TBD-6 | Codex／OpenCode 新版本要等 #74、#75 合併後才可能通過驗證 | 待確認 | Task 3.5 的端到端驗證相依 #74、#75；Phase 2、Task 3.1～3.4 不受影響 |
 
 ## Timeline
@@ -182,6 +182,7 @@ Feature: runtime 版本通過驗證才可使用
 | 2026-10-21 | Task 2.3 完成：OMP／Antigravity 改為內建或已驗證的身分；OMP 的 node_modules 樹雜湊記在驗證紀錄（`tree_sha256`），執行時固定 | Raybird |
 | 2026-10-21 | Task 2.4 完成：daemon、runtime inventory、doctor、本機 run 都讀同一份驗證紀錄；拒絕訊息與 doctor 提示 `asura runtime verify <runtime>` | Raybird |
 | 2026-10-21 | Task 2.5 完成：紀錄在 stage 執行前移除時任務 fail-closed 且不改選；升級前封存的 `inventory-v1` 快照仍通過驗證。未改產品程式 | Raybird |
+| 2026-10-22 | Task 1.3、1.4 完成：OMP 18.12.6、Antigravity 1.4.4 probe 全過，對照組皆失敗；新增憑證邊界 probe、取消 probe 改以啟動標記判定、新增 `clisandbox.TreeHash` 修正 OMP 樹雜湊不一致；Phase 1 判定 probe 可信 | Raybird |
 
 ---
 **建立日期**: 2026-10-21  

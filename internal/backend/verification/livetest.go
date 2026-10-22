@@ -53,3 +53,13 @@ func Root() (string, error) {
 	cache, err := os.UserCacheDir()
 	return filepath.Join(cache, "asura-verify"), err
 }
+
+// TempRecords 在 dir 下建立只含 rec 的驗證紀錄並回傳路徑，讓 live probe 能對尚未驗證的已安裝版本執行。
+func TempRecords(dir string, rec Record) (string, error) {
+	data := filepath.Join(dir, "data")
+	if err := os.Mkdir(data, 0o700); err != nil {
+		return "", err
+	}
+	path := filepath.Join(data, "runtime-verification.json")
+	return path, Add(path, rec)
+}

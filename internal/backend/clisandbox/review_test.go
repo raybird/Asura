@@ -62,3 +62,34 @@ func TestDependencySnapshot(t *testing.T) {
 		t.Fatal("escaping symlink accepted")
 	}
 }
+
+// 2026-10-21：issue-73，驗證紀錄的相依樹雜湊必須與執行時副本的摘要相同，否則已驗證的版本每次執行都會被拒絕。
+func TestTreeHashMatchesSnapshot(t *testing.T) {
+	source := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(source, "pkg", "bin"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "pkg", "index.js"), []byte("module"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "pkg", "bin", "cli"), []byte("#!/bin/sh\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("../pkg/bin/cli", filepath.Join(source, "pkg", "link")); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := SnapshotTree(source, filepath.Join(t.TempDir(), "snapshot"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash, err := TreeHash(source)
+	if err != nil || hash != snapshot {
+		t.Fatalf("TreeHash = %q, %v; snapshot = %q", hash, err, snapshot)
+	}
+	if err := os.Symlink("../../outside", filepath.Join(source, "pkg", "escape")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := TreeHash(source); err == nil {
+		t.Fatal("escaping symlink accepted")
+	}
+}

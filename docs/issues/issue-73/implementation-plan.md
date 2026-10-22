@@ -85,8 +85,8 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 - 驗收編號：SCN-005（風險證據）
 - 完成判準：每個 probe 有明確結果；憑證邊界 probe 有失效對照組（例如憑證以可寫方式掛入時 probe 失敗）；記錄模型呼叫次數與耗時
 - 驗證：live 實跑加對照組
-- 狀態：⏸️ 阻塞：OMP、Antigravity 登入過期（TBD-5）
-- 證據：[evidence/phase1-probes.md](./evidence/phase1-probes.md)：兩者 probe 皆回 authentication_failed，判為無法執行；憑證不變 PASS
+- 狀態：✅ 已完成（2026-10-22）
+- 證據：[evidence/phase1-probes.md](./evidence/phase1-probes.md)「2026-10-22 重跑」：OMP 18.12.6、Antigravity 1.4.4 全部 probe PASS；workspace 與憑證兩組 bwrap 失效對照組皆失敗；新增主動的 credential-boundary probe，取消 probe 改以啟動標記判定，兩者都有 hermetic 紅燈；2026-10-21 Antigravity 的「登入過期」是 snap 版 go 讓 libsecret 查不到 keyring 的假象
 
 ### Task 1.4 — Phase 1 判定
 - 產出與範圍：彙整 Task 1.1～1.3，寫回 README「風險與首要驗證」的完成證據；列出每個 runtime 驗證一次的模型呼叫次數與所需條件
@@ -94,8 +94,8 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 - 驗收編號：風險證據
 - 完成判準：每個唯讀 probe 都有實際失敗的沙箱失效對照組；若有 probe 在新版本上得不出可信結果，停止 Phase 2 以後的工作，依 acceptance.md「逐題確認」交由使用者決定
 - 驗證：人工核對證據檔與對照組
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成（2026-10-22）
+- 證據：[evidence/phase1-probes.md](./evidence/phase1-probes.md)：四個 runtime 的 probe 在已安裝版本上都得出可信結果，每個沙箱相關 probe（read-only、workspace-boundary、credential-boundary）都有實際失敗的失效對照組；沒有 probe 得不出可信結果，不需要停止。Codex、OpenCode 的失敗是真實缺陷（#74、#75，TBD-6），不是 probe 失準。每個 runtime 一輪 4 次模型呼叫、約 30～40 秒，所需條件見同檔「模型呼叫次數與所需條件」
 
 ## Phase 2 — 身分、紀錄與一致的判定
 
@@ -147,7 +147,7 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 ## Phase 3 — `asura runtime verify` 命令
 
 ### Task 3.1 — probe 產品化
-- 產出與範圍：把 Phase 1 驗證過的 probe 從 `_test.go` 搬成產品程式（每個 runtime 一組，含正向對照），在 Asura 建立的暫存 workspace 執行；原本的 live 測試改為呼叫同一套 probe
+- 產出與範圍：把 Phase 1 驗證過的 probe 從 `_test.go` 搬成產品程式（每個 runtime 一組，含正向對照），在 Asura 建立的暫存 workspace 執行；原本的 live 測試改為呼叫同一套 probe。2026-10-22 Task 1.3 補充：OMP 紀錄的 `tree_sha256` 必須以 `clisandbox.TreeHash` 計算（與執行時 `SnapshotTree` 相同）；OMP、Antigravity 加入 credential-boundary probe
 - 相依：Task 1.4、Task 2.2、Task 2.3
 - 驗收編號：SCN-005
 - 完成判準：以 fake runtime 模擬「唯讀角色能寫入」時唯讀 probe 失敗；模擬「模型沒有嘗試寫入」時正向對照失敗，不會被當成通過

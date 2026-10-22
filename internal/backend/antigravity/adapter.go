@@ -13,8 +13,8 @@ import (
 )
 
 // 2026-10-21：issue-73 Phase 1 的 live probe 需要以已安裝版本覆寫，暫改為 var。
-var Version = "1.2.13"
-var cliHash = "574b0234656c44564f3ff3b013225c86f14ae79b67d0f3b45f6aaf1b1625440e"
+const Version = "1.2.13"
+const cliHash = "574b0234656c44564f3ff3b013225c86f14ae79b67d0f3b45f6aaf1b1625440e"
 
 const Model = "gemini-3.8-flash-low"
 
