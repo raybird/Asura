@@ -11,32 +11,29 @@ import (
 	"asura/internal/backend/verification"
 )
 
-// 2026-10-21：issue-73 Phase 1，以 daemon 相同的 adapter 設定對已安裝的 Codex 執行共用 probe。
-func liveCodex(t *testing.T, binary string) (*Adapter, chan int) {
+// 2026-10-21：issue-73 Phase 1；2026-10-22 改走 verification.Verify，與 asura runtime verify 相同的放行路徑：
+// 未驗證的已安裝版本只透過暫時紀錄放行。binary 非空時改用該執行檔（失效對照組的 shim）。
+func liveCodex(t *testing.T, binary string, only ...string) []verification.Result {
 	t.Helper()
 	if !verification.LiveEnabled() {
 		t.Skip("set ASURA_VERIFY_LIVE=1 to run model-calling probes")
 	}
-	real, err := codexBinary()
-	if err != nil {
-		t.Skip("codex not installed")
-	}
-	out, err := exec.Command(real, "--version").Output()
-	if err != nil {
-		t.Fatalf("codex --version: %v", err)
-	}
-	version := strings.TrimPrefix(strings.TrimSpace(string(out)), "codex-cli ")
 	if binary == "" {
+		real, err := codexBinary()
+		if err != nil {
+			t.Skip("codex not installed")
+		}
 		binary = real
 	}
-	started := make(chan int, 4)
-	return NewAdapter(AdapterConfig{BinaryPath: binary, ExpectedVersion: version,
-		OnProcessStarted: func(_ context.Context, pgid int) {
-			select {
-			case started <- pgid:
-			default:
-			}
-		}}), started
+	spec, results, err := verification.Verify(context.Background(), func(records string, onStarted func(context.Context, int)) backend.Backend {
+		return NewAdapter(AdapterConfig{BinaryPath: binary, VerificationPath: records, OnProcessStarted: onStarted})
+	}, only...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	summary, _ := verification.Summary(results)
+	t.Logf("identity %+v builtin=%v\nresults:\n%s", spec.Record.Identity, spec.Builtin, summary)
+	return results
 }
 
 // ASURA_VERIFY_CODEX_BIN 指定另一份安裝（例如內建版本 0.155.0）做對照。
@@ -47,23 +44,8 @@ func codexBinary() (string, error) {
 	return exec.LookPath("codex")
 }
 
-func runCodexProbes(t *testing.T, b backend.Backend, probes []verification.Probe) []verification.Result {
-	t.Helper()
-	base, err := verification.NewBase()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("probe base: %s", base)
-	results := verification.Run(context.Background(), b, base, probes, nil)
-	summary, _ := verification.Summary(results)
-	t.Logf("results:\n%s", summary)
-	return results
-}
-
 func TestVerifyLive_Codex(t *testing.T) {
-	a, started := liveCodex(t, "")
-	results := runCodexProbes(t, a, verification.Probes(verification.Options{ReadOnlyRoles: true, Started: started}))
-	if _, ok := verification.Summary(results); !ok {
+	if _, ok := verification.Summary(liveCodex(t, "")); !ok {
 		t.Error("codex probes failed")
 	}
 }
@@ -71,7 +53,13 @@ func TestVerifyLive_Codex(t *testing.T) {
 // 失效對照組：shim 把 read-only 換成 workspace-write、把 --approve-for-me 換成完全不設沙箱，
 // 對應的 probe 必須失敗，證明 probe 抓得到沙箱失效。
 func TestVerifyLive_CodexControls(t *testing.T) {
-	real, _ := codexBinary()
+	if !verification.LiveEnabled() {
+		t.Skip("set ASURA_VERIFY_LIVE=1 to run model-calling probes")
+	}
+	real, err := codexBinary()
+	if err != nil {
+		t.Skip("codex not installed")
+	}
 	shim, err := verification.WriteShim(t.TempDir(), "codex", real, `for a; do shift
   case "$a" in
     read-only) set -- "$@" workspace-write ;;
@@ -83,15 +71,7 @@ exec "$REAL" "$@"`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	a, _ := liveCodex(t, shim)
-	all := verification.Probes(verification.Options{ReadOnlyRoles: true})
-	var probes []verification.Probe
-	for _, p := range all {
-		if p.Name == verification.ProbeReadOnly || p.Name == verification.ProbeWorkspace {
-			probes = append(probes, p)
-		}
-	}
-	for _, r := range runCodexProbes(t, a, probes) {
+	for _, r := range liveCodex(t, shim, verification.ProbeReadOnly, verification.ProbeWorkspace) {
 		if r.Err == nil || !strings.Contains(r.Err.Error(), "security violation") {
 			t.Errorf("control %s did not detect the degraded sandbox: %v", r.Name, r.Err)
 		}

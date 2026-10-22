@@ -183,6 +183,7 @@ Feature: runtime 版本通過驗證才可使用
 | 2026-10-21 | Task 2.4 完成：daemon、runtime inventory、doctor、本機 run 都讀同一份驗證紀錄；拒絕訊息與 doctor 提示 `asura runtime verify <runtime>` | Raybird |
 | 2026-10-21 | Task 2.5 完成：紀錄在 stage 執行前移除時任務 fail-closed 且不改選；升級前封存的 `inventory-v1` 快照仍通過驗證。未改產品程式 | Raybird |
 | 2026-10-22 | Task 1.3、1.4 完成：OMP 18.12.6、Antigravity 1.4.4 probe 全過，對照組皆失敗；新增憑證邊界 probe、取消 probe 改以啟動標記判定、新增 `clisandbox.TreeHash` 修正 OMP 樹雜湊不一致；Phase 1 判定 probe 可信 | Raybird |
+| 2026-10-22 | Task 3.1 完成：probe 產品化（`verification.Spec`／`Prepare`／`Verify`，四個 runtime 的 `VerificationSpec`），live 測試改走同一路徑；唯讀 probe 改以 nonce 為正向對照，並修訂 Task 3.1 完成判準（理由見 evidence/task-3.1.md） | Raybird |
 
 ---
 **建立日期**: 2026-10-21  

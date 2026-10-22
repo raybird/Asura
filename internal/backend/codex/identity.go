@@ -1,6 +1,7 @@
 package codex
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 
+	"asura/internal/backend"
 	"asura/internal/backend/verification"
 )
 
@@ -79,4 +81,24 @@ func codexPlatformPackage(root string) (string, error) {
 		return vendor, nil
 	}
 	return "", fmt.Errorf("codex platform package @openai/%s not found", name)
+}
+
+// VerificationSpec 2026-10-22：issue-73，回報 admission 會檢查的同一個身分；Codex 跑唯讀角色 probe。
+func (a *Adapter) VerificationSpec(ctx context.Context) (verification.Spec, error) {
+	bin := a.ProbeExecutable()
+	if bin == "" {
+		return verification.Spec{}, ErrNoBinary
+	}
+	raw, err := backend.ProbeVersionCommand(ctx, bin)
+	if err != nil {
+		return verification.Spec{}, err
+	}
+	spec := verification.Spec{Options: verification.Options{ReadOnlyRoles: true}}
+	spec.Record.Runtime, spec.Record.Version = "codex", NormalizeCodexVersion(raw)
+	if spec.Record.Version == NormalizeCodexVersion(a.cfg.ExpectedVersion) {
+		spec.Builtin = true
+		return spec, nil
+	}
+	spec.Record.Digest, err = codexDigest(bin)
+	return spec, err
 }

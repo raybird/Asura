@@ -150,10 +150,10 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 - 產出與範圍：把 Phase 1 驗證過的 probe 從 `_test.go` 搬成產品程式（每個 runtime 一組，含正向對照），在 Asura 建立的暫存 workspace 執行；原本的 live 測試改為呼叫同一套 probe。2026-10-22 Task 1.3 補充：OMP 紀錄的 `tree_sha256` 必須以 `clisandbox.TreeHash` 計算（與執行時 `SnapshotTree` 相同）；OMP、Antigravity 加入 credential-boundary probe
 - 相依：Task 1.4、Task 2.2、Task 2.3
 - 驗收編號：SCN-005
-- 完成判準：以 fake runtime 模擬「唯讀角色能寫入」時唯讀 probe 失敗；模擬「模型沒有嘗試寫入」時正向對照失敗，不會被當成通過
+- 完成判準：以 fake runtime 模擬「唯讀角色能寫入」時唯讀 probe 失敗；模擬「模型沒有讀出 workspace 的 nonce」時正向對照失敗，不會被當成通過。2026-10-22 修訂：原文為「模型沒有嘗試寫入」，但實測沙箱正常時 OpenCode（唯讀 agent 沒有 bash）與 Codex（事先判斷不能寫）都不會嘗試寫入，以此為條件會讓唯讀 probe 永遠失敗；改以同一唯讀回合讀出 nonce 為正向對照，「被允許時會寫入」由同一輪的 workspace-boundary 證明，理由與實測見證據
 - 驗證：hermetic 測試（fake runtime）；live 測試保留為可選並記錄 SKIP
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成（2026-10-22）
+- 證據：[evidence/task-3.1.md](./evidence/task-3.1.md)：`Spec`／`Prepare`／`Verify` 與四個 runtime 的 `VerificationSpec`，hermetic 測試先紅後綠；live 經 `Verify` 實跑，OMP、Antigravity 全過，Codex、OpenCode 的唯讀 probe 通過、失敗項為已知的 #74、#75；失效對照組皆失敗；專案 gate 24 個套件 ok
 
 ### Task 3.2 — verify 命令的成功與失敗
 - 產出與範圍：`asura runtime verify <runtime>`：依序執行該 runtime 的 probe，全部通過才寫入紀錄；逐項印出結果；任一失敗或無法執行時結束碼非 0、不寫紀錄

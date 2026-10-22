@@ -3,6 +3,8 @@ package antigravity
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 
 	"asura/internal/backend"
 	"asura/internal/backend/clisandbox"
@@ -30,4 +32,23 @@ func (a *Adapter) admit(ctx context.Context) (version, digest string, err error)
 		return "", "", &backend.ProbeError{Reason: backend.VersionFailed}
 	}
 	return version, digest, nil
+}
+
+// VerificationSpec 2026-10-22：issue-73，Antigravity 跑憑證邊界 probe；token 檔存在時才列入前後不變檢查
+// （keyring 登入時可能沒有這個檔案）。
+func (a *Adapter) VerificationSpec(ctx context.Context) (verification.Spec, error) {
+	digest, err := clisandbox.ProbeFileDigest(ctx, a.cfg.BinaryPath, backend.ExecutableNotFound)
+	if err != nil {
+		return verification.Spec{}, err
+	}
+	token := filepath.Join(a.cfg.Home, ".gemini/antigravity-cli/antigravity-oauth-token")
+	spec := verification.Spec{Builtin: digest == cliHash, Options: verification.Options{CredentialDir: filepath.Dir(token)}}
+	if _, err := os.Lstat(token); err == nil {
+		spec.Protected = []string{token}
+	}
+	spec.Record.Runtime, spec.Record.Version, spec.Record.Digest = "antigravity", Version, digest
+	if !spec.Builtin {
+		spec.Record.Version, err = backend.ProbeVersionCommand(ctx, a.cfg.BinaryPath)
+	}
+	return spec, err
 }

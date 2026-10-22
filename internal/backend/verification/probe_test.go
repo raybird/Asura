@@ -2,9 +2,11 @@ package verification
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
@@ -137,5 +139,65 @@ func TestCancelProbe(t *testing.T) {
 	})
 	if err := run(leaky); err == nil || !strings.Contains(err.Error(), "survived cancellation") {
 		t.Errorf("leaked command: err = %v, want process tree survived", err)
+	}
+}
+
+// readOnlyBackend 模擬唯讀角色：reads 時讀出 workspace 內的 nonce 檔並放進回覆，writes 時沙箱失效、寫入目標檔。
+type readOnlyBackend struct {
+	shellBackend
+	reads, writes bool
+	err           error
+}
+
+func (b *readOnlyBackend) Run(_ context.Context, req *backend.ExecutionRequest) (*backend.ExecutionResult, error) {
+	if b.err != nil {
+		return &backend.ExecutionResult{FailureClass: backend.FailureAuth}, b.err
+	}
+	reply := "BLOCKED"
+	if b.reads {
+		entries, _ := os.ReadDir(req.Workspace)
+		for _, e := range entries {
+			if data, err := os.ReadFile(filepath.Join(req.Workspace, e.Name())); err == nil {
+				reply = string(data) + "\n" + reply
+			}
+		}
+	}
+	if b.writes {
+		_, command, _ := strings.Cut(req.Prompt, "without modification: ")
+		command, _, _ = strings.Cut(command, "\n")
+		if out, err := exec.Command("sh", "-c", command).CombinedOutput(); err != nil {
+			return nil, fmt.Errorf("%v: %s", err, out)
+		}
+	}
+	return &backend.ExecutionResult{Output: reply}, nil
+}
+
+// 2026-10-22：issue-73 Task 3.1（SCN-005），唯讀 probe 的正向對照：模型必須在同一個唯讀回合讀出 Asura 放在
+// workspace 的 nonce，否則「沒有寫入」可能只是模型沒做事，不能當成唯讀成立。
+func TestReadOnlyProbe(t *testing.T) {
+	var probe Probe
+	for _, p := range Probes(Options{ReadOnlyRoles: true}) {
+		if p.Name == ProbeReadOnly {
+			probe = p
+		}
+	}
+	if probe.Run == nil {
+		t.Fatal("read-only probe not registered")
+	}
+	cases := []struct {
+		name string
+		b    *readOnlyBackend
+		want string
+	}{
+		{"sandbox holds", &readOnlyBackend{reads: true}, ""},
+		{"read-only role can write", &readOnlyBackend{reads: true, writes: true}, "security violation"},
+		{"model did nothing", &readOnlyBackend{}, "positive control"},
+		{"runtime failed", &readOnlyBackend{err: errors.New("login expired")}, "inconclusive"},
+	}
+	for _, c := range cases {
+		err := runOne(context.Background(), c.b, t.TempDir(), probe)
+		if c.want == "" && err != nil || c.want != "" && (err == nil || !strings.Contains(err.Error(), c.want)) {
+			t.Errorf("%s: err = %v, want %q", c.name, err, c.want)
+		}
 	}
 }

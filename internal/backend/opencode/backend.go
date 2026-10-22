@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"asura/internal/backend"
+	"asura/internal/backend/verification"
 )
 
 // RoleRoutingBackend 封裝 OpenCode 的唯讀（Oracle/Critic）與寫入（Striker）兩個真實 Adapter，
@@ -81,4 +82,24 @@ func (b *RoleRoutingBackend) Run(ctx context.Context, req *backend.ExecutionRequ
 	default:
 		return nil, fmt.Errorf("unsupported backend role: %q", req.Role)
 	}
+}
+
+// VerificationSpec 2026-10-22：issue-73，唯讀與寫入角色必須解析到同一個身分，驗證才涵蓋兩者。
+func (b *RoleRoutingBackend) VerificationSpec(ctx context.Context) (verification.Spec, error) {
+	var specs []verification.Spec
+	for _, adapter := range []backend.Backend{b.readOnly, b.striker} {
+		subject, ok := adapter.(verification.Subject)
+		if !ok {
+			return verification.Spec{}, errors.New("opencode role does not support verification")
+		}
+		spec, err := subject.VerificationSpec(ctx)
+		if err != nil {
+			return verification.Spec{}, err
+		}
+		specs = append(specs, spec)
+	}
+	if specs[0].Record.Identity != specs[1].Record.Identity || specs[0].Builtin != specs[1].Builtin {
+		return verification.Spec{}, errors.New("read-only and striker roles resolve to different opencode installations")
+	}
+	return specs[1], nil
 }

@@ -13,45 +13,38 @@ import (
 	"asura/internal/daemon"
 )
 
-// 2026-10-21：issue-73 Phase 1，以 daemon 相同的唯讀與寫入 adapter 設定對已安裝的 OpenCode 執行共用 probe。
-// ASURA_VERIFY_OPENCODE_BIN 指定另一份安裝做對照；readOnlyBin／strikerBin 非空時改用失效對照組的 shim。
-func liveOpenCode(t *testing.T, readOnlyBin, strikerBin string) (backend.Backend, chan int) {
+// 2026-10-21：issue-73 Phase 1；2026-10-22 改走 verification.Verify，以 daemon 相同的唯讀與寫入 adapter 設定執行，
+// 未驗證的已安裝版本只透過暫時紀錄放行。binary 非空時兩個角色都改用該執行檔（失效對照組的 shim）。
+func liveOpenCode(t *testing.T, binary string, only ...string) []verification.Result {
 	t.Helper()
 	if !verification.LiveEnabled() {
 		t.Skip("set ASURA_VERIFY_LIVE=1 to run model-calling probes")
 	}
-	real := openCodeBinary(t)
-	out, err := exec.Command(real, "--version").Output()
-	if err != nil {
-		t.Fatalf("opencode --version: %v", err)
-	}
-	version := strings.TrimSpace(string(out))
-	if readOnlyBin == "" {
-		readOnlyBin = real
-	}
-	if strikerBin == "" {
-		strikerBin = real
+	if binary == "" {
+		binary = openCodeBinary(t)
 	}
 	dir, cleanup, err := opencode.CreateIsolatedReadOnlyConfigDir()
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanup)
-	started := make(chan int, 4)
-	onStarted := func(_ context.Context, pgid int) {
-		select {
-		case started <- pgid:
-		default:
-		}
+	spec, results, err := verification.Verify(context.Background(), func(records string, onStarted func(context.Context, int)) backend.Backend {
+		readOnly := opencode.NewAdapter(opencode.AdapterConfig{BinaryPath: binary, VerificationPath: records, ConfigDir: dir,
+			Permission: daemon.DefaultReadOnlyPermissionPolicy, DisableAuto: true, Role: opencode.RoleOracle,
+			Agent: opencode.AsuraReadOnlyAgentName, Pure: true, DisableProjectConfig: true, Isolated: true, OnProcessStarted: onStarted})
+		striker := opencode.NewAdapter(opencode.AdapterConfig{BinaryPath: binary, VerificationPath: records,
+			Permission: daemon.DefaultApprovedPermissionPolicy, Role: opencode.RoleStriker, OnProcessStarted: onStarted})
+		return opencode.NewRoleRoutingBackend(readOnly, striker)
+	}, only...)
+	if err != nil {
+		t.Fatal(err)
 	}
-	readOnly := opencode.NewAdapter(opencode.AdapterConfig{BinaryPath: readOnlyBin, ExpectedVersion: version, ConfigDir: dir,
-		Permission: daemon.DefaultReadOnlyPermissionPolicy, DisableAuto: true, Role: opencode.RoleOracle,
-		Agent: opencode.AsuraReadOnlyAgentName, Pure: true, DisableProjectConfig: true, Isolated: true, OnProcessStarted: onStarted})
-	striker := opencode.NewAdapter(opencode.AdapterConfig{BinaryPath: strikerBin, ExpectedVersion: version,
-		Permission: daemon.DefaultApprovedPermissionPolicy, Role: opencode.RoleStriker, OnProcessStarted: onStarted})
-	return opencode.NewRoleRoutingBackend(readOnly, striker), started
+	summary, _ := verification.Summary(results)
+	t.Logf("identity %+v builtin=%v\nresults:\n%s", spec.Record.Identity, spec.Builtin, summary)
+	return results
 }
 
+// ASURA_VERIFY_OPENCODE_BIN 指定另一份安裝（例如內建版本 1.18.23）做對照。
 func openCodeBinary(t *testing.T) string {
 	if p := os.Getenv("ASURA_VERIFY_OPENCODE_BIN"); p != "" {
 		return p
@@ -63,33 +56,18 @@ func openCodeBinary(t *testing.T) string {
 	return p
 }
 
-func runOpenCodeProbes(t *testing.T, b backend.Backend, probes []verification.Probe) []verification.Result {
-	t.Helper()
-	base, err := verification.NewBase()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("probe base: %s", base)
-	results := verification.Run(context.Background(), b, base, probes, nil)
-	summary, _ := verification.Summary(results)
-	t.Logf("results:\n%s", summary)
-	return results
-}
-
 func TestVerifyLive_OpenCode(t *testing.T) {
-	b, started := liveOpenCode(t, "", "")
-	if _, ok := verification.Summary(runOpenCodeProbes(t, b, verification.Probes(verification.Options{ReadOnlyRoles: true, Started: started}))); !ok {
+	if _, ok := verification.Summary(liveOpenCode(t, "")); !ok {
 		t.Error("opencode probes failed")
 	}
 }
 
-// 失效對照組：唯讀 shim 拿掉 asura-readonly agent 並放行所有權限；寫入 shim 放行所有權限。
+// 失效對照組：shim 拿掉唯讀角色的 --agent asura-readonly，並對兩個角色放行所有權限。
 func TestVerifyLive_OpenCodeControls(t *testing.T) {
 	if !verification.LiveEnabled() {
 		t.Skip("set ASURA_VERIFY_LIVE=1 to run model-calling probes")
 	}
-	real, dir := openCodeBinary(t), t.TempDir()
-	readOnlyShim, err := verification.WriteShim(dir, "opencode-ro", real, `skip=
+	shim, err := verification.WriteShim(t.TempDir(), "opencode", openCodeBinary(t), `skip=
 for a; do shift
   if [ -n "$skip" ]; then skip=; continue; fi
   case "$a" in --agent) skip=1 ;; *) set -- "$@" "$a" ;; esac
@@ -98,18 +76,7 @@ OPENCODE_PERMISSION='{"*":"allow"}' exec "$REAL" "$@"`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	strikerShim, err := verification.WriteShim(dir, "opencode-rw", real, `OPENCODE_PERMISSION='{"*":"allow"}' exec "$REAL" "$@"`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, _ := liveOpenCode(t, readOnlyShim, strikerShim)
-	var probes []verification.Probe
-	for _, p := range verification.Probes(verification.Options{ReadOnlyRoles: true}) {
-		if p.Name == verification.ProbeReadOnly || p.Name == verification.ProbeWorkspace {
-			probes = append(probes, p)
-		}
-	}
-	for _, r := range runOpenCodeProbes(t, b, probes) {
+	for _, r := range liveOpenCode(t, shim, verification.ProbeReadOnly, verification.ProbeWorkspace) {
 		if r.Err == nil || !strings.Contains(r.Err.Error(), "security violation") {
 			t.Errorf("control %s did not detect the degraded sandbox: %v", r.Name, r.Err)
 		}

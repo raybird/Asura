@@ -10,19 +10,6 @@ import (
 // LiveEnabled 2026-10-21：會呼叫模型的 probe 只在明確設定 ASURA_VERIFY_LIVE=1 時執行。
 func LiveEnabled() bool { return os.Getenv("ASURA_VERIFY_LIVE") == "1" }
 
-// NewBase 在使用者快取目錄下建立 probe 根目錄；刻意避開 /tmp，
-// 因為 Codex workspace-write 預設可寫 /tmp、bwrap 會把 /tmp 換成 tmpfs，兩者都會讓 workspace 外的寫入檢查失準。
-func NewBase() (string, error) {
-	cache, err := os.UserCacheDir()
-	if err != nil {
-		return "", err
-	}
-	if err := os.MkdirAll(filepath.Join(cache, "asura-verify"), 0o700); err != nil {
-		return "", err
-	}
-	return os.MkdirTemp(filepath.Join(cache, "asura-verify"), "run-")
-}
-
 // WriteShim 寫出包裝 real 的 shell 腳本，供失效對照組刻意削弱沙箱。
 func WriteShim(dir, name, real, body string) (string, error) {
 	path := filepath.Join(dir, name)
@@ -52,14 +39,4 @@ exec "$REAL" "$@"`)
 func Root() (string, error) {
 	cache, err := os.UserCacheDir()
 	return filepath.Join(cache, "asura-verify"), err
-}
-
-// TempRecords 在 dir 下建立只含 rec 的驗證紀錄並回傳路徑，讓 live probe 能對尚未驗證的已安裝版本執行。
-func TempRecords(dir string, rec Record) (string, error) {
-	data := filepath.Join(dir, "data")
-	if err := os.Mkdir(data, 0o700); err != nil {
-		return "", err
-	}
-	path := filepath.Join(data, "runtime-verification.json")
-	return path, Add(path, rec)
 }
