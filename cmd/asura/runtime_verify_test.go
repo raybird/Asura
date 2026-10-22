@@ -303,3 +303,74 @@ func TestRuntimeVerifyListRemove(t *testing.T) {
 		}
 	}
 }
+
+// 2026-10-22：issue-73 Task 3.4，SCN-010。未驗證的 Codex 與 OpenCode：daemon 啟動、runtime inventory（本機與 daemon）、
+// doctor、本機 run 與 daemon ask 都只查版本，不執行任何 probe；只回報 version_unverified 與 verify 提示。
+func TestRuntimeVerificationNotAutomatic(t *testing.T) {
+	bin := buildCLI(t)
+	e := newXDGEnv(t)
+	ws := filepath.Join(e.root, "ws")
+	sock := filepath.Join(e.root, "asura.sock")
+	if err := os.Mkdir(ws, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	e.writeConfig(t, "schema_version = 1\nsocket = \""+sock+"\"\nallowed_roots = [\""+ws+"\"]\n")
+	runtimes := t.TempDir()
+	calls := filepath.Join(e.root, "calls.log")
+	for name, version := range map[string]string{"codex": "codex-cli 0.163.0", "opencode": "1.18.31"} {
+		script := "#!/bin/sh\necho \"" + name + " $*\" >> " + calls + "\nif [ \"$1\" = --version ]; then echo '" + version + "'; exit 0; fi\n"
+		if err := os.WriteFile(filepath.Join(runtimes, name), []byte(script), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	env := append(e.vars(), "PATH="+runtimes+":/usr/bin:/bin")
+	startDaemon(t, bin, t.TempDir(), env)
+	run := func(args ...string) string {
+		c := exec.Command(bin, args...)
+		c.Env, c.Dir = env, ws
+		out, _ := c.CombinedOutput()
+		return string(out)
+	}
+	for _, c := range []struct {
+		name  string
+		args  []string
+		wants []string
+	}{
+		{"local inventory", []string{"runtime", "inventory", "--socket", ""}, []string{
+			`codex registration=registered availability=unavailable version="" reason=version_unverified`,
+			`opencode registration=registered availability=unavailable version="" reason=version_unverified`}},
+		{"daemon inventory", []string{"runtime", "inventory", "--socket", sock}, []string{
+			`codex registration=registered availability=unavailable version="" reason=version_unverified`,
+			`opencode registration=registered availability=unavailable version="" reason=version_unverified`}},
+		{"doctor", []string{"doctor"}, []string{
+			"[warn] codex: unavailable reason=version_unverified", "asura runtime verify codex",
+			"[warn] opencode: unavailable reason=version_unverified", "asura runtime verify opencode"}},
+		{"local run", []string{"run", "--db", filepath.Join(t.TempDir(), "run.db"), "--workspace", ws, "--mode", "three-face", "--backend", "auto", "probe"}, []string{
+			"codex:version_unverified", "asura runtime verify codex", "opencode:version_unverified", "asura runtime verify opencode"}},
+		{"daemon ask", []string{"ask", "--backend", "auto", "--mode", "three-face", "--workspace", ws, "probe"}, []string{
+			"codex:version_unverified", "asura runtime verify codex", "opencode:version_unverified", "asura runtime verify opencode"}},
+	} {
+		out := run(c.args...)
+		for _, want := range c.wants {
+			if !strings.Contains(out, want) {
+				t.Errorf("%s: output lacks %q:\n%s", c.name, want, out)
+			}
+		}
+	}
+
+	data, err := os.ReadFile(calls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		name, args, _ := strings.Cut(line, " ")
+		if args != "--version" {
+			t.Errorf("unverified runtime was executed beyond the version check: %s", line)
+		}
+		seen[name] = true
+	}
+	if !seen["codex"] || !seen["opencode"] {
+		t.Errorf("the fake runtimes were never consulted:\n%s", data)
+	}
+}

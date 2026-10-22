@@ -179,8 +179,8 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 - 驗收編號：SCN-010
 - 完成判準：各命令執行後 fake runtime 沒有 probe 呼叫紀錄；未驗證時只回報 `version_unverified` 與提示
 - 驗證：整合測試；反向檢查為在某條路徑暫時接上 probe，測試必須失敗
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成（2026-10-22）
+- 證據：[evidence/task-3.4.md](./evidence/task-3.4.md)：`TestRuntimeVerificationNotAutomatic` 從 daemon 啟動前開始記錄 Codex 與 OpenCode 的所有呼叫，六條路徑都只有 `--version`；反向檢查把 probe 接到 doctor 或 daemon 啟動時測試都失敗；專案 gate 24 個套件 ok
 
 ### Task 3.5 — 本機真實 runtime 端到端
 - 產出與範圍：在維護者主機上以 `asura runtime verify` 驗證 Codex 0.163.0 與 OpenCode 1.18.31，之後以 daemon `ask` 各跑一個任務；紀錄存 `evidence/e2e.md`
