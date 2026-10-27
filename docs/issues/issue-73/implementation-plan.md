@@ -203,6 +203,44 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 - 狀態：✅ 已完成（2026-10-27）
 - 證據：[evidence/task-4.1.md](./evidence/task-4.1.md)：逐項核對文件敘述與程式依據；錨點與相對連結檢查；專案 gate 24 個套件 ok
 
+## Phase 5 — 審查修正（2026-10-27，PR #77 審查）
+
+### Task 5.1 — OpenCode 跨路徑整合測試（MUST FIX 1）
+- 產出與範圍：`cmd/asura` 的整合測試以假 opencode 1.18.31 走五個階段：未驗證、寫入紀錄後四條路徑 available 且 run／ask 實際執行假 opencode、換掉執行檔、移除紀錄；修正 `TestRuntimeVerificationAcrossPaths` 註解、task-2.4.md 與 e2e.md 對 SCN-008 的描述
+- 相依：無
+- 驗收編號：SCN-008
+- 完成判準：拿掉 daemon、`localBackend`、`run.go` auto 任一處 OpenCode 的 `VerificationPath` 時測試失敗；還原後通過
+- 驗證：整合測試加突變紅燈
+- 狀態：📝 待實作
+- 證據：
+
+### Task 5.2 — Codex 唯讀沙箱的確定性檢查（Q17）
+- 產出與範圍：Codex 的唯讀 probe 另以 `codex sandbox` 直接執行寫 workspace 的命令：唯讀 policy 必須失敗、workspace-write 必須成功；不經模型
+- 相依：無
+- 驗收編號：SCN-005
+- 完成判準：hermetic 測試以假 codex 覆蓋「沙箱沒擋」「正向對照失敗」「通過」；live 對照組（shim 讓唯讀 sandbox 改用 workspace-write）讓該檢查失敗
+- 驗證：hermetic 紅綠加 live 對照組
+- 狀態：📝 待實作
+- 證據：
+
+### Task 5.3 — Antigravity 先比雜湊（Q18）
+- 產出與範圍：`antigravity.admit` 非內建雜湊時先以雜湊查紀錄，沒有相符就 `version_unverified`、不執行 agy；有相符則用紀錄的版本
+- 相依：無
+- 驗收編號：SCN-002、SCN-006
+- 完成判準：未驗證、雜湊不符時假 agy 完全沒被執行；有紀錄時 available 且版本取自紀錄
+- 驗證：單元測試紅綠
+- 狀態：📝 待實作
+- 證據：
+
+### Task 5.4 — 改善建議（Q19）
+- 產出與範圍：Codex 雜湊改用 `clisandbox.TreeHash`，移除 `verification.TreeDigest`；verify 在跑 probe 前先讀紀錄檔，失敗立即結束；過時註解與開頭提示文字；runtimes.md 寫明 OMP 換 node_modules 樹的表現；PR Proof 表 SCN-001 的引用
+- 相依：無
+- 驗收編號：SCN-004、SCN-006、常青文件
+- 完成判準：紀錄檔不安全時 verify 不呼叫 runtime 就以非 0 結束（測試先紅）；Codex 身分測試照常通過
+- 驗證：單元／整合測試；文件人工核對
+- 狀態：📝 待實作
+- 證據：
+
 ### 責任對照
 
 | 驗收／交付 | 責任 Task | 支援 |

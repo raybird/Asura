@@ -140,6 +140,10 @@ Feature: runtime 版本通過驗證才可使用
   - Q15「另開 issue 加沙箱，probe 維持必要 (Recommended)」：OpenCode 寫入角色沒有 OS 沙箱，另開 [#75](https://github.com/raybird/Asura/issues/75)；workspace 邊界 probe 仍是必要條件。Q2 的「workspace-write 只能寫 workspace」對 OpenCode 現況不成立，由 #75 補齊
 - **Phase 3 決策**（2026-10-27）：
   - Q16「改用 OMP、Antigravity (Recommended)」：Task 3.5 的端到端改用驗證得過的 OMP 18.12.6 與 Antigravity 1.4.4，不再等 #74、#75；Codex 與 OpenCode 的端到端在 #74、#75 驗收時補做。SCN 內容不變
+- **審查決策**（2026-10-27，PR #77 獨立審查 [留言](https://github.com/raybird/Asura/pull/77#issuecomment-6438498249) 的 `需決策` 項目）：
+  - Q17「補不經模型的沙箱檢查 (Recommended)」：Codex 唯讀角色沙箱正常時不會嘗試寫入，nonce 正向對照分不出「宣告 read-only 但 OS 沙箱沒生效」。唯讀 probe 另外以 `codex sandbox` 不經模型直接驗證：唯讀 policy 寫 workspace 必須失敗，workspace-write 必須成功（SCN-005）
+  - Q18「先比雜湊，不執行 (Recommended)」：Antigravity 非內建的雜湊先查驗證紀錄，沒有相符紀錄就直接 `version_unverified`，不在 host 執行 agy；有紀錄則用紀錄裡的版本。只有 `asura runtime verify` 會執行 `agy --version`（SCN-002、SCN-006）
+  - Q19：一併處理改善建議：Codex 改用 `clisandbox.TreeHash`；verify 前先檢查紀錄檔可讀寫；過時註解、開頭提示文字、OMP 換樹行為的文件、Proof 表 SCN-001 引用
 
 | Scenario | 核准日期 | 狀態 |
 |----------|---------|------|
@@ -191,6 +195,7 @@ Feature: runtime 版本通過驗證才可使用
 | 2026-10-22 | Task 3.4 完成：確認 daemon 啟動、inventory、doctor、run、ask 都不自動執行 probe，以反向檢查證明測試有效 | Raybird |
 | 2026-10-27 | Q16：Task 3.5 改用 OMP 與 Antigravity，不再相依 #74、#75。Task 3.5 完成：OMP 18.12.6、Antigravity 1.4.4 以 `asura runtime verify` 驗證後，四條判定路徑都放行，本機 run 與 daemon ask 成功；移除紀錄後回到 `version_unverified` | Raybird |
 | 2026-10-27 | Task 4.1 完成：runtimes.md 新增「版本驗證」，cli-reference 新增 `runtime verify`，README 的 runtime 表與指令一覽、CHANGELOG `[Unreleased]` 更新；所有 Task 完成 | Raybird |
+| 2026-10-27 | PR #77 獨立審查 RETURN TO execute-task：SCN-008 的 OpenCode 跨路徑覆蓋缺口（MUST FIX）；Q17～Q19 決定補 Codex 唯讀沙箱的確定性檢查、Antigravity 先比雜湊不執行、一併處理改善建議；新增 Phase 5 | Raybird |
 
 ---
 **建立日期**: 2026-10-21  
