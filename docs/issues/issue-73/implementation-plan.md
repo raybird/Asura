@@ -234,10 +234,10 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 
 ## 檢查清單
 
-- [ ] Phase 1 的對照組證明每個唯讀 probe 抓得到沙箱失效
+- [x] Phase 1 的對照組證明每個唯讀 probe 抓得到沙箱失效（[phase1-probes.md](./evidence/phase1-probes.md)、Task 1.4）
 - [x] TBD-1～TBD-4 已有結論（2026-10-21）
 - [x] SCN-001～SCN-010 已核准（2026-10-21）
-- [ ] 升級前封存的 cron 與排隊任務在新版本仍通過 `InventorySnapshot.Validate`
-- [ ] 所有判定路徑共用同一個判定函式，沒有殘留寫死的版本或前綴
-- [ ] 紀錄檔以原子方式寫入，權限 `0600`
-- [ ] 文件與程式的版本政策一致
+- [x] 升級前封存的 cron 與排隊任務在新版本仍通過 `InventorySnapshot.Validate`（[task-2.5.md](./evidence/task-2.5.md)）
+- [x] 所有判定路徑共用同一個判定函式，沒有殘留寫死的版本或前綴（四個 adapter 都經 `verification.Admit`；2026-10-27 搜尋程式碼，沒有 `1.18` 前綴比對；[task-2.4.md](./evidence/task-2.4.md)）
+- [x] 紀錄檔以原子方式寫入，權限 `0600`（flock 加 tmp＋rename，[task-2.1.md](./evidence/task-2.1.md)；真實檔案權限見 [e2e.md](./evidence/e2e.md)）
+- [x] 文件與程式的版本政策一致（[task-4.1.md](./evidence/task-4.1.md)）
