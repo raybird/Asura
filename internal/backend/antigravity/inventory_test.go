@@ -17,9 +17,10 @@ func TestInventoryAntigravityProbe(t *testing.T) {
 	if err != nil || s.Entries[0].ReasonCode != backend.ExecutableNotFound {
 		t.Fatalf("missing=%+v %v", s, err)
 	}
+	// 2026-10-27：issue-73 Q18，未知 hash 不執行 agy 取版本，直接判為 version_unverified。
 	os.WriteFile(path, []byte("untrusted"), 0700)
 	s, err = backend.CaptureInventory(context.Background(), []backend.RegisteredRuntime{{ID: "antigravity", Backend: a}})
-	if err != nil || s.Entries[0].ReasonCode != backend.VersionFailed {
+	if err != nil || s.Entries[0].ReasonCode != backend.VersionUnverified {
 		t.Fatal("unverified CLI admitted")
 	}
 	ctx, cancel := context.WithCancel(context.Background())

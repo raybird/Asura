@@ -125,6 +125,23 @@ func Admit(runtime, version string, digest func() (string, error), builtin []Ide
 	return Record{}, fmt.Errorf("%w: %s %s; run asura runtime verify %s", ErrUnverified, runtime, version, runtime)
 }
 
+// AdmitDigest 只以雜湊查紀錄，不需要先取得版本：取版本必須執行未驗證的執行檔（2026-10-27 PR #77 審查，Antigravity）。
+// 雜湊已綁定執行檔內容，相符紀錄的版本就是該執行檔驗證時回報的版本。
+func AdmitDigest(runtime, digest, recordsPath string) (Record, error) {
+	if recordsPath != "" {
+		records, err := Load(recordsPath)
+		if err != nil {
+			return Record{}, fmt.Errorf("%w: %v", ErrUnverified, err)
+		}
+		for _, r := range records {
+			if r.Runtime == runtime && r.Digest == digest {
+				return r, nil
+			}
+		}
+	}
+	return Record{}, fmt.Errorf("%w: %s sha256 %s; run asura runtime verify %s", ErrUnverified, runtime, digest, runtime)
+}
+
 func matchesBuiltin(id Identity, builtin []Identity) bool {
 	for _, b := range builtin {
 		if b.Runtime == id.Runtime && b.Version == id.Version && (b.Digest == "" || b.Digest == id.Digest) {

@@ -229,8 +229,8 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 - 驗收編號：SCN-002、SCN-006
 - 完成判準：未驗證、雜湊不符時假 agy 完全沒被執行；有紀錄時 available 且版本取自紀錄
 - 驗證：單元測試紅綠
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成（2026-10-27）
+- 證據：[evidence/phase5.md](./evidence/phase5.md) Task 5.3：判定時假 agy 完全沒被執行（改之前有三次 `--version`）
 
 ### Task 5.4 — 改善建議（Q19）
 - 產出與範圍：Codex 雜湊改用 `clisandbox.TreeHash`，移除 `verification.TreeDigest`；verify 在跑 probe 前先讀紀錄檔，失敗立即結束；過時註解與開頭提示文字；runtimes.md 寫明 OMP 換 node_modules 樹的表現；PR Proof 表 SCN-001 的引用

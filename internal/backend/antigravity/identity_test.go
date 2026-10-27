@@ -11,13 +11,15 @@ import (
 	"asura/internal/backend/verification"
 )
 
-// 2026-10-21：issue-73，hash 不是內建時以 agy --version 取版本，需要本機驗證紀錄才可用。
+// 2026-10-21：issue-73，hash 不是內建時需要本機驗證紀錄才可用。
+// 2026-10-27：PR #77 審查 Q18，判定只比雜湊，不在 host 執行未驗證的 agy；版本取自相符的紀錄。
 func TestAntigravityIdentityPolicy(t *testing.T) {
 	root := t.TempDir()
 	bin := filepath.Join(root, "agy")
+	calls := filepath.Join(root, "calls.log")
 	records := filepath.Join(root, "data", "runtime-verification.json")
 	write := func(extra string) {
-		if err := os.WriteFile(bin, []byte("#!/bin/sh\n# "+extra+"\necho 1.4.4\n"), 0o700); err != nil {
+		if err := os.WriteFile(bin, []byte("#!/bin/sh\n# "+extra+"\necho \"$*\" >> "+calls+"\necho 1.4.4\n"), 0o700); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -43,5 +45,8 @@ func TestAntigravityIdentityPolicy(t *testing.T) {
 	write("v2")
 	if got := inventory().ReasonCode; got != backend.VersionUnverified {
 		t.Fatalf("replaced agy: reason=%s", got)
+	}
+	if data, err := os.ReadFile(calls); err == nil {
+		t.Errorf("admission executed agy outside the sandbox:\n%s", data)
 	}
 }

@@ -25,7 +25,7 @@ Asura 如何決定一個任務由哪個 runtime 執行、執行前檢查什麼�
 
 - **本機驗證紀錄**：執行 `asura runtime verify <runtime>`，對已安裝的版本實際跑一組 probe，全部通過才記下身分。
 
-雜湊涵蓋的範圍：OpenCode 為解析 symlink 後的執行檔；Codex 為 npm 套件與平台套件（原生檔與附帶的 bwrap）；OMP 為 CLI 與 Bun，另記 node_modules 樹雜湊，執行時以它固定複製的樹；Antigravity 為 CLI。換掉執行檔或安裝樹，身分就不符，需要重新驗證。
+雜湊涵蓋的範圍：OpenCode 為解析 symlink 後的執行檔；Codex 為 npm 套件與平台套件（原生檔與附帶的 bwrap）；OMP 為 CLI 與 Bun，另記 node_modules 樹雜湊，執行時以它固定複製的樹；Antigravity 為 CLI。換掉執行檔或安裝樹，身分就不符，需要重新驗證。Antigravity 判定時只比雜湊，版本取自相符的紀錄，不在 bwrap 外執行未驗證的 agy；只有 `asura runtime verify` 會執行一次 `agy --version`（2026-10-27）。
 
 所有判定路徑使用同一規則：daemon（含 IPC、Web、cron）、`runtime inventory`、`doctor` 與本機 `run`。`doctor` 與拒絕訊息會提示 `asura runtime verify <runtime>`；`version_failed` 只代表版本取不到或格式錯，與「可以自己驗證」的 `version_unverified` 分開。
 
