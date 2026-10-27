@@ -128,3 +128,19 @@ removed antigravity 1.4.4 (sha256 337dcde668441a2828968644d7982829c2d2a5e0c4144f
 跨路徑一致（SCN-003）。daemon 每次判定都重新讀取紀錄，不需要重啟。SCN-008 指的是 OpenCode，這次沒有涵蓋到它的真實 runtime。SCN-008 由 Task 2.4 的 hermetic 測試負責；OpenCode 的跨路徑子測試是 2026-10-27 PR #77 審查後才補上的（[phase5.md](./phase5.md) Task 5.1）。OpenCode 1.18.31 的真實端到端留到 #75 驗收時補做。
 
 觀察（不影響判準）：開頭訊息「each probe runs the model once」，對只比對檔案的 `protected-files-unchanged` 不精確。
+
+## 2026-10-27 重跑：Antigravity（Phase 5 之後）
+
+Phase 5 Task 5.3 改了 Antigravity 的判定：只比雜湊，不再執行 agy。上面第 1～4 節的 Antigravity 證據對應的是 `7f2ab50`，所以用 `f321df7` 建置後重跑同一流程。方法跟之前相同：獨立的 daemon（socket `$XDG_RUNTIME_DIR/asura-e2e-73b.sock`）與 DB，全程不重啟 daemon。OMP 的判定在 Phase 5 沒有改變，沒有重跑。
+
+| 階段 | 本機 inventory | daemon inventory | doctor | 任務 |
+|---|---|---|---|---|
+| 驗證前 | `version_unverified` | `version_unverified` | `[warn] … version_unverified`，提示 verify | daemon ask 被拒，`availability=[antigravity:version_unverified]` |
+| `runtime verify antigravity` | — | — | — | 開頭提示 `probes run the model`；output、workspace-boundary、credential-boundary、cancellation、protected-files-unchanged 全部 PASS，exit 0，sha256 `337dcde6…`（與第 2 節相同） |
+| 驗證後 | `available version="1.4.4"` | `available version="1.4.4"` | `[ok]   antigravity: available version=1.4.4` | 本機 run 為 `completed`，Result `E2E2-LOCAL`；daemon ask 輸出 `E2E2-DAEMON`，exit 0 |
+| `--remove antigravity 1.4.4` 之後 | `version_unverified` | `version_unverified` | `[warn] … version_unverified` | daemon ask 被拒 |
+
+收尾：
+- 停止 daemon 時，我用 `pgrep -f` 找 PID，結果也比對到執行這個命令的 shell 自己，所以那個 shell 也收到了 SIGTERM。daemon（PID 1160221）正常結束，socket 已移除，沒有影響其他行程。
+- 沒有殘留的 probe 行程。
+- `~/.local/share/asura/` 已刪除，回到開始前的狀態。
