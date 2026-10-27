@@ -220,8 +220,8 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 - 驗收編號：SCN-005
 - 完成判準：hermetic 測試以假 codex 覆蓋「沙箱沒擋」「正向對照失敗」「通過」；live 對照組（shim 讓唯讀 sandbox 改用 workspace-write）讓該檢查失敗
 - 驗證：hermetic 紅綠加 live 對照組
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成（2026-10-27）
+- 證據：[evidence/phase5.md](./evidence/phase5.md) Task 5.2：hermetic 紅綠；真實 Codex 0.163.0 通過，三組失效對照都失敗
 
 ### Task 5.3 — Antigravity 先比雜湊（Q18）
 - 產出與範圍：`antigravity.admit` 非內建雜湊時先以雜湊查紀錄，沒有相符就 `version_unverified`、不執行 agy；有相符則用紀錄的版本

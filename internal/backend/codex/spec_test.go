@@ -50,3 +50,32 @@ func TestCodexVerificationSpec(t *testing.T) {
 		t.Errorf("builtin %s: spec = %+v, err = %v", BuiltinVersion, spec, err)
 	}
 }
+
+// 2026-10-27：PR #77 審查 Q17，唯讀沙箱 probe 以 codex sandbox 直接執行命令，不經模型：
+// 唯讀用 :read-only，正向對照用 :workspace，工作目錄是 probe 的 workspace。
+func TestCodexReadOnlySandboxRunner(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "codex")
+	args := filepath.Join(dir, "args")
+	script := "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'codex-cli 0.163.0'; exit 0; fi\necho \"$*\" >> " + args + "\necho ran\n"
+	if err := os.WriteFile(bin, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	spec, err := NewAdapter(AdapterConfig{BinaryPath: bin}).VerificationSpec(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Options.ReadOnlySandbox == nil {
+		t.Fatal("codex spec has no read-only sandbox runner")
+	}
+	ws := filepath.Join(dir, "ws")
+	for _, readOnly := range []bool{true, false} {
+		if out, err := spec.Options.ReadOnlySandbox(context.Background(), ws, readOnly, "sh", "-c", "true"); err != nil || out != "ran\n" {
+			t.Errorf("readOnly=%v: out=%q err=%v", readOnly, out, err)
+		}
+	}
+	data, _ := os.ReadFile(args)
+	if want := "sandbox -P :read-only -C " + ws + " -- sh -c true\nsandbox -P :workspace -C " + ws + " -- sh -c true\n"; string(data) != want {
+		t.Errorf("codex sandbox args:\n%s\nwant:\n%s", data, want)
+	}
+}

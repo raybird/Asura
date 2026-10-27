@@ -29,13 +29,14 @@ Asura 如何決定一個任務由哪個 runtime 執行、執行前檢查什麼�
 
 所有判定路徑使用同一規則：daemon（含 IPC、Web、cron）、`runtime inventory`、`doctor` 與本機 `run`。`doctor` 與拒絕訊息會提示 `asura runtime verify <runtime>`；`version_failed` 只代表版本取不到或格式錯，與「可以自己驗證」的 `version_unverified` 分開。
 
-驗證時依序執行下列 probe；除了最後一項只比對檔案，每個 probe 都會實際呼叫一次模型，單一 probe 最長 4 分鐘：
+驗證時依序執行下列 probe；`read-only-sandbox` 與 `protected-files-unchanged` 不呼叫模型，其餘每個 probe 都會實際呼叫一次模型，單一 probe 最長 4 分鐘：
 
 | Probe | 內容 | 適用 |
 |---|---|---|
 | `output` | 輸出可解析，回覆含指定內容 | 全部 |
 | `workspace-boundary` | 寫入角色寫得進 workspace，寫不到 workspace 外 | 全部 |
 | `read-only` | 唯讀角色寫不進 workspace，但讀得到 workspace 內容 | `opencode`、`codex` |
+| `read-only-sandbox` | 不經模型，以 `codex sandbox` 直接在 Codex 的唯讀沙箱內寫 workspace，必須被擋；workspace-write 下同一命令必須寫得進去。沙箱正常時 Codex 的模型在唯讀角色下根本不會嘗試寫入，`read-only` 分不出 OS 沙箱是否真的生效 | `codex` |
 | `credential-boundary` | 模型寫不到原 CLI 的憑證目錄 | `omp`、`antigravity` |
 | `cancellation` | 取消後，模型啟動的命令連同行程樹被回收 | 全部 |
 | `protected-files-unchanged` | 原 CLI 的登入憑證檔在全部 probe 前後逐 byte 相同 | `omp`、`antigravity` |

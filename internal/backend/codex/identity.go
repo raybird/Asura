@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -96,7 +97,7 @@ func (a *Adapter) VerificationSpec(ctx context.Context) (verification.Spec, erro
 	if err != nil {
 		return verification.Spec{}, err
 	}
-	spec := verification.Spec{Options: verification.Options{ReadOnlyRoles: true}}
+	spec := verification.Spec{Options: verification.Options{ReadOnlyRoles: true, ReadOnlySandbox: sandboxRunner(bin)}}
 	spec.Record.Runtime, spec.Record.Version = "codex", NormalizeCodexVersion(raw)
 	if spec.Record.Version == NormalizeCodexVersion(a.cfg.ExpectedVersion) {
 		spec.Builtin = true
@@ -104,4 +105,17 @@ func (a *Adapter) VerificationSpec(ctx context.Context) (verification.Spec, erro
 	}
 	spec.Record.Digest, err = codexDigest(bin)
 	return spec, err
+}
+
+// sandboxRunner 2026-10-27：PR #77 審查 Q17，以 codex sandbox 在 Codex 自己的 Linux 沙箱內直接執行命令，不經模型。
+// :read-only 與 :workspace 是 Codex 內建的權限設定；命令與 exec 的 shell 工具一樣經 bwrap 與 codex-linux-sandbox 執行（0.163.0 以 ps 確認）。
+func sandboxRunner(bin string) func(context.Context, string, bool, ...string) (string, error) {
+	return func(ctx context.Context, workspace string, readOnly bool, command ...string) (string, error) {
+		profile := ":workspace"
+		if readOnly {
+			profile = ":read-only"
+		}
+		out, err := exec.CommandContext(ctx, bin, append([]string{"sandbox", "-P", profile, "-C", workspace, "--"}, command...)...).CombinedOutput()
+		return string(out), err
+	}
 }

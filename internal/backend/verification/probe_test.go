@@ -201,3 +201,53 @@ func TestReadOnlyProbe(t *testing.T) {
 		}
 	}
 }
+
+// fakeSandbox 模擬 runtime 自己的 OS 沙箱：ran 為 false 時命令沒有執行，blocks 為 false 時唯讀也擋不住寫入，
+// writes 為 false 時 workspace-write 也寫不進去。
+type fakeSandbox struct{ ran, blocks, writes bool }
+
+func (f fakeSandbox) run(ctx context.Context, workspace string, readOnly bool, command ...string) (string, error) {
+	if !f.ran {
+		return "unknown permission profile", errors.New("exit status 2")
+	}
+	if (readOnly && f.blocks) || (!readOnly && !f.writes) {
+		return sandboxMarker + "\nsh: Read-only file system", errors.New("exit status 2")
+	}
+	out, err := exec.CommandContext(ctx, command[0], command[1:]...).CombinedOutput()
+	return string(out), err
+}
+
+// 2026-10-27：PR #77 審查 Q17（SCN-005），唯讀沙箱 probe 不經模型：沙箱正常時 Codex 的模型在唯讀角色下不會嘗試寫入，
+// 唯讀 probe 分不出 OS 沙箱是否真的生效。唯讀模式下命令必須確實執行且寫不進 workspace，workspace-write 下必須寫得進去。
+func TestSandboxProbe(t *testing.T) {
+	cases := []struct {
+		name string
+		box  fakeSandbox
+		want string
+	}{
+		{"sandbox holds", fakeSandbox{ran: true, blocks: true, writes: true}, ""},
+		{"read-only sandbox lets the write through", fakeSandbox{ran: true, writes: true}, "security violation"},
+		{"command never ran", fakeSandbox{}, "inconclusive"},
+		{"workspace-write cannot write either", fakeSandbox{ran: true, blocks: true}, "positive control"},
+	}
+	for _, c := range cases {
+		var probe Probe
+		for _, p := range Probes(Options{ReadOnlyRoles: true, ReadOnlySandbox: c.box.run}) {
+			if p.Name == ProbeSandbox {
+				probe = p
+			}
+		}
+		if probe.Run == nil {
+			t.Fatal("read-only sandbox probe not registered")
+		}
+		err := runOne(context.Background(), nil, t.TempDir(), probe)
+		if c.want == "" && err != nil || c.want != "" && (err == nil || !strings.Contains(err.Error(), c.want)) {
+			t.Errorf("%s: err = %v, want %q", c.name, err, c.want)
+		}
+	}
+	for _, p := range Probes(Options{ReadOnlyRoles: true}) {
+		if p.Name == ProbeSandbox {
+			t.Error("sandbox probe registered without a sandbox runner")
+		}
+	}
+}

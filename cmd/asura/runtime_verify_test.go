@@ -21,6 +21,12 @@ func verifyCodexScript(calls, version string, confine, auth bool) string {
 	s := "#!/bin/sh\necho \"$*\" >> " + calls + "\n" +
 		"if [ \"$1\" = --version ]; then echo 'codex-cli " + version + "'; exit 0; fi\n" +
 		"say() { printf '{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"%s\"}}\\n' \"$1\"; }\n"
+	// codex sandbox -P <profile> -C <ws> -- <command>：confine 時 :read-only 擋下寫入（命令仍會執行並印出輸出）。
+	s += "if [ \"$1\" = sandbox ]; then profile=$3; while [ \"$1\" != -- ]; do shift; done; shift\n"
+	if confine {
+		s += "  [ \"$profile\" = :read-only ] && { echo ASURA_SANDBOX_RAN; echo 'sh: Read-only file system'; exit 2; }\n"
+	}
+	s += "  exec \"$@\"\nfi\n"
 	if auth {
 		return s + "printf '%s\\n' '{\"type\":\"error\",\"message\":\"401 Unauthorized: login required\"}'\nexit 1\n"
 	}

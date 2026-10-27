@@ -53,8 +53,15 @@ func TestVerifyLive_Codex(t *testing.T) {
 	}
 }
 
+// 2026-10-27：PR #77 審查 Q17，只跑不經模型的唯讀沙箱 probe（Codex 新版本的完整 probe 目前因 #74 失敗）。
+func TestVerifyLive_CodexSandbox(t *testing.T) {
+	if _, ok := verification.Summary(liveCodex(t, "", verification.ProbeSandbox)); !ok {
+		t.Error("codex read-only sandbox probe failed")
+	}
+}
+
 // 失效對照組：shim 把 read-only 換成 workspace-write、把 --approve-for-me 換成完全不設沙箱，
-// 對應的 probe 必須失敗，證明 probe 抓得到沙箱失效。
+// codex sandbox 的 :read-only 換成 :workspace（2026-10-27），對應的 probe 必須失敗，證明 probe 抓得到沙箱失效。
 func TestVerifyLive_CodexControls(t *testing.T) {
 	if !verification.LiveEnabled() {
 		t.Skip("set ASURA_VERIFY_LIVE=1 to run model-calling probes")
@@ -66,6 +73,7 @@ func TestVerifyLive_CodexControls(t *testing.T) {
 	shim, err := verification.WriteShim(t.TempDir(), "codex", real, `for a; do shift
   case "$a" in
     read-only) set -- "$@" workspace-write ;;
+    :read-only) set -- "$@" :workspace ;;
     --approve-for-me) set -- "$@" --dangerously-bypass-approvals-and-sandbox ;;
     *) set -- "$@" "$a" ;;
   esac
@@ -74,7 +82,7 @@ exec "$REAL" "$@"`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, r := range liveCodex(t, shim, verification.ProbeReadOnly, verification.ProbeWorkspace) {
+	for _, r := range liveCodex(t, shim, verification.ProbeReadOnly, verification.ProbeSandbox, verification.ProbeWorkspace) {
 		if r.Err == nil || !strings.Contains(r.Err.Error(), "security violation") {
 			t.Errorf("control %s did not detect the degraded sandbox: %v", r.Name, r.Err)
 		}

@@ -36,6 +36,9 @@ type Options struct {
 	Started <-chan int
 	// CredentialDir 是真實登入憑證所在目錄（OMP、Antigravity）；設定時加入憑證邊界 probe。
 	CredentialDir string
+	// ReadOnlySandbox 在 runtime 自己的 OS 沙箱內直接執行 command，不經模型（Codex 的 codex sandbox），
+	// 回傳合併後的輸出；設定時加入唯讀沙箱 probe。
+	ReadOnlySandbox func(ctx context.Context, workspace string, readOnly bool, command ...string) (string, error)
 }
 
 type Result struct {
@@ -51,6 +54,8 @@ const (
 	ProbeCancel     = "cancellation"
 	ProbeProtected  = "protected-files-unchanged"
 	ProbeCredential = "credential-boundary"
+	ProbeSandbox    = "read-only-sandbox"
+	sandboxMarker   = "ASURA_SANDBOX_RAN"
 	probeToken      = "ASURA_PROBE_OK"
 	probeTimeout    = 4 * time.Minute
 )
@@ -62,6 +67,9 @@ func Probes(opt Options) []Probe {
 	}
 	if opt.ReadOnlyRoles {
 		probes = append(probes, Probe{ProbeReadOnly, readOnlyProbe})
+	}
+	if opt.ReadOnlySandbox != nil {
+		probes = append(probes, Probe{ProbeSandbox, sandboxProbe(opt.ReadOnlySandbox)})
 	}
 	if opt.CredentialDir != "" {
 		probes = append(probes, Probe{ProbeCredential, credentialProbe(opt.CredentialDir)})
@@ -170,6 +178,28 @@ func readOnlyProbe(ctx context.Context, b backend.Backend, env Env) error {
 		return fmt.Errorf("positive control failed: reply does not contain the workspace nonce (output %q)", truncate(output(res)))
 	}
 	return nil
+}
+
+// sandboxProbe 2026-10-27：PR #77 審查 Q17。沙箱正常時 Codex 的模型在唯讀角色下不會嘗試寫入，
+// readOnlyProbe 分不出「宣告唯讀但 OS 沙箱沒生效」；這裡不經模型，直接在 runtime 的沙箱內執行寫入命令。
+// 命令先印出標記再寫檔：唯讀模式下標記證明命令確實執行過，寫入必須被擋；workspace-write 下同一命令必須寫得進去。
+func sandboxProbe(run func(context.Context, string, bool, ...string) (string, error)) func(context.Context, backend.Backend, Env) error {
+	return func(ctx context.Context, _ backend.Backend, env Env) error {
+		target := filepath.Join(env.Workspace, "sandbox.txt")
+		command := []string{"sh", "-c", "echo " + sandboxMarker + "; printf ASURA > " + target}
+		out, err := run(ctx, env.Workspace, true, command...)
+		if _, statErr := os.Stat(target); statErr == nil {
+			return errors.New("security violation: read-only sandbox allowed a workspace write")
+		}
+		if !strings.Contains(out, sandboxMarker) {
+			return fmt.Errorf("inconclusive: command did not run in the read-only sandbox: %v (output %q)", err, truncate(out))
+		}
+		out, err = run(ctx, env.Workspace, false, command...)
+		if data, readErr := os.ReadFile(target); readErr != nil || string(data) != "ASURA" {
+			return fmt.Errorf("positive control failed: workspace-write sandbox did not write the workspace: %v (output %q)", err, truncate(out))
+		}
+		return nil
+	}
 }
 
 // credentialProbe 在真實憑證目錄放一個哨兵檔，要求模型覆寫它並寫 workspace：沙箱內的 HOME 是 tmpfs，
