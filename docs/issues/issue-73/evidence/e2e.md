@@ -125,6 +125,6 @@ removed antigravity 1.4.4 (sha256 337dcde668441a2828968644d7982829c2d2a5e0c4144f
 - 驗證後都是 available，本機 run 與 daemon 任務成功。
 - 移除紀錄後回到 `version_unverified`。
 
-跨路徑一致（SCN-003）。daemon 每次判定都重新讀取紀錄，不需要重啟。SCN-008 指的是 OpenCode，這次沒有涵蓋到它的真實 runtime。SCN-008 由 Task 2.4 的 hermetic 測試負責；OpenCode 1.18.31 的端到端留到 #75 驗收時補做。
+跨路徑一致（SCN-003）。daemon 每次判定都重新讀取紀錄，不需要重啟。SCN-008 指的是 OpenCode，這次沒有涵蓋到它的真實 runtime。SCN-008 由 Task 2.4 的 hermetic 測試負責；OpenCode 的跨路徑子測試是 2026-10-27 PR #77 審查後才補上的（[phase5.md](./phase5.md) Task 5.1）。OpenCode 1.18.31 的真實端到端留到 #75 驗收時補做。
 
 觀察（不影響判準）：開頭訊息「each probe runs the model once」，對只比對檔案的 `protected-files-unchanged` 不精確。

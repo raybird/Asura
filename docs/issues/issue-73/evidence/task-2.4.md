@@ -10,6 +10,8 @@
 
 整合測試 `cmd/asura/runtime_verification_test.go` `TestRuntimeVerificationAcrossPaths`：建置真的 CLI 執行檔、以子行程啟動 daemon，PATH 只放假的 codex 0.163.0（加上 `/usr/bin:/bin`，已確認其中沒有 codex／opencode），依序檢查五個階段。
 
+2026-10-27 更正：這支測試當時只涵蓋 Codex。SCN-008 要求的 OpenCode「驗證後四條路徑都 available」沒有跨路徑覆蓋，是 PR #77 審查發現的缺口；已改為 codex、opencode 兩個子測試，見 [phase5.md](./phase5.md) Task 5.1。
+
 命令：`go test -count=1 ./cmd/asura/ -run TestRuntimeVerificationAcrossPaths -v`
 
 ```

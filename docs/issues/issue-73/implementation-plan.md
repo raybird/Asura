@@ -211,8 +211,8 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 - 驗收編號：SCN-008
 - 完成判準：拿掉 daemon、`localBackend`、`run.go` auto 任一處 OpenCode 的 `VerificationPath` 時測試失敗；還原後通過
 - 驗證：整合測試加突變紅燈
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成（2026-10-27）
+- 證據：[evidence/phase5.md](./evidence/phase5.md) Task 5.1：三處接線各自的突變都讓測試失敗
 
 ### Task 5.2 — Codex 唯讀沙箱的確定性檢查（Q17）
 - 產出與範圍：Codex 的唯讀 probe 另以 `codex sandbox` 直接執行寫 workspace 的命令：唯讀 policy 必須失敗、workspace-write 必須成功；不經模型
