@@ -190,9 +190,10 @@ Feature: runtime 版本通過驗證才可使用
 | 2026-10-22 | Task 3.3 完成：`asura runtime verify --list` 列出內建身分與紀錄；`--remove <runtime> <version> [<sha256>]` 移除紀錄，內建身分不能移除 | Raybird |
 | 2026-10-22 | Task 3.4 完成：確認 daemon 啟動、inventory、doctor、run、ask 都不自動執行 probe，以反向檢查證明測試有效 | Raybird |
 | 2026-10-27 | Q16：Task 3.5 改用 OMP 與 Antigravity，不再相依 #74、#75。Task 3.5 完成：OMP 18.12.6、Antigravity 1.4.4 以 `asura runtime verify` 驗證後，四條判定路徑都放行，本機 run 與 daemon ask 成功；移除紀錄後回到 `version_unverified` | Raybird |
+| 2026-10-27 | Task 4.1 完成：runtimes.md 新增「版本驗證」，cli-reference 新增 `runtime verify`，README 的 runtime 表與指令一覽、CHANGELOG `[Unreleased]` 更新；所有 Task 完成 | Raybird |
 
 ---
 **建立日期**: 2026-10-21  
 **分級**: Large — 跨四個 runtime adapter、清冊、admission、daemon 與 CLI，新增驗證紀錄與子命令  
 **風險**: High — 唯讀隔離是安全邊界，新版本上 probe 的可信度尚未確認\
-**狀態**: 規劃中
+**狀態**: 進行中

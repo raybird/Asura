@@ -35,9 +35,9 @@ git clone https://github.com/raybird/Asura.git && cd Asura
 go build -o bin/asura ./cmd/asura
 ```
 
-另需至少一個已登入的 runtime CLI。Asura 只接受固定版本，版本不符會在模型呼叫前拒絕：
+另需至少一個已登入的 runtime CLI。下表的內建版本免驗證可用；其他版本先執行 `asura runtime verify <runtime>`，通過驗證後才能使用，沒驗證過的版本會在模型呼叫前拒絕：
 
-| Runtime | 固定版本 | 備註 |
+| Runtime | 內建版本 | 備註 |
 |---|---|---|
 | `opencode`（預設） | OpenCode 1.18.23 | 可擔任所有 stage |
 | `codex` | Codex CLI 0.155.0 | 可擔任所有 stage |
@@ -81,6 +81,7 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web --listen 127.0.0.1:8080 --socket
 | `status` / `audit` | 查任務狀態、管線歷程與執行來源 | [CLI 參考](docs/guides/cli-reference.md#status)、[執行稽核](docs/guides/runtimes.md#執行稽核) |
 | `cancel` | 取消任務並回收進程樹 | [CLI 參考](docs/guides/cli-reference.md#cancel) |
 | `runtime inventory` | 查詢目前可用的 runtime | [Runtime 與執行控制](docs/guides/runtimes.md#可用性清冊) |
+| `runtime verify` | 驗證已安裝的 runtime 版本，通過才可使用；列出或移除驗證紀錄 | [CLI 參考](docs/guides/cli-reference.md#runtime-verify)、[版本驗證](docs/guides/runtimes.md#版本驗證) |
 | `cron` | 定時排程 | [CLI 參考](docs/guides/cli-reference.md#cron) |
 | `memory` | 專案記憶、Git 候選、效用與版本取代 | [專案記憶](docs/guides/memory.md) |
 | `web` | 單人 Web Console | [Web Console](docs/guides/web-console.md) |

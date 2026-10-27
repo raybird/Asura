@@ -102,6 +102,21 @@ Daemon 讀取的環境變數（也可寫在 config，環境變數優先）：
 
 語意見 [可用性清冊](runtimes.md#可用性清冊)。
 
+## runtime verify
+
+```bash
+# 2026-10-27：驗證已安裝的版本，全部 probe 通過才寫入驗證紀錄（每個 probe 都會實際呼叫模型）
+./bin/asura runtime verify omp
+# 列出內建身分與驗證紀錄
+./bin/asura runtime verify --list
+# 移除一筆紀錄；該版本只有一筆紀錄時可省略 sha256
+./bin/asura runtime verify --remove omp 18.12.6 [<sha256>]
+```
+
+`<runtime>` 為 `opencode`、`codex`、`omp`、`antigravity`。驗證前 runtime 必須已登入。逐項印出 probe 結果；全部通過時 exit 0，並印出寫入的身分與紀錄路徑。任一 probe 失敗、逾時或無法執行（未安裝、未登入、缺 `bwrap`）時 exit 1，不新增也不變動紀錄。內建身分不執行 probe，直接 exit 0。內建身分不能移除，找不到紀錄、或省略 sha256 但有多筆紀錄時 exit 1；用法錯誤也 exit 1。可用 Ctrl-C 中止，中止視為失敗。
+
+紀錄位置、probe 內容與已知限制見 [版本驗證](runtimes.md#版本驗證)。
+
 ## cron
 
 ```bash

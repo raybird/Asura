@@ -200,8 +200,8 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 - 驗收編號：交付成果（project.md 常青文件）
 - 完成判準：文件描述的版本政策、reason、命令與紀錄位置和程式一致；README 指令一覽列出 `runtime verify`
 - 驗證：人工核對文件與程式，記錄比對範圍
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成（2026-10-27）
+- 證據：[evidence/task-4.1.md](./evidence/task-4.1.md)：逐項核對文件敘述與程式依據；錨點與相對連結檢查；專案 gate 24 個套件 ok
 
 ### 責任對照
 
