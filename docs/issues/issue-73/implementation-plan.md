@@ -238,8 +238,8 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 - 驗收編號：SCN-004、SCN-006、常青文件
 - 完成判準：紀錄檔不安全時 verify 不呼叫 runtime 就以非 0 結束（測試先紅）；Codex 身分測試照常通過
 - 驗證：單元／整合測試；文件人工核對
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成（2026-10-27）
+- 證據：[evidence/phase5.md](./evidence/phase5.md) Task 5.4：兩項新測試先紅後綠；專案 gate 24 個套件 ok
 
 ### 責任對照
 

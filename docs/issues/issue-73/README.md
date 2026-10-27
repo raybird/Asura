@@ -196,6 +196,7 @@ Feature: runtime 版本通過驗證才可使用
 | 2026-10-27 | Q16：Task 3.5 改用 OMP 與 Antigravity，不再相依 #74、#75。Task 3.5 完成：OMP 18.12.6、Antigravity 1.4.4 以 `asura runtime verify` 驗證後，四條判定路徑都放行，本機 run 與 daemon ask 成功；移除紀錄後回到 `version_unverified` | Raybird |
 | 2026-10-27 | Task 4.1 完成：runtimes.md 新增「版本驗證」，cli-reference 新增 `runtime verify`，README 的 runtime 表與指令一覽、CHANGELOG `[Unreleased]` 更新；所有 Task 完成 | Raybird |
 | 2026-10-27 | PR #77 獨立審查 RETURN TO execute-task：SCN-008 的 OpenCode 跨路徑覆蓋缺口（MUST FIX）；Q17～Q19 決定補 Codex 唯讀沙箱的確定性檢查、Antigravity 先比雜湊不執行、一併處理改善建議；新增 Phase 5 | Raybird |
+| 2026-10-27 | Phase 5 完成：OpenCode 跨路徑測試；Codex 新增不經模型的 `read-only-sandbox` probe（真實 0.163.0 通過、失效對照失敗）；Antigravity 判定不執行未驗證的 agy；Codex 改用 `clisandbox.TreeHash`；verify 先檢查紀錄檔 | Raybird |
 
 ---
 **建立日期**: 2026-10-21  

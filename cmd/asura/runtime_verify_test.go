@@ -156,6 +156,18 @@ func TestRuntimeVerifyCommand(t *testing.T) {
 	}
 
 	writeCodex("0.163.0", true, false)
+	// 2026-10-27：PR #77 審查，紀錄檔寫不進去時，在呼叫模型之前就失敗並指出紀錄檔，不先跑完全部 probe。
+	if err := os.Chmod(records, 0o666); err != nil {
+		t.Fatal(err)
+	}
+	n := execCalls()
+	expectRejected("unsafe records file", "codex", fullPath, "verification records", records)
+	if execCalls() != n {
+		t.Errorf("unsafe records file: probes ran the model %d times", execCalls()-n)
+	}
+	if err := os.Chmod(records, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	digest, err := verification.FileDigest(codex)
 	if err != nil {
 		t.Fatal(err)
@@ -201,7 +213,7 @@ func TestRuntimeVerifyCommand(t *testing.T) {
 
 	verified, _ := os.ReadFile(records)
 	writeCodex("0.155.0", true, false)
-	n := execCalls()
+	n = execCalls()
 	if out, code := run(fullPath, "runtime", "verify", "codex"); code != 0 || !strings.Contains(out, "codex 0.155.0 is a built-in verified identity") || execCalls() != n {
 		t.Errorf("built-in identity: exit %d, %d model calls:\n%s", code, execCalls()-n, out)
 	}

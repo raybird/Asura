@@ -105,4 +105,11 @@ func TestCodexIdentityCoversNpmPlatformPackage(t *testing.T) {
 	if before == after {
 		t.Fatal("replacing the native binary did not change the codex identity")
 	}
+	// 2026-10-27：PR #77 審查，樹外的 symlink 讓樹外的內容不在雜湊範圍內，必須拒絕。
+	if err := os.Symlink(filepath.Join(t.TempDir(), "elsewhere"), filepath.Join(root, "bin", "escape")); err != nil {
+		t.Fatal(err)
+	}
+	if digest, err := codexDigest(wrapper); err == nil {
+		t.Errorf("symlink escaping the package tree was accepted: digest %s", digest)
+	}
 }

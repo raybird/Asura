@@ -48,6 +48,11 @@ func handleRuntimeVerify(args []string, stdout, stderr io.Writer) int {
 		return removeVerification(records, fs.Args(), stdout, stderr)
 	}
 	id := fs.Arg(0)
+	// 2026-10-27：PR #77 審查，紀錄檔損毀或權限不安全時，在呼叫模型之前就失敗，不先跑完全部 probe。
+	if _, err := verification.Load(records); err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
 	config, cleanup, err := opencode.CreateIsolatedReadOnlyConfigDir()
 	if err != nil {
 		fmt.Fprintln(stderr, "error: read-only runtime configuration unavailable")
@@ -56,7 +61,7 @@ func handleRuntimeVerify(args []string, stdout, stderr io.Writer) int {
 	defer cleanup()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	fmt.Fprintf(stdout, "Verifying %s: each probe runs the model once\n", id)
+	fmt.Fprintf(stdout, "Verifying %s: probes run the model\n", id)
 	spec, results, err := verification.Verify(ctx, func(path string, onStarted func(context.Context, int)) backend.Backend {
 		return localBackend(id, path, config, onStarted)
 	})

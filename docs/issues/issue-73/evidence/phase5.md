@@ -105,3 +105,24 @@
 
 - 這個檢查驗的是 Codex 內建的 `:read-only` 權限設定，exec 的 `-s read-only` 由 Codex 自行對應到唯讀政策。兩者走同一個沙箱執行檔，但對應關係是 Codex 的內部行為，沒有另外驗證。
 - 未來的 Codex 版本如果改了 `codex sandbox` 的參數，這個 probe 會判 `inconclusive`，驗證失敗（fail-closed），需要更新 Asura。
+
+## Task 5.4 — 改善建議（Q19）
+
+| 審查項目 | 變更 | 驗證 |
+|---|---|---|
+| 4：兩套樹雜湊 | Codex 的 `codexDigest` 改用 `clisandbox.TreeHash`，移除 `verification.TreeDigest`。樹外的 symlink 會被拒絕；目前沒有任何 Codex 驗證紀錄，改變算法不影響既有資料 | `TestCodexIdentityCoversNpmPlatformPackage` 新增斷言：套件樹裡有指向樹外的 symlink 時 `codexDigest` 必須失敗。暫時改回舊算法（`git stash` 這兩個檔案）時失敗：`symlink escaping the package tree was accepted`；還原後通過 |
+| 6：verify 前先檢查紀錄檔 | `handleRuntimeVerify` 在跑 probe 前先 `verification.Load`，失敗就印出原因（含紀錄檔路徑）並以 exit 1 結束 | `TestRuntimeVerifyCommand` 新增「unsafe records file」案例：紀錄檔權限改為 0666。改之前雖然 exit 1，但假 codex 被叫去跑了 4 次模型回合；改之後 0 次，輸出指出紀錄檔，紀錄逐 byte 不變 |
+| 5：過時註解 | `internal/backend/antigravity/adapter.go` 的常數區塊改回 main 的原樣，刪掉「暫改為 var」這段註解與多出的空行 | 與 `1826d5f` 比對，這幾行已沒有差異 |
+| 7：開頭提示文字 | 「each probe runs the model once」改為「probes run the model」，因為 `read-only-sandbox` 與 `protected-files-unchanged` 不呼叫模型 | `TestRuntimeVerifyCommand` 通過 |
+| 8：OMP 換樹的表現 | `docs/guides/runtimes.md` 寫明：node_modules 樹只在執行時比對；樹被換掉時 inventory 仍是 available，Run 在啟動模型前以 `dependency snapshot differs from fixed contract` 失敗 | 對照 `internal/backend/clisandbox/run.go:130-135`：比對在 bwrap 啟動前 |
+| 9：Proof 表 SCN-001 的引用 | PR 說明改為引用實際涵蓋內建身分的測試 | PR #77 說明 |
+
+## Gate（Phase 5 全部完成後）
+
+`go vet ./... && go build ./cmd/asura && go test -count=1 -race -v ./...`：exit 0，24 個套件 ok，沒有 FAIL。build 產生的 `asura` 已刪除。
+
+skip 共 26 個。與 [task-4.1.md](./task-4.1.md) 的清單相比：
+- 多了 `TestVerifyLive_CodexSandbox`，原因是沒有設定 `ASURA_VERIFY_LIVE`。這次已另外以 live 執行並通過，見 Task 5.2。
+- 少了 `TestOpenCodeProbe_Live`：這次真實 OpenCode 有回應，測試通過。
+
+其餘 25 個相同，都是 live opt-in 或版本不是內建身分，不計為通過。

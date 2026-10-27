@@ -164,47 +164,6 @@ func FileDigest(path string) (string, error) {
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
-// TreeDigest 依路徑順序涵蓋目錄樹內每個項目的路徑、型別、執行權限與內容（symlink 取目標字串）。
-func TreeDigest(root string) (string, error) {
-	h := sha256.New()
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
-			return err
-		}
-		switch {
-		case d.IsDir():
-			fmt.Fprintf(h, "d %q\n", rel)
-		case d.Type()&fs.ModeSymlink != 0:
-			target, err := os.Readlink(path)
-			if err != nil {
-				return err
-			}
-			fmt.Fprintf(h, "l %q %q\n", rel, target)
-		case d.Type().IsRegular():
-			info, err := d.Info()
-			if err != nil {
-				return err
-			}
-			sum, err := FileDigest(path)
-			if err != nil {
-				return err
-			}
-			fmt.Fprintf(h, "f %q %o %s\n", rel, info.Mode().Perm()&0o111, sum)
-		default:
-			return fmt.Errorf("unsupported file type in %s", path)
-		}
-		return nil
-	})
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%x", h.Sum(nil)), nil
-}
-
 // CombineDigests 把多個雜湊合成一個身分雜湊。
 func CombineDigests(parts ...string) string {
 	h := sha256.New()

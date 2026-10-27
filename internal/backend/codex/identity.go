@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"asura/internal/backend"
+	"asura/internal/backend/clisandbox"
 	"asura/internal/backend/verification"
 )
 
@@ -27,6 +28,7 @@ func (a *Adapter) admit(rawVersion, bin string) error {
 
 // codexDigest 計算 Asura 實際會執行的 codex 身分。npm 安裝時 codex 是 Node 包裝腳本，
 // 原生檔與它附帶的 bwrap、rg 在平台套件裡，因此涵蓋整個 @openai/codex 套件樹與平台套件。
+// 2026-10-27：PR #77 審查，樹雜湊改用與 OMP 相同的 clisandbox.TreeHash，跳出樹外的 symlink 會被拒絕。
 func codexDigest(bin string) (string, error) {
 	real, err := filepath.EvalSymlinks(bin)
 	if err != nil {
@@ -36,7 +38,7 @@ func codexDigest(bin string) (string, error) {
 	if !isCodexPackage(root) {
 		return verification.FileDigest(real)
 	}
-	rootDigest, err := verification.TreeDigest(root)
+	rootDigest, err := clisandbox.TreeHash(root)
 	if err != nil {
 		return "", err
 	}
@@ -47,7 +49,7 @@ func codexDigest(bin string) (string, error) {
 	if strings.HasPrefix(platform, root+string(os.PathSeparator)) {
 		return rootDigest, nil
 	}
-	platformDigest, err := verification.TreeDigest(platform)
+	platformDigest, err := clisandbox.TreeHash(platform)
 	if err != nil {
 		return "", err
 	}
