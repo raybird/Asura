@@ -183,13 +183,14 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 - 證據：[evidence/task-3.4.md](./evidence/task-3.4.md)：`TestRuntimeVerificationNotAutomatic` 從 daemon 啟動前開始記錄 Codex 與 OpenCode 的所有呼叫，六條路徑都只有 `--version`；反向檢查把 probe 接到 doctor 或 daemon 啟動時測試都失敗；專案 gate 24 個套件 ok
 
 ### Task 3.5 — 本機真實 runtime 端到端
-- 產出與範圍：在維護者主機上以 `asura runtime verify` 驗證 Codex 0.163.0 與 OpenCode 1.18.31，之後以 daemon `ask` 各跑一個任務；紀錄存 `evidence/e2e.md`
-- 相依：Task 2.4、Task 3.3、[#74](https://github.com/raybird/Asura/issues/74)、[#75](https://github.com/raybird/Asura/issues/75)（2026-10-21 Q14、Q15）
-- 驗收編號：支援 SCN-003、SCN-008
+- 產出與範圍：在維護者主機上以 `asura runtime verify` 驗證 OMP 18.12.6 與 Antigravity 1.4.4，之後以本機 `run` 與 daemon `ask` 各跑一個任務；紀錄存 `evidence/e2e.md`
+- 範圍修訂（2026-10-27 Q16）：原本指定 Codex 0.163.0 與 OpenCode 1.18.31，兩者要等 [#74](https://github.com/raybird/Asura/issues/74)、[#75](https://github.com/raybird/Asura/issues/75) 修好才通過得了驗證；改用目前驗證得過、同樣不是內建身分的 OMP 與 Antigravity 走同一流程。Codex 與 OpenCode 的端到端在 #74、#75 驗收時補做
+- 相依：Task 2.4、Task 3.3
+- 驗收編號：支援 SCN-003（SCN-008 指 OpenCode，它的端到端移到 #75 驗收時補做）
 - 完成判準：驗證前兩者在四條判定路徑皆為 `version_unverified`；驗證後皆為 available，daemon 任務成功；移除紀錄後回到 `version_unverified`
 - 驗證：live 端到端，記錄命令與輸出
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成（2026-10-27）
+- 證據：[evidence/e2e.md](./evidence/e2e.md)
 
 ## Phase 4 — 文件
 
@@ -214,7 +215,7 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 | SCN-005 | 3.1 | 1.1、1.2、1.3 |
 | SCN-006 | 2.4 | 2.1、2.2、2.3 |
 | SCN-007 | 3.3 | 2.1 |
-| SCN-008 | 2.4 | 3.5 |
+| SCN-008 | 2.4 | — |
 | SCN-009 | 2.5 | — |
 | SCN-010 | 3.4 | — |
 | 常青文件 | 4.1 | — |

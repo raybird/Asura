@@ -138,6 +138,8 @@ Feature: runtime 版本通過驗證才可使用
 - **Phase 1 決策**（2026-10-21，live probe 發現內建版本也有的既有問題後逐題確認，見 [evidence/phase1-probes.md](./evidence/phase1-probes.md)）：
   - Q14「另開 issue 修，probe 維持必要 (Recommended)」：取消後 Codex／OpenCode 由模型啟動的命令不會被回收，另開 [#74](https://github.com/raybird/Asura/issues/74)；取消 probe 仍是通過驗證的必要條件（SCN-004、SCN-005 不變）
   - Q15「另開 issue 加沙箱，probe 維持必要 (Recommended)」：OpenCode 寫入角色沒有 OS 沙箱，另開 [#75](https://github.com/raybird/Asura/issues/75)；workspace 邊界 probe 仍是必要條件。Q2 的「workspace-write 只能寫 workspace」對 OpenCode 現況不成立，由 #75 補齊
+- **Phase 3 決策**（2026-10-27）：
+  - Q16「改用 OMP、Antigravity (Recommended)」：Task 3.5 的端到端改用驗證得過的 OMP 18.12.6 與 Antigravity 1.4.4，不再等 #74、#75；Codex 與 OpenCode 的端到端在 #74、#75 驗收時補做。SCN 內容不變
 
 | Scenario | 核准日期 | 狀態 |
 |----------|---------|------|
@@ -169,7 +171,7 @@ Feature: runtime 版本通過驗證才可使用
 | TBD-3 | 新增 reason 是否要調升 inventory policy 版本：`InventorySnapshot.Validate` 要求 policy 版本完全相等 | 已解決 | 2026-10-21 Q13 回答「不調升，只擴充 reason」：舊的封存內容不會含新 reason，照樣通過驗證，升級前的 cron 與排隊任務不受影響；policy 維持 `inventory-v1`（SCN-009） |
 | TBD-4 | OpenCode／Codex 的 probe 使用 runtime 的預設模型，驗證紀錄不綁模型 | 已解決 | 2026-10-21 Q12 回答「可以，不綁模型」：沙箱與輸出格式屬於 runtime CLI 本身，一個版本驗證一次即可（SCN-003） |
 | TBD-5 | OMP 與 Antigravity 的登入在 2026-10-21 已過期，Task 1.3 的 probe 無法執行 | 已解決 | 2026-10-22 使用者重新登入後重跑，Task 1.3、1.4 完成。Antigravity 那次很可能並未過期：snap 版 go 讓測試行程帶著 `SNAP_NAME`，libsecret 查不到 keyring，adapter 才改讀舊的 token 檔（[evidence/phase1-probes.md](./evidence/phase1-probes.md)「2026-10-22 重跑」） |
-| TBD-6 | Codex／OpenCode 新版本要等 #74、#75 合併後才可能通過驗證 | 待確認 | Task 3.5 的端到端驗證相依 #74、#75；Phase 2、Task 3.1～3.4 不受影響 |
+| TBD-6 | Codex／OpenCode 新版本要等 #74、#75 合併後才可能通過驗證 | 已解決 | 2026-10-27 Q16：Task 3.5 改用 OMP 與 Antigravity，不再相依 #74、#75。#73 合併後，已安裝的 Codex 0.163.0 與 OpenCode 1.18.31 在 #74、#75 修好前維持 `version_unverified`，只有內建版本可用 |
 
 ## Timeline
 
@@ -187,6 +189,7 @@ Feature: runtime 版本通過驗證才可使用
 | 2026-10-22 | Task 3.2 完成：新增 `asura runtime verify <runtime>`，全部 probe 通過才寫入紀錄，任一失敗或無法執行時結束碼非 0、紀錄不變；內建身分不執行 probe | Raybird |
 | 2026-10-22 | Task 3.3 完成：`asura runtime verify --list` 列出內建身分與紀錄；`--remove <runtime> <version> [<sha256>]` 移除紀錄，內建身分不能移除 | Raybird |
 | 2026-10-22 | Task 3.4 完成：確認 daemon 啟動、inventory、doctor、run、ask 都不自動執行 probe，以反向檢查證明測試有效 | Raybird |
+| 2026-10-27 | Q16：Task 3.5 改用 OMP 與 Antigravity，不再相依 #74、#75。Task 3.5 完成：OMP 18.12.6、Antigravity 1.4.4 以 `asura runtime verify` 驗證後，四條判定路徑都放行，本機 run 與 daemon ask 成功；移除紀錄後回到 `version_unverified` | Raybird |
 
 ---
 **建立日期**: 2026-10-21  
