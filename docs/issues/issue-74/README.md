@@ -32,7 +32,7 @@ node (pgid=P, Asura 的 group)
 
 ### 修正後流程
 
-取消時先凍結並回收 group 成員的整棵子孫樹（以 `/proc` 的 PPID 關係找出，不論 session 或 process group），再回收 group 本身。Codex 與 OpenCode 的所有取消路徑（行程內、`asura cancel`、engine）共用同一個實作；OMP 與 Antigravity 不變，照舊由 clisandbox 的 bwrap（`--unshare-pid --die-with-parent`）讓整個 PID namespace 一起被回收。
+取消時先凍結並回收 group 成員的整棵子孫樹（以 `/proc` 的 PPID 關係找出，不論 session 或 process group），再回收 group 本身。Codex 與 OpenCode 的所有取消路徑（行程內、`asura cancel`、engine）共用同一個實作；OMP 與 Antigravity 的行程內取消不變，照舊由 clisandbox 的 bwrap（`--unshare-pid --die-with-parent`）讓整個 PID namespace 一起被回收；外部取消（`asura cancel`）與 engine 取消不分 runtime，都走同一個實作（2026-10-28 PR #82 第二輪審查更正）。
 
 ## 關鍵差異
 
@@ -149,7 +149,7 @@ Feature: 取消任務時回收模型啟動的命令
 |------|------|------|------|
 | TBD-1 | OpenCode 的命令如果在取消前就已脫離行程樹（例如 `cmd &` 之後 shell 先結束），會被 PID 1 接手，子孫樹找不到它 | 已接受（2026-10-28 Q1） | 不在本 issue 範圍。#75 會替 OpenCode 加上 OS 沙箱，屆時以 PID namespace 補上。Codex 不受影響：這類命令仍在它的 PID namespace 裡，會隨 init 一起被回收 |
 | TBD-2 | SCN-005 的「本機 run」：本機與 daemon 的 `--backend auto`，在主機上有任何 runtime 是 `version_unverified` 時都會因 `audit_invalid` 失敗。這是 #73 帶進來的缺陷，main 也重現得到 | 已解決（2026-10-28）：#79 由 PR #80 修正（merge commit `01ce169`），本分支併入 main 後補跑本機 run 通過，見 evidence/e2e.md「補跑」 | SCN-005 其他三條路徑（daemon、inventory、doctor）已通過。#79 合併後，本分支以 merge 併入 main，再補跑本機 run 的驗證前、驗證後、移除後三個階段 |
-| TBD-3 | Antigravity 1.4.4 沒有用最終版 cancellation 命令（`&&` 串接）跑到 live：2026-10-28T05:02Z 那次的 CLI 登入已過期，所有需要模型的 probe 都是 `authentication_failed` | 待確認：重新登入 Antigravity 後補跑 `TestVerifyLive_Antigravity` | 兩版命令只差 `;` 換成 `&&`；`;` 版在 04:4x 全部通過（cancellation 6.6s）。最終命令在 Codex、OpenCode、OMP 上都已通過 live |
+| TBD-3 | Antigravity 1.4.4 沒有用最終版 cancellation 命令（`&&` 串接）跑到 live：2026-10-28T05:02Z 那次的 CLI 登入已過期，所有需要模型的 probe 都是 `authentication_failed` | 已解決（2026-10-28）：重新登入後，在合併後的 main（`39ed182`）補跑 `TestVerifyLive_Antigravity`，五個 probe 全部 PASS（evidence/step4.md「Antigravity 補跑」） | 兩版命令只差 `;` 換成 `&&`；`;` 版在 04:4x 全部通過（cancellation 6.6s）。最終命令在 Codex、OpenCode、OMP 上都已通過 live |
 
 ## Timeline
 
@@ -160,9 +160,11 @@ Feature: 取消任務時回收模型啟動的命令
 | 2026-10-28 | #79 合併（PR #80，`01ce169`），本分支以 merge 併入 main（保留核准 commit `7f3787e` 與 #79 證據引用的 `80afa75`）。補跑 SCN-005 本機 run 通過，TBD-2 解決；步驟 6 完成 | Raybird |
 | 2026-10-28 | 併入 main 後的完整 gate 抓到兩個不穩定的問題：fork 測試沒節流，拖慢同時執行的套件；cancellation probe 先寫標記再 `setsid`，取消落在兩者之間時會出現假綠燈。改為節流，並改由另開 session 的子行程寫標記。命令裡的 `;` 改成 `&&`，因為 `TestRuntimeVerifyCommand` 的假 codex 會用 `;` 切開命令。最終命令的 live 結果：Codex、OMP 全部通過，OpenCode 照預期只有 #75 那一項失敗，Codex 與 OpenCode 的失效對照照樣失敗。Antigravity 登入過期，最終命令沒有執行到；`;` 版命令全部通過（evidence/step4.md） | Raybird |
 | 2026-10-28 | PR #82 獨立審查 PASS（[報告](https://github.com/raybird/Asura/pull/82#issuecomment-6461457482)），沒有 MUST FIX。使用者選擇全部處理：SHOULD 1（測試清理會誤殺機器上無關的 sleep）、SHOULD 2～3（計畫與 e2e 證據的一致性）、NICE 4～7（processTree 改回傳 BFS 順序、註解措辭、凍結迴圈設上限、CHANGELOG 補上 OMP／Antigravity 的回收方式） | Raybird |
+| 2026-10-28 | PR #82 第二輪獨立審查 PASS（增量 `5985b73..17b15c7`，[報告](https://github.com/raybird/Asura/pull/82#issuecomment-6462346664)），沒有 MUST FIX 與 SHOULD FIX。NICE TO HAVE 兩項：OMP／Antigravity 的描述說得太弱，PR 說明當時就已更正，README 在本次結案時更正；另一項是迴圈內的 `regexp.MustCompile`，未處理 | Raybird |
+| 2026-10-28 | PR #82 squash 合併至 main（merge commit `39ed182`），合併內容與審查的 HEAD `17b15c7` 相同（差異只有先合併的 #81 文件）。GitHub #74 由 `Closes #74` 自動關閉。合併後 main push CI [run 40648018644](https://github.com/raybird/Asura/actions/runs/40648018644) 為 success。Antigravity 重新登入後補跑最終命令的 live 全部通過，TBD-3 解決，issue 結案 | Raybird |
 
 ---
 **建立日期**: 2026-10-28  
 **分級**: Medium — 共用取消實作、Codex adapter、cancellation probe 與文件，範圍有界  
 **風險**: High — 會送出 SIGKILL，回收範圍錯誤會留下命令或殺到無關行程；真實行為只能用 live 驗證\
-**狀態**: 審查中（2026-10-28）
+**狀態**: 已完成 — PR #82 於 2026-10-28 合併（merge commit `39ed182`）
