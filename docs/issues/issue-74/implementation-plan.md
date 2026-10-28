@@ -19,6 +19,8 @@ Codex adapter 行程內取消的 `syscall.Kill(-pgid, SIGKILL)` 改呼叫同一�
 
 模型執行的命令從 `echo started > F; sleep N` 改為留下兩個子行程：一個前景 `sleep N`，一個另開 session 的背景 `sleep M`（`setsid`），然後 `wait`。判定改為：Run 返回後 5 秒內，兩個 sleep 都消失，而且 group 已不存在。
 
+啟動標記由另開 session 的子行程寫出（`sleep N & setsid sh -c 'echo started > F && exec sleep M' & wait`）：probe 看到標記時，背景子行程一定已經離開 runtime 的 group。2026-10-28 併入 main 後的 gate 抓到最初版本（先寫標記再 `setsid`）的競態：取消落在兩者之間時，只回收 group 的 runtime 也會通過。
+
 不增加模型呼叫次數。OMP、Antigravity 的命令在 clisandbox 的 PID namespace 裡，預期照樣通過，以 live 實測確認。
 
 ## 實作步驟
@@ -102,8 +104,8 @@ Codex adapter 行程內取消的 `syscall.Kill(-pgid, SIGKILL)` 改呼叫同一�
   - 結束後 `~/.local/share/asura/` 還原到開始前的狀態。
   - 文件與程式一致。
 - 驗證：live 端到端，記錄於 `evidence/e2e.md`；文件人工核對
-- 狀態：⏳ 部分完成（2026-10-28）：本機 run 等 #79（README TBD-2）
-- 證據：[evidence/e2e.md](./evidence/e2e.md)。verify 通過；daemon、inventory、doctor 三條路徑：驗證前拒絕、驗證後放行、移除後拒絕。本機 run 因 #79 失敗（main 也重現）。紀錄目錄已還原。文件：runtimes.md probe 表與已知限制、CHANGELOG
+- 狀態：✅ 已完成（2026-10-28）
+- 證據：[evidence/e2e.md](./evidence/e2e.md)。verify 通過；daemon、inventory、doctor 三條路徑：驗證前拒絕、驗證後放行、移除後拒絕。本機 run 先因 #79 失敗（main 也重現），#79 合併後補跑通過（e2e.md「補跑」）。紀錄目錄已還原。文件：runtimes.md probe 表與已知限制、CHANGELOG
 
 ## 使用方式對照
 
@@ -133,5 +135,5 @@ live 測試需要 `ASURA_VERIFY_LIVE=1` 與登入憑證。各步驟的證據要�
 - [x] 步驟 3：外部取消測試先紅後綠
 - [x] 步驟 4：probe 加強，live 四個 runtime 結果與失效對照
 - [x] 步驟 5：Codex exec 唯讀對應
-- [ ] 步驟 6：Codex 端到端、文件、CHANGELOG
+- [x] 步驟 6：Codex 端到端、文件、CHANGELOG
 - [ ] 專案 gate 通過，skip 已列出

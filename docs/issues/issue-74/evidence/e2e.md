@@ -96,3 +96,26 @@ removed codex 0.163.0 (sha256 40f51e0a186f83e4e26e8173c059d683ee633eb5eaad02efc1
 - 用確認過的 PID（58101）以 SIGTERM 停止 daemon，socket 已移除。
 - 沒有殘留的 probe 行程。
 - `~/.local/share/asura/` 是這次建立的：已刪除紀錄檔與 lock 檔並移除目錄，回到開始前的狀態。
+
+## 2026-10-28 補跑：本機 run（#79 合併後）
+
+#79（PR #80，merge commit `01ce169`）修正了 auto 路徑的稽核缺陷。本分支在 `69e2a5a` 併入 main 之後重新建置，補跑本機 run（`--backend auto`、`ASURA_RUNTIME_PRIORITY=codex`）。環境同上：真實紀錄路徑，開始前目錄不存在。
+
+| 階段 | 時間（UTC） | 結果 |
+|---|---|---|
+| 1. 驗證前 | 04:24:55 | inventory `reason=version_unverified`；run 結束碼 1：`stage striker: unsupported capability: no eligible runtime ... codex:version_unverified`。stderr 附上 `Admission rejection:` 投影；#79 之前，這種情況下不會印出投影 |
+| 2. verify | 04:24:56 | output、workspace-boundary、read-only、read-only-sandbox、cancellation 全部 PASS，`verified codex 0.163.0`，結束碼 0 |
+| 3. 驗證後 | 04:25:36 | inventory `available version="codex-cli 0.163.0"`；run 結束碼 0，任務 `task-1793161537-3512e05f627e` 的結果為 `E2E-LOCAL-codex`，`Backend version (striker): codex-cli 0.163.0` |
+| 4. 移除後 | 04:25:55 | `removed codex 0.163.0`，紀錄為 `{"records": []}`；inventory 回到 `version_unverified`；run 結束碼 1，訊息與第 1 階段相同 |
+
+收尾：刪除紀錄檔與 lock 檔並移除 `~/.local/share/asura/`，回到開始前的狀態。沒有殘留的 probe 行程。
+
+## 判定
+
+SCN-005 逐項成立：
+- 驗證前，daemon、inventory、doctor、本機 run 都是 `version_unverified`。
+- `asura runtime verify codex` 全部 probe 通過。
+- 驗證後四條路徑都放行，任務成功（daemon 見第 3 節，本機 run 見本節）。
+- 移除紀錄後回到 `version_unverified`。
+
+daemon 整個流程沒有重啟。

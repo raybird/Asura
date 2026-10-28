@@ -148,7 +148,8 @@ Feature: 取消任務時回收模型啟動的命令
 | 編號 | 事項 | 狀態 | 影響 |
 |------|------|------|------|
 | TBD-1 | OpenCode 的命令如果在取消前就已脫離行程樹（例如 `cmd &` 之後 shell 先結束），會被 PID 1 接手，子孫樹找不到它 | 已接受（2026-10-28 Q1） | 不在本 issue 範圍。#75 會替 OpenCode 加上 OS 沙箱，屆時以 PID namespace 補上。Codex 不受影響：這類命令仍在它的 PID namespace 裡，會隨 init 一起被回收 |
-| TBD-2 | SCN-005 的「本機 run」：本機與 daemon 的 `--backend auto`，在主機上有任何 runtime 是 `version_unverified` 時都會因 `audit_invalid` 失敗。這是 #73 帶進來的缺陷，main 也重現得到 | 待 [#79](https://github.com/raybird/Asura/issues/79) 修正（2026-10-28 Q3「另開 issue 先修」） | SCN-005 其他三條路徑（daemon、inventory、doctor）已通過。#79 合併後，在本分支 rebase，再補跑本機 run 的驗證前、驗證後、移除後三個階段 |
+| TBD-2 | SCN-005 的「本機 run」：本機與 daemon 的 `--backend auto`，在主機上有任何 runtime 是 `version_unverified` 時都會因 `audit_invalid` 失敗。這是 #73 帶進來的缺陷，main 也重現得到 | 已解決（2026-10-28）：#79 由 PR #80 修正（merge commit `01ce169`），本分支併入 main 後補跑本機 run 通過，見 evidence/e2e.md「補跑」 | SCN-005 其他三條路徑（daemon、inventory、doctor）已通過。#79 合併後，本分支以 merge 併入 main，再補跑本機 run 的驗證前、驗證後、移除後三個階段 |
+| TBD-3 | Antigravity 1.4.4 沒有用最終版 cancellation 命令（`&&` 串接）跑到 live：2026-10-28T05:02Z 那次的 CLI 登入已過期，所有需要模型的 probe 都是 `authentication_failed` | 待確認：重新登入 Antigravity 後補跑 `TestVerifyLive_Antigravity` | 兩版命令只差 `;` 換成 `&&`；`;` 版在 04:4x 全部通過（cancellation 6.6s）。最終命令在 Codex、OpenCode、OMP 上都已通過 live |
 
 ## Timeline
 
@@ -156,6 +157,8 @@ Feature: 取消任務時回收模型啟動的命令
 |------|------|--------|
 | 2026-10-28 | 建立 issue 文件。實測 Codex 0.163.0 的行程樹，確認殘留的是 PID namespace 的 init；Asura 的 bwrap 裡無法再開 Codex 的 bwrap（AppArmor）。Q1、Q2 照建議，SCN-001～006 核准 | Raybird |
 | 2026-10-28 | 步驟 1～5 完成，live 證據見 evidence/。步驟 6 的 Codex 端到端發現 #73 帶進來的 auto 路徑稽核缺陷，Q3「另開 issue 先修」，開 #79；SCN-005 的本機 run 等 #79（TBD-2） | Raybird |
+| 2026-10-28 | #79 合併（PR #80，`01ce169`），本分支以 merge 併入 main（保留核准 commit `7f3787e` 與 #79 證據引用的 `80afa75`）。補跑 SCN-005 本機 run 通過，TBD-2 解決；步驟 6 完成 | Raybird |
+| 2026-10-28 | 併入 main 後的完整 gate 抓到兩個不穩定的問題：fork 測試沒節流，拖慢同時執行的套件；cancellation probe 先寫標記再 `setsid`，取消落在兩者之間時會出現假綠燈。改為節流，並改由另開 session 的子行程寫標記。命令裡的 `;` 改成 `&&`，因為 `TestRuntimeVerifyCommand` 的假 codex 會用 `;` 切開命令。最終命令的 live 結果：Codex、OMP 全部通過，OpenCode 照預期只有 #75 那一項失敗，Codex 與 OpenCode 的失效對照照樣失敗。Antigravity 登入過期，最終命令沒有執行到；`;` 版命令全部通過（evidence/step4.md） | Raybird |
 
 ---
 **建立日期**: 2026-10-28  

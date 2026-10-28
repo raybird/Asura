@@ -95,8 +95,8 @@ func (b *cancelBackend) Run(ctx context.Context, req *backend.ExecutionRequest) 
 	_, command, _ := strings.Cut(req.Prompt, "\n\n")
 	if b.inProcess {
 		_, rest, ok := strings.Cut(command, "> ")
-		target, _, _ := strings.Cut(rest, ";")
-		if err := os.WriteFile(strings.TrimSpace(target), []byte("started"), 0o600); !ok || err != nil {
+		target, _, _ := strings.Cut(rest, " ")
+		if err := os.WriteFile(target, []byte("started"), 0o600); !ok || err != nil {
 			_ = syscall.Kill(-runtime.Process.Pid, syscall.SIGKILL)
 			_ = runtime.Wait()
 			return nil, fmt.Errorf("built-in shell found no start marker in %q", command)

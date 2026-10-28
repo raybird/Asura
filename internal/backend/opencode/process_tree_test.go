@@ -111,7 +111,8 @@ func TestKillProcessGroupReapsDetachedDescendants(t *testing.T) {
 // 2026-10-28 issue-74：取消期間仍不斷 fork 另開 session 的子行程時，凍結後重新掃描，也要全部回收。
 func TestKillProcessGroupReapsForkingDescendants(t *testing.T) {
 	m := strconv.Itoa((40000+os.Getpid()%9000)*10 + 6)
-	cmd := exec.Command("sh", "-c", "while :; do setsid sleep "+m+" & done")
+	// 節流：不節流時幾秒內會累積數千個行程，拖慢同時執行的其他套件（2026-10-28 gate 實測）。
+	cmd := exec.Command("sh", "-c", "while :; do setsid sleep "+m+" & sleep 0.01; done")
 	ConfigureProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)

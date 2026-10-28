@@ -239,6 +239,7 @@ func credentialProbe(dir string) func(context.Context, backend.Backend, Env) err
 // 看到標記後才取消，確認 Run 返回且整個行程樹被回收。
 // 以標記判定命令已開始：OMP 的 shell 在 runtime 行程內執行 sleep，看不到獨立的 sleep 行程（2026-10-22）。
 // 另開 session 的背景 sleep 抓的是只回收 process group 的 runtime（2026-10-28 issue-74）。
+// 標記由另開 session 的子行程寫出：看到標記時它已經不在 runtime 的 group 裡，取消不會搶在 setsid 之前。
 func cancelProbe(started <-chan int) func(context.Context, backend.Backend, Env) error {
 	return func(ctx context.Context, b backend.Backend, env Env) error {
 		if started == nil {
@@ -255,7 +256,7 @@ func cancelProbe(started <-chan int) func(context.Context, backend.Backend, Env)
 		done := make(chan error, 1)
 		go func() {
 			_, err := b.Run(runCtx, &backend.ExecutionRequest{Role: backend.RoleStriker, Workspace: env.Workspace,
-				Prompt: shellPrompt(fmt.Sprintf("echo started > %s; sleep %s & setsid sleep %s & wait", startedFile, marker, detached))})
+				Prompt: shellPrompt(fmt.Sprintf("sleep %s & setsid sh -c 'echo started > %s && exec sleep %s' & wait", marker, startedFile, detached))})
 			done <- err
 		}()
 		var pgid int
