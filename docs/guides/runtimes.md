@@ -38,14 +38,19 @@ Asura 如何決定一個任務由哪個 runtime 執行、執行前檢查什麼�
 | `read-only` | 唯讀角色寫不進 workspace，但讀得到 workspace 內容 | `opencode`、`codex` |
 | `read-only-sandbox` | 不經模型，以 `codex sandbox` 直接在 Codex 的唯讀沙箱內寫 workspace，必須被擋；workspace-write 下同一命令必須寫得進去。沙箱正常時 Codex 的模型在唯讀角色下根本不會嘗試寫入，`read-only` 分不出 OS 沙箱是否真的生效 | `codex` |
 | `credential-boundary` | 模型寫不到原 CLI 的憑證目錄 | `omp`、`antigravity` |
-| `cancellation` | 取消後，模型啟動的命令連同行程樹被回收 | 全部 |
+| `cancellation` | 取消後，模型啟動的命令連同行程樹被回收；命令同時留下前景子行程與另開 session 的背景子行程，兩者都必須消失（2026-10-28 #74） | 全部 |
 | `protected-files-unchanged` | 原 CLI 的登入憑證檔在全部 probe 前後逐 byte 相同 | `omp`、`antigravity` |
 
 驗證前 runtime 必須已登入；`omp`、`antigravity` 另需 `bwrap`。任一 probe 失敗、逾時或無法執行時整體失敗：逐項印出結果、結束碼非 0，紀錄不新增也不變動。內建身分不執行 probe。只有明確執行 `asura runtime verify` 才會驗證；daemon 啟動、`runtime inventory`、`doctor`、`run`、`ask` 都不會自動執行 probe。
 
 紀錄固定存在 `$XDG_DATA_HOME/asura/runtime-verification.json`（預設 `~/.local/share/asura/`），不跟 `--db` 或 config 走，每筆含身分、驗證時間（UTC）與執行驗證的 Asura 版本。驗證紀錄不綁模型：OpenCode 與 Codex 的 probe 使用 runtime 的預設模型。`--list` 列出內建身分與紀錄，`--remove` 移除一筆紀錄，內建身分不能移除。移除後，已接受但還沒執行到的 stage 在執行前被拒絕，不改選其他 runtime。清冊 policy 版本維持 `inventory-v1`，升級前封存的排隊任務與 cron 照常執行。
 
-已知限制（2026-10-27）：Codex 與 OpenCode 的新版本目前過不了驗證。兩者取消時都不會回收模型啟動的命令（[#74](https://github.com/raybird/Asura/issues/74)），OpenCode 的寫入角色也沒有 OS 沙箱（[#75](https://github.com/raybird/Asura/issues/75)）。修好之前，這兩個 runtime 只能使用內建版本。 另外，Codex 的 `read-only-sandbox` 驗的是 `codex sandbox -P :read-only`；正式任務的 `codex exec -s read-only` 如何對應到同一政策是 Codex 內部行為，尚未直接驗證，預定在 #74 驗收時補驗。
+已知限制（2026-10-28）：
+
+- **OpenCode 的新版本目前過不了驗證**：寫入角色沒有 OS 沙箱，workspace-boundary 會失敗（[#75](https://github.com/raybird/Asura/issues/75)）。修好之前只能使用內建版本。
+- **Codex 已可驗證**：取消時不回收模型命令的問題已修正（[#74](https://github.com/raybird/Asura/issues/74)），Codex 0.163.0 可以通過驗證。
+- **取消前就已脫離行程樹的 OpenCode 命令**：取消時，Asura 回收 runtime process group 成員的整棵子孫樹，包含另開 session 的命令，以及 Codex 另開的 PID namespace（#74）。但 OpenCode 的命令如果在取消前就已脫離行程樹（例如 `cmd &` 之後 shell 先結束），會被 PID 1 接手，不會被回收。預定在 #75 替 OpenCode 加上 OS 沙箱時，以 PID namespace 補上。
+- **唯讀權限設定的對應**：Codex 的 `read-only-sandbox` 驗的是 `codex sandbox -P :read-only`。正式任務的 `codex exec -s read-only` 交給 `codex-linux-sandbox` 的權限設定，2026-10-28 在 0.163.0 上確認兩者相同（`TestVerifyLive_CodexExecReadOnlyProfile`，#74）。這個對應是 Codex 的內部行為，新版本需要以同一個測試重新確認。
 
 ## 固定三面管線 (Three-Face Fixed Pipeline)
 

@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -136,6 +137,82 @@ func TestRuntimeSelectionLocalCancel(t *testing.T) {
 		t.Fatal("auto runtime survived cancel")
 	}
 	saved, _ := store.GetTask(context.Background(), "cancel-auto")
+	if saved.Status != storage.StatusCancelled {
+		t.Fatalf("status=%s", saved.Status)
+	}
+}
+
+// 2026-10-28：issue-74 SCN-002，外部 asura cancel 也要回收 runtime 另開 session 的子孫（模擬模型啟動的命令）。
+func TestRuntimeSelectionLocalCancelReapsDetachedCommand(t *testing.T) {
+	t.Setenv("ASURA_SOCKET", "")
+	root := t.TempDir()
+	bin := filepath.Join(root, "bin")
+	os.Mkdir(bin, 0700)
+	marker := strconv.Itoa((40000+os.Getpid()%9000)*10 + 7)
+	os.WriteFile(filepath.Join(bin, "opencode"), []byte("#!/bin/sh\necho 1.18.23\n"), 0700)
+	os.WriteFile(filepath.Join(bin, "codex"), []byte("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'codex-cli 0.155.0'; exit 0; fi\n/usr/bin/setsid /bin/sleep "+marker+" &\nwhile true; do /bin/sleep 1; done\n"), 0700)
+	t.Setenv("PATH", bin)
+	t.Setenv("ASURA_RUNTIME_PRIORITY", "codex")
+	sleepPIDs := func() []int {
+		var pids []int
+		entries, _ := os.ReadDir("/proc")
+		for _, e := range entries {
+			data, err := os.ReadFile(filepath.Join("/proc", e.Name(), "cmdline"))
+			if err == nil && string(data) == "/bin/sleep\x00"+marker+"\x00" {
+				pid, _ := strconv.Atoi(e.Name())
+				pids = append(pids, pid)
+			}
+		}
+		return pids
+	}
+	t.Cleanup(func() {
+		for _, pid := range sleepPIDs() {
+			_ = syscall.Kill(pid, syscall.SIGKILL)
+		}
+	})
+	db := filepath.Join(root, "tasks.db")
+	finished := make(chan int, 1)
+	var runOut, runErr safeBuffer
+	go func() {
+		finished <- handleRun([]string{"--db", db, "--workspace", root, "--id", "cancel-detached", "--backend", "auto", "probe"}, &runOut, &runErr)
+	}()
+	var store *storage.SQLiteStore
+	var task *storage.Task
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if store == nil {
+			store, _ = storage.NewSQLiteStore(db)
+		}
+		if store != nil {
+			task, _ = store.GetTask(context.Background(), "cancel-detached")
+			if task != nil && task.PGID > 0 && len(sleepPIDs()) == 1 {
+				break
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if store == nil || task == nil || task.PGID <= 0 || len(sleepPIDs()) != 1 {
+		t.Fatalf("runtime did not start the detached command: task=%+v sleeps=%v", task, sleepPIDs())
+	}
+	defer store.Close()
+	defer opencode.KillProcessGroup(task.PGID)
+	var out, stderr bytes.Buffer
+	if code := handleCancel([]string{"--db", db, "cancel-detached"}, &out, &stderr); code != 0 {
+		t.Fatalf("cancel: %s", stderr.String())
+	}
+	select {
+	case <-finished:
+	case <-time.After(5 * time.Second):
+		t.Fatal("runtime survived cancel")
+	}
+	deadline = time.Now().Add(5 * time.Second)
+	for len(sleepPIDs()) != 0 && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if pids := sleepPIDs(); len(pids) != 0 {
+		t.Errorf("detached command survived asura cancel: %v", pids)
+	}
+	saved, _ := store.GetTask(context.Background(), "cancel-detached")
 	if saved.Status != storage.StatusCancelled {
 		t.Fatalf("status=%s", saved.Status)
 	}

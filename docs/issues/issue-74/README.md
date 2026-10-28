@@ -148,15 +148,17 @@ Feature: 取消任務時回收模型啟動的命令
 | 編號 | 事項 | 狀態 | 影響 |
 |------|------|------|------|
 | TBD-1 | OpenCode 的命令如果在取消前就已脫離行程樹（例如 `cmd &` 之後 shell 先結束），會被 PID 1 接手，子孫樹找不到它 | 已接受（2026-10-28 Q1） | 不在本 issue 範圍。#75 會替 OpenCode 加上 OS 沙箱，屆時以 PID namespace 補上。Codex 不受影響：這類命令仍在它的 PID namespace 裡，會隨 init 一起被回收 |
+| TBD-2 | SCN-005 的「本機 run」：本機與 daemon 的 `--backend auto`，在主機上有任何 runtime 是 `version_unverified` 時都會因 `audit_invalid` 失敗。這是 #73 帶進來的缺陷，main 也重現得到 | 待 [#79](https://github.com/raybird/Asura/issues/79) 修正（2026-10-28 Q3「另開 issue 先修」） | SCN-005 其他三條路徑（daemon、inventory、doctor）已通過。#79 合併後，在本分支 rebase，再補跑本機 run 的驗證前、驗證後、移除後三個階段 |
 
 ## Timeline
 
 | 日期 | 異動 | 負責人 |
 |------|------|--------|
 | 2026-10-28 | 建立 issue 文件。實測 Codex 0.163.0 的行程樹，確認殘留的是 PID namespace 的 init；Asura 的 bwrap 裡無法再開 Codex 的 bwrap（AppArmor）。Q1、Q2 照建議，SCN-001～006 核准 | Raybird |
+| 2026-10-28 | 步驟 1～5 完成，live 證據見 evidence/。步驟 6 的 Codex 端到端發現 #73 帶進來的 auto 路徑稽核缺陷，Q3「另開 issue 先修」，開 #79；SCN-005 的本機 run 等 #79（TBD-2） | Raybird |
 
 ---
 **建立日期**: 2026-10-28  
 **分級**: Medium — 共用取消實作、Codex adapter、cancellation probe 與文件，範圍有界  
 **風險**: High — 會送出 SIGKILL，回收範圍錯誤會留下命令或殺到無關行程；真實行為只能用 live 驗證\
-**狀態**: 規劃中
+**狀態**: 進行中

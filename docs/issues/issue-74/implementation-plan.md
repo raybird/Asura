@@ -39,8 +39,8 @@ Codex adapter 行程內取消的 `syscall.Kill(-pgid, SIGKILL)` 改呼叫同一�
     - 取消當下所有命令都是 group 成員的子孫：照計畫進行。
     - 不是：停下來，向使用者回報，不擅自擴大範圍。
 - 驗證：單元紅燈；live 觀察記錄於 `evidence/step1.md`
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成（2026-10-28）
+- 證據：[evidence/step1.md](./evidence/step1.md)。重現測試以殘留為理由失敗（A、B、E 留下來）；對照行程保留；OpenCode 的命令在取消當下仍是 opencode 的子孫，照計畫進行
 
 ### 步驟 2 — 共用實作回收整棵子孫樹
 - 產出：`KillProcessGroup` 依設計方案實作；Codex adapter 改用它
@@ -51,8 +51,8 @@ Codex adapter 行程內取消的 `syscall.Kill(-pgid, SIGKILL)` 改呼叫同一�
   - 既有的取消、身分檢查、H-01 測試全部通過。
   - 凍結與重新掃描的部分有測試涵蓋：取消期間仍在 fork 的子孫也會被回收。
 - 驗證：單元測試；`go test -race` 全套
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成（2026-10-28）
+- 證據：[evidence/step4.md](./evidence/step4.md)「步驟 2」：重現測試轉綠；fork 測試以突變驗證（3 次中 2 次抓到，只當回歸網）；相關套件 race 測試通過
 
 ### 步驟 3 — 外部取消路徑
 - 產出：外部 `asura cancel` 回收同一棵行程樹的測試，以假 runtime 留下另開 session 的子孫
@@ -62,8 +62,8 @@ Codex adapter 行程內取消的 `syscall.Kill(-pgid, SIGKILL)` 改呼叫同一�
   - 拿掉步驟 2 的修正時，測試會失敗。
   - 加回修正後通過，任務狀態為已取消。
 - 驗證：`cmd/asura` 整合測試（現有的 cancel 測試架構）
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成（2026-10-28）
+- 證據：[evidence/step4.md](./evidence/step4.md)「步驟 3」：修正後通過；退回只送 kill(-pgid) 時失敗（runtime survived cancel）
 
 ### 步驟 4 — 加強 cancellation probe
 - 產出：probe 命令與判定依設計方案修改；單元測試涵蓋「背景 setsid 子行程殘留 → 失敗」
@@ -75,9 +75,9 @@ Codex adapter 行程內取消的 `syscall.Kill(-pgid, SIGKILL)` 改呼叫同一�
     - Codex 0.163.0、OpenCode 1.18.31 的 cancellation probe，在步驟 2 之後通過。
     - 用步驟 2 之前的實作（失效對照）執行時會失敗。
     - OMP、Antigravity 的 cancellation probe 照樣通過。
-- 驗證：單元紅綠；live 結果記錄於 `evidence/step4.md`
-- 狀態：📝 待實作
-- 證據：
+- 驗證：單元紅綠；live 結果記錄於 `evidence/step4.md`「步驟 4」
+- 狀態：✅ 已完成（2026-10-28）
+- 證據：[evidence/step4.md](./evidence/step4.md)「步驟 4」：單元先紅後綠；live 四個 runtime 的 cancellation 都通過；Codex、OpenCode 的失效對照都失敗
 
 ### 步驟 5 — Codex exec 唯讀對應（#73 TBD-7）
 - 產出：一個 live 測試，以 `codex exec -s read-only` 讓模型執行 sleep，在命令執行期間讀取 `codex-linux-sandbox` 的 `--permission-profile`，與 `codex sandbox -P :read-only` 的權限設定比較
@@ -86,9 +86,9 @@ Codex adapter 行程內取消的 `syscall.Kill(-pgid, SIGKILL)` 改呼叫同一�
 - 完成判準：
   - 除了路徑之外，兩份權限設定的欄位一致，workspace 都不是 `write`。
   - 不一致時：測試失敗，並向使用者回報。
-- 驗證：live（1 次模型呼叫），結果記錄於 `evidence/step5.md`
-- 狀態：📝 待實作
-- 證據：
+- 驗證：live（1 次模型呼叫），結果記錄於 `evidence/step4.md`「步驟 5」
+- 狀態：✅ 已完成（2026-10-28）
+- 證據：[evidence/step4.md](./evidence/step4.md)「步驟 5」：兩份權限設定相同，都只有根目錄可讀；shim 失效對照失敗
 
 ### 步驟 6 — Codex 端到端與文件
 - 產出：
@@ -102,8 +102,8 @@ Codex adapter 行程內取消的 `syscall.Kill(-pgid, SIGKILL)` 改呼叫同一�
   - 結束後 `~/.local/share/asura/` 還原到開始前的狀態。
   - 文件與程式一致。
 - 驗證：live 端到端，記錄於 `evidence/e2e.md`；文件人工核對
-- 狀態：📝 待實作
-- 證據：
+- 狀態：⏳ 部分完成（2026-10-28）：本機 run 等 #79（README TBD-2）
+- 證據：[evidence/e2e.md](./evidence/e2e.md)。verify 通過；daemon、inventory、doctor 三條路徑：驗證前拒絕、驗證後放行、移除後拒絕。本機 run 因 #79 失敗（main 也重現）。紀錄目錄已還原。文件：runtimes.md probe 表與已知限制、CHANGELOG
 
 ## 使用方式對照
 
@@ -128,10 +128,10 @@ live 測試需要 `ASURA_VERIFY_LIVE=1` 與登入憑證。各步驟的證據要�
 
 ## 檢查清單
 
-- [ ] 步驟 1：重現紅燈、對照綠燈、OpenCode 行程樹已記錄
-- [ ] 步驟 2：共用實作，全套測試綠燈
-- [ ] 步驟 3：外部取消測試先紅後綠
-- [ ] 步驟 4：probe 加強，live 四個 runtime 結果與失效對照
-- [ ] 步驟 5：Codex exec 唯讀對應
+- [x] 步驟 1：重現紅燈、對照綠燈、OpenCode 行程樹已記錄
+- [x] 步驟 2：共用實作，全套測試綠燈
+- [x] 步驟 3：外部取消測試先紅後綠
+- [x] 步驟 4：probe 加強，live 四個 runtime 結果與失效對照
+- [x] 步驟 5：Codex exec 唯讀對應
 - [ ] 步驟 6：Codex 端到端、文件、CHANGELOG
 - [ ] 專案 gate 通過，skip 已列出

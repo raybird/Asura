@@ -235,8 +235,10 @@ func credentialProbe(dir string) func(context.Context, backend.Backend, Env) err
 	}
 }
 
-// cancelProbe 讓模型先寫啟動標記再執行唯一長度的 sleep，看到標記後才取消，確認 Run 返回且整個行程樹被回收。
+// cancelProbe 讓模型先寫啟動標記，再留下一個前景 sleep 與一個另開 session 的背景 sleep（各有唯一長度），
+// 看到標記後才取消，確認 Run 返回且整個行程樹被回收。
 // 以標記判定命令已開始：OMP 的 shell 在 runtime 行程內執行 sleep，看不到獨立的 sleep 行程（2026-10-22）。
+// 另開 session 的背景 sleep 抓的是只回收 process group 的 runtime（2026-10-28 issue-74）。
 func cancelProbe(started <-chan int) func(context.Context, backend.Backend, Env) error {
 	return func(ctx context.Context, b backend.Backend, env Env) error {
 		if started == nil {
@@ -245,14 +247,15 @@ func cancelProbe(started <-chan int) func(context.Context, backend.Backend, Env)
 		for len(started) > 0 {
 			<-started
 		}
-		marker := strconv.Itoa(2000 + int(time.Now().UnixNano()%7000))
+		n := 2000 + int(time.Now().UnixNano()%7000)
+		marker, detached := strconv.Itoa(n), strconv.Itoa(n+2000)
 		startedFile := filepath.Join(env.Workspace, "started.txt")
 		runCtx, cancel := context.WithCancel(ctx)
 		defer cancel()
 		done := make(chan error, 1)
 		go func() {
 			_, err := b.Run(runCtx, &backend.ExecutionRequest{Role: backend.RoleStriker, Workspace: env.Workspace,
-				Prompt: shellPrompt(fmt.Sprintf("echo started > %s; sleep %s", startedFile, marker))})
+				Prompt: shellPrompt(fmt.Sprintf("echo started > %s; sleep %s & setsid sleep %s & wait", startedFile, marker, detached))})
 			done <- err
 		}()
 		var pgid int
@@ -274,7 +277,7 @@ func cancelProbe(started <-chan int) func(context.Context, backend.Backend, Env)
 			_, statErr := os.Stat(startedFile)
 			return exited || statErr == nil
 		}) || exited {
-			return fmt.Errorf("inconclusive: model never started the command (sleep %s): %v", marker, early)
+			return fmt.Errorf("inconclusive: model never started the command (sleep %s, %s): %v", marker, detached, early)
 		}
 		cancel()
 		select {
@@ -283,9 +286,9 @@ func cancelProbe(started <-chan int) func(context.Context, backend.Backend, Env)
 			return errors.New("run did not return within 20s after cancellation")
 		}
 		if !waitFor(context.Background(), 5*time.Second, func() bool {
-			return len(sleepPIDs(marker)) == 0 && errors.Is(syscall.Kill(-pgid, 0), syscall.ESRCH)
+			return len(sleepPIDs(marker))+len(sleepPIDs(detached)) == 0 && errors.Is(syscall.Kill(-pgid, 0), syscall.ESRCH)
 		}) {
-			return fmt.Errorf("process tree survived cancellation: pgid %d, sleep pids %v", pgid, sleepPIDs(marker))
+			return fmt.Errorf("process tree survived cancellation: pgid %d, sleep pids %v, detached sleep pids %v", pgid, sleepPIDs(marker), sleepPIDs(detached))
 		}
 		return nil
 	}

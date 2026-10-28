@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -75,10 +76,12 @@ func TestCredentialProbe(t *testing.T) {
 // cancelBackend 模擬 runtime 的行程：runtime 本身是一個以 pgid 回報的 sleep 600。
 // inProcess 時像 OMP 的內建 shell，自己寫出 prompt 命令的啟動標記、不產生 sleep 行程；
 // 否則以 sh 在另一個 session 執行命令（像 codex-linux-sandbox），取消時只殺 runtime 的 process group。
+// inGroup 時命令跑在 runtime 的 process group 裡，group 被殺時前景命令一起結束，只有命令自己另開 session 的子行程留下。
 type cancelBackend struct {
 	shellBackend
 	started   chan int
 	inProcess bool
+	inGroup   bool
 	leaked    []*exec.Cmd
 }
 
@@ -101,10 +104,18 @@ func (b *cancelBackend) Run(ctx context.Context, req *backend.ExecutionRequest) 
 	} else {
 		cmd := exec.Command("sh", "-c", command)
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		if b.inGroup {
+			cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pgid: runtime.Process.Pid}
+		}
 		if err := cmd.Start(); err != nil {
 			return nil, err
 		}
-		b.leaked = append(b.leaked, cmd)
+		if b.inGroup {
+			// 像 runtime 自己的 shell，結束後立即回收，不讓殭屍行程留在 group 裡。
+			go func() { _ = cmd.Wait() }()
+		} else {
+			b.leaked = append(b.leaked, cmd)
+		}
 	}
 	<-ctx.Done()
 	_ = syscall.Kill(-runtime.Process.Pid, syscall.SIGKILL)
@@ -140,6 +151,35 @@ func TestCancelProbe(t *testing.T) {
 	if err := run(leaky); err == nil || !strings.Contains(err.Error(), "survived cancellation") {
 		t.Errorf("leaked command: err = %v, want process tree survived", err)
 	}
+
+	// 2026-10-28：issue-74 SCN-004，只回收 process group 的 runtime 留下命令另開 session 的背景子行程，probe 必須失敗。
+	groupOnly := &cancelBackend{started: make(chan int, 1), inGroup: true}
+	t.Cleanup(func() {
+		for _, pid := range markedSleeps() {
+			_ = syscall.Kill(pid, syscall.SIGKILL)
+		}
+	})
+	if err := run(groupOnly); err == nil || !strings.Contains(err.Error(), "survived cancellation") {
+		t.Errorf("detached background command: err = %v, want process tree survived", err)
+	}
+}
+
+// markedSleeps 回傳 cancellation probe 可能留下的 sleep（marker 範圍 2000～10999），供測試清除殘留。
+func markedSleeps() []int {
+	var pids []int
+	entries, _ := os.ReadDir("/proc")
+	for _, e := range entries {
+		cmdline, err := os.ReadFile(filepath.Join("/proc", e.Name(), "cmdline"))
+		if err != nil {
+			continue
+		}
+		args := strings.Split(strings.TrimRight(string(cmdline), "\x00"), "\x00")
+		if m, err := strconv.Atoi(args[len(args)-1]); err == nil && len(args) == 2 && filepath.Base(args[0]) == "sleep" && m >= 2000 && m < 11000 {
+			pid, _ := strconv.Atoi(e.Name())
+			pids = append(pids, pid)
+		}
+	}
+	return pids
 }
 
 // readOnlyBackend 模擬唯讀角色：reads 時讀出 workspace 內的 nonce 檔並放進回覆，writes 時沙箱失效、寫入目標檔。

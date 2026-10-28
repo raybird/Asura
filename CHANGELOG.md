@@ -10,12 +10,16 @@
 ### 🔄 相容性
 - **[runtime]**：四個 runtime 只接受內建已驗證的身分（OpenCode 1.18.23、Codex 0.155.0、OMP 18.4.4、Antigravity 1.2.13），或驗證紀錄中身分相符的安裝。其他版本判為新的 reason `version_unverified`，在模型呼叫前拒絕；`doctor` 與拒絕訊息提示 `asura runtime verify <runtime>`。daemon、`runtime inventory`、`doctor`、本機 `run` 使用同一規則：OpenCode 原本在本機 `run`、`doctor` 與 `runtime inventory` 接受任何 1.18.x（daemon 只接受 1.18.23），現在未驗證的 1.18.x 一律拒絕。清冊 policy 維持 `inventory-v1`，升級前封存的排隊任務與 cron 不受影響 (#73)
 
+### 🐛 錯誤修正 (Bug Fixes)
+- **[runtime]**：取消任務後，Codex 與 OpenCode 由模型啟動的命令會繼續執行（Codex 的命令跑在另開 process group 的 PID namespace 裡，OpenCode 的 bash 工具另開 session），內建版本也一樣。現在所有取消路徑（行程內取消、`asura cancel`、engine 取消）都會凍結並回收 runtime process group 成員的整棵子孫樹。`runtime verify` 的 cancellation probe 改為同時留下另開 session 的背景子行程，取消後必須一併消失 (#74)
+
 ### 🔒 安全性 (Security)
 - **[installer]**：未指定 `--version` 而 `releases/latest` 解析到沒有發布者驗證的 v1.1.0 時，不論有沒有 `gh` 都在下載前拒絕安裝，避免把 latest 指回 v1.1.0 來繞過驗證；`--version v1.1.0` 仍照常安裝並警告 (#58)
 
 ### 📌 已知限制
-- Codex 的唯讀沙箱檢查驗的是 `codex sandbox -P :read-only`，正式任務的 `codex exec -s read-only` 如何對應到同一政策是 Codex 內部行為，尚未直接驗證 (#73)
-- Codex 與 OpenCode 的新版本（例如 Codex 0.163.0、OpenCode 1.18.31）目前過不了 `runtime verify`。原因是取消時模型啟動的命令不會被回收（#74），以及 OpenCode 寫入角色沒有 OS 沙箱（#75）；修好之前只能使用內建版本 (#73)
+- Codex 的唯讀沙箱檢查驗的是 `codex sandbox -P :read-only`。正式任務的 `codex exec -s read-only` 交給 OS 沙箱的權限設定，在 0.163.0 上已確認與它相同；這是 Codex 的內部行為，新版本需要重新確認 (#73, #74)
+- OpenCode 的新版本（例如 1.18.31）目前過不了 `runtime verify`，因為寫入角色沒有 OS 沙箱（#75）；修好之前只能使用內建版本。Codex 0.163.0 已可通過驗證 (#73, #74)
+- OpenCode 的命令如果在取消前就已脫離行程樹（例如 `cmd &` 之後 shell 先結束），取消時不會被回收；預定在 #75 以 PID namespace 補上 (#74)
 
 ## [v1.2.0] - 2026-10-16
 
