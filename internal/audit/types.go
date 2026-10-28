@@ -360,7 +360,8 @@ func capability(c backend.Capability) bool {
 }
 func probeReason(r backend.ProbeReason) bool {
 	switch r {
-	case backend.ProbeNotStarted, backend.ExecutableNotFound, backend.DependencyNotFound, backend.ConfigurationInvalid, backend.VersionFailed, backend.DescriptorInvalid, backend.ProbeFailed, backend.ProbePanicked, backend.ProbeTimedOut, backend.ProbeCancelled, backend.InventoryTimedOut:
+	// VersionUnverified 2026-10-28：issue-79，#73 新增的 reason，auto 的快照含未驗證的 runtime 時必須接受。
+	case backend.ProbeNotStarted, backend.ExecutableNotFound, backend.DependencyNotFound, backend.ConfigurationInvalid, backend.VersionFailed, backend.VersionUnverified, backend.DescriptorInvalid, backend.ProbeFailed, backend.ProbePanicked, backend.ProbeTimedOut, backend.ProbeCancelled, backend.InventoryTimedOut:
 		return true
 	}
 	return false
