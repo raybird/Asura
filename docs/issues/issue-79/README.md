@@ -57,9 +57,11 @@ admission 拒絕的稽核紀錄（`internal/audit/rejection.go:57`）也使用�
 |------|------|--------|
 | 2026-10-28 | 建立。#74 的 Codex 端到端發現此缺陷，使用者 Q3 選擇另開 issue 先修 | Raybird |
 | 2026-10-28 | PR #80 獨立審查 PASS（[報告](https://github.com/raybird/Asura/pull/80#issuecomment-6459894405)）。使用者選擇處理 SHOULD FIX 1（補拒絕投影測試）與 NICE 2～4（測試位置、gofmt、證據連結） | Raybird |
+| 2026-10-28 | PR #80 第二輪獨立審查 PASS（增量 `39695ae..bbcf045`，[報告](https://github.com/raybird/Asura/pull/80#issuecomment-6460083992)），無 MUST FIX、SHOULD FIX；NICE TO HAVE 一項（紅綠證據沒寫實際命令）未處理 | Raybird |
+| 2026-10-28 | PR #80 squash 合併至 main（merge commit `01ce169`，合併內容即審查的 HEAD `bbcf045`）；GitHub #79 由 `Closes #79` 自動關閉，issue 結案。合併後 main push CI [run 40631131063](https://github.com/raybird/Asura/actions/runs/40631131063) 為 success | Raybird |
 
 ---
 **建立日期**: 2026-10-28  
 **分級**: Small  
 **風險**: Low\
-**狀態**: 進行中
+**狀態**: 已完成 — PR #80 於 2026-10-28 合併（merge commit `01ce169`）
