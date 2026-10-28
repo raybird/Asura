@@ -136,4 +136,4 @@ live 測試需要 `ASURA_VERIFY_LIVE=1` 與登入憑證。各步驟的證據要�
 - [x] 步驟 4：probe 加強，live 四個 runtime 結果與失效對照
 - [x] 步驟 5：Codex exec 唯讀對應
 - [x] 步驟 6：Codex 端到端、文件、CHANGELOG
-- [ ] 專案 gate 通過，skip 已列出
+- [x] 專案 gate 通過，skip 已列出（evidence/step4.md「Gate（2026-10-28，併入 main 之後）」）
