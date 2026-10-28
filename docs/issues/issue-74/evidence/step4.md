@@ -143,3 +143,21 @@ skip 共 27 個，與 #73 收尾時（[phase5.md](../../issue-73/evidence/phase5
   - 一般情況下，既有的 process tree 測試照常通過：`TestKillProcessGroup*` 以 `-race` 連跑 3 次都通過，`cmd/asura` 的取消與 `TestRuntimeVerifyCommand` 也都通過。
 - **SHOULD 2～3、NICE 7**：只改文件，見 implementation-plan.md 步驟 4、e2e.md「判定」、CHANGELOG、README「修正後流程」。
 - **Gate**：`go vet ./... && go build ./cmd/asura && go test -count=1 -race -v ./...` 連續兩次 exit 0，24 個套件 ok，沒有 FAIL；skip 27 個，與前面相同，不算通過。build 產生的 `asura` 已刪除。結束後 `ps` 沒有殘留的 marker sleep。
+
+## Antigravity 補跑（2026-10-28T07:17Z～07:19Z，TBD-3）
+
+Antigravity 重新登入後，在合併後的 main（`39ed182`，cancellation 用最終的 `&&` 版命令）執行：
+
+`ASURA_VERIFY_LIVE=1 go test -count=1 -v -timeout 10m -run 'TestVerifyLive_Antigravity$' ./internal/backend/antigravity/`
+
+```
+identity {Runtime:antigravity Version:1.4.4 Digest:337dcde668441a2828968644d7982829c2d2a5e0c4144f346e1f3fc6abb3cdc7} builtin=false
+output                        6.8s  PASS
+workspace-boundary            8.9s  PASS
+credential-boundary          57.0s  PASS
+cancellation                  7.1s  PASS
+protected-files-unchanged     0.0s  PASS
+ok  	asura/internal/backend/antigravity	80.021s
+```
+
+結束後以 `ps` 確認沒有殘留的 probe sleep。至此，四個 runtime 都已用最終命令跑過 live。
