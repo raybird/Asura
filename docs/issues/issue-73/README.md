@@ -202,9 +202,11 @@ Feature: runtime 版本通過驗證才可使用
 | 2026-10-27 | PR #77 獨立審查 RETURN TO execute-task：SCN-008 的 OpenCode 跨路徑覆蓋缺口（MUST FIX）；Q17～Q19 決定補 Codex 唯讀沙箱的確定性檢查、Antigravity 先比雜湊不執行、一併處理改善建議；新增 Phase 5 | Raybird |
 | 2026-10-27 | Phase 5 完成：OpenCode 跨路徑測試；Codex 新增不經模型的 `read-only-sandbox` probe（真實 0.163.0 通過、失效對照失敗）；Antigravity 判定不執行未驗證的 agy；Codex 改用 `clisandbox.TreeHash`；verify 先檢查紀錄檔 | Raybird |
 | 2026-10-28 | PR #77 第二輪獨立審查 PASS；Q20 接受 Codex exec／sandbox 唯讀對應的殘餘風險（TBD-7，#74 時補驗）；Q21 處理文件措辭與唯讀沙箱 probe 加固，新增 Task 5.5 | Raybird |
+| 2026-10-28 | PR #77 第三輪獨立審查 PASS（增量 `92a84f9..af6ee49`，[報告](https://github.com/raybird/Asura/pull/77#issuecomment-6458102527)），無 MUST FIX、SHOULD FIX；NICE TO HAVE 三項未處理：process group 測試只量耗時、runtimes.md 多一個半形空格、責任對照沒有加上 Task 5.5 | Raybird |
+| 2026-10-28 | PR #77 squash 合併至 main（merge commit `ca3461a`，合併內容即審查的 HEAD `af6ee49`）；GitHub #73 由 `Closes #73` 自動關閉，issue 結案。合併後 main push CI [run 40615145464](https://github.com/raybird/Asura/actions/runs/40615145464) 為 success。TBD-7 與 Codex／OpenCode 的真實端到端留到 #74、#75 驗收 | Raybird |
 
 ---
 **建立日期**: 2026-10-21  
 **分級**: Large — 跨四個 runtime adapter、清冊、admission、daemon 與 CLI，新增驗證紀錄與子命令  
 **風險**: High — 唯讀隔離是安全邊界，新版本上 probe 的可信度尚未確認\
-**狀態**: 進行中
+**狀態**: 已完成 — PR #77 於 2026-10-28 合併（merge commit `ca3461a`）
