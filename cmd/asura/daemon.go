@@ -93,12 +93,13 @@ func handleDaemon(args []string, stdout, stderr io.Writer) int {
 	defer store.Close()
 
 	cfg := daemon.Config{
-		RuntimePriority: runtimePriority,
-		UtilityPolicy:   utilityPolicy,
-		SocketPath:      *sockPath,
-		MaxWorkers:      *workers,
-		MaxQueue:        *queue,
-		ContextConfig:   contextCfg,
+		RuntimePriority:  runtimePriority,
+		UtilityPolicy:    utilityPolicy,
+		SocketPath:       *sockPath,
+		MaxWorkers:       *workers,
+		MaxQueue:         *queue,
+		ContextConfig:    contextCfg,
+		VerificationPath: verificationPath(),
 	}
 	if *permission != "" {
 		cfg.OpenCodeConfig.Permission = *permission

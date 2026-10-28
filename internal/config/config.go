@@ -29,7 +29,7 @@ var decodeErrorPattern = regexp.MustCompile(`^toml: line (\d+) \(last key "([^"]
 const MaxSocketPathBytes = 107
 
 // Paths 是沒有 config 覆寫時的 XDG 預設路徑。
-type Paths struct{ ConfigFile, DB, Socket string }
+type Paths struct{ ConfigFile, DB, Socket, Verification string }
 
 // Config 的 nil 欄位代表 config 未設定，由呼叫端依 precedence 取下一層來源。
 type Config struct {
@@ -79,6 +79,8 @@ func DefaultPaths(getenv func(string) string) (Paths, error) {
 		ConfigFile: filepath.Join(dir("XDG_CONFIG_HOME", ".config"), "asura", "config.toml"),
 		DB:         filepath.Join(dir("XDG_DATA_HOME", ".local/share"), "asura", "asura.db"),
 		Socket:     filepath.Join(socketDir, "asura", "asura.sock"),
+		// 2026-10-21：runtime 驗證紀錄固定在 XDG data 目錄，不跟 --db 或 config 走（issue-73）。
+		Verification: filepath.Join(dir("XDG_DATA_HOME", ".local/share"), "asura", "runtime-verification.json"),
 	}, nil
 }
 
@@ -111,7 +113,7 @@ func Load(path string) (*Config, error) {
 	if err != nil {
 		return fail("cannot read file")
 	}
-	if err := checkOwnerAndMode(path, info); err != nil {
+	if err := CheckOwnerAndMode(path, info); err != nil {
 		return fail("%v", err)
 	}
 	raw, err := io.ReadAll(fh)
@@ -198,8 +200,8 @@ func Load(path string) (*Config, error) {
 	}, nil
 }
 
-// checkOwnerAndMode 拒絕非本人擁有，或檔案／所在目錄可被 group／others 寫入的設定檔。
-func checkOwnerAndMode(path string, info fs.FileInfo) error {
+// CheckOwnerAndMode 拒絕非本人擁有，或檔案／所在目錄可被 group／others 寫入的設定檔。
+func CheckOwnerAndMode(path string, info fs.FileInfo) error {
 	if st, ok := info.Sys().(*syscall.Stat_t); ok && int(st.Uid) != os.Getuid() {
 		return errors.New("file is not owned by the current user")
 	}

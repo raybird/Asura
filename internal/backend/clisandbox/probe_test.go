@@ -17,8 +17,8 @@ func TestInventoryPinnedFileProbe(t *testing.T) {
 	data := []byte("known fixture")
 	os.WriteFile(path, data, 0700)
 	want := fmt.Sprintf("%x", sha256.Sum256(data))
-	if err := VerifyProbeFile(context.Background(), path, want, backend.ExecutableNotFound); err != nil {
-		t.Fatal(err)
+	if got, err := ProbeFileDigest(context.Background(), path, backend.ExecutableNotFound); err != nil || got != want {
+		t.Fatalf("digest=%q err=%v", got, err)
 	}
 	got, _ := os.ReadFile(path)
 	if string(got) != string(data) {
@@ -26,7 +26,7 @@ func TestInventoryPinnedFileProbe(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := VerifyProbeFile(ctx, path, want, backend.ExecutableNotFound); err != context.Canceled {
+	if _, err := ProbeFileDigest(ctx, path, backend.ExecutableNotFound); err != context.Canceled {
 		t.Fatal("cancel ignored")
 	}
 	t.Setenv("PATH", root)

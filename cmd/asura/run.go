@@ -113,7 +113,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  web     Start the local web remote entry console")
 	fmt.Fprintln(w, "  cron    Manage periodic scheduled tasks")
 	fmt.Fprintln(w, "  memory  Manage project-level long-term memories")
-	fmt.Fprintln(w, "  runtime Query runtime inventory and admission availability")
+	fmt.Fprintln(w, "  runtime Query runtime inventory and verify installed runtime versions")
 	fmt.Fprintln(w, "  version Print build version, commit and platform")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Run 'asura <command> -h' for details on each command.")
@@ -405,11 +405,12 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 				_ = store.UpdateTaskPGID(context.Background(), currentTaskID, 0)
 			}
 		}
+		records := verificationPath()
 		var selected backend.Backend
 		if bID == "omp" {
-			selected = omp.NewAdapter(omp.AdapterConfig{OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart})
+			selected = omp.NewAdapter(omp.AdapterConfig{VerificationPath: records, OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart})
 		} else if bID == "antigravity" {
-			selected = antigravity.NewAdapter(antigravity.AdapterConfig{OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart})
+			selected = antigravity.NewAdapter(antigravity.AdapterConfig{VerificationPath: records, OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart})
 		}
 		reg := backend.NewRegistry()
 		if bID == "auto" {
@@ -419,13 +420,13 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 				return 1
 			}
 			defer cleanup()
-			readOnly := opencode.NewAdapter(opencode.AdapterConfig{ConfigDir: configDir, Permission: daemon.DefaultReadOnlyPermissionPolicy, DisableAuto: true, Role: opencode.RoleOracle, Agent: opencode.AsuraReadOnlyAgentName, Pure: true, DisableProjectConfig: true, Isolated: true, OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart})
-			writer := opencode.NewAdapter(opencode.AdapterConfig{Permission: daemon.DefaultApprovedPermissionPolicy, Role: opencode.RoleStriker, OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart})
+			readOnly := opencode.NewAdapter(opencode.AdapterConfig{ConfigDir: configDir, Permission: daemon.DefaultReadOnlyPermissionPolicy, DisableAuto: true, Role: opencode.RoleOracle, Agent: opencode.AsuraReadOnlyAgentName, Pure: true, DisableProjectConfig: true, Isolated: true, VerificationPath: records, OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart})
+			writer := opencode.NewAdapter(opencode.AdapterConfig{Permission: daemon.DefaultApprovedPermissionPolicy, Role: opencode.RoleStriker, VerificationPath: records, OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart})
 			selected = opencode.NewRoleRoutingBackend(readOnly, writer)
 			reg.Register(selected)
-			reg.Register(codex.NewAdapter(codex.AdapterConfig{OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart}))
-			reg.Register(omp.NewAdapter(omp.AdapterConfig{OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart}))
-			reg.Register(antigravity.NewAdapter(antigravity.AdapterConfig{OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart}))
+			reg.Register(codex.NewAdapter(codex.AdapterConfig{VerificationPath: records, OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart}))
+			reg.Register(omp.NewAdapter(omp.AdapterConfig{VerificationPath: records, OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart}))
+			reg.Register(antigravity.NewAdapter(antigravity.AdapterConfig{VerificationPath: records, OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart}))
 		} else {
 			reg.Register(selected)
 		}

@@ -1,0 +1,62 @@
+{
+  "contract_version": "runtime-inventory-v1",
+  "policy_version": "inventory-v1",
+  "observed_at": "2026-10-21T13:49:33.581861571Z",
+  "entries": [
+    {
+      "runtime_id": "antigravity",
+      "registration_state": "registered",
+      "availability_state": "unavailable",
+      "observed_at": "2026-10-21T13:49:33.581861571Z",
+      "probe_kind": "adapter",
+      "reason_code": "version_failed",
+      "diagnostic": "Runtime probe: version_failed"
+    },
+    {
+      "runtime_id": "codex",
+      "registration_state": "registered",
+      "availability_state": "unavailable",
+      "observed_at": "2026-10-21T13:49:33.581861571Z",
+      "probe_kind": "adapter",
+      "reason_code": "version_failed",
+      "diagnostic": "Runtime probe: version_failed"
+    },
+    {
+      "runtime_id": "omp",
+      "registration_state": "registered",
+      "availability_state": "available",
+      "descriptor": {
+        "id": "omp",
+        "version": "omp/18.4.4",
+        "capabilities": [
+          "process_cancellation",
+          "structured_events",
+          "workspace_write"
+        ],
+        "captured_at": "2026-10-21T13:49:33.581861571Z"
+      },
+      "observed_at": "2026-10-21T13:49:33.581861571Z",
+      "probe_kind": "adapter",
+      "reason_code": "none"
+    },
+    {
+      "runtime_id": "opencode",
+      "registration_state": "registered",
+      "availability_state": "available",
+      "descriptor": {
+        "id": "opencode",
+        "version": "1.18.31",
+        "capabilities": [
+          "process_cancellation",
+          "read_only_sandbox",
+          "structured_events",
+          "workspace_write"
+        ],
+        "captured_at": "2026-10-21T13:49:33.581861571Z"
+      },
+      "observed_at": "2026-10-21T13:49:33.581861571Z",
+      "probe_kind": "adapter",
+      "reason_code": "none"
+    }
+  ]
+}

@@ -23,11 +23,15 @@ var (
 	ErrExecutionFailed = errors.New("codex execution failed")
 )
 
+// BuiltinVersion 是開發時實測過、免驗證即可使用的 Codex 版本（issue-73）
+const BuiltinVersion = "0.155.0"
+
 // AdapterConfig 代表 Codex 適配器配置
 type AdapterConfig struct {
 	BeforeStart      func(context.Context) (func(), error)
 	BinaryPath       string
 	ExpectedVersion  string
+	VerificationPath string
 	OnProcessStarted func(ctx context.Context, pgid int)
 	OnProcessExited  func(ctx context.Context, pgid int)
 }
@@ -43,7 +47,7 @@ var _ backend.Backend = (*Adapter)(nil)
 // NewAdapter 建立新的 Codex Adapter 實例
 func NewAdapter(cfg AdapterConfig) *Adapter {
 	if cfg.ExpectedVersion == "" {
-		cfg.ExpectedVersion = "0.155.0"
+		cfg.ExpectedVersion = BuiltinVersion
 	}
 	if cfg.BinaryPath == "" {
 		if path, err := exec.LookPath("codex"); err == nil {
@@ -83,16 +87,14 @@ func NormalizeCodexVersion(raw string) string {
 	return strings.TrimSpace(raw)
 }
 
-// ValidateVersion 嚴格校驗目前 Codex binary 版本是否符合 ExpectedVersion 契約 (Exact Match)
+// ValidateVersion 校驗目前 Codex binary：內建 ExpectedVersion 精確比對，其他版本需本機驗證紀錄（issue-73）
 func (a *Adapter) ValidateVersion(ctx context.Context) error {
 	raw, err := a.Version(ctx)
 	if err != nil {
 		return err
 	}
-	actual := NormalizeCodexVersion(raw)
-	expected := NormalizeCodexVersion(a.cfg.ExpectedVersion)
-	if expected != "" && actual != expected {
-		return fmt.Errorf("%w: expected %s, got %s", ErrVersionMismatch, expected, actual)
+	if err := a.admit(raw, a.ProbeExecutable()); err != nil {
+		return fmt.Errorf("%w: %v", ErrVersionMismatch, err)
 	}
 	return nil
 }

@@ -2,7 +2,9 @@ package codex
 
 import (
 	"asura/internal/backend"
+	"asura/internal/backend/verification"
 	"context"
+	"errors"
 	"os/exec"
 )
 
@@ -16,7 +18,10 @@ func (a *Adapter) Probe(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if NormalizeCodexVersion(version) != NormalizeCodexVersion(a.cfg.ExpectedVersion) {
+	if err := a.admit(version, path); err != nil {
+		if errors.Is(err, verification.ErrUnverified) {
+			return "", &backend.ProbeError{Reason: backend.VersionUnverified}
+		}
 		return "", &backend.ProbeError{Reason: backend.VersionFailed}
 	}
 	return version, nil

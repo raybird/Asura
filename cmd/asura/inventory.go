@@ -24,6 +24,27 @@ func printInventory(w io.Writer, s *backend.InventorySnapshot) {
 	}
 }
 
+// localRuntimes 是本機 registry 的 runtime，順序與 daemon 相同。
+var localRuntimes = []string{"opencode", "codex", "omp", "antigravity"}
+
+// localBackend 建立與 daemon 相同設定的 runtime adapter；config 是 OpenCode 唯讀角色的隔離設定目錄，
+// onStarted 接到 adapter 的 OnProcessStarted（asura runtime verify 的取消 probe 使用）。
+func localBackend(id, records, config string, onStarted func(context.Context, int)) backend.Backend {
+	switch id {
+	case "opencode":
+		read := opencode.NewAdapter(opencode.AdapterConfig{VerificationPath: records, ConfigDir: config, Isolated: true, Pure: true, DisableAuto: true, DisableProjectConfig: true, Role: opencode.RoleOracle, Agent: opencode.AsuraReadOnlyAgentName, Permission: daemon.DefaultReadOnlyPermissionPolicy, OnProcessStarted: onStarted})
+		write := opencode.NewAdapter(opencode.AdapterConfig{VerificationPath: records, Role: opencode.RoleStriker, Permission: daemon.DefaultApprovedPermissionPolicy, OnProcessStarted: onStarted})
+		return opencode.NewRoleRoutingBackend(read, write)
+	case "codex":
+		return codex.NewAdapter(codex.AdapterConfig{VerificationPath: records, OnProcessStarted: onStarted})
+	case "omp":
+		return omp.NewAdapter(omp.AdapterConfig{VerificationPath: records, OnProcessStarted: onStarted})
+	case "antigravity":
+		return antigravity.NewAdapter(antigravity.AdapterConfig{VerificationPath: records, OnProcessStarted: onStarted})
+	}
+	return nil
+}
+
 // newLocalRegistry 建立與 daemon 相同組成的本機 runtime registry；cleanup 移除隔離的唯讀設定目錄。
 func newLocalRegistry() (*backend.InMemoryRegistry, func(), error) {
 	config, cleanup, err := opencode.CreateIsolatedReadOnlyConfigDir()
@@ -31,18 +52,19 @@ func newLocalRegistry() (*backend.InMemoryRegistry, func(), error) {
 		return nil, nil, err
 	}
 	reg := backend.NewRegistry()
-	read := opencode.NewAdapter(opencode.AdapterConfig{ConfigDir: config, Isolated: true, Pure: true, DisableAuto: true, DisableProjectConfig: true, Role: opencode.RoleOracle, Agent: opencode.AsuraReadOnlyAgentName, Permission: daemon.DefaultReadOnlyPermissionPolicy})
-	write := opencode.NewAdapter(opencode.AdapterConfig{Role: opencode.RoleStriker, Permission: daemon.DefaultApprovedPermissionPolicy})
-	reg.Register(opencode.NewRoleRoutingBackend(read, write))
-	reg.Register(codex.NewAdapter(codex.AdapterConfig{}))
-	reg.Register(omp.NewAdapter(omp.AdapterConfig{}))
-	reg.Register(antigravity.NewAdapter(antigravity.AdapterConfig{}))
+	records := verificationPath()
+	for _, id := range localRuntimes {
+		reg.Register(localBackend(id, records, config, nil))
+	}
 	return reg, cleanup, nil
 }
 
 func handleRuntime(args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "verify" {
+		return handleRuntimeVerify(args[1:], stdout, stderr)
+	}
 	if len(args) == 0 || args[0] != "inventory" {
-		fmt.Fprintln(stderr, "Usage: asura runtime inventory [--socket path]")
+		fmt.Fprintln(stderr, "Usage: asura runtime inventory [--socket path]\n       asura runtime verify <runtime>")
 		return 1
 	}
 	fs := flag.NewFlagSet("runtime inventory", flag.ContinueOnError)

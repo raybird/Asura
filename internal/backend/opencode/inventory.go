@@ -2,11 +2,12 @@ package opencode
 
 import (
 	"asura/internal/backend"
+	"asura/internal/backend/verification"
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 )
 
 // 2026-10-04：只探測明確的本機版本／配置，不初始化 workspace 或登入。
@@ -24,7 +25,7 @@ func (a *Adapter) Probe(ctx context.Context) (string, error) {
 	if path == "" {
 		if home, err := os.UserHomeDir(); err == nil {
 			candidate := filepath.Join(home, ".cache/asura-probe-issue-2/install/node_modules/.bin/opencode")
-			if version, err := backend.ProbeVersionCommand(ctx, candidate); err == nil && strings.HasPrefix(version, a.cfg.ExpectedVersion) {
+			if version, err := backend.ProbeVersionCommand(ctx, candidate); err == nil && admitOpenCode(version, candidate, a.cfg.ExpectedVersion, a.cfg.VerificationPath) == nil {
 				a.probedExecutable.Store(&candidate)
 				return version, nil
 			}
@@ -41,7 +42,10 @@ func (a *Adapter) Probe(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !strings.HasPrefix(version, a.cfg.ExpectedVersion) {
+	if err := admitOpenCode(version, path, a.cfg.ExpectedVersion, a.cfg.VerificationPath); err != nil {
+		if errors.Is(err, verification.ErrUnverified) {
+			return "", &backend.ProbeError{Reason: backend.VersionUnverified}
+		}
 		return "", &backend.ProbeError{Reason: backend.VersionFailed}
 	}
 	return version, nil

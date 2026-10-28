@@ -19,6 +19,7 @@ func TestInventoryOMPProbe(t *testing.T) {
 	}
 	os.MkdirAll(filepath.Dir(path), 0700)
 	os.WriteFile(path, []byte("untrusted"), 0600)
+	os.WriteFile(filepath.Join(root, "bun"), []byte("bun"), 0700)
 	s, err = backend.CaptureInventory(context.Background(), []backend.RegisteredRuntime{{ID: "omp", Backend: a}})
 	if err != nil || s.Entries[0].AvailabilityState != backend.Unavailable || s.Entries[0].ReasonCode != backend.VersionFailed {
 		t.Fatal("unverified CLI admitted")

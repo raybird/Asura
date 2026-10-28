@@ -42,23 +42,6 @@ type Config struct {
 	BeforeStart                       func(context.Context) (func(), error)
 }
 
-// VerifyFile 2026-09-30：僅接受真實 probe 的固定檔案，不執行未驗 binary。
-func VerifyFile(path, want string) error {
-	f, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	h := sha256.New()
-	if _, err = io.Copy(h, f); err != nil {
-		return err
-	}
-	if fmt.Sprintf("%x", h.Sum(nil)) != want {
-		return errors.New("binary differs from fixed contract")
-	}
-	return nil
-}
-
 func Run(ctx context.Context, req *backend.ExecutionRequest, cfg Config) (*backend.ExecutionResult, error) {
 	result := &backend.ExecutionResult{BackendID: cfg.ID, BackendVersion: cfg.Version, StartedAt: time.Now()}
 	fail := func(class backend.FailureClassification, err error) (*backend.ExecutionResult, error) {

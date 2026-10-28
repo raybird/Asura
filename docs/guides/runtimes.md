@@ -4,11 +4,48 @@ Asura 如何決定一個任務由哪個 runtime 執行、執行前檢查什麼�
 
 ## Runtime adapter
 
-抽象化 Runner 契約，支援 OpenCode、Codex、OMP、Antigravity 四種固定版本 runtime。OpenCode 固定 1.18.23、Codex CLI 固定 0.155.0。
+抽象化 Runner 契約，支援 OpenCode、Codex、OMP、Antigravity 四種 runtime。2026-10-27 起只接受內建已驗證的身分，或以 `asura runtime verify` 驗證過的安裝，見 [版本驗證](#版本驗證)。
 
-2026-09-30：OMP 固定支援 CLI 18.4.4、Bun 1.4.2 與 `openai-codex/gpt-6-luna`；Antigravity 固定支援 CLI 1.2.13 與 `gemini-3.8-flash-low`。OMP 還會驗證並複製固定的完整 node_modules 樹（約 1.2 GB 暫存空間）；增加其他 global 套件也會使摘要不符，需使用相符的獨立安裝。兩者需要 Linux `bwrap` 的 PID／IPC namespace；版本或隔離條件不符會在模型呼叫前拒絕。沿用原 CLI 登入，只傳入 access-only 快照，登入過期須在原 CLI 手動更新。OMP 不傳入可用的 refresh token；Antigravity 先讀原 CLI keyring，再讀原 CLI token 檔。
+2026-09-30：OMP 固定支援 CLI 18.4.4、Bun 1.4.2 與 `openai-codex/gpt-6-luna`；Antigravity 固定支援 CLI 1.2.13 與 `gemini-3.8-flash-low`。OMP 還會驗證並複製固定的完整 node_modules 樹（約 1.2 GB 暫存空間）；增加其他 global 套件也會使摘要不符，需使用相符的獨立安裝。兩者需要 Linux `bwrap` 的 PID／IPC namespace；版本或隔離條件不符會在模型呼叫前拒絕。2026-10-27 起這兩個版本是內建身分，其他版本可以驗證後使用，見 [版本驗證](#版本驗證)。沿用原 CLI 登入，只傳入 access-only 快照，登入過期須在原 CLI 手動更新。OMP 不傳入可用的 refresh token；Antigravity 先讀原 CLI keyring，再讀原 CLI token 檔。
 
 2026-09-30：這兩個 backend 目前僅支援 Single Striker，不宣告唯讀 sandbox 能力，Three-Face 在 Stage 0 拒絕且不呼叫模型。Context window 未知時沿用既有政策；可用 `ASURA_CONTEXT_LIMIT` 指定限制。`status` 顯示任務保存的 backend 與 trace 中的版本。
+
+## 版本驗證
+
+2026-10-27（[Issue 73](../issues/issue-73/README.md)）：runtime 的身分是 runtime、版本加上 SHA-256。只有以下兩種身分可以使用，其他一律判為 `version_unverified`，在模型呼叫前拒絕：
+
+- **內建已驗證**：開發時實測過的版本，免驗證可用。
+
+  | Runtime | 內建身分 |
+  |---|---|
+  | `opencode` | 1.18.23（只比對版本） |
+  | `codex` | 0.155.0（只比對版本） |
+  | `omp` | CLI 18.4.4 與 Bun 1.4.2 的固定雜湊 |
+  | `antigravity` | CLI 1.2.13 的固定雜湊 |
+
+- **本機驗證紀錄**：執行 `asura runtime verify <runtime>`，對已安裝的版本實際跑一組 probe，全部通過才記下身分。
+
+雜湊涵蓋的範圍：OpenCode 為解析 symlink 後的執行檔；Codex 為 npm 套件與平台套件（原生檔與附帶的 bwrap）；OMP 為 CLI 與 Bun，另記 node_modules 樹雜湊，執行時以它固定複製的樹；Antigravity 為 CLI。換掉執行檔或安裝樹，身分就不符，需要重新驗證。例外是 OMP 的 node_modules 樹：只在執行時比對，樹被換掉但 CLI 與 Bun 不變時，inventory、doctor 與 admission 仍判 available，Run 在啟動模型前以 `dependency snapshot differs from fixed contract` 失敗，與變更前內建版本的做法相同。Antigravity 判定時只比雜湊，版本取自相符的紀錄，不在 bwrap 外執行未驗證的 agy；只有 `asura runtime verify` 會執行一次 `agy --version`（2026-10-27）。
+
+所有判定路徑使用同一規則：daemon（含 IPC、Web、cron）、`runtime inventory`、`doctor` 與本機 `run`。`doctor` 與拒絕訊息會提示 `asura runtime verify <runtime>`；`version_failed` 只代表版本取不到或格式錯，與「可以自己驗證」的 `version_unverified` 分開。
+
+驗證時依序執行下列 probe；`read-only-sandbox` 與 `protected-files-unchanged` 不呼叫模型，其餘每個 probe 都會實際呼叫一次模型，單一 probe 最長 4 分鐘：
+
+| Probe | 內容 | 適用 |
+|---|---|---|
+| `output` | 輸出可解析，回覆含指定內容 | 全部 |
+| `workspace-boundary` | 寫入角色寫得進 workspace，寫不到 workspace 外 | 全部 |
+| `read-only` | 唯讀角色寫不進 workspace，但讀得到 workspace 內容 | `opencode`、`codex` |
+| `read-only-sandbox` | 不經模型，以 `codex sandbox` 直接在 Codex 的唯讀沙箱內寫 workspace，必須被擋；workspace-write 下同一命令必須寫得進去。沙箱正常時 Codex 的模型在唯讀角色下根本不會嘗試寫入，`read-only` 分不出 OS 沙箱是否真的生效 | `codex` |
+| `credential-boundary` | 模型寫不到原 CLI 的憑證目錄 | `omp`、`antigravity` |
+| `cancellation` | 取消後，模型啟動的命令連同行程樹被回收 | 全部 |
+| `protected-files-unchanged` | 原 CLI 的登入憑證檔在全部 probe 前後逐 byte 相同 | `omp`、`antigravity` |
+
+驗證前 runtime 必須已登入；`omp`、`antigravity` 另需 `bwrap`。任一 probe 失敗、逾時或無法執行時整體失敗：逐項印出結果、結束碼非 0，紀錄不新增也不變動。內建身分不執行 probe。只有明確執行 `asura runtime verify` 才會驗證；daemon 啟動、`runtime inventory`、`doctor`、`run`、`ask` 都不會自動執行 probe。
+
+紀錄固定存在 `$XDG_DATA_HOME/asura/runtime-verification.json`（預設 `~/.local/share/asura/`），不跟 `--db` 或 config 走，每筆含身分、驗證時間（UTC）與執行驗證的 Asura 版本。驗證紀錄不綁模型：OpenCode 與 Codex 的 probe 使用 runtime 的預設模型。`--list` 列出內建身分與紀錄，`--remove` 移除一筆紀錄，內建身分不能移除。移除後，已接受但還沒執行到的 stage 在執行前被拒絕，不改選其他 runtime。清冊 policy 版本維持 `inventory-v1`，升級前封存的排隊任務與 cron 照常執行。
+
+已知限制（2026-10-27）：Codex 與 OpenCode 的新版本目前過不了驗證。兩者取消時都不會回收模型啟動的命令（[#74](https://github.com/raybird/Asura/issues/74)），OpenCode 的寫入角色也沒有 OS 沙箱（[#75](https://github.com/raybird/Asura/issues/75)）。修好之前，這兩個 runtime 只能使用內建版本。 另外，Codex 的 `read-only-sandbox` 驗的是 `codex sandbox -P :read-only`；正式任務的 `codex exec -s read-only` 如何對應到同一政策是 Codex 內部行為，尚未直接驗證，預定在 #74 驗收時補驗。
 
 ## 固定三面管線 (Three-Face Fixed Pipeline)
 
@@ -55,7 +92,7 @@ Asura 如何決定一個任務由哪個 runtime 執行、執行前檢查什麼�
 
 2026-10-04：Web 的「Runtime 可用性清冊」與 `GET /api/runtime-inventory` 提供已登入使用者唯讀查詢。Task status/audit 顯示該次封存 inventory、availability reason、capability rejection、stage selection/binding 與實際 guard；不把 fresh 狀態回填到舊 Task。legacy capability-v1／stage-binding-v1 保留原讀取語意，inventory 顯示未封存。
 
-2026-10-04：Available 僅代表必要本機 executable、固定版本／hash、配置及依賴有效；probe 不呼叫模型、不讀取 token、不保證遠端登入、配額或 Run 成功。sealed runtime 消失或本機條件失效，執行前拒絕且不重新選擇；版本更新仍沿用 adapter 既有政策，不要求等於歷史版本。Inventory JSON 最多 64 KiB，完整新契約最多 256 KiB；diagnostic 為固定安全訊息（最多 512 bytes），不保存原始 stderr/error/environment。
+2026-10-04：Available 僅代表必要本機 executable、內建或已驗證的身分（2026-10-27 起，見 [版本驗證](#版本驗證)）、配置及依賴有效；probe 不呼叫模型、不讀取 token、不保證遠端登入、配額或 Run 成功。sealed runtime 消失或本機條件失效，執行前拒絕且不重新選擇；版本更新仍沿用 adapter 既有政策，不要求等於歷史版本。Inventory JSON 最多 64 KiB，完整新契約最多 256 KiB；diagnostic 為固定安全訊息（最多 512 bytes），不保存原始 stderr/error/environment。
 
 2026-10-09：`asura doctor` 以與 daemon 相同的本機 registry 執行同一份 inventory 判定，另由 adapter 回報 probe 實際使用的 executable 供顯示；executable 路徑不寫入 inventory 或封存的執行契約。見 [安裝與設定](setup.md#診斷asura-doctor)。
 

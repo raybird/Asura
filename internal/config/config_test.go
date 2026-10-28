@@ -23,13 +23,13 @@ func TestDefaultPaths(t *testing.T) {
 		err  string
 	}{
 		{"xdg", map[string]string{"HOME": "/home/u", "XDG_CONFIG_HOME": "/xc", "XDG_DATA_HOME": "/xd", "XDG_STATE_HOME": "/xs", "XDG_RUNTIME_DIR": "/run/user/1000"},
-			Paths{ConfigFile: "/xc/asura/config.toml", DB: "/xd/asura/asura.db", Socket: "/run/user/1000/asura/asura.sock"}, ""},
+			Paths{ConfigFile: "/xc/asura/config.toml", DB: "/xd/asura/asura.db", Socket: "/run/user/1000/asura/asura.sock", Verification: "/xd/asura/runtime-verification.json"}, ""},
 		{"home-fallback", map[string]string{"HOME": "/home/u"},
-			Paths{ConfigFile: "/home/u/.config/asura/config.toml", DB: "/home/u/.local/share/asura/asura.db", Socket: "/home/u/.local/state/asura/asura.sock"}, ""},
+			Paths{ConfigFile: "/home/u/.config/asura/config.toml", DB: "/home/u/.local/share/asura/asura.db", Socket: "/home/u/.local/state/asura/asura.sock", Verification: "/home/u/.local/share/asura/runtime-verification.json"}, ""},
 		{"state-without-runtime", map[string]string{"HOME": "/home/u", "XDG_STATE_HOME": "/xs"},
-			Paths{ConfigFile: "/home/u/.config/asura/config.toml", DB: "/home/u/.local/share/asura/asura.db", Socket: "/xs/asura/asura.sock"}, ""},
+			Paths{ConfigFile: "/home/u/.config/asura/config.toml", DB: "/home/u/.local/share/asura/asura.db", Socket: "/xs/asura/asura.sock", Verification: "/home/u/.local/share/asura/runtime-verification.json"}, ""},
 		{"relative-xdg-ignored", map[string]string{"HOME": "/home/u", "XDG_CONFIG_HOME": "rel/c", "XDG_DATA_HOME": "./d", "XDG_STATE_HOME": "s", "XDG_RUNTIME_DIR": "run"},
-			Paths{ConfigFile: "/home/u/.config/asura/config.toml", DB: "/home/u/.local/share/asura/asura.db", Socket: "/home/u/.local/state/asura/asura.sock"}, ""},
+			Paths{ConfigFile: "/home/u/.config/asura/config.toml", DB: "/home/u/.local/share/asura/asura.db", Socket: "/home/u/.local/state/asura/asura.sock", Verification: "/home/u/.local/share/asura/runtime-verification.json"}, ""},
 		{"no-home", map[string]string{"XDG_CONFIG_HOME": "/xc"}, Paths{}, "HOME"},
 		{"relative-home", map[string]string{"HOME": "home"}, Paths{}, "HOME"},
 	}

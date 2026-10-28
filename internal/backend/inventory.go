@@ -51,12 +51,14 @@ const (
 	DependencyNotFound   ProbeReason = "dependency_not_found"
 	ConfigurationInvalid ProbeReason = "configuration_invalid"
 	VersionFailed        ProbeReason = "version_failed"
-	DescriptorInvalid    ProbeReason = "descriptor_invalid"
-	ProbeFailed          ProbeReason = "probe_error"
-	ProbePanicked        ProbeReason = "probe_panic"
-	ProbeTimedOut        ProbeReason = "probe_timeout"
-	ProbeCancelled       ProbeReason = "probe_cancelled"
-	InventoryTimedOut    ProbeReason = "inventory_timeout"
+	// VersionUnverified 2026-10-21：版本取得成功，但身分不是內建也沒有本機驗證紀錄（issue-73）。
+	VersionUnverified ProbeReason = "version_unverified"
+	DescriptorInvalid ProbeReason = "descriptor_invalid"
+	ProbeFailed       ProbeReason = "probe_error"
+	ProbePanicked     ProbeReason = "probe_panic"
+	ProbeTimedOut     ProbeReason = "probe_timeout"
+	ProbeCancelled    ProbeReason = "probe_cancelled"
+	InventoryTimedOut ProbeReason = "inventory_timeout"
 )
 
 // 2026-10-04：不將任意 error、stderr 或 panic 值送入 audit。
@@ -254,7 +256,7 @@ func captureInventory(ctx context.Context, runtimes []RegisteredRuntime, perRunt
 }
 func validUnavailableReason(r ProbeReason) bool {
 	switch r {
-	case ExecutableNotFound, DependencyNotFound, ConfigurationInvalid, VersionFailed, DescriptorInvalid, ProbeFailed, ProbePanicked:
+	case ExecutableNotFound, DependencyNotFound, ConfigurationInvalid, VersionFailed, VersionUnverified, DescriptorInvalid, ProbeFailed, ProbePanicked:
 		return true
 	}
 	return false
@@ -319,13 +321,21 @@ type InventoryAdmissionError struct {
 }
 
 func (e *InventoryAdmissionError) Error() string {
-	reasons := []string{}
+	reasons, hints := []string{}, ""
 	for _, entry := range e.Snapshot.Entries {
 		if entry.AvailabilityState != Available {
 			reasons = append(reasons, entry.RuntimeID+":"+string(entry.ReasonCode))
+			if entry.ReasonCode == VersionUnverified {
+				hints += "; " + VerifyHint(entry.RuntimeID)
+			}
 		}
 	}
-	return fmt.Sprintf("runtime admission rejected: %v; availability=%v", e.Cause, reasons)
+	return fmt.Sprintf("runtime admission rejected: %v; availability=%v%s", e.Cause, reasons, hints)
+}
+
+// VerifyHint 2026-10-21：issue-73，未驗證的 runtime 版本一律提示同一個命令。
+func VerifyHint(runtimeID string) string {
+	return "to use this " + runtimeID + " version, run: asura runtime verify " + runtimeID
 }
 func (e *InventoryAdmissionError) Unwrap() error { return e.Cause }
 func (c *ExecutionContract) validateInventory(mode, id string) error {
