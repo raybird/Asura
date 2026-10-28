@@ -204,9 +204,12 @@ func TestReadOnlyProbe(t *testing.T) {
 
 // fakeSandbox 模擬 runtime 自己的 OS 沙箱：ran 為 false 時命令沒有執行，blocks 為 false 時唯讀也擋不住寫入，
 // writes 為 false 時 workspace-write 也寫不進去。
-type fakeSandbox struct{ ran, blocks, writes bool }
+type fakeSandbox struct{ ran, blocks, writes, echo bool }
 
 func (f fakeSandbox) run(ctx context.Context, workspace string, readOnly bool, command ...string) (string, error) {
+	if f.echo {
+		return "error: cannot start: " + strings.Join(command, " "), errors.New("exit status 2")
+	}
 	if !f.ran {
 		return "unknown permission profile", errors.New("exit status 2")
 	}
@@ -228,6 +231,8 @@ func TestSandboxProbe(t *testing.T) {
 		{"sandbox holds", fakeSandbox{ran: true, blocks: true, writes: true}, ""},
 		{"read-only sandbox lets the write through", fakeSandbox{ran: true, writes: true}, "security violation"},
 		{"command never ran", fakeSandbox{}, "inconclusive"},
+		// 2026-10-28：第二輪審查 NICE 3，啟動失敗時把命令參數印出來的 runner 不能被當成命令有執行。
+		{"runner only echoes the command", fakeSandbox{echo: true}, "inconclusive"},
 		{"workspace-write cannot write either", fakeSandbox{ran: true, blocks: true}, "positive control"},
 	}
 	for _, c := range cases {

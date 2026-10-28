@@ -147,6 +147,33 @@ func TestAdmit(t *testing.T) {
 	}
 }
 
+// 2026-10-28：PR #77 第二輪審查 NICE 6，AdmitDigest 只以雜湊查紀錄，但不能跨 runtime 比對。
+func TestAdmitDigest(t *testing.T) {
+	path := recordPath(t)
+	verified := Record{Identity: codexNew, AsuraVersion: "v1.2.0"}
+	if err := Add(path, verified); err != nil {
+		t.Fatal(err)
+	}
+	if rec, err := AdmitDigest(codexNew.Runtime, codexNew.Digest, path); err != nil || rec != verified {
+		t.Errorf("verified digest: %+v %v", rec, err)
+	}
+	for name, c := range map[string]struct{ runtime, digest, path string }{
+		"other runtime, same digest": {"opencode", codexNew.Digest, path},
+		"different digest":           {codexNew.Runtime, "dddd", path},
+		"no records path":            {codexNew.Runtime, codexNew.Digest, ""},
+	} {
+		if _, err := AdmitDigest(c.runtime, c.digest, c.path); !errors.Is(err, ErrUnverified) {
+			t.Errorf("%s: err=%v, want ErrUnverified", name, err)
+		}
+	}
+	if err := os.Chmod(path, 0o666); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AdmitDigest(codexNew.Runtime, codexNew.Digest, path); !errors.Is(err, ErrUnverified) {
+		t.Errorf("unsafe record file still admitted: %v", err)
+	}
+}
+
 func TestFileDigest(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "bin")
 	if err := os.WriteFile(path, []byte("asura"), 0o700); err != nil {

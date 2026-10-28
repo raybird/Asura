@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"asura/internal/backend"
 	"asura/internal/backend/verification"
@@ -77,5 +78,29 @@ func TestCodexReadOnlySandboxRunner(t *testing.T) {
 	data, _ := os.ReadFile(args)
 	if want := "sandbox -P :read-only -C " + ws + " -- sh -c true\nsandbox -P :workspace -C " + ws + " -- sh -c true\n"; string(data) != want {
 		t.Errorf("codex sandbox args:\n%s\nwant:\n%s", data, want)
+	}
+}
+
+// 2026-10-28：PR #77 第二輪審查 NICE 4，npm 版 codex 是 Node 包裝腳本，原生子行程繼承輸出 pipe。
+// 逾時時要回收整個 process group，不能等孤兒子行程結束才返回。
+func TestCodexReadOnlySandboxRunnerKillsProcessGroup(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "codex")
+	script := "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'codex-cli 0.163.0'; exit 0; fi\nsleep 30 &\nsleep 30\n"
+	if err := os.WriteFile(bin, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	spec, err := NewAdapter(AdapterConfig{BinaryPath: bin}).VerificationSpec(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	if _, err := spec.Options.ReadOnlySandbox(ctx, dir, true, "true"); err == nil {
+		t.Error("timed-out sandbox run returned no error")
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Errorf("sandbox runner waited %v for orphaned children", elapsed)
 	}
 }

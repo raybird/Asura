@@ -45,7 +45,7 @@ Asura 如何決定一個任務由哪個 runtime 執行、執行前檢查什麼�
 
 紀錄固定存在 `$XDG_DATA_HOME/asura/runtime-verification.json`（預設 `~/.local/share/asura/`），不跟 `--db` 或 config 走，每筆含身分、驗證時間（UTC）與執行驗證的 Asura 版本。驗證紀錄不綁模型：OpenCode 與 Codex 的 probe 使用 runtime 的預設模型。`--list` 列出內建身分與紀錄，`--remove` 移除一筆紀錄，內建身分不能移除。移除後，已接受但還沒執行到的 stage 在執行前被拒絕，不改選其他 runtime。清冊 policy 版本維持 `inventory-v1`，升級前封存的排隊任務與 cron 照常執行。
 
-已知限制（2026-10-27）：Codex 與 OpenCode 的新版本目前過不了驗證。兩者取消時都不會回收模型啟動的命令（[#74](https://github.com/raybird/Asura/issues/74)），OpenCode 的寫入角色也沒有 OS 沙箱（[#75](https://github.com/raybird/Asura/issues/75)）。修好之前，這兩個 runtime 只能使用內建版本。
+已知限制（2026-10-27）：Codex 與 OpenCode 的新版本目前過不了驗證。兩者取消時都不會回收模型啟動的命令（[#74](https://github.com/raybird/Asura/issues/74)），OpenCode 的寫入角色也沒有 OS 沙箱（[#75](https://github.com/raybird/Asura/issues/75)）。修好之前，這兩個 runtime 只能使用內建版本。 另外，Codex 的 `read-only-sandbox` 驗的是 `codex sandbox -P :read-only`；正式任務的 `codex exec -s read-only` 如何對應到同一政策是 Codex 內部行為，尚未直接驗證，預定在 #74 驗收時補驗。
 
 ## 固定三面管線 (Three-Face Fixed Pipeline)
 

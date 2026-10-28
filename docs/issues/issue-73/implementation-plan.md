@@ -241,6 +241,15 @@ Task 由 decompose 於 2026-10-21 依核准 commit `64d7b0e` 細化。所有 pro
 - 狀態：✅ 已完成（2026-10-27）
 - 證據：[evidence/phase5.md](./evidence/phase5.md) Task 5.4：兩項新測試先紅後綠；專案 gate 24 個套件 ok
 
+### Task 5.5 — 第二輪審查修正（2026-10-28 Q21）
+- 產出與範圍：cli-reference、CHANGELOG 的 probe 措辭；`read-only-sandbox` 的標記改由 shell 組出；`sandboxRunner` 以 process group 回收子行程；移除 Antigravity 走不到的 `VersionFailed` 分支；`AdmitDigest` 單元測試
+- 相依：Task 5.2、5.3
+- 驗收編號：SCN-005、SCN-002、常青文件
+- 完成判準：「runner 只回顯命令」判 inconclusive；逾時時 `sandboxRunner` 不等孤兒子行程；`AdmitDigest` 不跨 runtime 比對（各自先紅後綠）
+- 驗證：單元測試紅綠；文件人工核對
+- 狀態：✅ 已完成（2026-10-28）
+- 證據：[evidence/phase5.md](./evidence/phase5.md) Task 5.5：三項測試各自先紅後綠；真實 Codex 重跑通過、失效對照失敗；專案 gate 24 個套件 ok
+
 ### 責任對照
 
 | 驗收／交付 | 責任 Task | 支援 |

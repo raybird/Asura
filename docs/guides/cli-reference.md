@@ -105,7 +105,7 @@ Daemon 讀取的環境變數（也可寫在 config，環境變數優先）：
 ## runtime verify
 
 ```bash
-# 2026-10-27：驗證已安裝的版本，全部 probe 通過才寫入驗證紀錄（每個 probe 都會實際呼叫模型）
+# 2026-10-27：驗證已安裝的版本，全部 probe 通過才寫入驗證紀錄（大部分 probe 會實際呼叫模型）
 ./bin/asura runtime verify omp
 # 列出內建身分與驗證紀錄
 ./bin/asura runtime verify --list

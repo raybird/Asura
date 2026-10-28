@@ -2,7 +2,6 @@ package antigravity
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 
@@ -24,12 +23,10 @@ func (a *Adapter) admit(ctx context.Context) (version, digest string, err error)
 	if digest == cliHash {
 		return Version, digest, nil
 	}
+	// AdmitDigest 的錯誤一律是 ErrUnverified（含讀不到紀錄檔）。
 	rec, err := verification.AdmitDigest("antigravity", digest, a.cfg.VerificationPath)
-	if errors.Is(err, verification.ErrUnverified) {
-		return "", "", &backend.ProbeError{Reason: backend.VersionUnverified}
-	}
 	if err != nil {
-		return "", "", &backend.ProbeError{Reason: backend.VersionFailed}
+		return "", "", &backend.ProbeError{Reason: backend.VersionUnverified}
 	}
 	return rec.Version, digest, nil
 }

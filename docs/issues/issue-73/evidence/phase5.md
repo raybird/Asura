@@ -126,3 +126,35 @@ skip 共 26 個。與 [task-4.1.md](./task-4.1.md) 的清單相比：
 - 少了 `TestOpenCodeProbe_Live`：這次真實 OpenCode 有回應，測試通過。
 
 其餘 25 個相同，都是 live opt-in 或版本不是內建身分，不計為通過。
+
+## Task 5.5 — 第二輪審查修正（2026-10-28，Q21）
+
+來源：PR #77 第二輪獨立審查 [留言](https://github.com/raybird/Asura/pull/77#issuecomment-6439324006)（Reviewed HEAD `92a84f9`，判定 PASS）。SHOULD FIX 1 依 Q20 接受殘餘風險，記入 README TBD-7，程式不變。
+
+| 審查項目 | 變更 | 紅綠 |
+|---|---|---|
+| SHOULD FIX 2：措辭 | 文件改為與程式一致：<br>• `cli-reference.md` 的命令註解改為「大部分 probe 會實際呼叫模型」<br>• CHANGELOG 的功能條目補上 Codex 的 `codex sandbox` 唯讀檢查，已知限制補上 TBD-7<br>• `runtimes.md` 的已知限制補上 TBD-7 | 人工核對：與 `runtimes.md` probe 表、`runtime_verify.go` 開頭提示一致 |
+| NICE 3：標記出現在命令參數裡 | 改用 `printf '%s_%s\n' ASURA SANDBOX_RAN` 組出標記，命令參數裡不會出現完整的 `ASURA_SANDBOX_RAN` | `TestSandboxProbe` 新增「runner only echoes the command」案例（啟動失敗時把參數印出來）。改之前：唯讀步驟誤判為有執行，結果是 `positive control failed`，不是 `inconclusive`；改之後：`inconclusive` |
+| NICE 4：逾時時等孤兒子行程 | `sandboxRunner` 改用獨立 process group：取消時 `kill(-pgid, SIGKILL)`，並設 `WaitDelay = 1s` | `TestCodexReadOnlySandboxRunnerKillsProcessGroup`：假 codex 在背景留一個 `sleep 30`，ctx 300ms 後逾時。改之前等了 30.0 秒；改之後立即返回並回報錯誤 |
+| NICE 5：走不到的分支 | 移除 `antigravity.admit` 的 `VersionFailed` 分支；`AdmitDigest` 的錯誤一律判為 `version_unverified` | `TestAntigravityIdentityPolicy`、`TestInventoryAntigravityProbe` 照常通過 |
+| NICE 6：`AdmitDigest` 沒有單元測試 | 新增 `TestAdmitDigest`，涵蓋：<br>• 相符的雜湊<br>• 其他 runtime 的相同雜湊<br>• 不同雜湊<br>• 沒有紀錄路徑<br>• 紀錄檔權限不安全 | 突變：拿掉 `r.Runtime == runtime` 時失敗（`other runtime, same digest: err=<nil>`）；還原後通過 |
+
+NICE 7～9 依 Q21 不處理。
+
+### Live（2026-10-28，Codex 0.163.0）
+
+標記改由 shell 組出之後，用真實 Codex 重跑：
+
+```
+--- PASS: TestVerifyLive_CodexSandbox (0.43s)        read-only-sandbox 0.1s PASS
+--- PASS: TestVerifyLive_CodexControls (24.07s)
+        workspace-boundary   FAIL: security violation: wrote outside the workspace
+        read-only            FAIL: security violation: read-only role wrote the workspace
+        read-only-sandbox    FAIL: security violation: read-only sandbox allowed a workspace write
+```
+
+沒有殘留的 probe 行程。
+
+### Gate
+
+`go vet ./... && go build ./cmd/asura && go test -count=1 -race -v ./...`：exit 0，24 個套件 ok，沒有 FAIL。skip 26 個，與 Task 5.4 的清單完全相同。

@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
+	"time"
 
 	"asura/internal/backend"
 	"asura/internal/backend/clisandbox"
@@ -117,7 +119,13 @@ func sandboxRunner(bin string) func(context.Context, string, bool, ...string) (s
 		if readOnly {
 			profile = ":read-only"
 		}
-		out, err := exec.CommandContext(ctx, bin, append([]string{"sandbox", "-P", profile, "-C", workspace, "--"}, command...)...).CombinedOutput()
+		// npm 版 codex 是 Node 包裝腳本，原生子行程繼承輸出 pipe；取消時回收整個 process group，
+		// 並限制等 pipe 關閉的時間，不等孤兒子行程（2026-10-28 第二輪審查）。
+		cmd := exec.CommandContext(ctx, bin, append([]string{"sandbox", "-P", profile, "-C", workspace, "--"}, command...)...)
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+		cmd.WaitDelay = time.Second
+		out, err := cmd.CombinedOutput()
 		return string(out), err
 	}
 }

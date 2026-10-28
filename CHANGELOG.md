@@ -5,7 +5,7 @@
 ## [Unreleased]
 
 ### 🚀 新增功能 (Features)
-- **[runtime]**：新增 `asura runtime verify <runtime>`。對已安裝的 runtime 版本實際執行 probe（輸出、workspace 邊界、唯讀或憑證邊界、取消），全部通過才把身分（runtime、版本、SHA-256）記到 `$XDG_DATA_HOME/asura/runtime-verification.json`，之後該版本即可使用；`--list` 列出內建身分與紀錄，`--remove` 移除紀錄，內建身分不能移除 (#73)
+- **[runtime]**：新增 `asura runtime verify <runtime>`。對已安裝的 runtime 版本實際執行 probe（輸出、workspace 邊界、唯讀或憑證邊界、取消；Codex 另以 `codex sandbox` 不經模型驗證唯讀沙箱），全部通過才把身分（runtime、版本、SHA-256）記到 `$XDG_DATA_HOME/asura/runtime-verification.json`，之後該版本即可使用；`--list` 列出內建身分與紀錄，`--remove` 移除紀錄，內建身分不能移除 (#73)
 
 ### 🔄 相容性
 - **[runtime]**：四個 runtime 只接受內建已驗證的身分（OpenCode 1.18.23、Codex 0.155.0、OMP 18.4.4、Antigravity 1.2.13），或驗證紀錄中身分相符的安裝。其他版本判為新的 reason `version_unverified`，在模型呼叫前拒絕；`doctor` 與拒絕訊息提示 `asura runtime verify <runtime>`。daemon、`runtime inventory`、`doctor`、本機 `run` 使用同一規則：OpenCode 原本在本機 `run`、`doctor` 與 `runtime inventory` 接受任何 1.18.x（daemon 只接受 1.18.23），現在未驗證的 1.18.x 一律拒絕。清冊 policy 維持 `inventory-v1`，升級前封存的排隊任務與 cron 不受影響 (#73)
@@ -14,6 +14,7 @@
 - **[installer]**：未指定 `--version` 而 `releases/latest` 解析到沒有發布者驗證的 v1.1.0 時，不論有沒有 `gh` 都在下載前拒絕安裝，避免把 latest 指回 v1.1.0 來繞過驗證；`--version v1.1.0` 仍照常安裝並警告 (#58)
 
 ### 📌 已知限制
+- Codex 的唯讀沙箱檢查驗的是 `codex sandbox -P :read-only`，正式任務的 `codex exec -s read-only` 如何對應到同一政策是 Codex 內部行為，尚未直接驗證 (#73)
 - Codex 與 OpenCode 的新版本（例如 Codex 0.163.0、OpenCode 1.18.31）目前過不了 `runtime verify`。原因是取消時模型啟動的命令不會被回收（#74），以及 OpenCode 寫入角色沒有 OS 沙箱（#75）；修好之前只能使用內建版本 (#73)
 
 ## [v1.2.0] - 2026-10-16

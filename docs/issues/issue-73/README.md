@@ -144,6 +144,9 @@ Feature: runtime 版本通過驗證才可使用
   - Q17「補不經模型的沙箱檢查 (Recommended)」：Codex 唯讀角色沙箱正常時不會嘗試寫入，nonce 正向對照分不出「宣告 read-only 但 OS 沙箱沒生效」。唯讀 probe 另外以 `codex sandbox` 不經模型直接驗證：唯讀 policy 寫 workspace 必須失敗，workspace-write 必須成功（SCN-005）
   - Q18「先比雜湊，不執行 (Recommended)」：Antigravity 非內建的雜湊先查驗證紀錄，沒有相符紀錄就直接 `version_unverified`，不在 host 執行 agy；有紀錄則用紀錄裡的版本。只有 `asura runtime verify` 會執行 `agy --version`（SCN-002、SCN-006）
   - Q19：一併處理改善建議：Codex 改用 `clisandbox.TreeHash`；verify 前先檢查紀錄檔可讀寫；過時註解、開頭提示文字、OMP 換樹行為的文件、Proof 表 SCN-001 引用
+- **第二輪審查決策**（2026-10-28，PR #77 第二輪獨立審查 [留言](https://github.com/raybird/Asura/pull/77#issuecomment-6439324006)，判定 PASS）：
+  - Q20「接受並記錄，#74 時再補驗 (Recommended)」：`read-only-sandbox` 驗的是 `codex sandbox -P :read-only`，正式任務跑的是 `codex exec -s read-only`，兩者的對應是 Codex 內部行為，目前無法直接驗證。接受這項殘餘風險，見 TBD-7
+  - Q21：一併處理 SHOULD FIX 2（文件措辭）、NICE 3、4（唯讀沙箱 probe 加固）、NICE 5、6（`AdmitDigest` 收尾）；NICE 7～9 不處理
 
 | Scenario | 核准日期 | 狀態 |
 |----------|---------|------|
@@ -176,6 +179,7 @@ Feature: runtime 版本通過驗證才可使用
 | TBD-4 | OpenCode／Codex 的 probe 使用 runtime 的預設模型，驗證紀錄不綁模型 | 已解決 | 2026-10-21 Q12 回答「可以，不綁模型」：沙箱與輸出格式屬於 runtime CLI 本身，一個版本驗證一次即可（SCN-003） |
 | TBD-5 | OMP 與 Antigravity 的登入在 2026-10-21 已過期，Task 1.3 的 probe 無法執行 | 已解決 | 2026-10-22 使用者重新登入後重跑，Task 1.3、1.4 完成。Antigravity 那次很可能並未過期：snap 版 go 讓測試行程帶著 `SNAP_NAME`，libsecret 查不到 keyring，adapter 才改讀舊的 token 檔（[evidence/phase1-probes.md](./evidence/phase1-probes.md)「2026-10-22 重跑」） |
 | TBD-6 | Codex／OpenCode 新版本要等 #74、#75 合併後才可能通過驗證 | 已解決 | 2026-10-27 Q16：Task 3.5 改用 OMP 與 Antigravity，不再相依 #74、#75。#73 合併後，已安裝的 Codex 0.163.0 與 OpenCode 1.18.31 在 #74、#75 修好前維持 `version_unverified`，只有內建版本可用 |
+| TBD-7 | Codex 的 `read-only-sandbox` 驗 `codex sandbox -P :read-only`，正式任務跑 `codex exec -s read-only`；若未來版本讓 exec 的唯讀對應到較寬政策，同時仍告訴模型它是唯讀，`read-only` 與 `read-only-sandbox` 都可能通過 | 已接受（2026-10-28 Q20） | 目前 Codex 新版本受 #74 影響過不了 cancellation，沒有實際放行路徑。#74 驗收時（Codex 新版本第一次可能通過驗證）補驗 exec 唯讀的對應，例如觀察 exec 實際啟動的 codex-linux-sandbox 參數 |
 
 ## Timeline
 
@@ -197,6 +201,7 @@ Feature: runtime 版本通過驗證才可使用
 | 2026-10-27 | Task 4.1 完成：runtimes.md 新增「版本驗證」，cli-reference 新增 `runtime verify`，README 的 runtime 表與指令一覽、CHANGELOG `[Unreleased]` 更新；所有 Task 完成 | Raybird |
 | 2026-10-27 | PR #77 獨立審查 RETURN TO execute-task：SCN-008 的 OpenCode 跨路徑覆蓋缺口（MUST FIX）；Q17～Q19 決定補 Codex 唯讀沙箱的確定性檢查、Antigravity 先比雜湊不執行、一併處理改善建議；新增 Phase 5 | Raybird |
 | 2026-10-27 | Phase 5 完成：OpenCode 跨路徑測試；Codex 新增不經模型的 `read-only-sandbox` probe（真實 0.163.0 通過、失效對照失敗）；Antigravity 判定不執行未驗證的 agy；Codex 改用 `clisandbox.TreeHash`；verify 先檢查紀錄檔 | Raybird |
+| 2026-10-28 | PR #77 第二輪獨立審查 PASS；Q20 接受 Codex exec／sandbox 唯讀對應的殘餘風險（TBD-7，#74 時補驗）；Q21 處理文件措辭與唯讀沙箱 probe 加固，新增 Task 5.5 | Raybird |
 
 ---
 **建立日期**: 2026-10-21  

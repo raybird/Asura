@@ -186,7 +186,8 @@ func readOnlyProbe(ctx context.Context, b backend.Backend, env Env) error {
 func sandboxProbe(run func(context.Context, string, bool, ...string) (string, error)) func(context.Context, backend.Backend, Env) error {
 	return func(ctx context.Context, _ backend.Backend, env Env) error {
 		target := filepath.Join(env.Workspace, "sandbox.txt")
-		command := []string{"sh", "-c", "echo " + sandboxMarker + "; printf ASURA > " + target}
+		// 標記由 shell 組出，命令參數裡沒有完整字串：runner 啟動失敗時回顯參數，也不會被當成命令有執行。
+		command := []string{"sh", "-c", "printf '%s_%s\\n' " + strings.Replace(sandboxMarker, "_", " ", 1) + "; printf ASURA > " + target}
 		out, err := run(ctx, env.Workspace, true, command...)
 		if _, statErr := os.Stat(target); statErr == nil {
 			return errors.New("security violation: read-only sandbox allowed a workspace write")
