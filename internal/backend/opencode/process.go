@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+
+	"asura/internal/backend"
 )
 
 // Process 代表一個被管理且擁有獨立進程組 (PGID) 的子進程
@@ -32,17 +34,9 @@ func ConfigureProcessGroup(cmd *exec.Cmd) {
 	cmd.SysProcAttr.Setpgid = true
 }
 
-// KillProcessGroup 向指定 PGID 發送 SIGKILL，徹底清除整個進程樹
+// KillProcessGroup 回收指定 PGID 的成員與其整棵子孫樹，包含另開 session 或 PID namespace 的子孫（2026-10-28 issue-74）
 func KillProcessGroup(pgid int) error {
-	if pgid <= 0 {
-		return errors.New("invalid pgid")
-	}
-	err := syscall.Kill(-pgid, syscall.SIGKILL)
-	if errors.Is(err, syscall.ESRCH) {
-		// 進程組已完全退出
-		return nil
-	}
-	return err
+	return backend.KillProcessTree(pgid)
 }
 
 // IsProcessGroupAlive 探測指定進程組是否仍有任何存活成員

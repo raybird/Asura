@@ -218,7 +218,7 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 	}
 	release()
 
-	// 進程回收監控：Context 取消時發送 SIGKILL 至整組進程組 (MBACK-007)
+	// 進程回收監控：Context 取消時回收整組進程組與其子孫 (MBACK-007)；命令跑在 bwrap 另開的 group 與 PID namespace 裡（2026-10-28 issue-74）
 	doneChan := make(chan struct{})
 	var closeOnce sync.Once
 	defer closeOnce.Do(func() { close(doneChan) })
@@ -226,7 +226,7 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 	go func() {
 		select {
 		case <-ctx.Done():
-			_ = syscall.Kill(-pgid, syscall.SIGKILL)
+			_ = backend.KillProcessTree(pgid)
 		case <-doneChan:
 		}
 	}()

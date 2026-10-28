@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"testing"
@@ -75,11 +76,29 @@ func TestCredentialProbe(t *testing.T) {
 // cancelBackend 模擬 runtime 的行程：runtime 本身是一個以 pgid 回報的 sleep 600。
 // inProcess 時像 OMP 的內建 shell，自己寫出 prompt 命令的啟動標記、不產生 sleep 行程；
 // 否則以 sh 在另一個 session 執行命令（像 codex-linux-sandbox），取消時只殺 runtime 的 process group。
+// inGroup 時命令跑在 runtime 的 process group 裡，group 被殺時前景命令一起結束，只有命令自己另開 session 的子行程留下。
 type cancelBackend struct {
 	shellBackend
 	started   chan int
 	inProcess bool
+	inGroup   bool
 	leaked    []*exec.Cmd
+	commands  []string
+}
+
+// cleanup 只清除這個 backend 執行過的命令留下的 sleep，不碰同一台機器上的其他行程（2026-10-28 PR #82 審查）。
+func (b *cancelBackend) cleanup() {
+	for _, c := range b.leaked {
+		_ = syscall.Kill(-c.Process.Pid, syscall.SIGKILL)
+		_ = c.Wait()
+	}
+	for _, command := range b.commands {
+		for _, m := range regexp.MustCompile(`sleep (\d+)`).FindAllStringSubmatch(command, -1) {
+			for _, pid := range sleepPIDs(m[1]) {
+				_ = syscall.Kill(pid, syscall.SIGKILL)
+			}
+		}
+	}
 }
 
 func (b *cancelBackend) Run(ctx context.Context, req *backend.ExecutionRequest) (*backend.ExecutionResult, error) {
@@ -90,10 +109,11 @@ func (b *cancelBackend) Run(ctx context.Context, req *backend.ExecutionRequest) 
 	}
 	b.started <- runtime.Process.Pid
 	_, command, _ := strings.Cut(req.Prompt, "\n\n")
+	b.commands = append(b.commands, command)
 	if b.inProcess {
 		_, rest, ok := strings.Cut(command, "> ")
-		target, _, _ := strings.Cut(rest, ";")
-		if err := os.WriteFile(strings.TrimSpace(target), []byte("started"), 0o600); !ok || err != nil {
+		target, _, _ := strings.Cut(rest, " ")
+		if err := os.WriteFile(target, []byte("started"), 0o600); !ok || err != nil {
 			_ = syscall.Kill(-runtime.Process.Pid, syscall.SIGKILL)
 			_ = runtime.Wait()
 			return nil, fmt.Errorf("built-in shell found no start marker in %q", command)
@@ -101,10 +121,18 @@ func (b *cancelBackend) Run(ctx context.Context, req *backend.ExecutionRequest) 
 	} else {
 		cmd := exec.Command("sh", "-c", command)
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		if b.inGroup {
+			cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pgid: runtime.Process.Pid}
+		}
 		if err := cmd.Start(); err != nil {
 			return nil, err
 		}
-		b.leaked = append(b.leaked, cmd)
+		if b.inGroup {
+			// 像 runtime 自己的 shell，結束後立即回收，不讓殭屍行程留在 group 裡。
+			go func() { _ = cmd.Wait() }()
+		} else {
+			b.leaked = append(b.leaked, cmd)
+		}
 	}
 	<-ctx.Done()
 	_ = syscall.Kill(-runtime.Process.Pid, syscall.SIGKILL)
@@ -131,14 +159,16 @@ func TestCancelProbe(t *testing.T) {
 		t.Errorf("in-process shell: %v", err)
 	}
 	leaky := &cancelBackend{started: make(chan int, 1)}
-	t.Cleanup(func() {
-		for _, c := range leaky.leaked {
-			_ = syscall.Kill(-c.Process.Pid, syscall.SIGKILL)
-			_ = c.Wait()
-		}
-	})
+	t.Cleanup(leaky.cleanup)
 	if err := run(leaky); err == nil || !strings.Contains(err.Error(), "survived cancellation") {
 		t.Errorf("leaked command: err = %v, want process tree survived", err)
+	}
+
+	// 2026-10-28：issue-74 SCN-004，只回收 process group 的 runtime 留下命令另開 session 的背景子行程，probe 必須失敗。
+	groupOnly := &cancelBackend{started: make(chan int, 1), inGroup: true}
+	t.Cleanup(groupOnly.cleanup)
+	if err := run(groupOnly); err == nil || !strings.Contains(err.Error(), "survived cancellation") {
+		t.Errorf("detached background command: err = %v, want process tree survived", err)
 	}
 }
 
