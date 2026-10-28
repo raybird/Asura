@@ -128,3 +128,18 @@ skip 共 27 個，與 #73 收尾時（[phase5.md](../../issue-73/evidence/phase5
   - `TestCancelProbe` 出現假綠燈（見步驟 4）。
 - 第二輪（節流＋背景子行程寫標記，`;` 版）：兩次都失敗在 `TestRuntimeVerifyCommand`，原因是假 codex 用 `;` 切開命令（見步驟 4「新命令重跑」）。這是確定會發生的回歸，不是偶發。
 - 最終（`&&` 版）：連續兩次 exit 0，24 個套件 ok，沒有 FAIL；skip 27 個，與上節相同，不算通過。`gofmt -l` 對本分支改過的 Go 檔沒有輸出。
+
+## PR #82 審查修正（2026-10-28）
+
+- **SHOULD 1：測試清理誤殺無關的 sleep**
+  - 原本 `TestCancelProbe` 的 cleanup（`markedSleeps`）會殺掉機器上所有 `sleep 2000`～`sleep 10999`。
+  - 紅燈：先 `setsid sleep 3333` 啟動旁觀行程，再跑 `go test -count=1 ./internal/backend/verification/ -run 'TestCancelProbe$'`。測試通過，但旁觀行程被殺（`kill -0` 回 `No such process`）。這次修正前重現了兩次。
+  - 修正：fake（`cancelBackend`）記下每次收到的命令，cleanup 只殺命令裡那兩個 marker 的 sleep（沿用 probe 的 `sleepPIDs`），並刪除 `markedSleeps`。
+  - 綠燈：同樣先啟動旁觀行程，`-race` 跑 3 次都通過，旁觀行程都還活著；之後 `ps` 確認沒有殘留的 marker sleep。
+- **NICE 4**：`processTree` 改為依 BFS 順序回傳（父行程在前），少了 map 轉 slice 那段。
+- **NICE 5**：註解改寫為「凍結後的行程不能 fork、PID 不會被重用」，並說明凍結前的窗口屬於 TBD-1。
+- **NICE 6**：凍結迴圈最多 64 輪（`maxStopRounds`），超過就直接進入 SIGKILL。
+  - 觸發條件是「SIGSTOP 失敗、又持續 fork」的子孫，例如不同 uid 的 setuid 行程。測試環境建不出這種行程，所以沒有紅燈。
+  - 一般情況下，既有的 process tree 測試照常通過：`TestKillProcessGroup*` 以 `-race` 連跑 3 次都通過，`cmd/asura` 的取消與 `TestRuntimeVerifyCommand` 也都通過。
+- **SHOULD 2～3、NICE 7**：只改文件，見 implementation-plan.md 步驟 4、e2e.md「判定」、CHANGELOG、README「修正後流程」。
+- **Gate**：`go vet ./... && go build ./cmd/asura && go test -count=1 -race -v ./...` 連續兩次 exit 0，24 個套件 ok，沒有 FAIL；skip 27 個，與前面相同，不算通過。build 產生的 `asura` 已刪除。結束後 `ps` 沒有殘留的 marker sleep。

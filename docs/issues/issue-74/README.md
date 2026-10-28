@@ -32,7 +32,7 @@ node (pgid=P, Asura 的 group)
 
 ### 修正後流程
 
-取消時先凍結並回收 group 成員的整棵子孫樹（以 `/proc` 的 PPID 關係找出，不論 session 或 process group），再回收 group 本身。所有取消路徑共用同一個實作。
+取消時先凍結並回收 group 成員的整棵子孫樹（以 `/proc` 的 PPID 關係找出，不論 session 或 process group），再回收 group 本身。Codex 與 OpenCode 的所有取消路徑（行程內、`asura cancel`、engine）共用同一個實作；OMP 與 Antigravity 不變，照舊由 clisandbox 的 bwrap（`--unshare-pid --die-with-parent`）讓整個 PID namespace 一起被回收。
 
 ## 關鍵差異
 
@@ -159,6 +159,7 @@ Feature: 取消任務時回收模型啟動的命令
 | 2026-10-28 | 步驟 1～5 完成，live 證據見 evidence/。步驟 6 的 Codex 端到端發現 #73 帶進來的 auto 路徑稽核缺陷，Q3「另開 issue 先修」，開 #79；SCN-005 的本機 run 等 #79（TBD-2） | Raybird |
 | 2026-10-28 | #79 合併（PR #80，`01ce169`），本分支以 merge 併入 main（保留核准 commit `7f3787e` 與 #79 證據引用的 `80afa75`）。補跑 SCN-005 本機 run 通過，TBD-2 解決；步驟 6 完成 | Raybird |
 | 2026-10-28 | 併入 main 後的完整 gate 抓到兩個不穩定的問題：fork 測試沒節流，拖慢同時執行的套件；cancellation probe 先寫標記再 `setsid`，取消落在兩者之間時會出現假綠燈。改為節流，並改由另開 session 的子行程寫標記。命令裡的 `;` 改成 `&&`，因為 `TestRuntimeVerifyCommand` 的假 codex 會用 `;` 切開命令。最終命令的 live 結果：Codex、OMP 全部通過，OpenCode 照預期只有 #75 那一項失敗，Codex 與 OpenCode 的失效對照照樣失敗。Antigravity 登入過期，最終命令沒有執行到；`;` 版命令全部通過（evidence/step4.md） | Raybird |
+| 2026-10-28 | PR #82 獨立審查 PASS（[報告](https://github.com/raybird/Asura/pull/82#issuecomment-6461457482)），沒有 MUST FIX。使用者選擇全部處理：SHOULD 1（測試清理會誤殺機器上無關的 sleep）、SHOULD 2～3（計畫與 e2e 證據的一致性）、NICE 4～7（processTree 改回傳 BFS 順序、註解措辭、凍結迴圈設上限、CHANGELOG 補上 OMP／Antigravity 的回收方式） | Raybird |
 
 ---
 **建立日期**: 2026-10-28  

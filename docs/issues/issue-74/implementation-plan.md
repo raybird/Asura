@@ -79,7 +79,7 @@ Codex adapter 行程內取消的 `syscall.Kill(-pgid, SIGKILL)` 改呼叫同一�
     - OMP、Antigravity 的 cancellation probe 照樣通過。
 - 驗證：單元紅綠；live 結果記錄於 `evidence/step4.md`「步驟 4」
 - 狀態：✅ 已完成（2026-10-28）
-- 證據：[evidence/step4.md](./evidence/step4.md)「步驟 4」：單元先紅後綠；live 四個 runtime 的 cancellation 都通過；Codex、OpenCode 的失效對照都失敗
+- 證據：[evidence/step4.md](./evidence/step4.md)「步驟 4」：單元先紅後綠；Codex、OpenCode、OMP 以最終命令通過 cancellation；Antigravity 的最終命令沒有執行到（登入過期，見 README TBD-3），`;` 版命令通過；Codex、OpenCode 的失效對照都失敗
 
 ### 步驟 5 — Codex exec 唯讀對應（#73 TBD-7）
 - 產出：一個 live 測試，以 `codex exec -s read-only` 讓模型執行 sleep，在命令執行期間讀取 `codex-linux-sandbox` 的 `--permission-profile`，與 `codex sandbox -P :read-only` 的權限設定比較
@@ -133,7 +133,7 @@ live 測試需要 `ASURA_VERIFY_LIVE=1` 與登入憑證。各步驟的證據要�
 - [x] 步驟 1：重現紅燈、對照綠燈、OpenCode 行程樹已記錄
 - [x] 步驟 2：共用實作，全套測試綠燈
 - [x] 步驟 3：外部取消測試先紅後綠
-- [x] 步驟 4：probe 加強，live 四個 runtime 結果與失效對照
+- [x] 步驟 4：probe 加強，live 結果與失效對照（Antigravity 的最終命令待補跑，TBD-3）
 - [x] 步驟 5：Codex exec 唯讀對應
 - [x] 步驟 6：Codex 端到端、文件、CHANGELOG
 - [x] 專案 gate 通過，skip 已列出（evidence/step4.md「Gate（2026-10-28，併入 main 之後）」）

@@ -119,3 +119,5 @@ SCN-005 逐項成立：
 - 移除紀錄後回到 `version_unverified`。
 
 daemon 整個流程沒有重啟。
+
+probe 版本（2026-10-28 PR #82 審查補註）：本文件兩次端到端（02:52Z、04:24Z）都早於 `9feed5a`，`runtime verify codex` 跑的是舊版 cancellation 命令（先寫標記再 `setsid`，有假綠燈競態）。最終命令在 Codex 0.163.0 上的 probe 結果，見 [step4.md](./step4.md)「新命令重跑」（05:01Z，`TestVerifyLive_Codex` 五個 probe 全部 PASS）。這兩次 verify 走的是同一個 `verification.Verify`、同一份安裝（sha256 `40f51e0a…5e80`），差別只在 cancellation 的命令字串。SCN-005 驗的是驗證紀錄在四條路徑上的放行與撤銷，那一部分不受 probe 命令影響。

@@ -7,7 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
+	"regexp"
 	"strings"
 	"syscall"
 	"testing"
@@ -83,6 +83,22 @@ type cancelBackend struct {
 	inProcess bool
 	inGroup   bool
 	leaked    []*exec.Cmd
+	commands  []string
+}
+
+// cleanup 只清除這個 backend 執行過的命令留下的 sleep，不碰同一台機器上的其他行程（2026-10-28 PR #82 審查）。
+func (b *cancelBackend) cleanup() {
+	for _, c := range b.leaked {
+		_ = syscall.Kill(-c.Process.Pid, syscall.SIGKILL)
+		_ = c.Wait()
+	}
+	for _, command := range b.commands {
+		for _, m := range regexp.MustCompile(`sleep (\d+)`).FindAllStringSubmatch(command, -1) {
+			for _, pid := range sleepPIDs(m[1]) {
+				_ = syscall.Kill(pid, syscall.SIGKILL)
+			}
+		}
+	}
 }
 
 func (b *cancelBackend) Run(ctx context.Context, req *backend.ExecutionRequest) (*backend.ExecutionResult, error) {
@@ -93,6 +109,7 @@ func (b *cancelBackend) Run(ctx context.Context, req *backend.ExecutionRequest) 
 	}
 	b.started <- runtime.Process.Pid
 	_, command, _ := strings.Cut(req.Prompt, "\n\n")
+	b.commands = append(b.commands, command)
 	if b.inProcess {
 		_, rest, ok := strings.Cut(command, "> ")
 		target, _, _ := strings.Cut(rest, " ")
@@ -142,44 +159,17 @@ func TestCancelProbe(t *testing.T) {
 		t.Errorf("in-process shell: %v", err)
 	}
 	leaky := &cancelBackend{started: make(chan int, 1)}
-	t.Cleanup(func() {
-		for _, c := range leaky.leaked {
-			_ = syscall.Kill(-c.Process.Pid, syscall.SIGKILL)
-			_ = c.Wait()
-		}
-	})
+	t.Cleanup(leaky.cleanup)
 	if err := run(leaky); err == nil || !strings.Contains(err.Error(), "survived cancellation") {
 		t.Errorf("leaked command: err = %v, want process tree survived", err)
 	}
 
 	// 2026-10-28：issue-74 SCN-004，只回收 process group 的 runtime 留下命令另開 session 的背景子行程，probe 必須失敗。
 	groupOnly := &cancelBackend{started: make(chan int, 1), inGroup: true}
-	t.Cleanup(func() {
-		for _, pid := range markedSleeps() {
-			_ = syscall.Kill(pid, syscall.SIGKILL)
-		}
-	})
+	t.Cleanup(groupOnly.cleanup)
 	if err := run(groupOnly); err == nil || !strings.Contains(err.Error(), "survived cancellation") {
 		t.Errorf("detached background command: err = %v, want process tree survived", err)
 	}
-}
-
-// markedSleeps 回傳 cancellation probe 可能留下的 sleep（marker 範圍 2000～10999），供測試清除殘留。
-func markedSleeps() []int {
-	var pids []int
-	entries, _ := os.ReadDir("/proc")
-	for _, e := range entries {
-		cmdline, err := os.ReadFile(filepath.Join("/proc", e.Name(), "cmdline"))
-		if err != nil {
-			continue
-		}
-		args := strings.Split(strings.TrimRight(string(cmdline), "\x00"), "\x00")
-		if m, err := strconv.Atoi(args[len(args)-1]); err == nil && len(args) == 2 && filepath.Base(args[0]) == "sleep" && m >= 2000 && m < 11000 {
-			pid, _ := strconv.Atoi(e.Name())
-			pids = append(pids, pid)
-		}
-	}
-	return pids
 }
 
 // readOnlyBackend 模擬唯讀角色：reads 時讀出 workspace 內的 nonce 檔並放進回覆，writes 時沙箱失效、寫入目標檔。
