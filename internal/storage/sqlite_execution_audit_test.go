@@ -262,6 +262,55 @@ func TestExecutionAuditNormalizationAndTamper(t *testing.T) {
 	}
 }
 
+// 2026-10-28：issue-79 AC-1、AC-3，auto 的 admission 快照含 version_unverified 的 runtime 時，稽核 header 必須接受；
+// 未知的 reason，以及 Available 卻帶 version_unverified 的 runtime，仍然拒絕。
+func TestExecutionAuditAcceptsUnverifiedRuntime(t *testing.T) {
+	s, err := NewSQLiteStore(filepath.Join(t.TempDir(), "db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	reg := backend.NewRegistry()
+	reg.Register(&auditInventoryRuntime{id: "codex", caps: []backend.Capability{backend.CapWorkspaceWrite}})
+	reg.Register(&auditInventoryRuntime{id: "opencode", err: &backend.ProbeError{Reason: backend.VersionUnverified}})
+	c, err := backend.AdmitRuntime(ctx, reg, "direct", "auto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(struct {
+		Contract *backend.ExecutionContract `json:"execution_contract"`
+	}{c})
+	task := &Task{ID: "unverified", RequestID: "r", Workspace: "/a", Backend: c.Runtime.ID, ExecutionMode: "direct", Status: StatusPending, ResolvedContext: string(raw)}
+	if err = s.CreateTask(ctx, task); err != nil {
+		t.Fatalf("task with a version_unverified runtime in the snapshot: %v", err)
+	}
+	r, err := s.GetTaskAudit(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Header.Admission.Runtimes) != 2 || r.Header.Admission.Runtimes[1].Reason != backend.VersionUnverified {
+		t.Fatalf("availability provenance %+v", r.Header.Admission.Runtimes)
+	}
+
+	h, err := audit.NewHeader("unverified-2", "r", time.Now(), c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unknown := h
+	unknown.Admission.Runtimes = append([]audit.Runtime(nil), h.Admission.Runtimes...)
+	unknown.Admission.Runtimes[1].Reason = "not_a_reason"
+	if !errors.Is(unknown.Validate(), audit.ErrInvalid) {
+		t.Error("unknown unavailable reason accepted")
+	}
+	available := h
+	available.Admission.Runtimes = append([]audit.Runtime(nil), h.Admission.Runtimes...)
+	available.Admission.Runtimes[0].Reason = backend.VersionUnverified
+	if !errors.Is(available.Validate(), audit.ErrInvalid) {
+		t.Error("available runtime with version_unverified accepted")
+	}
+}
+
 func TestExecutionAuditEventOrderAndBounds(t *testing.T) {
 	s, err := NewSQLiteStore(filepath.Join(t.TempDir(), "db"))
 	if err != nil {

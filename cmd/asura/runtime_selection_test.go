@@ -64,6 +64,51 @@ printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"a
 		t.Fatalf("audit=%s %s", out.String(), stderr.String())
 	}
 }
+
+// 2026-10-28：issue-79 AC-1，另一個 runtime 是 version_unverified 時，本機 auto 仍能建立任務並由可用的 runtime 完成。
+func TestRuntimeSelectionLocalAutoWithUnverifiedRuntime(t *testing.T) {
+	t.Setenv("ASURA_SOCKET", "")
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	root := t.TempDir()
+	bin := filepath.Join(root, "bin")
+	os.Mkdir(bin, 0700)
+	os.WriteFile(filepath.Join(bin, "opencode"), []byte("#!/bin/sh\necho 1.18.31\n"), 0700)
+	script := `#!/bin/sh
+if [ "$1" = "--version" ]; then echo 'codex-cli 0.155.0'; exit 0; fi
+printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"auto-with-unverified"}}'
+`
+	os.WriteFile(filepath.Join(bin, "codex"), []byte(script), 0700)
+	t.Setenv("PATH", bin)
+	t.Setenv("ASURA_RUNTIME_PRIORITY", "codex,opencode,antigravity,omp")
+	db := filepath.Join(root, "tasks.db")
+	var out, stderr bytes.Buffer
+	if code := handleRun([]string{"--db", db, "--workspace", root, "--id", "auto-unverified", "--backend", "auto", "probe"}, &out, &stderr); code != 0 {
+		t.Fatalf("code=%d: %s", code, stderr.String())
+	}
+	out.Reset()
+	if code := handleStatus([]string{"--db", db, "auto-unverified"}, &out, &stderr); code != 0 || !strings.Contains(out.String(), "auto-with-unverified") || !strings.Contains(out.String(), "version_unverified") {
+		t.Fatalf("status=%s %s", out.String(), stderr.String())
+	}
+}
+
+// 2026-10-28：issue-79，所有 runtime 都不可用、其中有 version_unverified 時，拒絕訊息仍附上 admission 拒絕投影（PR #80 審查 SHOULD FIX 1）。
+func TestRuntimeSelectionLocalAutoRejectionWithUnverifiedRuntime(t *testing.T) {
+	t.Setenv("ASURA_SOCKET", "")
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	root := t.TempDir()
+	bin := filepath.Join(root, "bin")
+	os.Mkdir(bin, 0700)
+	os.WriteFile(filepath.Join(bin, "codex"), []byte("#!/bin/sh\necho 'codex-cli 0.163.0'\n"), 0700)
+	t.Setenv("PATH", bin)
+	var out, stderr bytes.Buffer
+	if code := handleRun([]string{"--db", filepath.Join(root, "tasks.db"), "--workspace", root, "--backend", "auto", "probe"}, &out, &stderr); code == 0 {
+		t.Fatal("run succeeded without an available runtime")
+	}
+	if !strings.Contains(stderr.String(), "Admission rejection: ") || !strings.Contains(stderr.String(), `"reason":"version_unverified"`) {
+		t.Fatalf("rejection projection missing: %s", stderr.String())
+	}
+}
+
 func TestRuntimeSelectionCLIBoundaries(t *testing.T) {
 	var out, stderr bytes.Buffer
 	handleAsk([]string{"--backend", "auto", "--socket", filepath.Join(t.TempDir(), "missing.sock"), "probe"}, &out, &stderr)
