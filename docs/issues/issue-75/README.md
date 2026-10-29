@@ -19,27 +19,28 @@ GitHub [#75](https://github.com/raybird/Asura/issues/75)。OpenCode 的寫入角
 
 ### 修正後流程
 
-寫入角色改在 Asura 的 bwrap 內執行，比照 OMP／Antigravity 使用 PID／IPC namespace 與 `--die-with-parent`。根目錄唯讀掛載，可寫的只有下列路徑：
+寫入角色改在 Asura 的 bwrap 內執行，比照 OMP／Antigravity 使用 PID／IPC namespace 與 `--die-with-parent`。真正寫回主機的只有下列路徑：
 
 - workspace
 - OpenCode 自己的 data 與 state 目錄（預設 `~/.local/share/opencode`、`~/.local/state/opencode`）：OAuth 登入更新、session、log 都寫在這裡
-- 每次執行私有的 `/tmp`（tmpfs，結束即丟）
 
-`~/.cache/opencode`、`~/.config/opencode` 與其他路徑都是唯讀。環境變數照舊沿用使用者原本的環境，不改登入方式。
+HOME 的其他部分掛成暫時 overlay（Q5）：沙箱內可以寫，寫入放在 tmpfs，執行結束就丟，主機上什麼都不留。這樣 MCP server 與工具快取（`uvx`、`npx`、`go test` 等）照常可用。`/tmp` 是每次執行私有的 tmpfs。HOME 以外的路徑（`/etc`、`/opt` 等）唯讀。環境變數照舊沿用使用者原本的環境，不改登入方式。
 
-2026-10-29 探測（不呼叫模型，OpenCode 1.18.31）：
+2026-10-29 探測（OpenCode 1.18.31）：
 
 | 掛載 | 命令 | 結果 |
 |------|------|------|
 | 根目錄唯讀，只有 workspace 可寫 | `opencode session list` | 失敗：`FileSystem.open (~/.local/share/opencode/log/opencode.log)` |
 | 另加 data、state 可寫，cache 唯讀 | `opencode session list`、`opencode models openai`、`opencode debug config` | 都成功 |
+| 同上，真實 `opencode run --auto`（步驟 1） | 模型以 bash 寫 workspace、`/tmp`、workspace 外的同層目錄 | workspace 寫入成功；同層目錄得到 `Read-only file system`；主機 `/tmp` 沒有檔案。但 serena（`uvx`）、mcp-memory-libsql（`npx`）兩個 MCP server 起不來，沙箱外是 connected；`~/.cache/opencode/models.json` 也更新失敗（EROFS） |
+| 改為 HOME 暫時 overlay，data、state 照舊 bind | `opencode mcp list`；寫 HOME 與同層目錄 | 三個 MCP server 都是 connected；兩個寫入在沙箱內成功，主機上都不存在 |
 
 ## 關鍵差異
 
 | 項目 | 變更前 | 變更後 |
 |------|--------|--------|
-| 寫入角色的檔案系統 | 整個主機都可寫 | 只有 workspace、OpenCode data／state、私有 `/tmp` 可寫 |
-| 寫入 HOME 下的工具快取（`~/.cache/go-build`、`~/.npm` 等） | 可以 | 不行，這類命令會失敗；與 Codex workspace-write、OMP 相同 |
+| 寫入角色的檔案系統 | 整個主機都可寫 | 只有 workspace、OpenCode data／state 寫回主機；HOME 其他部分的寫入在執行結束後丟棄；HOME 以外唯讀 |
+| 寫入 HOME 下的工具快取與 MCP 資料（`~/.cache/go-build`、`~/.npm`、mcp-memory-libsql 的資料庫等） | 寫回主機 | 沙箱內可寫，執行結束後丟棄，不保存 |
 | 取消前就已脫離行程樹的命令 | 被 PID 1 接手，取消後繼續執行 | 留在 bwrap 的 PID namespace 裡，取消時一併回收 |
 | 主機沒有 `bwrap` | OpenCode 可用 | OpenCode 整體判為 unavailable（`dependency_not_found`），auto 改選其他 runtime |
 | OpenCode 新版本的 verify | workspace-boundary 失敗 | 全部 probe 可以通過 |
@@ -69,15 +70,16 @@ Feature: OpenCode 寫入角色在 OS 沙箱內執行
 
   @SCN-001
   Scenario: 模型的命令寫不到 workspace 外
-    When 模型在同一個 shell 命令裡，先寫 workspace，再寫 workspace 外的同層目錄、HOME 下的檔案、~/.config/opencode 與 ~/.cache/opencode
+    When 模型在同一個 shell 命令裡，先寫 workspace，再寫 workspace 外的同層目錄、HOME 下的檔案、~/.config/opencode、~/.cache/opencode 與 HOME 以外的路徑
     Then workspace 內的檔案寫入成功
-    And workspace 外的每個寫入都失敗，主機上對應的檔案不存在或內容不變
+    And 任務結束後，主機上 workspace 外的每個對應檔案都不存在或內容不變
 
   @SCN-002
   Scenario: OpenCode 自己的資料照常保存，/tmp 是私有的
     When 寫入角色的任務執行完成
     Then OpenCode 的 data 與 state 目錄可以寫入（session、log、登入更新），任務結束後在沙箱外看得到這次的 session
-    And 模型寫進 /tmp 的檔案，任務結束後不會出現在主機的 /tmp
+    And 模型寫進 /tmp 與 HOME（data、state 以外）的檔案，任務結束後不會出現在主機上
+    And 使用者設定的 MCP server 在沙箱內照常啟動
 
   @SCN-003
   Scenario: 取消時回收取消前就已脫離行程樹的命令
@@ -110,17 +112,25 @@ Feature: OpenCode 寫入角色在 OS 沙箱內執行
 ```
 
 ## Gherkin 核准紀錄
-- **核准 commit**: 待提交
+- **核准 commit**: d753164
 - **核准來源**：
   - GitHub #75 的問題描述（2026-10-21 建立）：寫入角色必須寫不到 workspace 外；方向是比照 OMP／Antigravity，在 Asura 的 bwrap 內執行 → SCN-001、SCN-006。
   - #74 的 TBD-1（2026-10-28 Q1）：取消前就已脫離行程樹的 OpenCode 命令，在 #75 以 PID namespace 補上 → SCN-003。
   - #73 的 known limitation：OpenCode 的真實端到端（含 #73 SCN-008 的 OpenCode live）留到 #74、#75 驗收時補做 → SCN-005。
   - 使用者 2026-10-29 本 issue Q1：「data/state 可寫，其餘唯讀 (Recommended)」→ SCN-001、SCN-002。
-  - 使用者 2026-10-29 本 issue Q2：「接受並寫進文件 (Recommended)」→ HOME 下的工具快取不可寫，只寫進文件，不另開放路徑。
+  - 使用者 2026-10-29 本 issue Q2：「接受並寫進文件 (Recommended)」→ HOME 下的工具快取不可寫，只寫進文件，不另開放路徑。已被 Q5 取代：改為 overlay 後工具快取在沙箱內可寫，這項限制不存在。
   - 使用者 2026-10-29 本 issue Q3 更正：「整個 OpenCode 判不可用 (Recommended)」→ SCN-004。第一次提問的選項說明寫了「唯讀角色不受影響」，與清冊以整個 runtime 為單位的實際機制不符；更正後重新詢問，以此答案為準。
   - 使用者 2026-10-29 本 issue Q4：「不放，維持現況 (Recommended)」→ 唯讀角色不在範圍內。
+  - 使用者 2026-10-29 本 issue Q5（步驟 1 實測後）：「HOME 改用暫時 overlay (Recommended)」→ SCN-001、SCN-002 修訂：HOME 內的寫入在沙箱內成功、主機上不留；MCP server 照常啟動。
 
-全部 Scenario 於 2026-10-29 核准。
+| Scenario | 核准日期 | 狀態 |
+|----------|---------|------|
+| SCN-001 | 2026-10-29（Q5 修訂） | 已核准 |
+| SCN-002 | 2026-10-29（Q5 修訂） | 已核准 |
+| SCN-003 | 2026-10-29 | 已核准 |
+| SCN-004 | 2026-10-29 | 已核准 |
+| SCN-005 | 2026-10-29 | 已核准 |
+| SCN-006 | 2026-10-29 | 已核准 |
 
 ## 實作步驟
 
@@ -143,6 +153,8 @@ Feature: OpenCode 寫入角色在 OS 沙箱內執行
 | 編號 | 事項 | 狀態 | 影響 |
 |------|------|------|------|
 | TBD-1 | 依 Q1，data 目錄可寫，模型的命令仍能改 OpenCode 自己的資料，包含 `auth.json`。OpenCode 的驗證不設 protected files：OAuth 更新本來就會改寫 `auth.json`，設了會誤判失敗 | 待確認 | 接受的殘餘風險，在 PR 揭露。SCN-001 不涵蓋 data／state 目錄 |
+| TBD-3 | 步驟 1 沙箱內 10 次真實執行有 2 次在 240 秒逾時（唯讀 HOME 與 overlay 各一次），都停在 instance 初始化之後、建立 session 之前，也都是閒置數小時後的第一次執行。主機上 4 次對照都正常，但沒有一次是冷啟動，原因未確認（[evidence/step1.md](./evidence/step1.md)「逾時的對照」） | 待確認 | 不阻擋實作：Asura 有逾時保護，逾時以失敗回報。步驟 5 的 live 執行繼續觀察，有機會時補做主機的冷啟動對照 |
+| TBD-4 | overlay 的上層放在 tmpfs（記憶體），模型或工具在 HOME 大量寫入（例如 Go build cache）時會占用記憶體，執行結束才釋放 | 待確認 | 在 PR 揭露，不設上限 |
 | TBD-2 | 本機沒有內建版本 1.18.23 的隔離安裝（`~/.cache/asura-probe-issue-2/install` 不存在），SCN-006 要先安裝才能執行 | 待確認 | 只影響 SCN-006 的證據。安裝前會先向使用者確認 |
 
 ## Timeline
@@ -150,6 +162,7 @@ Feature: OpenCode 寫入角色在 OS 沙箱內執行
 | 日期 | 異動 | 負責人 |
 |------|------|--------|
 | 2026-10-29 | 建立 issue 文件。不呼叫模型的探測：OpenCode 1.18.31 需要可寫的 data 目錄，cache 唯讀可正常執行。Q1、Q2、Q4 照建議；Q3 的選項說明有誤，更正後重新詢問，答「整個 OpenCode 判不可用」。SCN-001～006 核准 | Raybird |
+| 2026-10-29 | 步驟 1 實測：唯讀 HOME 讓使用者的 MCP server 起不來。Q5 改為 HOME 暫時 overlay，SCN-001、SCN-002 修訂並重新核准；Q2 的限制隨之取消 | Raybird |
 
 ---
 **建立日期**: 2026-10-29  
