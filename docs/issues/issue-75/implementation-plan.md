@@ -134,7 +134,7 @@ bwrap --unshare-pid --unshare-ipc --die-with-parent
 - 驗收編號：SCN-004、SCN-008；SCN-001、SCN-002、SCN-007 的回歸
 - 完成判準：新測試先紅後綠；沙箱參數變更後 live verify 與失效對照重跑通過；CI 綠燈
 - 驗證：單元、直接探測與 live，記錄於 `evidence/review-fixes.md`
-- 狀態：🔄 進行中（等 CI）
+- 狀態：✅ 已完成（2026-11-03）
 - 證據：[evidence/review-fixes.md](./evidence/review-fixes.md)
 
 ## 使用方式對照
@@ -172,5 +172,5 @@ bwrap --unshare-pid --unshare-ipc --die-with-parent
 - [x] 步驟 4：缺 bwrap 時 fail-closed
 - [x] 步驟 5：live verify、失效對照、端到端、內建版本
 - [x] 步驟 6：文件與 CHANGELOG
-- [ ] 步驟 7：PR #86 審查修正（CI 綠燈後勾選）
+- [x] 步驟 7：PR #86 審查修正
 - [x] 專案 gate 通過，skip 已列出（[evidence/e2e.md](./evidence/e2e.md)「Gate」）

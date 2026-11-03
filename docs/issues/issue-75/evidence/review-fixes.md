@@ -96,3 +96,11 @@ workspace-boundary           11.5s  FAIL: security violation: wrote outside the 
 ## Gate（本機）
 
 `go vet ./... && go build ./cmd/asura && go test -count=1 -race -v ./...`：exit 0，24 個套件 ok，沒有 FAIL。skip 28 個，與 [e2e.md](./e2e.md)「Gate」相同。都是沒有設 `ASURA_VERIFY_LIVE` 的 live 測試，不算通過。build 產生的 `asura` 已刪除；`gofmt -l` 對本分支的 Go 檔沒有輸出。
+
+## CI（`9593a63`）
+
+[run 41573766211](https://github.com/raybird/Asura/actions/runs/41573766211)（pull_request）結論 success。同一個 commit 的 push run 41573760635 被 workflow 的 concurrency 設定取消，這是既有行為。
+
+- `Install bubblewrap` 步驟：`/home/runner/work/_temp/bubblewrap.tar.xz: OK`，`bubblewrap 0.11.1`，overlay 自我檢查通過。
+- `TestStrikerSandbox_*`、`TestOpenCodeWithoutBwrapFailsClosed`、7 個 `TestAdapter_Run_*` 與 `TestRuntimeVerificationAcrossPaths/opencode` 都沒有 skip，也沒有失敗。
+- CI 的 skip 都是 live 或環境相依的測試（`TestVerifyLive_*`、`TestCodexProbe_*`、`TestINT00*` 等），不算通過。
