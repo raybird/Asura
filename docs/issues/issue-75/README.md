@@ -26,6 +26,12 @@ GitHub [#75](https://github.com/raybird/Asura/issues/75)。OpenCode 的寫入角
 
 HOME 的其他部分掛成暫時 overlay（Q5）：沙箱內可以寫，寫入放在 tmpfs，執行結束就丟，主機上什麼都不留。這樣 MCP server 與工具快取（`uvx`、`npx`、`go test` 等）照常可用。`/tmp` 是每次執行私有的 tmpfs。HOME 以外的路徑（`/etc`、`/opt` 等）唯讀。`/run` 換成 tmpfs（Q6），只唯讀掛回名稱解析需要的路徑，沙箱內連不到主機 `/run` 底下的 socket，例如 docker 與使用者的 session bus。環境變數照舊沿用使用者原本的環境，不改登入方式。
 
+2026-11-03 依 PR #86 審查修訂：
+
+- HOME overlay 需要 bwrap 0.10 以上；更舊的版本與找不到 bwrap 一樣判為不可用（Q7）。
+- workspace 等於或包含 HOME、`/tmp`、`/var/tmp`、`/run` 時，可寫掛載會蓋掉 overlay 與遮蔽，寫入角色拒絕執行（Q8）。
+- `/var/tmp` 也換成 tmpfs。名稱解析只唯讀掛回 resolv.conf 檔案本身，不帶同目錄的 varlink socket。執行檔只掛檔案本身，不掛它所在的目錄。另加 `--new-session`，沙箱內的命令沒有控制終端。
+
 2026-10-29 探測（OpenCode 1.18.31）：
 
 | 掛載 | 命令 | 結果 |
@@ -45,7 +51,8 @@ HOME 的其他部分掛成暫時 overlay（Q5）：沙箱內可以寫，寫入�
 | 寫入 HOME 下的工具快取與 MCP 資料（`~/.cache/go-build`、`~/.npm`、mcp-memory-libsql 的資料庫等） | 寫回主機 | 沙箱內可寫，執行結束後丟棄，不保存 |
 | 取消前就已脫離行程樹的命令 | 被 PID 1 接手，取消後繼續執行 | 留在 bwrap 的 PID namespace 裡，取消時一併回收 |
 | 主機 `/run` 底下的 socket（docker、session bus） | 連得到 | 連不到 |
-| 主機沒有 `bwrap` | OpenCode 可用 | OpenCode 整體判為 unavailable（`dependency_not_found`），auto 改選其他 runtime |
+| 主機沒有 `bwrap`，或 bwrap 低於 0.10 | OpenCode 可用 | OpenCode 整體判為 unavailable（`dependency_not_found`），auto 改選其他 runtime |
+| workspace 是 HOME、HOME 的上層，或 `/tmp`、`/run` 本身 | 照常執行 | 寫入角色以 unsupported 拒絕，不呼叫模型 |
 | OpenCode 新版本的 verify | workspace-boundary 失敗 | 全部 probe 可以通過 |
 
 ## 涉及檔案
@@ -99,12 +106,12 @@ Feature: OpenCode 寫入角色在 OS 沙箱內執行
     And 原本的 process group 也已不存在
 
   @SCN-004
-  Scenario: 主機沒有 bwrap 時 fail-closed
-    Given 主機的 PATH 找不到 bwrap
+  Scenario: 主機沒有可用的 bwrap 時 fail-closed
+    Given 主機的 PATH 找不到 bwrap，或 bwrap 低於 0.10（不支援 overlay）
     When 執行 runtime inventory 或 doctor
     Then OpenCode 判為 unavailable，reason 為 dependency_not_found
     And auto 不選 OpenCode；明確指定 OpenCode 時帶 reason 拒絕，不改選其他 runtime
-    And bwrap 存在但無法建立 namespace 時，寫入角色在啟動模型前以 unavailable 失敗，不在沙箱外執行
+    And bwrap 存在但無法建立沙箱時，寫入角色在啟動模型前以 unavailable 失敗，不在沙箱外執行，失敗原因帶有 bwrap 的錯誤訊息
 
   @SCN-005
   Scenario: OpenCode 新版本通過驗證後各路徑可用
@@ -119,6 +126,13 @@ Feature: OpenCode 寫入角色在 OS 沙箱內執行
     Given OpenCode 是內建版本 1.18.23
     When 寫入角色執行一個需要修改 workspace 檔案的任務
     Then 任務成功，workspace 內的檔案被修改
+
+  @SCN-008
+  Scenario: workspace 蓋住 HOME 或遮蔽目錄時拒絕
+    Given workspace 等於或包含 HOME、/tmp、/var/tmp 或 /run（例如 workspace 就是 HOME 或 /）
+    When 寫入角色執行
+    Then 在啟動 opencode 前以 unsupported 失敗，不呼叫模型
+    And workspace 是 HOME 底下的子目錄時照常執行
 ```
 
 ## Gherkin 核准紀錄
@@ -133,16 +147,21 @@ Feature: OpenCode 寫入角色在 OS 沙箱內執行
   - 使用者 2026-10-29 本 issue Q4：「不放，維持現況 (Recommended)」→ 唯讀角色不在範圍內。
   - 使用者 2026-10-29 本 issue Q5（步驟 1 實測後）：「HOME 改用暫時 overlay (Recommended)」→ SCN-001、SCN-002 修訂：HOME 內的寫入在沙箱內成功、主機上不留；MCP server 照常啟動。
   - 使用者 2026-11-03 本 issue Q6（步驟 1 發現沙箱內連得到 docker socket）：「本 issue 遮蔽 /run，其餘另開 (Recommended)」→ SCN-007。clisandbox 的同一缺口另開 [#84](https://github.com/raybird/Asura/issues/84)，需要網路隔離的缺口另開 [#85](https://github.com/raybird/Asura/issues/85)。
+  - 使用者 2026-11-03 本 issue Q7（PR #86 審查 M1：overlay 需要 bwrap 0.10，CI 與 Ubuntu 24.04 只有 0.9.0）：「要求 bwrap ≥ 0.10 (Recommended)」→ SCN-004 修訂。
+  - 使用者 2026-11-03 本 issue Q8（審查 M2：workspace 是 HOME 時可寫到 `~/.config/opencode`）：「比照 clisandbox 拒絕 (Recommended)」→ SCN-008。除了 HOME，也把 `/tmp`、`/var/tmp`、`/run` 列入：它們是同一類「workspace 的掛載蓋掉遮蔽」，不涵蓋的話 SCN-007 就能被 workspace 繞過。
+  - 使用者 2026-11-03 本 issue Q9（審查 S1：`/run` 以外仍有 0666 的 root daemon socket）：「揭露並併入 #85 (Recommended)」→ TBD-5。
+  - 使用者 2026-11-03 本 issue Q10（審查 S3：data 目錄可寫的範圍）：「改寫 TBD-1 揭露，維持可寫 (Recommended)」→ TBD-1，另開 [#87](https://github.com/raybird/Asura/issues/87)。
 
 | Scenario | 核准日期 | 狀態 |
 |----------|---------|------|
 | SCN-001 | 2026-10-29（Q5 修訂） | 已核准 |
 | SCN-002 | 2026-10-29（Q5 修訂） | 已核准 |
 | SCN-003 | 2026-10-29 | 已核准 |
-| SCN-004 | 2026-10-29 | 已核准 |
+| SCN-004 | 2026-11-03（Q7 修訂） | 已核准 |
 | SCN-005 | 2026-10-29 | 已核准 |
 | SCN-006 | 2026-10-29 | 已核准 |
 | SCN-007 | 2026-11-03 | 已核准 |
+| SCN-008 | 2026-11-03（Q8） | 已核准 |
 
 ## 實作步驟
 
@@ -164,9 +183,9 @@ Feature: OpenCode 寫入角色在 OS 沙箱內執行
 
 | 編號 | 事項 | 狀態 | 影響 |
 |------|------|------|------|
-| TBD-1 | 依 Q1，data 目錄可寫，模型的命令仍能改 OpenCode 自己的資料，包含 `auth.json`。OpenCode 的驗證不設 protected files：OAuth 更新本來就會改寫 `auth.json`，設了會誤判失敗 | 待確認 | 接受的殘餘風險，在 PR 揭露。SCN-001 不涵蓋 data／state 目錄 |
+| TBD-1 | 依 Q1，data 目錄整個可寫並寫回主機。模型的命令能改其中所有東西：`auth.json`、所有專案共用的 `opencode.db`、`snapshot/` 底下的 git 目錄與 `repos/`。之後在主機上直接執行的 OpenCode（不經 Asura）會讀這些資料；能否藉 snapshot 的 git 設定執行命令沒有驗證（PR #86 審查 S3）。OpenCode 的驗證不設 protected files：OAuth 更新本來就會改寫 `auth.json`，設了會誤判失敗 | 不影響本次交付（2026-11-03 Q10）：追蹤：[#87](https://github.com/raybird/Asura/issues/87) | 接受的殘餘風險，在 PR 揭露。SCN-001 不涵蓋 data／state 目錄 |
 | TBD-3 | 步驟 1 沙箱內 10 次真實執行有 2 次在 240 秒逾時（唯讀 HOME 與 overlay 各一次），都停在 instance 初始化之後、建立 session 之前，也都是閒置數小時後的第一次執行。主機上 4 次對照都正常，但沒有一次是冷啟動，原因未確認（[evidence/step1.md](./evidence/step1.md)「逾時的對照」） | 待確認 | 不阻擋實作：Asura 有逾時保護，逾時以失敗回報。步驟 5 的 14 次模型呼叫都沒有逾時（最長 12.9 秒），但沒有記錄當時的快取狀態，不能當冷啟動對照（[evidence/e2e.md](./evidence/e2e.md)「逾時」）。在 PR 揭露 |
-| TBD-5 | 沙箱沒有網路隔離：localhost 上的服務與 abstract unix socket 仍然連得到。帳號讀得到憑證的服務（例如啟動後的 microk8s API）可以被用來繞過沙箱 | 不影響本次交付（2026-11-03 Q6）：追蹤：[#85](https://github.com/raybird/Asura/issues/85) | 本 issue 只遮蔽 `/run` 底下的 socket（SCN-007）。2026-10-29 檢查時，localhost 上只有 ollama（11434），microk8s API 沒有在 listen |
+| TBD-5 | 沙箱沒有網路隔離：localhost 上的服務與 abstract unix socket 仍然連得到。帳號讀得到憑證的服務（例如啟動後的 microk8s API）可以被用來繞過沙箱。唯讀掛載也擋不住 `connect`：`/run` 以外權限 0666 的 root daemon socket 仍連得到，例如 `/var/snap/multipass/common/multipass_socket` 與 livepatchd，能否利用沒有驗證（PR #86 審查 S1，Q9 併入 #85） | 不影響本次交付（2026-11-03 Q6）：追蹤：[#85](https://github.com/raybird/Asura/issues/85) | 本 issue 只遮蔽 `/run` 底下的 socket（SCN-007）。2026-10-29 檢查時，localhost 上只有 ollama（11434），microk8s API 沒有在 listen |
 | TBD-6 | OMP／Antigravity 的 clisandbox 只把 `/run/user` 換成 tmpfs，沙箱內同樣連得到 docker socket | 不影響本次交付（2026-11-03 Q6）：追蹤：[#84](https://github.com/raybird/Asura/issues/84) | 既有缺口，不在本 issue 修改 |
 | TBD-4 | overlay 的上層放在 tmpfs（記憶體），模型或工具在 HOME 大量寫入（例如 Go build cache）時會占用記憶體，執行結束才釋放 | 待確認 | 在 PR 揭露，不設上限 |
 | TBD-2 | 本機沒有內建版本 1.18.23 的隔離安裝（`~/.cache/asura-probe-issue-2/install` 不存在），SCN-006 要先安裝才能執行 | 已解決（2026-11-03）：#73 留下的 `~/.cache/asura-verify/opencode-1.18.23` 就是 1.18.23 的隔離安裝，不需要另外安裝 | SCN-006 以它執行通過（[evidence/e2e.md](./evidence/e2e.md)） |
@@ -179,9 +198,10 @@ Feature: OpenCode 寫入角色在 OS 沙箱內執行
 | 2026-10-29 | 步驟 1 實測：唯讀 HOME 讓使用者的 MCP server 起不來。Q5 改為 HOME 暫時 overlay，SCN-001、SCN-002 修訂並重新核准；Q2 的限制隨之取消 | Raybird |
 | 2026-11-03 | 步驟 1 另外發現，沙箱內連得到主機的 docker socket（clisandbox 也一樣）。Q6 決定本 issue 遮蔽 `/run`，新增 SCN-007 並核准；clisandbox 的缺口開 #84，網路隔離開 #85 | Raybird |
 | 2026-11-03 | 步驟 2～6 完成：寫入角色在 bwrap 內執行；OpenCode 1.18.31 第一次通過 `runtime verify`，端到端四條路徑與內建 1.18.23 通過 | Raybird |
+| 2026-11-03 | PR #86 獨立審查 RETURN TO execute-task（M1 bwrap 版本、M2 workspace 蓋住 HOME）。Q7～Q10 照建議：SCN-004 修訂、新增 SCN-008；TBD-1、TBD-5 改寫，另開 #87 | Raybird |
 
 ---
 **建立日期**: 2026-10-29  
 **分級**: Medium — OpenCode adapter 的寫入角色啟動方式、inventory 探測、live 測試與文件，範圍有界  
 **風險**: High — 安全邊界：可寫範圍錯了，不是模型能寫到 workspace 外，就是寫入角色無法使用；真實行為只能用 live 驗證\
-**狀態**: 審查中（2026-11-03）
+**狀態**: 實作中（2026-11-03，處理 PR #86 審查）
