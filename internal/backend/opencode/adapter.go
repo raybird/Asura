@@ -443,9 +443,40 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 	}
 	args = append(args, req.Prompt)
 
-	cmd := exec.CommandContext(ctx, binPath, args...)
+	env := buildExecutionEnv(cfg)
+	name := binPath
+	// 2026-11-03：issue-75，寫入角色在 bwrap 內執行；無法建立沙箱時不在沙箱外執行。
+	if !isIsolatedRuntime(cfg) {
+		unavailable := func(err error) (*backend.ExecutionResult, error) {
+			class := backend.FailureUnavailable
+			if ctx.Err() != nil {
+				class = backend.FailureCancelled
+			}
+			return &backend.ExecutionResult{
+				BackendID:    "opencode",
+				FailureClass: class,
+				StartedAt:    startedAt,
+				CompletedAt:  time.Now(),
+			}, backend.NewExecutionError("opencode", class, err, "")
+		}
+		bwrap, err := exec.LookPath("bwrap")
+		if err != nil {
+			return unavailable(err)
+		}
+		sandbox, err := sandboxArgs(env, req.Workspace, binPath)
+		if err != nil {
+			return unavailable(fmt.Errorf("prepare sandbox: %w", err))
+		}
+		if err := exec.CommandContext(ctx, bwrap, append(sandbox, "/usr/bin/true")...).Run(); err != nil {
+			return unavailable(errors.New("bwrap namespaces unavailable"))
+		}
+		args = append(append(sandbox, binPath), args...)
+		name = bwrap
+	}
+
+	cmd := exec.CommandContext(ctx, name, args...)
 	ConfigureProcessGroup(cmd)
-	cmd.Env = buildExecutionEnv(cfg)
+	cmd.Env = env
 
 	var stdoutBuf, stderrBuf bytes.Buffer
 	cmd.Stdout = &stdoutBuf

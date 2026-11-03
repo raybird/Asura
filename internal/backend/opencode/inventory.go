@@ -2,6 +2,7 @@ package opencode
 
 import (
 	"asura/internal/backend"
+	"asura/internal/backend/clisandbox"
 	"asura/internal/backend/verification"
 	"context"
 	"errors"
@@ -19,6 +20,12 @@ func (a *Adapter) Probe(ctx context.Context) (string, error) {
 		info, err := os.Stat(filepath.Join(a.cfg.ConfigDir, "opencode", "opencode.json"))
 		if err != nil || !info.Mode().IsRegular() {
 			return "", &backend.ProbeError{Reason: backend.ConfigurationInvalid}
+		}
+	}
+	// 2026-11-03：issue-75，寫入角色只在 bwrap 內執行；找不到 bwrap 時整個 OpenCode 判為不可用（Q3）。
+	if !isIsolatedRuntime(a.cfg) {
+		if err := clisandbox.ProbeSandboxDependency(ctx); err != nil {
+			return "", err
 		}
 	}
 	path := a.cfg.BinaryPath

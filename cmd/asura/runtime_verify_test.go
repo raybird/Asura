@@ -334,7 +334,8 @@ func TestRuntimeVerificationNotAutomatic(t *testing.T) {
 	}
 	e.writeConfig(t, "schema_version = 1\nsocket = \""+sock+"\"\nallowed_roots = [\""+ws+"\"]\n")
 	runtimes := t.TempDir()
-	calls := filepath.Join(e.root, "calls.log")
+	// 呼叫紀錄寫在 workspace 內：寫在外面時，OpenCode 寫入角色在 bwrap 內的紀錄會被丟棄，「只查版本」會變成假綠燈（issue-75）。
+	calls := filepath.Join(ws, "calls.log")
 	for name, version := range map[string]string{"codex": "codex-cli 0.163.0", "opencode": "1.18.31"} {
 		script := "#!/bin/sh\necho \"" + name + " $*\" >> " + calls + "\nif [ \"$1\" = --version ]; then echo '" + version + "'; exit 0; fi\n"
 		if err := os.WriteFile(filepath.Join(runtimes, name), []byte(script), 0o700); err != nil {

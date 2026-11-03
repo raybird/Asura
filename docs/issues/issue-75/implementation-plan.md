@@ -57,8 +57,8 @@ bwrap --unshare-pid --unshare-ipc --die-with-parent
   - 新測試在修改前以「寫到 workspace 外」為理由失敗，修改後通過。
   - 既有的 opencode 套件測試全部通過，包含身分檢查與 H-01 測試。
 - 驗證：單元紅綠；`go test -race ./internal/backend/opencode/...`
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成（2026-11-03）
+- 證據：[evidence/steps2-4.md](./evidence/steps2-4.md)「步驟 2」：新測試先紅後綠；三個既有測試的呼叫紀錄改寫到 workspace 內（其中兩個原本會變成假綠燈）；gate 通過
 
 ### 步驟 2b — 遮蔽主機 /run 底下的 socket
 - 產出：確定性測試。測試建立一個 `/run` 底下的 socket 不切實際，改由假 opencode 在沙箱內回報：`/run/docker.sock`、`/var/run/docker.sock`、`/run/user/<uid>` 是否存在，以及 `/etc/resolv.conf` 是否可讀。
@@ -68,8 +68,8 @@ bwrap --unshare-pid --unshare-ipc --die-with-parent
   - 拿掉 `--tmpfs /run` 時，主機有 docker socket 的環境下測試失敗。主機沒有 docker socket 時，紅燈改以 `/run/user/<uid>` 判定。
   - 加回後通過，`/etc/resolv.conf` 仍可讀。
 - 驗證：單元紅綠；live 佐證在步驟 5（沙箱內 `_ping` 失敗、模型呼叫正常）
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成（2026-11-03）
+- 證據：[evidence/steps2-4.md](./evidence/steps2-4.md)「步驟 2b」：拿掉 `--tmpfs /run` 時看得到 docker socket 與 `/run/user/1000`；拿掉 resolv.conf 掛回時讀不到；最終版通過
 
 ### 步驟 3 — 取消回收已脫離行程樹的命令
 - 產出：確定性測試。假的 opencode 先以 `setsid` 在背景啟動 `sleep`，啟動它的 shell 隨即結束，假 opencode 本身繼續執行。兩條取消路徑都要測：行程內取消，以及經 `KillProcessGroup` 的外部取消。
@@ -79,8 +79,8 @@ bwrap --unshare-pid --unshare-ipc --die-with-parent
   - 拿掉步驟 2 的 bwrap 時，測試以「殘留」為理由失敗。
   - 加回後，5 秒內該 sleep 與 process group 都不存在。
 - 驗證：單元紅綠（紅燈以暫時退回步驟 2 取得，記錄於證據）
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成（2026-11-03）
+- 證據：[evidence/steps2-4.md](./evidence/steps2-4.md)「步驟 3」：不經 bwrap 時兩條取消路徑都留下殘留；最終版 5 秒內回收
 
 ### 步驟 4 — 缺 bwrap 時 fail-closed
 - 產出：
@@ -93,8 +93,8 @@ bwrap --unshare-pid --unshare-ipc --die-with-parent
   - 新測試先紅後綠。
   - 假 opencode 在測試中確實沒有被執行（以標記檔判定）。
 - 驗證：單元＋ `cmd/asura` 測試
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成（2026-11-03）
+- 證據：[evidence/steps2-4.md](./evidence/steps2-4.md)「步驟 4」：inventory、doctor、auto run、daemon ask 都判 `dependency_not_found`；三個突變各自被抓到
 
 ### 步驟 5 — live 驗證、端到端與內建版本
 - 產出：
@@ -153,10 +153,10 @@ bwrap --unshare-pid --unshare-ipc --die-with-parent
 ## 檢查清單
 
 - [x] 步驟 1：真實 run 的可寫路徑已確認
-- [ ] 步驟 2：寫入角色在 bwrap 內，SCN-001、002 先紅後綠
-- [ ] 步驟 2b：主機 /run 底下的 socket 已遮蔽
-- [ ] 步驟 3：已脫離行程樹的命令被回收
-- [ ] 步驟 4：缺 bwrap 時 fail-closed
+- [x] 步驟 2：寫入角色在 bwrap 內，SCN-001、002 先紅後綠
+- [x] 步驟 2b：主機 /run 底下的 socket 已遮蔽
+- [x] 步驟 3：已脫離行程樹的命令被回收
+- [x] 步驟 4：缺 bwrap 時 fail-closed
 - [ ] 步驟 5：live verify、失效對照、端到端、內建版本
 - [ ] 步驟 6：文件與 CHANGELOG
 - [ ] 專案 gate 通過，skip 已列出
