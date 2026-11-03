@@ -41,14 +41,17 @@ Asura 如何決定一個任務由哪個 runtime 執行、執行前檢查什麼�
 | `cancellation` | 取消後，模型啟動的命令連同行程樹被回收；命令同時留下前景子行程與另開 session 的背景子行程，兩者都必須消失（2026-10-28 #74） | 全部 |
 | `protected-files-unchanged` | 原 CLI 的登入憑證檔在全部 probe 前後逐 byte 相同 | `omp`、`antigravity` |
 
-驗證前 runtime 必須已登入；`opencode`、`omp`、`antigravity` 另需 `bwrap`。任一 probe 失敗、逾時或無法執行時整體失敗：逐項印出結果、結束碼非 0，紀錄不新增也不變動。內建身分不執行 probe。只有明確執行 `asura runtime verify` 才會驗證；daemon 啟動、`runtime inventory`、`doctor`、`run`、`ask` 都不會自動執行 probe。
+驗證前 runtime 必須已登入；`opencode`（0.10 以上）、`omp`、`antigravity` 另需 `bwrap`。任一 probe 失敗、逾時或無法執行時整體失敗：逐項印出結果、結束碼非 0，紀錄不新增也不變動。內建身分不執行 probe。只有明確執行 `asura runtime verify` 才會驗證；daemon 啟動、`runtime inventory`、`doctor`、`run`、`ask` 都不會自動執行 probe。
 
 紀錄固定存在 `$XDG_DATA_HOME/asura/runtime-verification.json`（預設 `~/.local/share/asura/`），不跟 `--db` 或 config 走，每筆含身分、驗證時間（UTC）與執行驗證的 Asura 版本。驗證紀錄不綁模型：OpenCode 與 Codex 的 probe 使用 runtime 的預設模型。`--list` 列出內建身分與紀錄，`--remove` 移除一筆紀錄，內建身分不能移除。移除後，已接受但還沒執行到的 stage 在執行前被拒絕，不改選其他 runtime。清冊 policy 版本維持 `inventory-v1`，升級前封存的排隊任務與 cron 照常執行。
 
 已知限制（2026-10-28）：
 
 - **Codex 已可驗證**：取消時不回收模型命令的問題已修正（[#74](https://github.com/raybird/Asura/issues/74)），Codex 0.163.0 可以通過驗證。
-- **OpenCode 寫入角色的殘餘範圍**（2026-11-03 #75）：OpenCode 自己的 data 目錄必須可寫（OAuth 更新會改寫 `auth.json`），模型的命令也能改它；沙箱沒有網路隔離，localhost 上的服務與 abstract unix socket 仍連得到（[#85](https://github.com/raybird/Asura/issues/85)）；HOME overlay 的寫入放在記憶體，執行結束才釋放。
+- **OpenCode 寫入角色的殘餘範圍**（2026-11-03 #75）：
+  - OpenCode 自己的 data 目錄必須整個可寫（OAuth 更新會改寫 `auth.json`），模型的命令也能改其中的 `opencode.db`、snapshot 等，之後在主機上直接執行的 OpenCode 會讀到（[#87](https://github.com/raybird/Asura/issues/87)）。
+  - 沙箱沒有網路隔離：localhost 上的服務、abstract unix socket，以及 `/run` 以外權限開放的 socket 仍連得到（[#85](https://github.com/raybird/Asura/issues/85)）。
+  - HOME overlay 的寫入放在記憶體，執行結束才釋放。
 - **唯讀權限設定的對應**：Codex 的 `read-only-sandbox` 驗的是 `codex sandbox -P :read-only`。正式任務的 `codex exec -s read-only` 交給 `codex-linux-sandbox` 的權限設定，2026-10-28 在 0.163.0 上確認兩者相同（`TestVerifyLive_CodexExecReadOnlyProfile`，#74）。這個對應是 Codex 的內部行為，新版本需要以同一個測試重新確認。
 
 ## OpenCode 寫入角色的沙箱
@@ -60,12 +63,14 @@ Asura 如何決定一個任務由哪個 runtime 執行、執行前檢查什麼�
 | workspace | 可寫 | 是 |
 | OpenCode 的 data、state 目錄（`$XDG_DATA_HOME/opencode`、`$XDG_STATE_HOME/opencode`，預設在 `~/.local/share`、`~/.local/state`） | 可寫 | 是：登入更新、session 與 log |
 | HOME 的其他部分 | 可寫（暫時 overlay） | 否，執行結束即丟；MCP server 與工具快取照常運作 |
-| `/tmp`、`/run` | 空的 tmpfs | 否；看不到主機 `/run` 底下的 socket（docker、session bus），只唯讀掛回 DNS 設定 |
-| 其他 | 唯讀 | — |
+| `/tmp`、`/var/tmp`、`/run` | 空的 tmpfs | 否；看不到主機 `/run` 底下的 socket（docker、session bus），只唯讀掛回 resolv.conf 檔案 |
+| 其他 | 唯讀 | —；唯讀擋不住對 unix socket 的連線，`/run` 以外權限開放的 socket 仍連得到（#85） |
 
-沙箱另開 PID 與 IPC namespace。取消時連命令已脫離行程樹的（例如 `cmd &` 之後 shell 先結束）也一併回收。
+沙箱另開 PID 與 IPC namespace，也另開 session，命令沒有控制終端。取消時連命令已脫離行程樹的（例如 `cmd &` 之後 shell 先結束）也一併回收。
 
-不會退回沙箱外執行。找不到 `bwrap` 時，`runtime inventory`、`doctor` 與 admission 把整個 OpenCode（包含唯讀角色）判為 `dependency_not_found`。`bwrap` 存在但主機不允許建立 namespace 時，inventory 仍判 available（與 OMP、Antigravity 相同，只檢查 `bwrap` 是否存在），寫入角色在啟動 opencode 前以 unavailable 失敗。
+workspace 等於或包含 HOME、`/tmp`、`/var/tmp`、`/run` 時（例如在 `~` 底下直接 `asura run`，workspace 預設是目前目錄），workspace 的可寫掛載會蓋掉上表的 overlay 與遮蔽，寫入角色在啟動 opencode 前以 unsupported 拒絕。workspace 是 HOME 底下的子目錄時照常執行。
+
+HOME overlay 需要 `bwrap` 0.10 以上；Ubuntu 24.04、Debian 12 的套件是 0.9.0，需要另外安裝新版（例如從 release 原始碼建置）。不會退回沙箱外執行：找不到 `bwrap` 或版本低於 0.10 時，`runtime inventory`、`doctor` 與 admission 把整個 OpenCode（包含唯讀角色）判為 `dependency_not_found`。`bwrap` 版本夠新但主機不允許建立 namespace 時，inventory 仍判 available（與 OMP、Antigravity 相同，不實際建立 namespace），寫入角色在啟動 opencode 前以 unavailable 失敗，訊息帶有 bwrap 的錯誤。
 
 ## 固定三面管線 (Three-Face Fixed Pipeline)
 

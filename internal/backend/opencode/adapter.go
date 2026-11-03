@@ -447,8 +447,7 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 	name := binPath
 	// 2026-11-03：issue-75，寫入角色在 bwrap 內執行；無法建立沙箱時不在沙箱外執行。
 	if !isIsolatedRuntime(cfg) {
-		unavailable := func(err error) (*backend.ExecutionResult, error) {
-			class := backend.FailureUnavailable
+		fail := func(class backend.FailureClassification, err error) (*backend.ExecutionResult, error) {
 			if ctx.Err() != nil {
 				class = backend.FailureCancelled
 			}
@@ -461,14 +460,17 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 		}
 		bwrap, err := exec.LookPath("bwrap")
 		if err != nil {
-			return unavailable(err)
+			return fail(backend.FailureUnavailable, err)
 		}
 		sandbox, err := sandboxArgs(env, req.Workspace, binPath)
-		if err != nil {
-			return unavailable(fmt.Errorf("prepare sandbox: %w", err))
+		if errors.Is(err, errWorkspaceCoversMask) {
+			return fail(backend.FailureUnsupported, err)
 		}
-		if err := exec.CommandContext(ctx, bwrap, append(sandbox, "/usr/bin/true")...).Run(); err != nil {
-			return unavailable(errors.New("bwrap namespaces unavailable"))
+		if err != nil {
+			return fail(backend.FailureUnavailable, fmt.Errorf("prepare sandbox: %w", err))
+		}
+		if out, err := exec.CommandContext(ctx, bwrap, append(sandbox, "/usr/bin/true")...).CombinedOutput(); err != nil {
+			return fail(backend.FailureUnavailable, fmt.Errorf("bwrap sandbox unavailable: %s", strings.TrimSpace(string(out))))
 		}
 		args = append(append(sandbox, binPath), args...)
 		name = bwrap

@@ -136,7 +136,7 @@ Feature: OpenCode 寫入角色在 OS 沙箱內執行
 ```
 
 ## Gherkin 核准紀錄
-- **核准 commit**: 2a52140（SCN-001～006 初次核准於 d753164；Q5 修訂 SCN-001、SCN-002 於 3dcc7e4；Q6 新增 SCN-007 於 2a52140）
+- **核准 commit**: e0ffc67（SCN-001～006 初次核准於 d753164；Q5 修訂 SCN-001、SCN-002 於 3dcc7e4；Q6 新增 SCN-007 於 2a52140；Q7 修訂 SCN-004、Q8 新增 SCN-008 於 e0ffc67）
 - **核准來源**：
   - GitHub #75 的問題描述（2026-10-21 建立）：寫入角色必須寫不到 workspace 外；方向是比照 OMP／Antigravity，在 Asura 的 bwrap 內執行 → SCN-001、SCN-006。
   - #74 的 TBD-1（2026-10-28 Q1）：取消前就已脫離行程樹的 OpenCode 命令，在 #75 以 PID namespace 補上 → SCN-003。

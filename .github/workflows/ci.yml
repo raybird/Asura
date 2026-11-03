@@ -32,10 +32,19 @@ jobs:
       - name: Install Pinned OpenCode 1.18.23
         run: npm install -g opencode-ai@1.18.23
 
+      # 2026-11-03：OpenCode 寫入角色的 HOME overlay 需要 bwrap 0.10 以上（#75），ubuntu-24.04 的套件只有 0.9.0；
+      # 改從固定雜湊的 release 原始碼建置，裝在 /usr/bin，下方 AppArmor profile 才對得上。
       - name: Install bubblewrap and verify namespaces
         run: |
           sudo apt-get update
-          sudo apt-get install -y bubblewrap
+          sudo apt-get install -y meson ninja-build libcap-dev pkg-config
+          curl -sSfL -o "$RUNNER_TEMP/bubblewrap.tar.xz" https://github.com/containers/bubblewrap/releases/download/v0.11.1/bubblewrap-0.11.1.tar.xz
+          echo "c1b7455a1283b1295879a46d5f001dfd088c0bb0f238abb5e128b3583a246f71  $RUNNER_TEMP/bubblewrap.tar.xz" | sha256sum -c -
+          tar -xJf "$RUNNER_TEMP/bubblewrap.tar.xz" -C "$RUNNER_TEMP"
+          meson setup "$RUNNER_TEMP/bwrap-build" "$RUNNER_TEMP/bubblewrap-0.11.1" --prefix=/usr -Dman=disabled -Dtests=false -Dselinux=disabled -Dbash_completion=disabled -Dzsh_completion=disabled
+          ninja -C "$RUNNER_TEMP/bwrap-build"
+          sudo ninja -C "$RUNNER_TEMP/bwrap-build" install
+          bwrap --version
           # 2026-09-30: Ubuntu restricts unprivileged user namespaces; allow only bwrap.
           sudo tee /etc/apparmor.d/asura-ci-bwrap > /dev/null <<'EOF'
           abi <abi/4.0>,
@@ -46,6 +55,7 @@ jobs:
           EOF
           sudo apparmor_parser -r /etc/apparmor.d/asura-ci-bwrap
           bwrap --unshare-pid --unshare-ipc --ro-bind / / --proc /proc --die-with-parent -- /usr/bin/true
+          bwrap --unshare-pid --ro-bind / / --overlay-src "$HOME" --tmp-overlay "$HOME" -- /usr/bin/true
 
       - name: Vet
         run: go vet ./...

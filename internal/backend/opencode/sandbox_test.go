@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -124,8 +125,13 @@ func TestStrikerSandbox_HidesHostRunSockets(t *testing.T) {
 		script += fmt.Sprintf("[ -e %q ] && echo 'visible %s' >> %q\n", p, p, report)
 	}
 	script += fmt.Sprintf("cat /etc/resolv.conf >/dev/null 2>&1 || echo 'resolv.conf unreadable' >> %q\n", report)
+	sentinel := filepath.Join(root, "ws", "checked")
+	script += fmt.Sprintf("echo ok > %q\n", sentinel)
 	if _, err := runFakeStriker(t, context.Background(), root, script); err != nil {
 		t.Fatalf("run: %v", err)
+	}
+	if _, err := os.Stat(sentinel); err != nil {
+		t.Fatalf("checks did not run in the workspace: %v", err)
 	}
 	if data, err := os.ReadFile(report); err == nil {
 		t.Errorf("sandbox exposes host paths:\n%s", data)
@@ -164,7 +170,12 @@ func TestStrikerSandbox_CancelReapsCommandsDetachedBeforeCancel(t *testing.T) {
 				defer close(done)
 				_, _ = adapter.Run(ctx, &backend.ExecutionRequest{Role: backend.RoleStriker, Workspace: filepath.Join(root, "ws"), Prompt: "p"})
 			}()
-			pgid := <-pgids
+			var pgid int
+			select {
+			case pgid = <-pgids:
+			case <-done:
+				t.Fatal("Run returned before starting opencode")
+			}
 			ready := func(found map[string][]int) bool {
 				_, err := os.Stat(started)
 				return err == nil && len(found[detached]) == 1
@@ -241,6 +252,57 @@ func TestStrikerSandbox_FailsClosedWithoutBwrap(t *testing.T) {
 	}
 	t.Setenv("PATH", fake)
 	runStriker()
+	// bwrap 的錯誤訊息要帶進失敗原因，否則使用者看不出是版本還是 namespace 的問題（PR #86 審查 M1）。
+	if _, err := logical.Run(context.Background(), &backend.ExecutionRequest{Role: backend.RoleStriker, Workspace: ws, Prompt: "p"}); err == nil || !strings.Contains(err.Error(), "setting up uid map") {
+		t.Errorf("striker error does not carry bwrap stderr: %v", err)
+	}
+}
+
+// 2026-11-03：issue-75 SCN-004（Q7），HOME overlay 需要 bwrap 0.10 以上；舊版 bwrap 時整個 OpenCode 判為 dependency_not_found。
+func TestStrikerSandbox_InventoryRequiresOverlayCapableBwrap(t *testing.T) {
+	root, _ := sandboxRoot(t)
+	bin := filepath.Join(root, "bin")
+	if err := os.WriteFile(filepath.Join(bin, "opencode"), []byte("#!/bin/sh\necho 1.18.23\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	for version, want := range map[string]backend.ProbeReason{
+		"bubblewrap 0.9.0":  backend.DependencyNotFound,
+		"bubblewrap 0.10.0": backend.ProbeOK,
+		"bubblewrap 0.11.1": backend.ProbeOK,
+		"garbage":           backend.DependencyNotFound,
+	} {
+		if err := os.WriteFile(filepath.Join(bin, "bwrap"), []byte("#!/bin/sh\necho '"+version+"'\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		logical := NewRoleRoutingBackend(NewAdapter(AdapterConfig{Role: RoleOracle}), NewAdapter(AdapterConfig{Role: RoleStriker}))
+		s, err := backend.CaptureInventory(context.Background(), []backend.RegisteredRuntime{{ID: "opencode", Backend: logical}})
+		if err != nil || s.Entries[0].ReasonCode != want {
+			t.Errorf("%s: reason=%v err=%v, want %s", version, s.Entries[0].ReasonCode, err, want)
+		}
+	}
+}
+
+// 2026-11-03：issue-75 SCN-008（Q8），workspace 等於或包含 HOME、/tmp、/run 時，掛載會蓋掉 overlay 或遮蔽；寫入角色拒絕執行。
+func TestStrikerSandbox_RejectsWorkspaceCoveringMaskedPaths(t *testing.T) {
+	requireBwrap(t)
+	root, home := sandboxRoot(t)
+	marker := filepath.Join(home, "executed")
+	bin := filepath.Join(root, "bin", "opencode")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\n[ \"$1\" = --version ] && { echo 1.18.31; exit 0; }\n: > "+marker+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	adapter := NewAdapter(AdapterConfig{BinaryPath: bin, ExpectedVersion: "1.18.31", Role: RoleStriker})
+	for _, ws := range []string{home, root, "/", os.TempDir()} {
+		res, err := adapter.Run(context.Background(), &backend.ExecutionRequest{Role: backend.RoleStriker, Workspace: ws, Prompt: "p"})
+		if err == nil || res == nil || res.FailureClass != backend.FailureUnsupported {
+			t.Errorf("workspace %s: res=%+v err=%v", ws, res, err)
+		}
+		if _, err := os.Stat(marker); err == nil {
+			t.Errorf("workspace %s: opencode was executed", ws)
+			os.Remove(marker)
+		}
+	}
 }
 
 // linkBwrap 把主機的 bwrap 連進 dir：OpenCode 寫入角色只在 bwrap 內執行，PATH 只放假 runtime 的測試也要找得到它（issue-75）。

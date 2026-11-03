@@ -27,6 +27,10 @@ func (a *Adapter) Probe(ctx context.Context) (string, error) {
 		if err := clisandbox.ProbeSandboxDependency(ctx); err != nil {
 			return "", err
 		}
+		// HOME overlay 需要 bwrap 0.10 以上；舊版同樣判為不可用，不讓 admission 選到必定失敗的寫入角色（Q7）。
+		if bwrap, err := exec.LookPath("bwrap"); err != nil || !bwrapSupportsOverlay(ctx, bwrap) {
+			return "", &backend.ProbeError{Reason: backend.DependencyNotFound}
+		}
 	}
 	path := a.cfg.BinaryPath
 	if path == "" {

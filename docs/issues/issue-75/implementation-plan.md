@@ -124,6 +124,19 @@ bwrap --unshare-pid --unshare-ipc --die-with-parent
 - 狀態：✅ 已完成（2026-11-03）
 - 證據：`docs/guides/runtimes.md` 新增「OpenCode 寫入角色的沙箱」並更新已知限制；`README.md`、`docs/guides/cli-reference.md`、`CHANGELOG.md`。對照 `sandbox.go`、`clisandbox.ProbeSandboxDependency` 與 live 結果人工核對
 
+### 步驟 7 — PR #86 審查修正
+- 產出：
+  - inventory 要求 bwrap 0.10 以上，預檢失敗帶 bwrap stderr（SCN-004 修訂）。
+  - workspace 蓋住 HOME、`/tmp`、`/var/tmp`、`/run` 時拒絕（SCN-008）。
+  - 沙箱參數：只掛執行檔與 resolv.conf 檔案、`--new-session`、`--tmpfs /var/tmp`。
+  - CI 改裝 bubblewrap 0.11.1；文件與 TBD 依 Q7～Q10 更新。
+- 相依：步驟 2～6；規格修訂 `e0ffc67`
+- 驗收編號：SCN-004、SCN-008；SCN-001、SCN-002、SCN-007 的回歸
+- 完成判準：新測試先紅後綠；沙箱參數變更後 live verify 與失效對照重跑通過；CI 綠燈
+- 驗證：單元、直接探測與 live，記錄於 `evidence/review-fixes.md`
+- 狀態：🔄 進行中（等 CI）
+- 證據：[evidence/review-fixes.md](./evidence/review-fixes.md)
+
 ## 使用方式對照
 
 使用者操作不變。差異如下：
@@ -159,4 +172,5 @@ bwrap --unshare-pid --unshare-ipc --die-with-parent
 - [x] 步驟 4：缺 bwrap 時 fail-closed
 - [x] 步驟 5：live verify、失效對照、端到端、內建版本
 - [x] 步驟 6：文件與 CHANGELOG
+- [ ] 步驟 7：PR #86 審查修正（CI 綠燈後勾選）
 - [x] 專案 gate 通過，skip 已列出（[evidence/e2e.md](./evidence/e2e.md)「Gate」）

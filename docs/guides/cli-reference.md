@@ -113,7 +113,7 @@ Daemon 讀取的環境變數（也可寫在 config，環境變數優先）：
 ./bin/asura runtime verify --remove omp 18.12.6 [<sha256>]
 ```
 
-`<runtime>` 為 `opencode`、`codex`、`omp`、`antigravity`。驗證前 runtime 必須已登入。逐項印出 probe 結果；全部通過時 exit 0，並印出寫入的身分與紀錄路徑。任一 probe 失敗、逾時或無法執行（未安裝、未登入、OpenCode／OMP／Antigravity 缺 `bwrap`）時 exit 1，不新增也不變動紀錄。內建身分不執行 probe，直接 exit 0。內建身分不能移除，找不到紀錄、或省略 sha256 但有多筆紀錄時 exit 1；用法錯誤也 exit 1。可用 Ctrl-C 中止，中止視為失敗。
+`<runtime>` 為 `opencode`、`codex`、`omp`、`antigravity`。驗證前 runtime 必須已登入。逐項印出 probe 結果；全部通過時 exit 0，並印出寫入的身分與紀錄路徑。任一 probe 失敗、逾時或無法執行（未安裝、未登入、OpenCode／OMP／Antigravity 缺 `bwrap`，或 OpenCode 的 `bwrap` 低於 0.10）時 exit 1，不新增也不變動紀錄。內建身分不執行 probe，直接 exit 0。內建身分不能移除，找不到紀錄、或省略 sha256 但有多筆紀錄時 exit 1；用法錯誤也 exit 1。可用 Ctrl-C 中止，中止視為失敗。
 
 紀錄位置、probe 內容與已知限制見 [版本驗證](runtimes.md#版本驗證)。
 

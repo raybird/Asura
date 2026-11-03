@@ -39,7 +39,7 @@ go build -o bin/asura ./cmd/asura
 
 | Runtime | 內建版本 | 備註 |
 |---|---|---|
-| `opencode`（預設） | OpenCode 1.18.23 | 需 `bwrap`；可擔任所有 stage |
+| `opencode`（預設） | OpenCode 1.18.23 | 需 `bwrap` 0.10 以上；可擔任所有 stage |
 | `codex` | Codex CLI 0.155.0 | 可擔任所有 stage |
 | `omp` | OMP CLI 18.4.4、Bun 1.4.2、`openai-codex/gpt-6-luna` | 需 `bwrap`；只能擔任 Striker |
 | `antigravity` | Antigravity CLI 1.2.13、`gemini-3.8-flash-low` | 需 `bwrap`；只能擔任 Striker |
