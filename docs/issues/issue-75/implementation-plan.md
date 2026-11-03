@@ -9,6 +9,7 @@
 ```
 bwrap --unshare-pid --unshare-ipc --die-with-parent
       --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp
+      --tmpfs /run --ro-bind <resolv.conf 所在目錄> <同一路徑>
       --overlay-src <HOME> --tmp-overlay <HOME>
       --bind <OpenCode data> <OpenCode data> --bind <OpenCode state> <OpenCode state>
       --bind <workspace> <workspace> --chdir <workspace>
@@ -17,6 +18,7 @@ bwrap --unshare-pid --unshare-ipc --die-with-parent
 
 - **寫回主機的路徑**（Q1）：data 與 state 目錄依 OpenCode 的 XDG 規則決定：設了 `XDG_DATA_HOME`／`XDG_STATE_HOME` 就用 `<XDG>/opencode`，否則是 `~/.local/share/opencode`、`~/.local/state/opencode`。目錄不存在時先建立，bind 才有掛載點。workspace 最後才 bind，所以位在 `/tmp` 或 HOME 底下的 workspace（測試的 `t.TempDir()`）仍然寫回主機。
 - **HOME 暫時 overlay**（Q5）：HOME 以 `--tmp-overlay` 掛載，沙箱內可寫、結束即丟；data、state、workspace 在 overlay 之後 bind，寫入照樣回到主機。HOME 以外維持唯讀。步驟 1 實測：唯讀 HOME 讓使用者的 MCP server 起不來，overlay 後三個都是 connected。
+- **`/run` 遮蔽**（Q6）：`/run` 換成 tmpfs，`/var/run` 是指向它的 symlink，一併被遮蔽。`/etc/resolv.conf` 解析後若位在 `/run` 底下（Ubuntu 是 `/run/systemd/resolve/stub-resolv.conf`），把它所在的目錄唯讀掛回，名稱解析才能用。2026-10-29 實測：docker socket 兩條路徑都被擋，DNS、HTTPS、MCP、models 都正常。
 - **環境變數**：照舊用 `buildStandardExecutionEnv` 的結果，交給 bwrap 傳下去，不加 `--clearenv`。bwrap 是 process group 的 leader，`/proc/<pgid>/environ` 仍然帶著 `ASURA_TASK_ID`，所以 `IsTaskProcessGroup` 與 `VerifyTaskProcessGroup` 的身分檢查不受影響。
 - **取消**：process group 的 leader 從 opencode 變成 bwrap。`KillProcessGroup`（#74）會沿 PPID 找到 namespace 的 init（內層 bwrap）並 kill 它，核心一併回收 namespace 內的所有行程，包含取消前就已脫離行程樹、被 init 接手的命令（SCN-003）。`--die-with-parent` 讓 Asura 行程結束時，沙箱也跟著結束。
 - **namespace 檢查**：啟動前比照 clisandbox，先以同一組 namespace 與 overlay 參數執行 `/usr/bin/true`，失敗就以 `FailureUnavailable` 回傳，不在沙箱外執行（SCN-004）。找不到 bwrap、或核心不支援非特權 overlay 時也一樣。
@@ -58,6 +60,17 @@ bwrap --unshare-pid --unshare-ipc --die-with-parent
 - 狀態：📝 待實作
 - 證據：
 
+### 步驟 2b — 遮蔽主機 /run 底下的 socket
+- 產出：確定性測試。測試建立一個 `/run` 底下的 socket 不切實際，改由假 opencode 在沙箱內回報：`/run/docker.sock`、`/var/run/docker.sock`、`/run/user/<uid>` 是否存在，以及 `/etc/resolv.conf` 是否可讀。
+- 相依：步驟 2
+- 驗收編號：SCN-007
+- 完成判準：
+  - 拿掉 `--tmpfs /run` 時，主機有 docker socket 的環境下測試失敗。主機沒有 docker socket 時，紅燈改以 `/run/user/<uid>` 判定。
+  - 加回後通過，`/etc/resolv.conf` 仍可讀。
+- 驗證：單元紅綠；live 佐證在步驟 5（沙箱內 `_ping` 失敗、模型呼叫正常）
+- 狀態：📝 待實作
+- 證據：
+
 ### 步驟 3 — 取消回收已脫離行程樹的命令
 - 產出：確定性測試。假的 opencode 先以 `setsid` 在背景啟動 `sleep`，啟動它的 shell 隨即結束，假 opencode 本身繼續執行。兩條取消路徑都要測：行程內取消，以及經 `KillProcessGroup` 的外部取消。
 - 相依：步驟 2
@@ -89,8 +102,8 @@ bwrap --unshare-pid --unshare-ipc --die-with-parent
   - 失效對照：暫時讓寫入角色不經 bwrap，workspace-boundary 失敗。
   - 端到端，做法同 #73、#74 的 `evidence/e2e.md`：驗證前拒絕；verify 後 daemon、inventory、doctor、本機 run 都放行；remove 後回到拒絕。
   - 內建版本 1.18.23：寫入角色實際修改一個 workspace 檔案（SCN-006）。需要先在隔離目錄安裝 1.18.23（TBD-2），安裝前向使用者確認。
-- 相依：步驟 2、3、4
-- 驗收編號：SCN-005、SCN-006；SCN-001～003 的 live 佐證
+- 相依：步驟 2、2b、3、4
+- 驗收編號：SCN-005、SCN-006；SCN-001～003、SCN-007 的 live 佐證
 - 完成判準：
   - live 與對照的實際輸出都已記錄。
   - 結束後 `~/.local/share/asura/` 還原到開始前的狀態。
@@ -126,6 +139,7 @@ bwrap --unshare-pid --unshare-ipc --die-with-parent
 | SCN-001 | 單元（假 opencode，真 bwrap）＋ live probe | 步驟 1、2、5 |
 | SCN-002 | 單元＋ live 觀察 | 步驟 1、2 |
 | SCN-003 | 單元（真 bwrap）＋ live cancellation probe | 步驟 3、5 |
+| SCN-007 | 單元（真 bwrap）＋ live 觀察 | 步驟 2b、5 |
 | SCN-004 | 單元＋ `cmd/asura` 測試 | 步驟 4 |
 | SCN-005 | live 端到端 | 步驟 5 |
 | SCN-006 | live（內建版本） | 步驟 5 |
@@ -140,6 +154,7 @@ bwrap --unshare-pid --unshare-ipc --die-with-parent
 
 - [x] 步驟 1：真實 run 的可寫路徑已確認
 - [ ] 步驟 2：寫入角色在 bwrap 內，SCN-001、002 先紅後綠
+- [ ] 步驟 2b：主機 /run 底下的 socket 已遮蔽
 - [ ] 步驟 3：已脫離行程樹的命令被回收
 - [ ] 步驟 4：缺 bwrap 時 fail-closed
 - [ ] 步驟 5：live verify、失效對照、端到端、內建版本
