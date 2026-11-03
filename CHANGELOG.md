@@ -8,18 +8,19 @@
 - **[runtime]**：新增 `asura runtime verify <runtime>`。對已安裝的 runtime 版本實際執行 probe（輸出、workspace 邊界、唯讀或憑證邊界、取消；Codex 另以 `codex sandbox` 不經模型驗證唯讀沙箱），全部通過才把身分（runtime、版本、SHA-256）記到 `$XDG_DATA_HOME/asura/runtime-verification.json`，之後該版本即可使用；`--list` 列出內建身分與紀錄，`--remove` 移除紀錄，內建身分不能移除 (#73)
 
 ### 🔄 相容性
+- **[runtime]**：OpenCode 需要 `bwrap`。找不到 `bwrap` 時，整個 OpenCode（包含唯讀角色）判為 `dependency_not_found`；無法建立 namespace 時寫入角色在啟動 opencode 前失敗，都不在沙箱外執行；寫入角色在沙箱內對 HOME（data、state 以外）的寫入不會保存 (#75)
 - **[runtime]**：四個 runtime 只接受內建已驗證的身分（OpenCode 1.18.23、Codex 0.155.0、OMP 18.4.4、Antigravity 1.2.13），或驗證紀錄中身分相符的安裝。其他版本判為新的 reason `version_unverified`，在模型呼叫前拒絕；`doctor` 與拒絕訊息提示 `asura runtime verify <runtime>`。daemon、`runtime inventory`、`doctor`、本機 `run` 使用同一規則：OpenCode 原本在本機 `run`、`doctor` 與 `runtime inventory` 接受任何 1.18.x（daemon 只接受 1.18.23），現在未驗證的 1.18.x 一律拒絕。清冊 policy 維持 `inventory-v1`，升級前封存的排隊任務與 cron 不受影響 (#73)
 
 ### 🐛 錯誤修正 (Bug Fixes)
 - **[runtime]**：取消任務後，Codex 與 OpenCode 由模型啟動的命令會繼續執行（Codex 的命令跑在另開 process group 的 PID namespace 裡，OpenCode 的 bash 工具另開 session），內建版本也一樣。現在 Codex 與 OpenCode 的所有取消路徑（行程內取消、`asura cancel`、engine 取消）都會凍結並回收 runtime process group 成員的整棵子孫樹；OMP 與 Antigravity 照舊由 clisandbox 的 PID namespace 一併回收。`runtime verify` 的 cancellation probe 改為同時留下另開 session 的背景子行程，取消後必須一併消失 (#74)
 
 ### 🔒 安全性 (Security)
+- **[runtime]**：OpenCode 的寫入角色改在 Asura 啟動的 `bwrap` 裡執行，模型的命令寫不到 workspace 外，內建版本也一樣。寫回主機的只有 workspace 與 OpenCode 的 data、state 目錄；HOME 其他部分是暫時 overlay，`/tmp`、`/run` 換成 tmpfs，連不到主機的 docker socket 與 session bus。取消時一併回收已脫離行程樹的命令。OpenCode 新版本（例如 1.18.31）因此可以通過 `runtime verify` (#75)
 - **[installer]**：未指定 `--version` 而 `releases/latest` 解析到沒有發布者驗證的 v1.1.0 時，不論有沒有 `gh` 都在下載前拒絕安裝，避免把 latest 指回 v1.1.0 來繞過驗證；`--version v1.1.0` 仍照常安裝並警告 (#58)
 
 ### 📌 已知限制
 - Codex 的唯讀沙箱檢查驗的是 `codex sandbox -P :read-only`。正式任務的 `codex exec -s read-only` 交給 OS 沙箱的權限設定，在 0.163.0 上已確認與它相同；這是 Codex 的內部行為，新版本需要重新確認 (#73, #74)
-- OpenCode 的新版本（例如 1.18.31）目前過不了 `runtime verify`，因為寫入角色沒有 OS 沙箱（#75）；修好之前只能使用內建版本。Codex 0.163.0 已可通過驗證 (#73, #74)
-- OpenCode 的命令如果在取消前就已脫離行程樹（例如 `cmd &` 之後 shell 先結束），取消時不會被回收；預定在 #75 以 PID namespace 補上 (#74)
+- OpenCode 寫入角色的沙箱沒有網路隔離，localhost 上的服務與 abstract unix socket 仍連得到（#85）；OpenCode 的 data 目錄（含 `auth.json`）可寫；OMP、Antigravity 的沙箱仍連得到 docker socket（#84） (#75)
 
 ## [v1.2.0] - 2026-10-16
 

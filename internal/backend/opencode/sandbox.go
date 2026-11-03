@@ -12,6 +12,7 @@ import (
 // HOME 其他部分是暫時 overlay，沙箱內可寫、結束即丟，讓 MCP server 與工具快取照常運作（Q5）；
 // /tmp 與 /run 換成 tmpfs，沙箱內連不到主機 /run 底下的 socket，例如 docker 與 session bus（Q6）；HOME 以外唯讀。
 // 執行檔所在目錄唯讀掛回，執行檔位在 /tmp 底下時仍可執行。
+// --die-with-parent 放在掛載參數之後，與 clisandbox 相同；失效對照組（verification.BwrapControl）在它前面插入可寫的 bind。
 func sandboxArgs(env []string, workspace, bin string) ([]string, error) {
 	home := envValue(env, "HOME")
 	if home == "" {
@@ -36,12 +37,12 @@ func sandboxArgs(env []string, workspace, bin string) ([]string, error) {
 		return nil, err
 	}
 	binDir = filepath.Dir(binDir)
-	args := []string{"--unshare-pid", "--unshare-ipc", "--die-with-parent", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp", "--tmpfs", "/run"}
+	args := []string{"--unshare-pid", "--unshare-ipc", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp", "--tmpfs", "/run"}
 	// Ubuntu 的 /etc/resolv.conf 指向 /run/systemd/resolve，不掛回就無法解析名稱。
 	if resolv, err := filepath.EvalSymlinks("/etc/resolv.conf"); err == nil && strings.HasPrefix(resolv, "/run/") {
 		args = append(args, "--ro-bind", filepath.Dir(resolv), filepath.Dir(resolv))
 	}
-	args = append(args, "--overlay-src", home, "--tmp-overlay", home, "--bind", data, data, "--bind", state, state, "--ro-bind", binDir, binDir, "--bind", workspace, workspace, "--chdir", workspace, "--")
+	args = append(args, "--overlay-src", home, "--tmp-overlay", home, "--bind", data, data, "--bind", state, state, "--ro-bind", binDir, binDir, "--bind", workspace, workspace, "--die-with-parent", "--chdir", workspace, "--")
 	return args, nil
 }
 

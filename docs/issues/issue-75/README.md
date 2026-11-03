@@ -165,11 +165,11 @@ Feature: OpenCode 寫入角色在 OS 沙箱內執行
 | 編號 | 事項 | 狀態 | 影響 |
 |------|------|------|------|
 | TBD-1 | 依 Q1，data 目錄可寫，模型的命令仍能改 OpenCode 自己的資料，包含 `auth.json`。OpenCode 的驗證不設 protected files：OAuth 更新本來就會改寫 `auth.json`，設了會誤判失敗 | 待確認 | 接受的殘餘風險，在 PR 揭露。SCN-001 不涵蓋 data／state 目錄 |
-| TBD-3 | 步驟 1 沙箱內 10 次真實執行有 2 次在 240 秒逾時（唯讀 HOME 與 overlay 各一次），都停在 instance 初始化之後、建立 session 之前，也都是閒置數小時後的第一次執行。主機上 4 次對照都正常，但沒有一次是冷啟動，原因未確認（[evidence/step1.md](./evidence/step1.md)「逾時的對照」） | 待確認 | 不阻擋實作：Asura 有逾時保護，逾時以失敗回報。步驟 5 的 live 執行繼續觀察，有機會時補做主機的冷啟動對照 |
+| TBD-3 | 步驟 1 沙箱內 10 次真實執行有 2 次在 240 秒逾時（唯讀 HOME 與 overlay 各一次），都停在 instance 初始化之後、建立 session 之前，也都是閒置數小時後的第一次執行。主機上 4 次對照都正常，但沒有一次是冷啟動，原因未確認（[evidence/step1.md](./evidence/step1.md)「逾時的對照」） | 待確認 | 不阻擋實作：Asura 有逾時保護，逾時以失敗回報。步驟 5 的 14 次模型呼叫都沒有逾時（最長 12.9 秒），但沒有記錄當時的快取狀態，不能當冷啟動對照（[evidence/e2e.md](./evidence/e2e.md)「逾時」）。在 PR 揭露 |
 | TBD-5 | 沙箱沒有網路隔離：localhost 上的服務與 abstract unix socket 仍然連得到。帳號讀得到憑證的服務（例如啟動後的 microk8s API）可以被用來繞過沙箱 | 不影響本次交付（2026-11-03 Q6）：追蹤：[#85](https://github.com/raybird/Asura/issues/85) | 本 issue 只遮蔽 `/run` 底下的 socket（SCN-007）。2026-10-29 檢查時，localhost 上只有 ollama（11434），microk8s API 沒有在 listen |
 | TBD-6 | OMP／Antigravity 的 clisandbox 只把 `/run/user` 換成 tmpfs，沙箱內同樣連得到 docker socket | 不影響本次交付（2026-11-03 Q6）：追蹤：[#84](https://github.com/raybird/Asura/issues/84) | 既有缺口，不在本 issue 修改 |
 | TBD-4 | overlay 的上層放在 tmpfs（記憶體），模型或工具在 HOME 大量寫入（例如 Go build cache）時會占用記憶體，執行結束才釋放 | 待確認 | 在 PR 揭露，不設上限 |
-| TBD-2 | 本機沒有內建版本 1.18.23 的隔離安裝（`~/.cache/asura-probe-issue-2/install` 不存在），SCN-006 要先安裝才能執行 | 待確認 | 只影響 SCN-006 的證據。安裝前會先向使用者確認 |
+| TBD-2 | 本機沒有內建版本 1.18.23 的隔離安裝（`~/.cache/asura-probe-issue-2/install` 不存在），SCN-006 要先安裝才能執行 | 已解決（2026-11-03）：#73 留下的 `~/.cache/asura-verify/opencode-1.18.23` 就是 1.18.23 的隔離安裝，不需要另外安裝 | SCN-006 以它執行通過（[evidence/e2e.md](./evidence/e2e.md)） |
 
 ## Timeline
 
@@ -178,9 +178,10 @@ Feature: OpenCode 寫入角色在 OS 沙箱內執行
 | 2026-10-29 | 建立 issue 文件。不呼叫模型的探測：OpenCode 1.18.31 需要可寫的 data 目錄，cache 唯讀可正常執行。Q1、Q2、Q4 照建議；Q3 的選項說明有誤，更正後重新詢問，答「整個 OpenCode 判不可用」。SCN-001～006 核准 | Raybird |
 | 2026-10-29 | 步驟 1 實測：唯讀 HOME 讓使用者的 MCP server 起不來。Q5 改為 HOME 暫時 overlay，SCN-001、SCN-002 修訂並重新核准；Q2 的限制隨之取消 | Raybird |
 | 2026-11-03 | 步驟 1 另外發現，沙箱內連得到主機的 docker socket（clisandbox 也一樣）。Q6 決定本 issue 遮蔽 `/run`，新增 SCN-007 並核准；clisandbox 的缺口開 #84，網路隔離開 #85 | Raybird |
+| 2026-11-03 | 步驟 2～6 完成：寫入角色在 bwrap 內執行；OpenCode 1.18.31 第一次通過 `runtime verify`，端到端四條路徑與內建 1.18.23 通過 | Raybird |
 
 ---
 **建立日期**: 2026-10-29  
 **分級**: Medium — OpenCode adapter 的寫入角色啟動方式、inventory 探測、live 測試與文件，範圍有界  
 **風險**: High — 安全邊界：可寫範圍錯了，不是模型能寫到 workspace 外，就是寫入角色無法使用；真實行為只能用 live 驗證\
-**狀態**: 實作中（2026-10-29）
+**狀態**: 審查中（2026-11-03）

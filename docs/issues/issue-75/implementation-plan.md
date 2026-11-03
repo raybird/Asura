@@ -99,9 +99,9 @@ bwrap --unshare-pid --unshare-ipc --die-with-parent
 ### 步驟 5 — live 驗證、端到端與內建版本
 - 產出：
   - `ASURA_VERIFY_LIVE=1` 執行 `TestVerifyLive_OpenCode`（1.18.31），全部 probe 通過。
-  - 失效對照：暫時讓寫入角色不經 bwrap，workspace-boundary 失敗。
+  - 失效對照：暫時讓寫入角色不經 bwrap，workspace-boundary 失敗；另以 `verification.BwrapControl` 把 probe 根目錄可寫掛進沙箱，寫成可重複執行的 `TestVerifyLive_OpenCodeSandboxControl`。
   - 端到端，做法同 #73、#74 的 `evidence/e2e.md`：驗證前拒絕；verify 後 daemon、inventory、doctor、本機 run 都放行；remove 後回到拒絕。
-  - 內建版本 1.18.23：寫入角色實際修改一個 workspace 檔案（SCN-006）。需要先在隔離目錄安裝 1.18.23（TBD-2），安裝前向使用者確認。
+  - 內建版本 1.18.23：寫入角色實際修改一個 workspace 檔案（SCN-006）。使用 #73 留下的隔離安裝（TBD-2）。
 - 相依：步驟 2、2b、3、4
 - 驗收編號：SCN-005、SCN-006；SCN-001～003、SCN-007 的 live 佐證
 - 完成判準：
@@ -109,8 +109,8 @@ bwrap --unshare-pid --unshare-ipc --die-with-parent
   - 結束後 `~/.local/share/asura/` 還原到開始前的狀態。
   - 留下的行程已以 ps 確認並清除。
 - 驗證：live，記錄於 `evidence/e2e.md`
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成（2026-11-03）
+- 證據：[evidence/e2e.md](./evidence/e2e.md)：1.18.31 四個 probe 通過；三組失效對照都抓到；端到端四條路徑在驗證前、後、移除後的判定都正確；內建 1.18.23 改寫了 workspace 檔案。真實紀錄目錄已還原為不存在
 
 ### 步驟 6 — 文件
 - 產出：
@@ -121,8 +121,8 @@ bwrap --unshare-pid --unshare-ipc --die-with-parent
 - 驗收編號：常青文件
 - 完成判準：文件描述與程式、live 結果一致
 - 驗證：人工核對
-- 狀態：📝 待實作
-- 證據：
+- 狀態：✅ 已完成（2026-11-03）
+- 證據：`docs/guides/runtimes.md` 新增「OpenCode 寫入角色的沙箱」並更新已知限制；`README.md`、`docs/guides/cli-reference.md`、`CHANGELOG.md`。對照 `sandbox.go`、`clisandbox.ProbeSandboxDependency` 與 live 結果人工核對
 
 ## 使用方式對照
 
@@ -157,6 +157,6 @@ bwrap --unshare-pid --unshare-ipc --die-with-parent
 - [x] 步驟 2b：主機 /run 底下的 socket 已遮蔽
 - [x] 步驟 3：已脫離行程樹的命令被回收
 - [x] 步驟 4：缺 bwrap 時 fail-closed
-- [ ] 步驟 5：live verify、失效對照、端到端、內建版本
-- [ ] 步驟 6：文件與 CHANGELOG
-- [ ] 專案 gate 通過，skip 已列出
+- [x] 步驟 5：live verify、失效對照、端到端、內建版本
+- [x] 步驟 6：文件與 CHANGELOG
+- [x] 專案 gate 通過，skip 已列出（[evidence/e2e.md](./evidence/e2e.md)「Gate」）
