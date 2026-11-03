@@ -11,6 +11,7 @@ import (
 // 2026-10-09：issue-45 Task 4.1，doctor 顯示的 executable 必須是 probe 實際執行的檔案。
 func TestProbeExecutableReportsProbedBinary(t *testing.T) {
 	home, bin := t.TempDir(), t.TempDir()
+	linkBwrap(t, bin)
 	t.Setenv("HOME", home)
 	t.Setenv("PATH", bin)
 	script := []byte("#!/bin/sh\necho 1.18.23\n")

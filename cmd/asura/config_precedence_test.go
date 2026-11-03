@@ -242,6 +242,7 @@ func TestConfigRuntimePriorityAndContext(t *testing.T) {
 	e.writeConfig(t, "schema_version = 1\nruntime_priority = [\"codex\", \"opencode\"]\n")
 	e.setenv(t)
 	bin := t.TempDir()
+	linkBwrap(t, bin)
 	os.WriteFile(filepath.Join(bin, "opencode"), []byte("#!/bin/sh\necho 1.18.23\n"), 0700)
 	os.WriteFile(filepath.Join(bin, "codex"), []byte("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'codex-cli 0.155.0'; exit 0; fi\nprintf '%s\\n' '{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"ok\"}}'\n"), 0700)
 	t.Setenv("PATH", bin)

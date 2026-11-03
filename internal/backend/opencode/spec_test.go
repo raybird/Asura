@@ -24,6 +24,7 @@ func fakeOpenCode(t *testing.T, path, version string) {
 // 兩個角色必須是同一份安裝，未驗證的版本只透過暫時紀錄放行。
 func TestOpenCodeVerificationSpec(t *testing.T) {
 	home, bin := t.TempDir(), t.TempDir()
+	linkBwrap(t, bin)
 	t.Setenv("HOME", home)
 	t.Setenv("PATH", bin)
 	fakeOpenCode(t, filepath.Join(bin, "opencode"), "1.18.31")

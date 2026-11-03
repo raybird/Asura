@@ -443,9 +443,42 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 	}
 	args = append(args, req.Prompt)
 
-	cmd := exec.CommandContext(ctx, binPath, args...)
+	env := buildExecutionEnv(cfg)
+	name := binPath
+	// 2026-11-03：issue-75，寫入角色在 bwrap 內執行；無法建立沙箱時不在沙箱外執行。
+	if !isIsolatedRuntime(cfg) {
+		fail := func(class backend.FailureClassification, err error) (*backend.ExecutionResult, error) {
+			if ctx.Err() != nil {
+				class = backend.FailureCancelled
+			}
+			return &backend.ExecutionResult{
+				BackendID:    "opencode",
+				FailureClass: class,
+				StartedAt:    startedAt,
+				CompletedAt:  time.Now(),
+			}, backend.NewExecutionError("opencode", class, err, "")
+		}
+		bwrap, err := exec.LookPath("bwrap")
+		if err != nil {
+			return fail(backend.FailureUnavailable, err)
+		}
+		sandbox, err := sandboxArgs(env, req.Workspace, binPath)
+		if errors.Is(err, errWorkspaceCoversMask) {
+			return fail(backend.FailureUnsupported, err)
+		}
+		if err != nil {
+			return fail(backend.FailureUnavailable, fmt.Errorf("prepare sandbox: %w", err))
+		}
+		if out, err := exec.CommandContext(ctx, bwrap, append(sandbox, "/usr/bin/true")...).CombinedOutput(); err != nil {
+			return fail(backend.FailureUnavailable, fmt.Errorf("bwrap sandbox unavailable: %s", strings.TrimSpace(string(out))))
+		}
+		args = append(append(sandbox, binPath), args...)
+		name = bwrap
+	}
+
+	cmd := exec.CommandContext(ctx, name, args...)
 	ConfigureProcessGroup(cmd)
-	cmd.Env = buildExecutionEnv(cfg)
+	cmd.Env = env
 
 	var stdoutBuf, stderrBuf bytes.Buffer
 	cmd.Stdout = &stdoutBuf

@@ -66,6 +66,7 @@ func TestVerifyLive_OpenCode(t *testing.T) {
 }
 
 // 失效對照組：shim 拿掉唯讀角色的 --agent asura-readonly，並對兩個角色放行所有權限。
+// 寫入角色在 bwrap 內執行之後，權限全開也寫不出 workspace，workspace 邊界改由 TestVerifyLive_OpenCodeSandboxControl 對照（2026-11-03 issue-75）。
 func TestVerifyLive_OpenCodeControls(t *testing.T) {
 	if !verification.LiveEnabled() {
 		t.Skip("set ASURA_VERIFY_LIVE=1 to run model-calling probes")
@@ -79,7 +80,28 @@ OPENCODE_PERMISSION='{"*":"allow"}' exec "$REAL" "$@"`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, r := range liveOpenCode(t, shim, verification.ProbeReadOnly, verification.ProbeWorkspace) {
+	for _, r := range liveOpenCode(t, shim, verification.ProbeReadOnly) {
+		if r.Err == nil || !strings.Contains(r.Err.Error(), "security violation") {
+			t.Errorf("control %s did not detect the degraded sandbox: %v", r.Name, r.Err)
+		}
+	}
+}
+
+// 失效對照組：包裝過的 bwrap 把 probe 根目錄以可寫方式掛進寫入角色的沙箱，workspace 外的寫入必須被抓到（2026-11-03 issue-75）。
+func TestVerifyLive_OpenCodeSandboxControl(t *testing.T) {
+	if !verification.LiveEnabled() {
+		t.Skip("set ASURA_VERIFY_LIVE=1 to run model-calling probes")
+	}
+	root, err := verification.Root()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir, err := verification.BwrapControl(t.TempDir(), root)
+	if err != nil {
+		t.Skip(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	for _, r := range liveOpenCode(t, "", verification.ProbeWorkspace) {
 		if r.Err == nil || !strings.Contains(r.Err.Error(), "security violation") {
 			t.Errorf("control %s did not detect the degraded sandbox: %v", r.Name, r.Err)
 		}

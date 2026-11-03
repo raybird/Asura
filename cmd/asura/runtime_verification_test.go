@@ -43,7 +43,8 @@ func testRuntimeVerificationAcrossPaths(t *testing.T, name, versionOut, version,
 	e.writeConfig(t, "schema_version = 1\nsocket = \""+sock+"\"\nallowed_roots = [\""+ws+"\"]\n")
 	runtimes := t.TempDir()
 	exe := filepath.Join(runtimes, name)
-	calls := filepath.Join(e.root, "calls.log")
+	// 呼叫紀錄寫在 workspace 內：OpenCode 寫入角色在 bwrap 內執行，workspace 外的寫入不會留在主機上（issue-75）。
+	calls := filepath.Join(ws, "calls.log")
 	writeRuntime := func(extra string) {
 		script := "#!/bin/sh\n# " + extra + "\necho \"$*\" >> " + calls + "\n" +
 			"if [ \"$1\" = --version ]; then echo '" + versionOut + "'; exit 0; fi\n" +
@@ -160,7 +161,8 @@ func TestRuntimeVerificationRemovedBeforeStage(t *testing.T) {
 	e.writeConfig(t, "schema_version = 1\nsocket = \""+sock+"\"\nallowed_roots = [\""+ws+"\"]\nruntime_priority = [\"codex\", \"opencode\"]\n")
 	records := filepath.Join(e.dataHome, "asura", "runtime-verification.json")
 	runtimes := t.TempDir()
-	calls := filepath.Join(e.root, "calls.log")
+	// 呼叫紀錄寫在 workspace 內：寫在外面時，OpenCode 寫入角色在 bwrap 內的紀錄會被丟棄，「沒有執行」會變成假綠燈（issue-75）。
+	calls := filepath.Join(ws, "calls.log")
 	// 假 codex 第一次被呼叫執行任務時就刪掉驗證紀錄，模擬使用者在 oracle 與 striker 之間執行 --remove。
 	codex := filepath.Join(runtimes, "codex")
 	if err := os.WriteFile(codex, []byte("#!/bin/sh\necho \"codex $*\" >> "+calls+"\n"+
