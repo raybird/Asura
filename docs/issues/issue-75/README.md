@@ -201,9 +201,11 @@ Feature: OpenCode 寫入角色在 OS 沙箱內執行
 | 2026-11-03 | 步驟 2～6 完成：寫入角色在 bwrap 內執行；OpenCode 1.18.31 第一次通過 `runtime verify`，端到端四條路徑與內建 1.18.23 通過 | Raybird |
 | 2026-11-03 | PR #86 獨立審查 RETURN TO execute-task（M1 bwrap 版本、M2 workspace 蓋住 HOME）。Q7～Q10 照建議：SCN-004 修訂、新增 SCN-008；TBD-1、TBD-5 改寫，另開 #87 | Raybird |
 | 2026-11-03 | 第二輪審查 PASS，指出 SCN-008 的 `/tmp`、`/var/tmp`、`/run` 沒有核准來源（S-A）；Q11 保留擴大的範圍 | Raybird |
+| 2026-11-03 | 第三輪差異審查 PASS（`01e7cd1..3bbd0b1`，[報告](https://github.com/raybird/Asura/pull/86#issuecomment-6596897999)），沒有 MUST FIX 與 SHOULD FIX；PR CI [run 41588358727](https://github.com/raybird/Asura/actions/runs/41588358727) 為 success | Raybird |
+| 2026-11-03 | PR #86 squash 合併至 main（merge commit `6dde8a9`，2026-11-03T06:27:40Z），tree 與審查的 HEAD `3bbd0b1` 相同。GitHub #75 由 `Closes #75` 自動關閉。合併後 main push CI [run 41590020074](https://github.com/raybird/Asura/actions/runs/41590020074) 為 success。TBD-3（冷啟動逾時）沒有追蹤 issue，維持待確認；TBD-1、TBD-5、TBD-6 分別由 #87、#85、#84 追蹤 | Raybird |
 
 ---
 **建立日期**: 2026-10-29  
 **分級**: Medium — OpenCode adapter 的寫入角色啟動方式、inventory 探測、live 測試與文件，範圍有界  
 **風險**: High — 安全邊界：可寫範圍錯了，不是模型能寫到 workspace 外，就是寫入角色無法使用；真實行為只能用 live 驗證\
-**狀態**: 審查中（2026-11-03）
+**狀態**: 已完成 — PR #86 於 2026-11-03 合併（merge commit `6dde8a9`）
