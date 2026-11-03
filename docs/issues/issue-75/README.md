@@ -148,7 +148,8 @@ Feature: OpenCode 寫入角色在 OS 沙箱內執行
   - 使用者 2026-10-29 本 issue Q5（步驟 1 實測後）：「HOME 改用暫時 overlay (Recommended)」→ SCN-001、SCN-002 修訂：HOME 內的寫入在沙箱內成功、主機上不留；MCP server 照常啟動。
   - 使用者 2026-11-03 本 issue Q6（步驟 1 發現沙箱內連得到 docker socket）：「本 issue 遮蔽 /run，其餘另開 (Recommended)」→ SCN-007。clisandbox 的同一缺口另開 [#84](https://github.com/raybird/Asura/issues/84)，需要網路隔離的缺口另開 [#85](https://github.com/raybird/Asura/issues/85)。
   - 使用者 2026-11-03 本 issue Q7（PR #86 審查 M1：overlay 需要 bwrap 0.10，CI 與 Ubuntu 24.04 只有 0.9.0）：「要求 bwrap ≥ 0.10 (Recommended)」→ SCN-004 修訂。
-  - 使用者 2026-11-03 本 issue Q8（審查 M2：workspace 是 HOME 時可寫到 `~/.config/opencode`）：「比照 clisandbox 拒絕 (Recommended)」→ SCN-008。除了 HOME，也把 `/tmp`、`/var/tmp`、`/run` 列入：它們是同一類「workspace 的掛載蓋掉遮蔽」，不涵蓋的話 SCN-007 就能被 workspace 繞過。
+  - 使用者 2026-11-03 本 issue Q8（審查 M2：workspace 是 HOME 時可寫到 `~/.config/opencode`）：「比照 clisandbox 拒絕 (Recommended)」→ SCN-008 的 HOME 部分。
+  - 使用者 2026-11-03 本 issue Q11（第二輪審查 S-A：`/tmp`、`/var/tmp`、`/run` 是實作時推導出來的，Q8 沒有問到）：「保留擴大的範圍 (Recommended)」→ SCN-008 的 `/tmp`、`/var/tmp`、`/run` 部分。理由：workspace 等於或包含這些目錄時，可寫掛載會蓋掉 tmpfs 遮蔽，例如 workspace 是 `/run` 時又連得到 docker socket，SCN-007 就能被繞過；子目錄照常可用。
   - 使用者 2026-11-03 本 issue Q9（審查 S1：`/run` 以外仍有 0666 的 root daemon socket）：「揭露並併入 #85 (Recommended)」→ TBD-5。
   - 使用者 2026-11-03 本 issue Q10（審查 S3：data 目錄可寫的範圍）：「改寫 TBD-1 揭露，維持可寫 (Recommended)」→ TBD-1，另開 [#87](https://github.com/raybird/Asura/issues/87)。
 
@@ -161,7 +162,7 @@ Feature: OpenCode 寫入角色在 OS 沙箱內執行
 | SCN-005 | 2026-10-29 | 已核准 |
 | SCN-006 | 2026-10-29 | 已核准 |
 | SCN-007 | 2026-11-03 | 已核准 |
-| SCN-008 | 2026-11-03（Q8） | 已核准 |
+| SCN-008 | 2026-11-03（Q8、Q11） | 已核准 |
 
 ## 實作步驟
 
@@ -199,6 +200,7 @@ Feature: OpenCode 寫入角色在 OS 沙箱內執行
 | 2026-11-03 | 步驟 1 另外發現，沙箱內連得到主機的 docker socket（clisandbox 也一樣）。Q6 決定本 issue 遮蔽 `/run`，新增 SCN-007 並核准；clisandbox 的缺口開 #84，網路隔離開 #85 | Raybird |
 | 2026-11-03 | 步驟 2～6 完成：寫入角色在 bwrap 內執行；OpenCode 1.18.31 第一次通過 `runtime verify`，端到端四條路徑與內建 1.18.23 通過 | Raybird |
 | 2026-11-03 | PR #86 獨立審查 RETURN TO execute-task（M1 bwrap 版本、M2 workspace 蓋住 HOME）。Q7～Q10 照建議：SCN-004 修訂、新增 SCN-008；TBD-1、TBD-5 改寫，另開 #87 | Raybird |
+| 2026-11-03 | 第二輪審查 PASS，指出 SCN-008 的 `/tmp`、`/var/tmp`、`/run` 沒有核准來源（S-A）；Q11 保留擴大的範圍 | Raybird |
 
 ---
 **建立日期**: 2026-10-29  

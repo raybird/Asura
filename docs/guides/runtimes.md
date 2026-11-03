@@ -70,7 +70,7 @@ Asura 如何決定一個任務由哪個 runtime 執行、執行前檢查什麼�
 
 workspace 等於或包含 HOME、`/tmp`、`/var/tmp`、`/run` 時（例如在 `~` 底下直接 `asura run`，workspace 預設是目前目錄），workspace 的可寫掛載會蓋掉上表的 overlay 與遮蔽，寫入角色在啟動 opencode 前以 unsupported 拒絕。workspace 是 HOME 底下的子目錄時照常執行。
 
-HOME overlay 需要 `bwrap` 0.10 以上；Ubuntu 24.04、Debian 12 的套件是 0.9.0，需要另外安裝新版（例如從 release 原始碼建置）。不會退回沙箱外執行：找不到 `bwrap` 或版本低於 0.10 時，`runtime inventory`、`doctor` 與 admission 把整個 OpenCode（包含唯讀角色）判為 `dependency_not_found`。`bwrap` 版本夠新但主機不允許建立 namespace 時，inventory 仍判 available（與 OMP、Antigravity 相同，不實際建立 namespace），寫入角色在啟動 opencode 前以 unavailable 失敗，訊息帶有 bwrap 的錯誤。
+HOME overlay 需要 `bwrap` 0.10 以上；Ubuntu 24.04、Debian 12 的套件是 0.9.0，需要另外安裝新版（例如從 release 原始碼建置）。不會退回沙箱外執行：找不到 `bwrap` 或版本低於 0.10 時，`runtime inventory`、`doctor` 與 admission 把整個 OpenCode（包含唯讀角色）判為 `dependency_not_found`。`bwrap` 版本夠新，但主機不允許建立沙箱時（例如禁止非特權 user namespace，或核心不支援非特權 overlay），inventory 仍判 available（與 OMP、Antigravity 相同，不實際建立沙箱），寫入角色在啟動 opencode 前以 unavailable 失敗，訊息帶有 bwrap 的錯誤。
 
 ## 固定三面管線 (Three-Face Fixed Pipeline)
 

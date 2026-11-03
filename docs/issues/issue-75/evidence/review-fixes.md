@@ -40,7 +40,7 @@ workspace 是 `/tmp` 的那一筆只有 FailureClass 判定失敗：opencode 有
 | N1 | 加 `--tmpfs /var/tmp` |
 | N2 | 只掛回 resolv.conf 的目標檔案，不掛整個 `/run/systemd/resolve` |
 | N4 | `TestStrikerSandbox_HidesHostRunSockets` 每次都寫一個正向 sentinel，沒寫出來就失敗 |
-| N3、N5、N6 | 不改，理由見 PR 回覆 |
+| N3、N5、N6 | 不改，理由見 [PR #86 回覆](https://github.com/raybird/Asura/pull/86)（2026-11-03 第二輪審查後補上，第二輪審查 N-D） |
 
 ## CI 建置步驟的本機重現
 
@@ -104,3 +104,20 @@ workspace-boundary           11.5s  FAIL: security violation: wrote outside the 
 - `Install bubblewrap` 步驟：`/home/runner/work/_temp/bubblewrap.tar.xz: OK`，`bubblewrap 0.11.1`，overlay 自我檢查通過。
 - `TestStrikerSandbox_*`、`TestOpenCodeWithoutBwrapFailsClosed`、7 個 `TestAdapter_Run_*` 與 `TestRuntimeVerificationAcrossPaths/opencode` 都沒有 skip，也沒有失敗。
 - CI 的 skip 都是 live 或環境相依的測試（`TestVerifyLive_*`、`TestCodexProbe_*`、`TestINT00*` 等），不算通過。
+
+## 第二輪審查後（2026-11-03）
+
+[第二輪審查](https://github.com/raybird/Asura/pull/86#issuecomment-6595150687)判定 PASS。另外指出 S-A：SCN-008 的 `/tmp`、`/var/tmp`、`/run` 沒有核准來源。Q11 選「保留擴大的範圍」，記入 README 核准來源，程式不變。
+
+N-A：`TestStrikerSandbox_RejectsWorkspaceCoveringMaskedPaths` 原本用 `os.TempDir()` 代表 `/tmp`，設了 `TMPDIR` 就會紅燈；`/` 又同時蓋住 HOME，所以拿掉 `/var/tmp` 或 `/run` 的檢查也抓不到。改用字面路徑，每個遮蔽目錄各測一筆。以 `TMPDIR=$HOME/.cache` 執行，三個突變各自被對應的那一筆抓到：
+
+| 突變（從遮蔽清單拿掉） | 結果 |
+|---|---|
+| `/tmp` | FAIL：`workspace /tmp: res=&{... FailureClass:...}`，沒有拒絕 |
+| `/var/tmp` | FAIL：`workspace /var/tmp: ...` |
+| `/run` | FAIL：`workspace /run: ...` |
+| 無（最終版） | PASS |
+
+N-C：runtimes.md 把「主機不允許建立沙箱」的例子補上核心不支援非特權 overlay 的情況。N-D：在 PR 補上 N3、N5、N6 不修改的理由。N-B 不修改，理由也寫在同一則 PR 回覆。
+
+Gate：`go vet ./... && go build ./cmd/asura && go test -count=1 -race -v ./...` exit 0，沒有 FAIL；skip 28 個，與前一次相同，不算通過。`asura` 已刪除。

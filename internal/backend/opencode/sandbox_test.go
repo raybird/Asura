@@ -293,7 +293,8 @@ func TestStrikerSandbox_RejectsWorkspaceCoveringMaskedPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	adapter := NewAdapter(AdapterConfig{BinaryPath: bin, ExpectedVersion: "1.18.31", Role: RoleStriker})
-	for _, ws := range []string{home, root, "/", os.TempDir()} {
+	// 遮蔽目錄用字面路徑各測一筆，不受 TMPDIR 影響；/ 同時蓋住 HOME，不能代表其他遮蔽目錄（PR #86 第二輪審查 N-A）。
+	for _, ws := range []string{home, root, "/", "/tmp", "/var/tmp", "/run"} {
 		res, err := adapter.Run(context.Background(), &backend.ExecutionRequest{Role: backend.RoleStriker, Workspace: ws, Prompt: "p"})
 		if err == nil || res == nil || res.FailureClass != backend.FailureUnsupported {
 			t.Errorf("workspace %s: res=%+v err=%v", ws, res, err)
