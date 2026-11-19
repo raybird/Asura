@@ -21,6 +21,11 @@ func TestRuntimeSelectionWebIntent(t *testing.T) {
 	}
 	login := request(server, "POST", "/api/login", `{"key":"`+secret+`"}`, origin, nil)
 	cookie := login.Result().Cookies()[0]
+	retired := request(server, "POST", "/api/tasks", `{"id":"retired","workspace":"/project","prompt":"probe","backend":"antigravity"}`, origin, cookie)
+	if retired.Code != http.StatusBadRequest || retired.Body.String() != "invalid backend\n" {
+		t.Fatalf("removed backend response=%d %s", retired.Code, retired.Body.String())
+	}
+
 	for _, body := range []string{`{"id":"auto","workspace":"/project","prompt":"probe","backend":"auto"}`, `{"id":"legacy","workspace":"/project","prompt":"probe"}`} {
 		response := request(server, "POST", "/api/tasks", body, origin, cookie)
 		if response.Code != http.StatusAccepted {

@@ -2,7 +2,6 @@ package main
 
 import (
 	"asura/internal/backend"
-	"asura/internal/backend/antigravity"
 	"asura/internal/backend/codex"
 	"asura/internal/backend/omp"
 	"asura/internal/backend/opencode"
@@ -20,7 +19,7 @@ import (
 )
 
 // builtinIdentities 是內建已驗證身分，順序與 localRuntimes 相同。
-var builtinIdentities = []verification.Identity{opencode.Builtin, codex.Builtin, omp.Builtin, antigravity.Builtin}
+var builtinIdentities = []verification.Identity{opencode.Builtin, codex.Builtin, omp.Builtin}
 
 // handleRuntimeVerify 2026-10-22：issue-73，對已安裝的 runtime 執行全部 probe，全部通過才寫入驗證紀錄；
 // 任一 probe 失敗或無法執行時結束碼非 0，紀錄不變。--list 列出內建身分與紀錄，--remove 移除一筆紀錄。

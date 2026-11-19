@@ -15,27 +15,18 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"golang.org/x/sys/unix"
 )
-
-type Authentication struct {
-	Payload []byte
-	Expiry  time.Time
-	Secrets []string
-}
 
 type PinnedFile struct{ Path, SHA256 string }
 
 type Config struct {
 	PinnedFiles                       []PinnedFile
 	PinnedTrees                       []PinnedFile
-	AuthReadOnly                      bool
-	ID, Version, Home, AuthTarget     string
-	Auth                              func(context.Context) (Authentication, error)
+	ID, Version, Home, ProfileDir     string
 	Program                           []string
 	ReadOnlyPaths                     []string
 	Settings                          []byte
+	Input                             io.Reader
 	Args                              func(string) []string
 	Parse                             func(string, string) (*backend.ExecutionResult, error)
 	OnProcessStarted, OnProcessExited func(context.Context, int)
@@ -62,7 +53,7 @@ func Run(ctx context.Context, req *backend.ExecutionRequest, cfg Config) (*backe
 	if err != nil {
 		return fail(backend.FailureUnavailable, err)
 	}
-	if cfg.Auth == nil || cfg.Parse == nil || cfg.Args == nil || len(cfg.Program) == 0 {
+	if cfg.Parse == nil || cfg.Args == nil || len(cfg.Program) == 0 {
 		return fail(backend.FailureUnavailable, errors.New("incomplete adapter configuration"))
 	}
 	workspace, err := filepath.Abs(req.Workspace)
@@ -90,35 +81,27 @@ func Run(ctx context.Context, req *backend.ExecutionRequest, cfg Config) (*backe
 			return fail(backend.FailureUnsupported, errors.New("workspace overlaps protected runtime"))
 		}
 	}
+	if cfg.ProfileDir != "" {
+		profileRoot := filepath.Dir(cfg.ProfileDir)
+		relative, e := filepath.Rel(profileRoot, workspace)
+		if e == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(os.PathSeparator)) {
+			return fail(backend.FailureUnsupported, errors.New("workspace overlaps CLI profile directory"))
+		}
+		profile, e := filepath.EvalSymlinks(cfg.ProfileDir)
+		if e != nil || profile != cfg.ProfileDir {
+			return fail(backend.FailureAuth, errors.New("CLI profile directory missing or redirected; log in with PI_CODING_AGENT_DIR set to "+cfg.ProfileDir))
+		}
+		info, e := os.Stat(profile)
+		if e != nil || !info.IsDir() || info.Mode().Perm()&0077 != 0 {
+			return fail(backend.FailureAuth, errors.New("CLI profile directory must be private (mode 0700)"))
+		}
+	}
 	probe := exec.CommandContext(ctx, bwrap, "--unshare-pid", "--unshare-ipc", "--ro-bind", "/", "/", "--proc", "/proc", "--die-with-parent", "--", "/usr/bin/true")
 	if err = probe.Run(); err != nil {
 		if ctx.Err() != nil {
 			return fail(backend.FailureCancelled, ctx.Err())
 		}
 		return fail(backend.FailureUnavailable, errors.New("bwrap namespaces unavailable"))
-	}
-	auth, err := cfg.Auth(ctx)
-	expiry := auth.Expiry
-	if err != nil {
-		if ctx.Err() != nil {
-			return fail(backend.FailureCancelled, ctx.Err())
-		}
-		return fail(backend.FailureAuth, err)
-	}
-	if !expiry.After(time.Now()) {
-		return fail(backend.FailureAuth, errors.New("CLI login expired; update login in the original CLI"))
-	}
-	fd, err := unix.MemfdCreate("asura-cli-auth", unix.MFD_CLOEXEC)
-	if err != nil {
-		return fail(backend.FailureUnavailable, err)
-	}
-	authFile := os.NewFile(uintptr(fd), "asura-cli-auth")
-	defer authFile.Close()
-	if _, err = authFile.Write(auth.Payload); err != nil {
-		return fail(backend.FailureUnavailable, err)
-	}
-	if _, err = authFile.Seek(0, io.SeekStart); err != nil {
-		return fail(backend.FailureUnavailable, err)
 	}
 	root, err := os.MkdirTemp("", "asura-cli-")
 	if err != nil {
@@ -163,11 +146,14 @@ func Run(ctx context.Context, req *backend.ExecutionRequest, cfg Config) (*backe
 	for _, path := range cfg.ReadOnlyPaths {
 		args = append(args, "--dir", filepath.Dir(path), "--ro-bind", path, path)
 	}
-	authBind := "--bind-data"
-	if cfg.AuthReadOnly {
-		authBind = "--ro-bind-data"
+	if cfg.ProfileDir != "" {
+		args = append(args, "--bind", cfg.ProfileDir, cfg.ProfileDir)
 	}
-	args = append(args, "--dir", filepath.Dir(cfg.AuthTarget), authBind, "3", cfg.AuthTarget, "--bind", root, root, "--bind", workspace, workspace, "--die-with-parent", "--chdir", workspace, "--clearenv", "--setenv", "HOME", cfg.Home, "--setenv", "PATH", "/usr/bin:/bin", "--")
+	args = append(args, "--bind", root, root, "--bind", workspace, workspace, "--die-with-parent", "--chdir", workspace, "--clearenv", "--setenv", "HOME", cfg.Home, "--setenv", "PATH", "/usr/bin:/bin")
+	if cfg.ProfileDir != "" {
+		args = append(args, "--setenv", "PI_CODING_AGENT_DIR", cfg.ProfileDir)
+	}
+	args = append(args, "--")
 
 	// 2026-09-30：overlay 在可寫 scratch mount 之後；封住原路徑與副本別名。
 	mountEnd := 0
@@ -189,11 +175,8 @@ func Run(ctx context.Context, req *backend.ExecutionRequest, cfg Config) (*backe
 	args = append(mountArgs, args[mountEnd:]...)
 	args = append(args, cfg.Program...)
 	args = append(args, cfg.Args(filepath.Join(root, "config.json"))...)
-	// 2026-09-30：到期即終止快照執行，不讓模型或背景工具跨越登入期限。
-	runCtx, cancel := context.WithDeadline(ctx, expiry)
-	defer cancel()
-	cmd := exec.CommandContext(runCtx, bwrap, args...)
-	cmd.ExtraFiles = []*os.File{authFile}
+	cmd := exec.CommandContext(ctx, bwrap, args...)
+	cmd.Stdin = cfg.Input
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -202,11 +185,8 @@ func Run(ctx context.Context, req *backend.ExecutionRequest, cfg Config) (*backe
 	cmd.WaitDelay = 2 * time.Second
 	var unlock func()
 	if cfg.BeforeStart != nil {
-		unlock, err = cfg.BeforeStart(runCtx)
+		unlock, err = cfg.BeforeStart(ctx)
 		if err != nil {
-			if ctx.Err() == nil && runCtx.Err() != nil {
-				return fail(backend.FailureAuth, errors.New("CLI login expired before execution"))
-			}
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return fail(backend.FailureCancelled, err)
 			}
@@ -223,9 +203,6 @@ func Run(ctx context.Context, req *backend.ExecutionRequest, cfg Config) (*backe
 	if ctx.Err() != nil {
 		return fail(backend.FailureCancelled, ctx.Err())
 	}
-	if runCtx.Err() != nil {
-		return fail(backend.FailureAuth, errors.New("CLI login expired before execution"))
-	}
 	if err = cmd.Start(); err != nil {
 		return fail(backend.FailureUnavailable, err)
 	}
@@ -238,14 +215,7 @@ func Run(ctx context.Context, req *backend.ExecutionRequest, cfg Config) (*backe
 	if cfg.OnProcessExited != nil {
 		cfg.OnProcessExited(ctx, pgid)
 	}
-	rawOut, rawErr := stdout.String(), stderr.String()
-	for _, secret := range auth.Secrets {
-		if secret != "" {
-			rawOut = strings.ReplaceAll(rawOut, secret, "<redacted>")
-			rawErr = strings.ReplaceAll(rawErr, secret, "<redacted>")
-		}
-	}
-	parsed, parseErr := cfg.Parse(rawOut, rawErr)
+	parsed, parseErr := cfg.Parse(stdout.String(), stderr.String())
 	if parsed != nil {
 		result.Output = parsed.Output
 		result.PartialOutput = parsed.PartialOutput
@@ -258,10 +228,6 @@ func Run(ctx context.Context, req *backend.ExecutionRequest, cfg Config) (*backe
 	if ctx.Err() != nil {
 		result.Output = ""
 		return fail(backend.FailureCancelled, ctx.Err())
-	}
-	if runCtx.Err() != nil {
-		result.Output = ""
-		return fail(backend.FailureAuth, errors.New("CLI login expired during execution"))
 	}
 	if waitErr != nil && result.FailureClass == backend.FailureNone {
 		result.Output = ""

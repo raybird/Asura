@@ -12,7 +12,7 @@ import (
 // 2026-09-30：BADAPT-003／005，指定新 ID 應通過 CLI 身份檢查，再檢查 socket。
 func TestAskAcceptsExpandedBackendIDs(t *testing.T) {
 	t.Setenv("ASURA_SOCKET", "")
-	for _, id := range []string{"omp", "antigravity"} {
+	for _, id := range []string{"omp", "pi"} {
 		var out, err bytes.Buffer
 		handleAsk([]string{"--backend", id, "--socket", filepath.Join(t.TempDir(), "missing.sock"), "probe"}, &out, &err)
 		if strings.Contains(err.String(), "unknown backend") {

@@ -63,10 +63,10 @@ func TestExpandedBackendsRegisteredFailClosed(t *testing.T) {
 			t.Fatalf("runtime accepted or identity absent: %v", e)
 		}
 		// 2026-10-04：#39 將 raw version error 改為固定 availability reason，保留零呼叫與註冊判準。
-		if id != "unknown-issue25" && (!strings.Contains(e.Error(), "availability=") || strings.Contains(e.Error(), "backend not found")) {
+		if id == "omp" && (!strings.Contains(e.Error(), "availability=") || strings.Contains(e.Error(), "backend not found")) {
 			t.Fatalf("not registered/fail-closed: %v", e)
 		}
-		if id == "unknown-issue25" && !strings.Contains(e.Error(), "backend not found") {
+		if id != "omp" && !strings.Contains(e.Error(), "backend not found") {
 			t.Fatalf("unknown runtime did not fail closed: %v", e)
 		}
 	}

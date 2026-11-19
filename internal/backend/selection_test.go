@@ -13,7 +13,7 @@ import (
 
 // 2026-10-03：RTSEL-002/003/004/008/013，純 admission 以既有入口重現缺少 auto。
 func TestRuntimeSelectionDefaultAndOrder(t *testing.T) {
-	for _, ids := range [][]string{{"omp", "codex", "antigravity", "opencode"}, {"opencode", "antigravity", "codex", "omp"}} {
+	for _, ids := range [][]string{{"omp", "codex", "opencode"}, {"opencode", "codex", "omp"}} {
 		reg := NewRegistry()
 		for _, id := range ids {
 			reg.Register(&descriptorBackend{mockBackend: mockBackend{id: id, caps: []Capability{CapWorkspaceWrite}}})
@@ -36,7 +36,7 @@ func TestRuntimeSelectionDefaultAndOrder(t *testing.T) {
 		}
 		reg.Unregister("opencode")
 		c, err = AdmitRuntime(context.Background(), reg, "direct", "auto")
-		if err != nil || c.Runtime.ID != "antigravity" {
+		if err != nil || c.Runtime.ID != "codex" {
 			t.Fatalf("second selection=%+v %v", c, err)
 		}
 	}
@@ -68,7 +68,7 @@ func TestRuntimeSelectionVersionFailureIsolated(t *testing.T) {
 
 // 2026-10-03：RTSEL-003/014/015，已知字面值及未知能力、大小限制與封存破壞。
 func TestRuntimeSelectionPriorityAndBounds(t *testing.T) {
-	for _, invalid := range []string{"codex,codex", "codex,", "unknown", " "} {
+	for _, invalid := range []string{"codex,codex", "codex,", "unknown", "antigravity", " "} {
 		if _, err := ParseRuntimePriority(invalid); err == nil {
 			t.Fatalf("setting accepted: %q", invalid)
 		}
@@ -77,10 +77,10 @@ func TestRuntimeSelectionPriorityAndBounds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := effectivePriority([]string{"z", "omp", "opencode", "codex", "antigravity"}, nil); !reflect.DeepEqual(got, []string{"opencode", "antigravity", "codex", "z", "omp"}) {
+	if got := effectivePriority([]string{"z", "omp", "opencode", "codex", "a"}, nil); !reflect.DeepEqual(got, []string{"opencode", "a", "codex", "z", "omp"}) {
 		t.Fatalf("default=%v", got)
 	}
-	if got := effectivePriority([]string{"omp", "opencode", "antigravity"}, preferred); !reflect.DeepEqual(got, []string{"omp", "opencode", "antigravity"}) {
+	if got := effectivePriority([]string{"omp", "opencode", "a"}, preferred); !reflect.DeepEqual(got, []string{"omp", "opencode", "a"}) {
 		t.Fatalf("custom=%v", got)
 	}
 	reg := NewRegistry()

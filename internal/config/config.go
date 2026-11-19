@@ -169,7 +169,7 @@ func Load(path string) (*Config, error) {
 	if f.RuntimePriority != nil {
 		ids, err := backend.ParseRuntimePriority(strings.Join(f.RuntimePriority, ","))
 		if err != nil || len(ids) != len(f.RuntimePriority) {
-			return fail("runtime_priority must list distinct runtime IDs (opencode, codex, omp, antigravity)")
+			return fail("runtime_priority must list distinct runtime IDs (opencode, codex, omp, pi)")
 		}
 	}
 	if p := f.MemoryUtilityPolicy; p != nil && *p != "observe" && *p != "apply" {

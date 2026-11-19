@@ -2,10 +2,10 @@ package main
 
 import (
 	"asura/internal/backend"
-	"asura/internal/backend/antigravity"
 	"asura/internal/backend/codex"
 	"asura/internal/backend/omp"
 	"asura/internal/backend/opencode"
+	"asura/internal/backend/pi"
 	"asura/internal/daemon"
 	"context"
 	"flag"
@@ -25,7 +25,7 @@ func printInventory(w io.Writer, s *backend.InventorySnapshot) {
 }
 
 // localRuntimes 是本機 registry 的 runtime，順序與 daemon 相同。
-var localRuntimes = []string{"opencode", "codex", "omp", "antigravity"}
+var localRuntimes = []string{"opencode", "codex", "omp", "pi"}
 
 // localBackend 建立與 daemon 相同設定的 runtime adapter；config 是 OpenCode 唯讀角色的隔離設定目錄，
 // onStarted 接到 adapter 的 OnProcessStarted（asura runtime verify 的取消 probe 使用）。
@@ -39,8 +39,8 @@ func localBackend(id, records, config string, onStarted func(context.Context, in
 		return codex.NewAdapter(codex.AdapterConfig{VerificationPath: records, OnProcessStarted: onStarted})
 	case "omp":
 		return omp.NewAdapter(omp.AdapterConfig{VerificationPath: records, OnProcessStarted: onStarted})
-	case "antigravity":
-		return antigravity.NewAdapter(antigravity.AdapterConfig{VerificationPath: records, OnProcessStarted: onStarted})
+	case "pi":
+		return pi.NewAdapter(pi.AdapterConfig{VerificationPath: records, OnProcessStarted: onStarted})
 	}
 	return nil
 }

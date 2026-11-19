@@ -46,7 +46,7 @@ func ParseRuntimePriority(value string) ([]string, error) {
 	for _, part := range strings.Split(value, ",") {
 		id := strings.TrimSpace(part)
 		switch id {
-		case "opencode", "codex", "antigravity", "omp":
+		case "opencode", "codex", "omp", "pi":
 		default:
 			return nil, fmt.Errorf("invalid runtime priority ID %q", id)
 		}
@@ -75,6 +75,9 @@ func effectivePriority(ids, preferred []string) []string {
 	remaining := append([]string(nil), ids...)
 	sort.Slice(remaining, func(i, j int) bool {
 		a, b := remaining[i], remaining[j]
+		if a == "pi" || b == "pi" {
+			return a != "pi"
+		}
 		if a == "opencode" || b == "omp" {
 			return a != b
 		}

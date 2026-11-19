@@ -23,7 +23,7 @@ Asura/
 ├── internal/
 │   ├── audit/             # 執行稽核契約與查詢 (execution-audit-v1)
 │   ├── auth/              # 工作目錄與授權政策 (Policy)
-│   ├── backend/           # Runtime adapter (opencode, codex, omp, antigravity)、能力需求、選擇、綁定與清冊
+│   ├── backend/           # Runtime adapter (opencode, codex, omp)、能力需求、選擇、綁定與清冊
 │   ├── contextwin/        # 上下文窗口管理、預算、估算器與准入引擎
 │   ├── cron/              # 定時排程器與日曆計算
 │   ├── daemon/            # 守護進程服務中樞

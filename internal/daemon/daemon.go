@@ -21,10 +21,10 @@ import (
 	"asura/internal/audit"
 	"asura/internal/auth"
 	"asura/internal/backend"
-	"asura/internal/backend/antigravity"
 	"asura/internal/backend/codex"
 	"asura/internal/backend/omp"
 	"asura/internal/backend/opencode"
+	"asura/internal/backend/pi"
 	"asura/internal/contextwin"
 	"asura/internal/cron"
 	"asura/internal/engine"
@@ -256,7 +256,7 @@ func NewDaemon(cfg Config, store *storage.SQLiteStore, policy *auth.Policy, opts
 			}
 		}
 		_ = reg.Register(omp.NewAdapter(omp.AdapterConfig{VerificationPath: d.cfg.VerificationPath, OnProcessStarted: onStarted, OnProcessExited: onExited}))
-		_ = reg.Register(antigravity.NewAdapter(antigravity.AdapterConfig{VerificationPath: d.cfg.VerificationPath, OnProcessStarted: onStarted, OnProcessExited: onExited}))
+		_ = reg.Register(pi.NewAdapter(pi.AdapterConfig{VerificationPath: d.cfg.VerificationPath, OnProcessStarted: onStarted, OnProcessExited: onExited}))
 
 		oracleStage := pipeline.NewOracleStageWithBackend(readOnlyAdapter)
 		strikerStage := pipeline.NewStrikerStageWithBackend(strikerAdapter)

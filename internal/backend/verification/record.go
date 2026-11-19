@@ -125,7 +125,7 @@ func Admit(runtime, version string, digest func() (string, error), builtin []Ide
 	return Record{}, fmt.Errorf("%w: %s %s; run asura runtime verify %s", ErrUnverified, runtime, version, runtime)
 }
 
-// AdmitDigest 只以雜湊查紀錄，不需要先取得版本：取版本必須執行未驗證的執行檔（2026-10-27 PR #77 審查，Antigravity）。
+// AdmitDigest 只以雜湊查紀錄，不需要先取得版本：取版本必須執行未驗證的執行檔（2026-10-27 PR #77 審查）。
 // 雜湊已綁定執行檔內容，相符紀錄的版本就是該執行檔驗證時回報的版本。
 func AdmitDigest(runtime, digest, recordsPath string) (Record, error) {
 	if recordsPath != "" {

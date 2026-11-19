@@ -139,7 +139,7 @@ func handleDoctor(args []string, stdout, stderr io.Writer) int {
 	if path, err := exec.LookPath("bwrap"); err == nil {
 		add("System", levelOK, "bwrap", "%s", path)
 	} else {
-		add("System", levelWarn, "bwrap", "not found; sandboxed runtimes (omp, antigravity) are unavailable")
+		add("System", levelWarn, "bwrap", "not found; sandboxed runtimes (omp, pi) are unavailable")
 	}
 
 	cc, cfgErr := loadCLIConfig()

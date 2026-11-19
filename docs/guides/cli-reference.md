@@ -30,7 +30,7 @@ Daemon 讀取的環境變數（也可寫在 config，環境變數優先）：
 # 啟用 Three-Face 固定管線模式（Oracle 規劃 → Striker 執行 → Critic 審查）
 ./bin/asura ask --socket /tmp/asura.sock --workspace /path/to/project --mode three-face "重構認證模組並補齊測試"
 
-# 指定後端執行器（opencode、codex、omp、antigravity 或 auto，預設 opencode）
+# 指定後端執行器（opencode、codex、omp、pi 或 auto，預設 opencode）
 ./bin/asura ask --socket /tmp/asura.sock --workspace /path/to/project --backend codex "修復單元測試"
 
 # 提交並等待任務完成輸出結果
@@ -63,7 +63,7 @@ Daemon 讀取的環境變數（也可寫在 config，環境變數優先）：
 
 ## `ask` 與 `run` 的後端行為
 
-2026-09-30：`ask` 與 `run` 支援 `--backend opencode|codex|omp|antigravity` 旗標（未指定預設為 `opencode`）。指定未知後端時將立即 fail-closed 拒絕，0 模型調用且絕不自動切換。Three-Face 模式下後端須支援唯讀沙箱（`CapReadOnlySandbox`），若能力不符立即拒絕。任務執行期間若部分失敗，保存現場並標記 Failed，絕無第二次自動容錯嘗試（No Automatic Failover）。
+2026-09-30：`ask` 與 `run` 支援 `--backend opencode|codex|omp|pi|auto` 旗標（未指定預設為 `opencode`）。指定未知後端時將立即 fail-closed 拒絕，0 模型調用且絕不自動切換。Three-Face 模式下後端須支援唯讀沙箱（`CapReadOnlySandbox`），若能力不符立即拒絕。任務執行期間若部分失敗，保存現場並標記 Failed，絕無第二次自動容錯嘗試（No Automatic Failover）。
 
 各 runtime 的版本與隔離條件見 [Runtime 與執行控制](runtimes.md#runtime-adapter)。
 
@@ -113,7 +113,7 @@ Daemon 讀取的環境變數（也可寫在 config，環境變數優先）：
 ./bin/asura runtime verify --remove omp 18.12.6 [<sha256>]
 ```
 
-`<runtime>` 為 `opencode`、`codex`、`omp`、`antigravity`。驗證前 runtime 必須已登入。逐項印出 probe 結果；全部通過時 exit 0，並印出寫入的身分與紀錄路徑。任一 probe 失敗、逾時或無法執行（未安裝、未登入、OpenCode／OMP／Antigravity 缺 `bwrap`，或 OpenCode 的 `bwrap` 低於 0.10）時 exit 1，不新增也不變動紀錄。內建身分不執行 probe，直接 exit 0。內建身分不能移除，找不到紀錄、或省略 sha256 但有多筆紀錄時 exit 1；用法錯誤也 exit 1。可用 Ctrl-C 中止，中止視為失敗。
+`<runtime>` 為 `opencode`、`codex`、`omp`、`pi`。驗證前 runtime 必須已登入。逐項印出 probe 結果；全部通過時 exit 0，並印出寫入的身分與紀錄路徑。任一 probe 失敗、逾時或無法執行（未安裝、未登入、OpenCode／OMP／Pi 缺 `bwrap`，或 OpenCode 的 `bwrap` 低於 0.10）時 exit 1，不新增也不變動紀錄。內建身分不執行 probe，直接 exit 0。內建身分不能移除，找不到紀錄、或省略 sha256 但有多筆紀錄時 exit 1；用法錯誤也 exit 1。可用 Ctrl-C 中止，中止視為失敗。
 
 紀錄位置、probe 內容與已知限制見 [版本驗證](runtimes.md#版本驗證)。
 

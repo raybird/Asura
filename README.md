@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/badge/release-v1.2.0-success)](CHANGELOG.md)
 
-Asura 是一個以 Go 撰寫的單一執行檔，在一台 Linux 主機上統一管理 AI coding agent（OpenCode、Codex、OMP、Antigravity）的**執行**：誰可以提交、在哪個 workspace、用哪個 runtime、能力是否相符、何時取消，以及事後如何稽核。skills、MCP、workflow 與 domain logic 由各 runtime 自行處理。
+Asura 是一個以 Go 撰寫的單一執行檔，在一台 Linux 主機上統一管理 AI coding agent（OpenCode、Codex、OMP、Pi）的**執行**：誰可以提交、在哪個 workspace、用哪個 runtime、能力是否相符、何時取消，以及事後如何稽核。skills、MCP、workflow 與 domain logic 由各 runtime 自行處理。
 
 - **一個 daemon 管全部**：CLI、Web Console、Cron 共用同一套任務佇列、容量、授權與取消；SQLite 單一狀態引擎。
 - **可靠回收**：每個任務一個進程組（PGID），取消時整棵進程樹回收，防 PID 重用誤殺。
@@ -42,7 +42,7 @@ go build -o bin/asura ./cmd/asura
 | `opencode`（預設） | OpenCode 1.18.23 | 需 `bwrap` 0.10 以上；可擔任所有 stage |
 | `codex` | Codex CLI 0.155.0 | 可擔任所有 stage |
 | `omp` | OMP CLI 18.4.4、Bun 1.4.2、`openai-codex/gpt-6-luna` | 需 `bwrap`；只能擔任 Striker |
-| `antigravity` | Antigravity CLI 1.2.13、`gemini-3.8-flash-low` | 需 `bwrap`；只能擔任 Striker |
+| `pi` | Pi coding agent（npm） | 需 Node.js、`bwrap` 與版本驗證，只能擔任 Striker |
 
 細節見 [Runtime 與執行控制](docs/guides/runtimes.md)。
 
@@ -98,7 +98,7 @@ ASURA_WEB_KEY="your-secret-key" ./bin/asura web --listen 127.0.0.1:8080 --socket
 |---|---|
 | 執行中樞 | CLI 與 Daemon 共用任務、容量與取消契約；PGID 進程樹回收；SQLite 單一狀態引擎 |
 | 入口 | 本機 CLI、單人 Web Console、Cron 排程 |
-| Runtime | OpenCode、Codex、OMP、Antigravity 四個 adapter；能力感知 admission、`auto` 選擇、stage 級綁定、可用性清冊 |
+| Runtime | OpenCode、Codex、OMP、Pi 四個 adapter；能力感知 admission、`auto` 選擇、stage 級綁定、可用性清冊 |
 | 管線 | `direct`（單一 Striker）與 `three-face`（Oracle → Striker → Critic） |
 | 記憶 | 專案級記憶、有界詞彙召回、Git 候選審核、效用回饋、版本取代 |
 | 稽核 | 接受時封存契約，`status`／`audit`／Web 唯讀查詢執行來源 |

@@ -33,10 +33,7 @@ func TestProcessCancellation(t *testing.T) {
 	marker := filepath.Join(workspace, "late")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cfg := Config{ID: "probe", Home: home, AuthTarget: filepath.Join(home, "auth"), Program: []string{"/usr/bin/python3"},
-		Auth: func(context.Context) (Authentication, error) {
-			return Authentication{Payload: []byte("probe"), Expiry: time.Now().Add(time.Minute)}, nil
-		},
+	cfg := Config{ID: "probe", Home: home, Program: []string{"/usr/bin/python3"},
 		Args: func(string) []string {
 			return []string{"-c", `import subprocess,time;from pathlib import Path;subprocess.Popen(['/usr/bin/python3','-c',"import os,time;from pathlib import Path;os.setsid();time.sleep(2);Path('late').write_text('LATE')"]);Path('ready').write_text('READY');time.sleep(30)`}
 		},
@@ -77,37 +74,44 @@ func TestProcessCancellation(t *testing.T) {
 	}
 }
 
-// 2026-09-30：BADAPT-007／009，過期時不啟動模型，原始 access 字串不進結果。
-func TestAuthenticationBoundary(t *testing.T) {
-	if _, e := exec.LookPath("bwrap"); e != nil {
-		t.Skip("bwrap unavailable")
-	}
+// 2026-11-19：CLI 自行管理專用 profile，原本的登入目錄保持隔離。
+func TestProfileMount(t *testing.T) {
 	home, workspace := t.TempDir(), t.TempDir()
-	starts := 0
-	cfg := Config{ID: "probe", Home: home, AuthTarget: filepath.Join(home, "auth"), Program: []string{"/usr/bin/python3"},
-		Args: func(string) []string { return []string{"-c", `print('PROBE_SECRET_SHOULD_NOT_PERSIST')`} },
-		Auth: func(context.Context) (Authentication, error) {
-			return Authentication{Payload: []byte("probe"), Expiry: time.Now().Add(-time.Second)}, nil
-		},
-		OnProcessStarted: func(context.Context, int) { starts++ },
-		Parse: func(out, err string) (*backend.ExecutionResult, error) {
-			return &backend.ExecutionResult{Output: out, PartialOutput: out}, nil
-		},
+	profile := filepath.Join(home, ".omp", "asura-agent")
+	original := filepath.Join(home, ".omp", "agent")
+	for _, dir := range []string{profile, original} {
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "agent.db"), []byte("fixture"), 0600); err != nil {
+			t.Fatal(err)
+		}
 	}
-	req := &backend.ExecutionRequest{Role: backend.RoleStriker, Workspace: workspace}
-	r, e := Run(context.Background(), req, cfg)
+	cfg := Config{ID: "probe", Home: home, ProfileDir: profile, Program: []string{"/bin/sh"},
+		Args: func(string) []string {
+			return []string{"-ec", `test -n "$PI_CODING_AGENT_DIR"
+test "$(cat "$PI_CODING_AGENT_DIR/agent.db")" = fixture
+test ! -e "$HOME/.omp/agent/agent.db"
+printf updated > "$PI_CODING_AGENT_DIR/agent.db"`}
+		},
+		Parse: func(string, string) (*backend.ExecutionResult, error) { return &backend.ExecutionResult{}, nil },
+	}
+	r, err := Run(context.Background(), &backend.ExecutionRequest{Role: backend.RoleStriker, Workspace: profile}, cfg)
+	if err == nil || r.FailureClass != backend.FailureUnsupported {
+		t.Fatalf("profile workspace accepted: %+v, %v", r, err)
+	}
+	r, err = Run(context.Background(), &backend.ExecutionRequest{Role: backend.RoleStriker, Workspace: workspace}, cfg)
 	if r.FailureClass == backend.FailureUnavailable {
-		t.Skip("namespace unavailable")
+		t.Skipf("namespace unavailable: %v", err)
 	}
-	if e == nil || r.FailureClass != backend.FailureAuth || starts != 0 {
-		t.Fatalf("expired result %+v starts %d err %v", r, starts, e)
+	if err != nil {
+		t.Fatal(err)
 	}
-	cfg.Auth = func(context.Context) (Authentication, error) {
-		return Authentication{Payload: []byte("probe"), Expiry: time.Now().Add(time.Minute), Secrets: []string{"PROBE_SECRET_SHOULD_NOT_PERSIST"}}, nil
-	}
-	r, e = Run(context.Background(), req, cfg)
-	if e != nil || starts != 1 || r.Output != "<redacted>\n" {
-		t.Fatalf("redaction result %+v starts %d err %v", r, starts, e)
+	for dir, want := range map[string]string{profile: "updated", original: "fixture"} {
+		got, err := os.ReadFile(filepath.Join(dir, "agent.db"))
+		if err != nil || string(got) != want {
+			t.Fatalf("%s: contents=%q error=%v", dir, got, err)
+		}
 	}
 }
 
@@ -118,10 +122,7 @@ func TestRuntimePinnedAcrossSourceUpdate(t *testing.T) {
 	original := []byte("#!/bin/sh\nprintf 'VERIFIED'\n")
 	os.WriteFile(script, original, 0700)
 	hash := fmt.Sprintf("%x", sha256.Sum256(original))
-	cfg := Config{ID: "probe", Home: home, AuthTarget: filepath.Join(home, "auth"), Program: []string{script}, ReadOnlyPaths: []string{script}, PinnedFiles: []PinnedFile{{Path: script, SHA256: hash}},
-		Auth: func(context.Context) (Authentication, error) {
-			return Authentication{Payload: []byte("probe"), Expiry: time.Now().Add(time.Minute)}, nil
-		}, Args: func(string) []string { return nil },
+	cfg := Config{ID: "probe", Home: home, Program: []string{script}, ReadOnlyPaths: []string{script}, PinnedFiles: []PinnedFile{{Path: script, SHA256: hash}}, Args: func(string) []string { return nil },
 		BeforeStart: func(context.Context) (func(), error) {
 			return nil, os.WriteFile(script, []byte("#!/bin/sh\nprintf 'UPDATED'\n"), 0700)
 		},

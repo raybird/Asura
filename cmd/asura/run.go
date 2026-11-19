@@ -19,10 +19,10 @@ import (
 
 	"asura/internal/auth"
 	"asura/internal/backend"
-	"asura/internal/backend/antigravity"
 	"asura/internal/backend/codex"
 	"asura/internal/backend/omp"
 	"asura/internal/backend/opencode"
+	"asura/internal/backend/pi"
 	"asura/internal/daemon"
 	"asura/internal/engine"
 	"asura/internal/pipeline"
@@ -146,7 +146,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 	workspace := fs.String("workspace", "", "target workspace directory")
 	allowedRoots := fs.String("allowed-roots", activeConfig.allowedRoots(), "comma-separated list of allowed root directories")
 	mode := fs.String("mode", string(pipeline.ModeDirect), "execution mode (direct or three-face)")
-	backendFlag := fs.String("backend", "opencode", "execution backend (opencode, codex, omp, antigravity, auto)")
+	backendFlag := fs.String("backend", "opencode", "execution backend (opencode, codex, omp, pi, auto)")
 
 	if err := fs.Parse(args); err != nil {
 		return 1
@@ -167,8 +167,8 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 	if bID == "" {
 		bID = "opencode"
 	}
-	if bID != "opencode" && bID != "codex" && bID != "omp" && bID != "antigravity" && bID != "auto" {
-		fmt.Fprintf(stderr, "error: unknown backend %q (supported: opencode, codex, omp, antigravity, auto)\n", bID)
+	if bID != "opencode" && bID != "codex" && bID != "omp" && bID != "pi" && bID != "auto" {
+		fmt.Fprintf(stderr, "error: unknown backend %q (supported: opencode, codex, omp, pi, auto)\n", bID)
 		return 1
 	}
 
@@ -362,7 +362,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 	criticStage := pipeline.NewCriticStage(runner)
 	orc := pipeline.NewOrchestrator(oracleStage, strikerStage, criticStage).WithContextBudget(contextCfg)
 	// 2026-09-30：新增 CLI adapter 在本地 composition root 接線；保留既有 shell runner。
-	if bID == "omp" || bID == "antigravity" || bID == "auto" {
+	if bID == "omp" || bID == "pi" || bID == "auto" {
 		var startLock *os.File
 		beforeStart := func(c context.Context) (func(), error) {
 			lf, e := os.OpenFile(taskLockPath(*dbPath, currentTaskID), os.O_CREATE|os.O_RDWR, 0600)
@@ -409,8 +409,8 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 		var selected backend.Backend
 		if bID == "omp" {
 			selected = omp.NewAdapter(omp.AdapterConfig{VerificationPath: records, OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart})
-		} else if bID == "antigravity" {
-			selected = antigravity.NewAdapter(antigravity.AdapterConfig{VerificationPath: records, OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart})
+		} else if bID == "pi" {
+			selected = pi.NewAdapter(pi.AdapterConfig{VerificationPath: records, OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart})
 		}
 		reg := backend.NewRegistry()
 		if bID == "auto" {
@@ -426,7 +426,7 @@ func handleRun(args []string, stdout, stderr io.Writer) int {
 			reg.Register(selected)
 			reg.Register(codex.NewAdapter(codex.AdapterConfig{VerificationPath: records, OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart}))
 			reg.Register(omp.NewAdapter(omp.AdapterConfig{VerificationPath: records, OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart}))
-			reg.Register(antigravity.NewAdapter(antigravity.AdapterConfig{VerificationPath: records, OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart}))
+			reg.Register(pi.NewAdapter(pi.AdapterConfig{VerificationPath: records, OnProcessStarted: onStarted, OnProcessExited: onExited, BeforeStart: beforeStart}))
 		} else {
 			reg.Register(selected)
 		}

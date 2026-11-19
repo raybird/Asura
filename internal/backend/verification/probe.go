@@ -34,7 +34,7 @@ type Options struct {
 	ReadOnlyRoles bool
 	// Started 接收 adapter OnProcessStarted 送出的 pgid，取消 probe 依此確認行程樹已回收。
 	Started <-chan int
-	// CredentialDir 是真實登入憑證所在目錄（OMP、Antigravity）；設定時加入憑證邊界 probe。
+	// CredentialDir 是真實登入憑證所在目錄（OMP）；設定時加入憑證邊界 probe。
 	CredentialDir string
 	// ReadOnlySandbox 在 runtime 自己的 OS 沙箱內直接執行 command，不經模型（Codex 的 codex sandbox），
 	// 回傳合併後的輸出；設定時加入唯讀沙箱 probe。

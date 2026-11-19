@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 )
 
 // 2026-09-30：獨立審查發現的工作區覆蓋與 I/O 分類反例。
@@ -17,9 +16,7 @@ func TestReviewProtectedWorkspaceAndStartFailure(t *testing.T) {
 	if err := os.Mkdir(workspace, 0700); err != nil {
 		t.Fatal(err)
 	}
-	cfg := Config{ID: "probe", Home: home, AuthTarget: filepath.Join(home, "auth"), Program: []string{"/usr/bin/true"}, ReadOnlyPaths: []string{runtime}, Auth: func(context.Context) (Authentication, error) {
-		return Authentication{Payload: []byte("probe"), Expiry: time.Now().Add(time.Minute)}, nil
-	}, Args: func(string) []string { return nil }, Parse: func(string, string) (*backend.ExecutionResult, error) { return &backend.ExecutionResult{}, nil }}
+	cfg := Config{ID: "probe", Home: home, Program: []string{"/usr/bin/true"}, ReadOnlyPaths: []string{runtime}, Args: func(string) []string { return nil }, Parse: func(string, string) (*backend.ExecutionResult, error) { return &backend.ExecutionResult{}, nil }}
 	r, e := Run(context.Background(), &backend.ExecutionRequest{Role: backend.RoleStriker, Workspace: workspace}, cfg)
 	if e == nil || r.FailureClass != backend.FailureUnsupported {
 		t.Fatalf("runtime overlap result %+v err %v", r, e)

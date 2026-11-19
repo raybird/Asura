@@ -15,7 +15,7 @@ func TestInventoryCLI(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("inventory unavailable: %s", err.String())
 	}
-	for _, want := range []string{"Runtime Inventory", "opencode", "codex", "omp", "antigravity", "registered", "unavailable", "executable_not_found"} {
+	for _, want := range []string{"Runtime Inventory", "opencode", "codex", "omp", "pi", "registered", "unavailable", "executable_not_found"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("missing %s: %s", want, out.String())
 		}

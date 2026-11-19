@@ -2125,7 +2125,7 @@ func TestDaemon_IPC_InvalidExecutionMode_Rejected(t *testing.T) {
 // MBACK-004, MBACK-005: 驗證 Backend 納入 Fingerprint 計算，不同 Backend 被拒絕，相同 Backend Redelivery 命中既有 Task (0 重複執行)
 // 2026-09-30：BADAPT-008，沿用相同持久化身份測試並加入新 backend ID。
 func TestDaemon_BackendFingerprint_ConflictAndRedelivery(t *testing.T) {
-	for _, id := range []string{"opencode", "omp", "antigravity"} {
+	for _, id := range []string{"opencode", "omp"} {
 		t.Run(id, func(t *testing.T) { testBackendFingerprintConflictAndRedelivery(t, id) })
 	}
 }
@@ -2479,7 +2479,7 @@ func TestDaemon_Start_FailClosedOnInitError(t *testing.T) {
 // MBACK-012: 驗證 Task 在排隊喚醒執行時，依 Task 內記錄之 BackendID 執行，不重新套用預設值 opencode
 // 2026-09-30：BADAPT-008，三種非預設身份的同一 queue-wake 對照。
 func TestDaemon_QueueWake_PreservesBackend(t *testing.T) {
-	for _, id := range []string{"codex", "omp", "antigravity"} {
+	for _, id := range []string{"codex", "omp"} {
 		t.Run(id, func(t *testing.T) { testQueueWakePreservesBackend(t, id) })
 	}
 }

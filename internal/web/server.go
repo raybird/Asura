@@ -161,7 +161,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		switch input.Backend {
-		case "", "opencode", "codex", "omp", "antigravity", "auto":
+		case "", "opencode", "codex", "omp", "pi", "auto":
 		default:
 			http.Error(w, "invalid backend", http.StatusBadRequest)
 			return

@@ -4,11 +4,35 @@ Asura 如何決定一個任務由哪個 runtime 執行、執行前檢查什麼�
 
 ## Runtime adapter
 
-抽象化 Runner 契約，支援 OpenCode、Codex、OMP、Antigravity 四種 runtime。2026-10-27 起只接受內建已驗證的身分，或以 `asura runtime verify` 驗證過的安裝，見 [版本驗證](#版本驗證)。
+抽象化 Runner 契約，支援 OpenCode、Codex、OMP、Pi 四種 runtime。2026-10-27 起只接受內建已驗證的身分，或以 `asura runtime verify` 驗證過的安裝，見 [版本驗證](#版本驗證)。
 
-2026-09-30：OMP 固定支援 CLI 18.4.4、Bun 1.4.2 與 `openai-codex/gpt-6-luna`；Antigravity 固定支援 CLI 1.2.13 與 `gemini-3.8-flash-low`。OMP 還會驗證並複製固定的完整 node_modules 樹（約 1.2 GB 暫存空間）；增加其他 global 套件也會使摘要不符，需使用相符的獨立安裝。兩者需要 Linux `bwrap` 的 PID／IPC namespace；版本或隔離條件不符會在模型呼叫前拒絕。2026-10-27 起這兩個版本是內建身分，其他版本可以驗證後使用，見 [版本驗證](#版本驗證)。沿用原 CLI 登入，只傳入 access-only 快照，登入過期須在原 CLI 手動更新。OMP 不傳入可用的 refresh token；Antigravity 先讀原 CLI keyring，再讀原 CLI token 檔。
+2026-09-30：OMP 固定支援 CLI 18.4.4、Bun 1.4.2 與 `openai-codex/gpt-6-luna`。OMP 還會驗證並複製固定的完整 node_modules 樹（約 1.2 GB 暫存空間）；增加其他 global 套件也會使摘要不符，需使用相符的獨立安裝。OMP 需要 Linux `bwrap` 的 PID／IPC namespace；版本或隔離條件不符會在模型呼叫前拒絕。2026-10-27 起這個版本是內建身分，其他版本可以驗證後使用，見 [版本驗證](#版本驗證)。
+
+2026-11-19：Asura 透過 `omp --print --mode json` 執行，OMP 自行讀取與更新專用登入目錄。升級後請先在同一個 OS 帳號下建立目錄並透過 OMP 登入原供應商 `openai-codex`。
+
+```bash
+install -d -m 700 "$HOME/.omp/asura-agent"
+PI_CODING_AGENT_DIR="$HOME/.omp/asura-agent" omp login
+```
+
+Asura 只將這個專用目錄以可寫方式掛進沙箱，原有的 `~/.omp/agent` 仍被遮蔽。任務內執行的程式能讀寫專用目錄及其中的完整登入憑證，因此只應用於信任的任務。Asura 不再讀取 OAuth token、判斷其到期時間或以 token 值遮蔽輸出。
 
 2026-09-30：這兩個 backend 目前僅支援 Single Striker，不宣告唯讀 sandbox 能力，Three-Face 在 Stage 0 拒絕且不呼叫模型。Context window 未知時沿用既有政策；可用 `ASURA_CONTEXT_LIMIT` 指定限制。`status` 顯示任務保存的 backend 與 trace 中的版本。
+
+## Pi
+
+2026-11-19：Pi 支援 npm 安裝的 `@earendil-works/pi-coding-agent`，需要 Node.js 與 Linux `bwrap`。Asura 驗證 Node、CLI 與套件相依樹，並使用 Pi 設定的預設模型。Pi 只能擔任 Striker。
+
+先用執行 Asura 的 OS 帳號開啟專用目錄，在 Pi 內執行 `/login` 並選擇模型。
+
+```bash
+install -d -m 700 "$HOME/.pi/asura-agent"
+PI_CODING_AGENT_DIR="$HOME/.pi/asura-agent" pi
+asura runtime verify pi
+asura run --backend pi '列出專案測試指令'
+```
+
+Pi 自行讀寫專用目錄並管理登入，沙箱內任務也可以存取該目錄的憑證。預設的 `~/.pi/agent` 保持隔離。
 
 ## 版本驗證
 
@@ -21,11 +45,10 @@ Asura 如何決定一個任務由哪個 runtime 執行、執行前檢查什麼�
   | `opencode` | 1.18.23（只比對版本） |
   | `codex` | 0.155.0（只比對版本） |
   | `omp` | CLI 18.4.4 與 Bun 1.4.2 的固定雜湊 |
-  | `antigravity` | CLI 1.2.13 的固定雜湊 |
 
 - **本機驗證紀錄**：執行 `asura runtime verify <runtime>`，對已安裝的版本實際跑一組 probe，全部通過才記下身分。
 
-雜湊涵蓋的範圍：OpenCode 為解析 symlink 後的執行檔；Codex 為 npm 套件與平台套件（原生檔與附帶的 bwrap）；OMP 為 CLI 與 Bun，另記 node_modules 樹雜湊，執行時以它固定複製的樹；Antigravity 為 CLI。換掉執行檔或安裝樹，身分就不符，需要重新驗證。例外是 OMP 的 node_modules 樹：只在執行時比對，樹被換掉但 CLI 與 Bun 不變時，inventory、doctor 與 admission 仍判 available，Run 在啟動模型前以 `dependency snapshot differs from fixed contract` 失敗，與變更前內建版本的做法相同。Antigravity 判定時只比雜湊，版本取自相符的紀錄，不在 bwrap 外執行未驗證的 agy；只有 `asura runtime verify` 會執行一次 `agy --version`（2026-10-27）。
+雜湊涵蓋的範圍：OpenCode 為解析 symlink 後的執行檔；Codex 為 npm 套件與平台套件（原生檔與附帶的 bwrap）；OMP 為 CLI 與 Bun，另記 node_modules 樹雜湊，執行時以它固定複製的樹。換掉執行檔或安裝樹，身分就不符，需要重新驗證。例外是 OMP 的 node_modules 樹：只在執行時比對，樹被換掉但 CLI 與 Bun 不變時，inventory、doctor 與 admission 仍判 available，Run 在啟動模型前以 `dependency snapshot differs from fixed contract` 失敗，與變更前內建版本的做法相同。
 
 所有判定路徑使用同一規則：daemon（含 IPC、Web、cron）、`runtime inventory`、`doctor` 與本機 `run`。`doctor` 與拒絕訊息會提示 `asura runtime verify <runtime>`；`version_failed` 只代表版本取不到或格式錯，與「可以自己驗證」的 `version_unverified` 分開。
 
@@ -37,11 +60,11 @@ Asura 如何決定一個任務由哪個 runtime 執行、執行前檢查什麼�
 | `workspace-boundary` | 寫入角色寫得進 workspace，寫不到 workspace 外 | 全部 |
 | `read-only` | 唯讀角色寫不進 workspace，但讀得到 workspace 內容 | `opencode`、`codex` |
 | `read-only-sandbox` | 不經模型，以 `codex sandbox` 直接在 Codex 的唯讀沙箱內寫 workspace，必須被擋；workspace-write 下同一命令必須寫得進去。沙箱正常時 Codex 的模型在唯讀角色下根本不會嘗試寫入，`read-only` 分不出 OS 沙箱是否真的生效 | `codex` |
-| `credential-boundary` | 模型寫不到原 CLI 的憑證目錄 | `omp`、`antigravity` |
+| `credential-boundary` | 模型寫不到原 CLI 的預設憑證目錄 | `omp` |
 | `cancellation` | 取消後，模型啟動的命令連同行程樹被回收；命令同時留下前景子行程與另開 session 的背景子行程，兩者都必須消失（2026-10-28 #74） | 全部 |
-| `protected-files-unchanged` | 原 CLI 的登入憑證檔在全部 probe 前後逐 byte 相同 | `omp`、`antigravity` |
+| `protected-files-unchanged` | 原 CLI 預設目錄的登入憑證檔在全部 probe 前後逐 byte 相同 | `omp` |
 
-驗證前 runtime 必須已登入；`opencode`（0.10 以上）、`omp`、`antigravity` 另需 `bwrap`。任一 probe 失敗、逾時或無法執行時整體失敗：逐項印出結果、結束碼非 0，紀錄不新增也不變動。內建身分不執行 probe。只有明確執行 `asura runtime verify` 才會驗證；daemon 啟動、`runtime inventory`、`doctor`、`run`、`ask` 都不會自動執行 probe。
+驗證前 runtime 必須已登入；`opencode`（0.10 以上）、`omp` 另需 `bwrap`。任一 probe 失敗、逾時或無法執行時整體失敗：逐項印出結果、結束碼非 0，紀錄不新增也不變動。內建身分不執行 probe。只有明確執行 `asura runtime verify` 才會驗證；daemon 啟動、`runtime inventory`、`doctor`、`run`、`ask` 都不會自動執行 probe。
 
 紀錄固定存在 `$XDG_DATA_HOME/asura/runtime-verification.json`（預設 `~/.local/share/asura/`），不跟 `--db` 或 config 走，每筆含身分、驗證時間（UTC）與執行驗證的 Asura 版本。驗證紀錄不綁模型：OpenCode 與 Codex 的 probe 使用 runtime 的預設模型。`--list` 列出內建身分與紀錄，`--remove` 移除一筆紀錄，內建身分不能移除。移除後，已接受但還沒執行到的 stage 在執行前被拒絕，不改選其他 runtime。清冊 policy 版本維持 `inventory-v1`，升級前封存的排隊任務與 cron 照常執行。
 
@@ -70,7 +93,7 @@ Asura 如何決定一個任務由哪個 runtime 執行、執行前檢查什麼�
 
 workspace 等於或包含 HOME、`/tmp`、`/var/tmp`、`/run` 時（例如在 `~` 底下直接 `asura run`，workspace 預設是目前目錄），workspace 的可寫掛載會蓋掉上表的 overlay 與遮蔽，寫入角色在啟動 opencode 前以 unsupported 拒絕。workspace 是 HOME 底下的子目錄時照常執行。
 
-HOME overlay 需要 `bwrap` 0.10 以上；Ubuntu 24.04、Debian 12 的套件是 0.9.0，需要另外安裝新版（例如從 release 原始碼建置）。不會退回沙箱外執行：找不到 `bwrap` 或版本低於 0.10 時，`runtime inventory`、`doctor` 與 admission 把整個 OpenCode（包含唯讀角色）判為 `dependency_not_found`。`bwrap` 版本夠新，但主機不允許建立沙箱時（例如禁止非特權 user namespace，或核心不支援非特權 overlay），inventory 仍判 available（與 OMP、Antigravity 相同，不實際建立沙箱），寫入角色在啟動 opencode 前以 unavailable 失敗，訊息帶有 bwrap 的錯誤。
+HOME overlay 需要 `bwrap` 0.10 以上；Ubuntu 24.04、Debian 12 的套件是 0.9.0，需要另外安裝新版（例如從 release 原始碼建置）。不會退回沙箱外執行：找不到 `bwrap` 或版本低於 0.10 時，`runtime inventory`、`doctor` 與 admission 把整個 OpenCode（包含唯讀角色）判為 `dependency_not_found`。`bwrap` 版本夠新，但主機不允許建立沙箱時（例如禁止非特權 user namespace，或核心不支援非特權 overlay），inventory 仍判 available（與 OMP 相同，不實際建立沙箱），寫入角色在啟動 opencode 前以 unavailable 失敗，訊息帶有 bwrap 的錯誤。
 
 ## 固定三面管線 (Three-Face Fixed Pipeline)
 
@@ -98,7 +121,7 @@ HOME overlay 需要 `bwrap` 0.10 以上；Ubuntu 24.04、Debian 12 的套件是 
 
 2026-10-03：`ask --backend auto` 與 `run --backend auto` 明確啟用能力感知 runtime 選擇；`run auto` 的參數是 AI prompt，其他既有 shell run 行為保持。先以共同 matcher 篩選，再依 `opencode` 優先、其他 ID 字典序、`omp` 最後的 deterministic policy 選擇一個 runtime；2026-10-04：Three-Face auto 改為同一份候選快照、共同排序按 stage requirements 各自選擇；explicit 仍讓全部 stage 使用指定 runtime，不相容不 fallback。
 
-2026-10-03：可用 `ASURA_RUNTIME_PRIORITY=codex,opencode,antigravity,omp asura daemon` 或同環境變數啟動 `asura run --backend auto 'prompt'` 調整偏好。未列的候選按預設規則補齊，未註冊的偏好不新增候選；空項、重複或非四種已知 ID 拒絕。`ask` 使用 daemon 啟動設定，變更需重啟 daemon；不以 client 環境覆蓋。排序只能作用於 eligible set。
+2026-10-03：可用 `ASURA_RUNTIME_PRIORITY=codex,opencode,omp asura daemon` 或同環境變數啟動 `asura run --backend auto 'prompt'` 調整偏好。未列的候選按預設規則補齊，未註冊的偏好不新增候選；空項、重複或非四種已知 ID 拒絕。`ask` 使用 daemon 啟動設定，變更需重啟 daemon；不以 client 環境覆蓋。排序只能作用於 eligible set。2026-11-19：Pi 在未指定優先順序時排在既有 runtime 之後。
 
 ## Stage 級綁定
 
@@ -113,7 +136,7 @@ HOME overlay 需要 `bwrap` 0.10 以上；Ubuntu 24.04、Debian 12 的套件是 
 ./bin/asura runtime inventory --socket /path/to/asura.sock
 ```
 
-2026-10-04：Daemon 與 local auto 明確註冊 OpenCode/Codex/OMP/Antigravity，缺 binary 也保留 registered entry。每次 admission 使用 fresh inventory，先排除 unavailable/unknown，再做 capability filter 與原 deterministic priority；單一版本失敗／逾時不污染其他候選。explicit 只探測指定 runtime，不可用則帶 reason 拒絕，不 fallback。最多 32 entries、每 probe 3 秒、整批 5 秒，timeout 為 unknown；panic/error 為 unavailable。snapshot 排序與序列化不受完成順序影響。Web task API 支援 additive `backend:"auto"`，沒有新增設定編輯頁。
+2026-10-04：Daemon 與 local auto 明確註冊 OpenCode/Codex/OMP/Pi，缺 binary 也保留 registered entry。每次 admission 使用 fresh inventory，先排除 unavailable/unknown，再做 capability filter 與原 deterministic priority；單一版本失敗／逾時不污染其他候選。explicit 只探測指定 runtime，不可用則帶 reason 拒絕，不 fallback。最多 32 entries、每 probe 3 秒、整批 5 秒，timeout 為 unknown；panic/error 為 unavailable。snapshot 排序與序列化不受完成順序影響。Web task API 支援 additive `backend:"auto"`，沒有新增設定編輯頁。
 
 2026-10-04：Web 的「Runtime 可用性清冊」與 `GET /api/runtime-inventory` 提供已登入使用者唯讀查詢。Task status/audit 顯示該次封存 inventory、availability reason、capability rejection、stage selection/binding 與實際 guard；不把 fresh 狀態回填到舊 Task。legacy capability-v1／stage-binding-v1 保留原讀取語意，inventory 顯示未封存。
 

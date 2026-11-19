@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"asura/internal/backend"
-	"asura/internal/backend/antigravity"
 	"asura/internal/backend/omp"
 	"asura/internal/contextwin"
 	"asura/internal/engine"
@@ -24,9 +23,9 @@ func (c *countedAdapter) Run(ctx context.Context, r *backend.ExecutionRequest) (
 
 // 2026-09-30：BADAPT-006，使用正式能力矩陣，四個 backend 均計數。
 func TestNewBackendsThreeFaceStageZero(t *testing.T) {
-	for _, id := range []string{"omp", "antigravity"} {
+	for _, id := range []string{"omp"} {
 		t.Run(id, func(t *testing.T) {
-			all := []*countedAdapter{{Backend: &mockBackendForPipeline{id: "opencode"}}, {Backend: &mockBackendForPipeline{id: "codex"}}, {Backend: omp.NewAdapter(omp.AdapterConfig{})}, {Backend: antigravity.NewAdapter(antigravity.AdapterConfig{})}}
+			all := []*countedAdapter{{Backend: &mockBackendForPipeline{id: "opencode"}}, {Backend: &mockBackendForPipeline{id: "codex"}}, {Backend: omp.NewAdapter(omp.AdapterConfig{})}}
 			reg := backend.NewRegistry()
 			for _, b := range all {
 				reg.Register(b)
@@ -47,11 +46,11 @@ func TestNewBackendsThreeFaceStageZero(t *testing.T) {
 
 // 2026-09-30：BADAPT-009／011，這層驗上層 admission、sealed prompt 與一次派送，未 mock 安全能力。
 func TestNewBackendContextMemoryAndFailureIsolation(t *testing.T) {
-	for _, id := range []string{"omp", "antigravity"} {
+	for _, id := range []string{"omp"} {
 		t.Run(id, func(t *testing.T) {
 			reg := backend.NewRegistry()
 			all := make([]*mockBackendForPipeline, 0, 4)
-			for _, name := range []string{"opencode", "codex", "omp", "antigravity"} {
+			for _, name := range []string{"opencode", "codex", "omp"} {
 				b := &mockBackendForPipeline{id: name, version: "fixture-contract", caps: []backend.Capability{backend.CapWorkspaceWrite}}
 				all = append(all, b)
 				reg.Register(b)

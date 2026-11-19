@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"asura/internal/backend/antigravity"
 	"asura/internal/backend/omp"
 	"asura/internal/backend/verification"
 )
@@ -144,15 +143,24 @@ func TestRuntimeVerifyCommand(t *testing.T) {
 	expectRejected("not logged in", "codex", fullPath, "output", "FAIL", "authentication failed", "no record written")
 	writeCodex("0.163.0", false, false)
 	expectRejected("workspace escape", "codex", fullPath, "output                      ", "PASS", "workspace-boundary", "FAIL: security violation: wrote outside the workspace", "no record written")
-	if err := os.WriteFile(filepath.Join(runtimes, "agy"), []byte("#!/bin/sh\necho 1.4.4\n"), 0o700); err != nil {
+	marker := filepath.Join(runtimes, "agy-invoked")
+	if err := os.WriteFile(filepath.Join(runtimes, "agy"), []byte("#!/bin/sh\ntouch "+marker+"\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(e.home, ".gemini", "antigravity-cli"), 0o700); err != nil {
-		t.Fatal(err)
+	for _, args := range [][]string{
+		{"runtime", "verify", "antigravity"},
+		{"run", "--backend", "antigravity", "probe"},
+		{"ask", "--backend", "antigravity", "probe"},
+	} {
+		if out, code := run(fullPath, args...); code == 0 {
+			t.Errorf("%v accepted: %s", args, out)
+		}
 	}
-	expectRejected("bwrap unavailable", "antigravity", runtimes, "output", "FAIL", "bwrap", "no record written")
-	if err := os.Remove(filepath.Join(runtimes, "agy")); err != nil {
-		t.Fatal(err)
+	if out, _ := run(fullPath, "runtime", "inventory", "--socket", ""); strings.Contains(out, "antigravity registration=") {
+		t.Errorf("removed runtime registered: %s", out)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("removed executable was invoked or marker could not be checked: %v", err)
 	}
 
 	writeCodex("0.163.0", true, false)
@@ -272,8 +280,7 @@ func TestRuntimeVerifyListRemove(t *testing.T) {
 	}
 	builtins := "opencode version=\"1.18.23\" sha256=any built-in\n" +
 		"codex version=\"0.155.0\" sha256=any built-in\n" +
-		"omp version=\"18.4.4\" sha256=" + omp.Builtin.Digest + " built-in\n" +
-		"antigravity version=\"1.2.13\" sha256=" + antigravity.Builtin.Digest + " built-in\n"
+		"omp version=\"18.4.4\" sha256=" + omp.Builtin.Digest + " built-in\n"
 	ompRows := "omp version=\"19.0.0\" sha256=e1 verified_at=2026-10-20T01:02:03Z asura_version=dev\n" +
 		"omp version=\"19.0.0\" sha256=f2 verified_at=2026-10-20T01:02:03Z asura_version=dev\n"
 	if out, errOut, code := cli("verify", "--list"); code != 0 || errOut != "" ||

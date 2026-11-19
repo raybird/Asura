@@ -80,10 +80,7 @@ func (a *Adapter) Run(ctx context.Context, req *backend.ExecutionRequest) (*back
 		return &backend.ExecutionResult{BackendID: a.ID(), FailureClass: backend.FailureUnsupported}, backend.NewExecutionError(a.ID(), backend.FailureUnsupported, errors.New("model differs from fixed contract"), "")
 	}
 	return clisandbox.Run(ctx, req, clisandbox.Config{
-		ID: a.ID(), Version: version, Home: a.cfg.Home, AuthTarget: filepath.Join(a.cfg.Home, ".omp/agent/agent.db"),
-		Auth: func(c context.Context) (clisandbox.Authentication, error) {
-			return snapshot(c, filepath.Join(a.cfg.Home, ".omp/agent/agent.db"))
-		},
+		ID: a.ID(), Version: version, Home: a.cfg.Home, ProfileDir: filepath.Join(a.cfg.Home, ".omp", "asura-agent"),
 		Program: []string{a.cfg.BunPath, a.cfg.BinaryPath}, PinnedFiles: files, PinnedTrees: trees, ReadOnlyPaths: []string{a.cfg.BunPath, a.modules()}, Settings: []byte(settings),
 		Args: func(config string) []string {
 			return []string{"--model", Model, "--thinking", "low", "--config", config, "--no-session", "--no-lsp", "--no-title", "--no-extensions", "--no-skills", "--no-rules", "--no-prewalk", "--approval-mode", "yolo", "--mode", "json", "--print", "--", req.Prompt}

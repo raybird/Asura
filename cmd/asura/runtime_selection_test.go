@@ -33,7 +33,7 @@ printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"a
 `
 	os.WriteFile(filepath.Join(bin, "codex"), []byte(script), 0700)
 	t.Setenv("PATH", bin)
-	t.Setenv("ASURA_RUNTIME_PRIORITY", "codex,opencode,antigravity,omp")
+	t.Setenv("ASURA_RUNTIME_PRIORITY", "codex,opencode,omp")
 	db := filepath.Join(root, "tasks.db")
 	var out, stderr bytes.Buffer
 	code := handleRun([]string{"--db", db, "--workspace", root, "--id", "auto", "--backend", "auto", "touch shell-side-effect"}, &out, &stderr)
@@ -80,7 +80,7 @@ printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"a
 `
 	os.WriteFile(filepath.Join(bin, "codex"), []byte(script), 0700)
 	t.Setenv("PATH", bin)
-	t.Setenv("ASURA_RUNTIME_PRIORITY", "codex,opencode,antigravity,omp")
+	t.Setenv("ASURA_RUNTIME_PRIORITY", "codex,opencode,omp")
 	db := filepath.Join(root, "tasks.db")
 	var out, stderr bytes.Buffer
 	if code := handleRun([]string{"--db", db, "--workspace", root, "--id", "auto-unverified", "--backend", "auto", "probe"}, &out, &stderr); code != 0 {
